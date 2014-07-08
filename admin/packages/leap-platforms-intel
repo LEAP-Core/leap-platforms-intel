@@ -1,0 +1,9 @@
+
+[Global]
+Buildorder=1000
+Version=1
+Lock=asim-leap-platforms-intel
+Description=Description of leap-platforms-intel
+Name=leap-platforms-intel
+Tag=HEAD
+CSN=CSN-leap-platforms-intel-0

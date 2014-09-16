@@ -1,0 +1,15 @@
+%name QPI with DDR
+%desc QPI with DDR
+
+%provides physical_platform
+
+%requires clocks_device
+%requires qpi_device
+%requires ddr_sdram_device
+%requires physical_platform_utils
+
+%sources -t BSV -v PUBLIC  qpi-platform.bsv
+%sources -t BSH -v PUBLIC  qpi-platform.bsh
+%sources -t CPP -v PRIVATE qpi-platform.cpp
+%sources -t H   -v PUBLIC  qpi-platform.h
+

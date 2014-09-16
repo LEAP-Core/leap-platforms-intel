@@ -1,0 +1,22 @@
+
+%name QPI Common Software Driver
+%desc QPI Common Software Driver
+
+%provides qpi_common_software_driver
+
+%sources -t H      -v PUBLIC  qpi-software-driver.h
+%sources -t CPP    -v PRIVATE qpi-software-driver.cpp
+
+%sources -t H      -v PUBLIC  AFU.h
+%sources -t H      -v PUBLIC  AFU_csr.h
+%sources -t CPP    -v PRIVATE AFU.cpp
+
+%library libCCI.so
+%library libAAS.so
+%library libOSAL.so
+%library libltdl.so
+%library libaalclp.so
+
+
+
+

@@ -1,0 +1,39 @@
+%name QPI Simulation Device
+%desc QPI Simulation Device
+
+%provides qpi_device
+%requires qpi_common_software_driver
+
+%public qpi-import.bsv
+
+%param CCI_CACHE_WIDTH  512    "Cache line width"
+%param CCI_TXHDR_WIDTH  61     "TX Header width"
+%param CCI_RXHDR_WIDTH  18     "RX Header width"
+%param CCI_SIMULATION   1      "Is the CCI implementation actually a simulator?"
+
+%sources -t VERILOG    -v PRIVATE cafu_top.v
+%sources -t VERILOG    -v PRIVATE fifo.v   
+%sources -t VERILOG    -v PRIVATE gram_sdp.v 
+%sources -t VERILOG_H  -v PRIVATE platform.vh  
+%sources -t VERILOG    -v PRIVATE sbv_gfifo.v
+%sources -t VERILOG_H  -v PRIVATE ase_global.vh  
+%sources -t VERILOG    -v PRIVATE cci_mem_translator.sv  
+%sources -t VERILOG    -v PRIVATE cci_std_afu.sv  
+%sources -t VERILOG    -v PRIVATE gfifo_v.v  
+%sources -t VERILOG    -v PRIVATE latency_pipe.sv
+%sources -t VERILOG    -v PRIVATE qpi_wrapper.v
+
+%sources -t BDPI_H -v PUBLIC  ase_common.h
+%sources -t BDPI_H -v PUBLIC  ase_sim.h
+
+%sources -t BDPI_C -v PRIVATE ase_ops.c
+%sources -t BDPI_C -v PRIVATE capcm_ops.c
+%sources -t BDPI_C -v PRIVATE cci_mem_translator.c
+%sources -t BDPI_C -v PRIVATE dpi_ops.c
+%sources -t BDPI_C -v PRIVATE error_report.c
+%sources -t BDPI_C -v PRIVATE ipc_mgmt_ops.c
+%sources -t BDPI_C -v PRIVATE linked_list_ops.c
+%sources -t BDPI_C -v PRIVATE mqueue_ops.c
+%sources -t BDPI_C -v PRIVATE shm_ops.c
+%sources -t BDPI_C -v PRIVATE tstamp_ops.c
+

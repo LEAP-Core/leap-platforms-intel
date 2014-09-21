@@ -1,0 +1,43 @@
+
+%name QPI Polled Driver
+%desc QPI Polled Driver
+
+%provides qpi_driver
+
+%sources -t H      -v PUBLIC  qpi-polled-driver.h
+%sources -t CPP    -v PRIVATE qpi-polled-driver.cpp
+
+%sources -t H      -v PUBLIC  AFU.h
+%sources -t H      -v PUBLIC  AFU_csr.h
+%sources -t CPP    -v PRIVATE AFU.cpp
+
+%sources -t VERILOG    -v PRIVATE mkBRAMScoreboardQPI.v
+%sources -t VERILOG    -v PRIVATE mkDemarshallerHighToLowQPI.v
+%sources -t VERILOG    -v PRIVATE mkDemarshallerQPI.v
+%sources -t VERILOG    -v PRIVATE mkMarshallerHighToLowQPI.v
+%sources -t VERILOG    -v PRIVATE mkMarshallerQPI.v
+%sources -t VERILOG    -v PRIVATE mkScoreboardQPI.v
+%sources -t VERILOG    -v PRIVATE mkSizeFIFOUMF.v
+%sources -t VERILOG    -v PRIVATE mkSizeFIFOQPI.v
+
+%sources -t VERILOG_H  -v PRIVATE qpi.vh  
+%sources -t VERILOG_H  -v PRIVATE qpi_csr.vh  
+%sources -t VERILOG    -v PRIVATE qpi_csr.sv  
+%sources -t VERILOG    -v PRIVATE qpi_driver.sv  
+%sources -t VERILOG    -v PRIVATE frame_reader.sv  
+%sources -t VERILOG    -v PRIVATE frame_release.sv  
+%sources -t VERILOG    -v PRIVATE frame_writer.sv  
+%sources -t VERILOG    -v PRIVATE cci_read_arbiter.sv  
+%sources -t VERILOG    -v PRIVATE cci_write_arbiter.sv  
+%sources -t VERILOG    -v PRIVATE cci_can_issue.sv  
+%sources -t VERILOG    -v PRIVATE cci_adaptor.sv  
+
+%library libCCI.so
+%library libAAS.so
+%library libOSAL.so
+%library libltdl.so
+%library libaalclp.so
+
+
+
+

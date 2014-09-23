@@ -36,32 +36,32 @@ module cci_adaptor
    
     input logic                    lp_initdone,       // Link initialization is complete
 
-    cci_bus_t                      cci_bus            // CCI bus interface
+    input  tx_c0_t                 tx0,
+    input  tx_c1_t                 tx1,
+    output rx_c0_t                 rx0,
+    output rx_c1_t                 rx1,
+    output logic                   tx0_almostfull,
+    output logic                   tx1_almostfull         
+
    );
 
-   assign cci_bus.rx0.header     = rx_c0_header;
-   assign cci_bus.rx0.data       = rx_c0_data;
-   assign cci_bus.rx0.wrvalid    = rx_c0_wrvalid;
-   assign cci_bus.rx0.rdvalid    = rx_c0_rdvalid;
-   assign cci_bus.rx0.cfgvalid   = rx_c0_cfgvalid;
+   assign rx0.header     = rx_c0_header;
+   assign rx0.data       = rx_c0_data;
+   assign rx0.wrvalid    = rx_c0_wrvalid;
+   assign rx0.rdvalid    = rx_c0_rdvalid;
+   assign rx0.cfgvalid   = rx_c0_cfgvalid;
 
-   // Perhaps the read metadata decode should be a different module
-   assign cci_bus.rx0.read_metadata.is_read   = cci_bus.rx0.header[12];   
-   assign cci_bus.rx0.read_metadata.is_header = cci_bus.rx0.header[11];   
-   assign cci_bus.rx0.read_metadata.rob_addr  = cci_bus.rx0.header[10:0];   
-   
-   assign cci_bus.rx1.header     = rx_c1_header;
-   assign cci_bus.rx1.wrvalid    = rx_c1_wrvalid;
+   assign rx1.header     = rx_c1_header;
+   assign rx1.wrvalid    = rx_c1_wrvalid;
 
-   assign tx_c0_header           = cci_bus.tx0.header;
-   assign tx_c0_rdvalid          = cci_bus.tx0.rdvalid;
-   assign cci_bus.tx0.almostfull = tx_c0_almostfull;
+   assign tx_c0_header           = tx0.header;
+   assign tx_c0_rdvalid          = tx0.rdvalid;
+   assign tx0_almostfull         = tx_c0_almostfull;
 
-   assign tx_c1_header           = cci_bus.tx1.header;
-   assign tx_c1_data             = cci_bus.tx1.data;
-   assign tx_c1_wrvalid          = cci_bus.tx1.wrvalid;
-   assign cci_bus.tx1.almostfull = tx_c1_almostfull;
+   assign tx_c1_header           = tx1.header;
+   assign tx_c1_data             = tx1.data;
+   assign tx_c1_wrvalid          = tx1.wrvalid;
+   assign tx1_almostfull         = tx_c1_almostfull;
 
-   assign cci_bus.lp_initdone    = lp_initdone;
-
+      
 endmodule // cci_adaptor

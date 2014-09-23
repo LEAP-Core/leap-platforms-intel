@@ -145,8 +145,11 @@ File=modules/leap/virtual-platform/physical-channel/qpi/qpi-physical-channel.awb
 Packagehint=leap-platforms-intel
 
 [QPI Simulation Device/Requires]
-qpi_common_software_driver=QPI Common Software Driver
+qpi_driver=QPI Polled Driver
 
-[QPI Common Software Driver]
-File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qpi/software/qpi-software-driver.awb
+[QPI Polled Driver]
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qpi/polled_driver/qpi-polled-driver.awb
 Packagehint=leap-platforms-intel
+
+[Little-Endian Unified Message Format/Params]
+UMF_CHUNK_BYTES=16

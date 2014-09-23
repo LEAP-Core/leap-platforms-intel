@@ -38,8 +38,8 @@ module cci_can_issue
     input  logic resetb,
    
     input  logic almostfull,
-    input  logic issue
-    output logic can_issue,
+    input  logic issue,
+    output logic can_issue
 
  
    );
@@ -48,7 +48,7 @@ module cci_can_issue
    logic almostfull_ff;
    
    always_ff @(posedge clk) begin
-      almostfull_ff <= cci_bus.tx0.almostfull;
+      almostfull_ff <= almostfull;
    end
 
    assign can_issue = ~almostfull_ff;

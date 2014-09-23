@@ -52,6 +52,15 @@ module status_writer
    assign status_array[2] = 32'haced0002;
    assign status_array[1] = 32'haced0001;
    assign status_array[0] = 32'haced0000;
+
+   genvar        i;
+
+   generate
+      for (i = 0; i < 16; i++) begin : gen_status
+         assign status[32*(i+1)-1:32*i] = status_array[i];        
+      end
+   endgenerate
+   
    
       
    //=================================================================
@@ -87,7 +96,7 @@ module status_writer
    always@(negedge clk)
      begin
         if(status_writer.write.request)
-          $display("Status writer attempts to write");
+          $display("Status writer attempts to write 0x%h to CL 0x%h", status_writer.data, status_writer.write_header.address);
         if(write_grant.status_grant)
           $display("Status writer write request granted");        
      end

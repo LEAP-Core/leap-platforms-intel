@@ -33,6 +33,7 @@ public:
   ~AFU();
 
   AFUBuffer* create_buffer(uint32_t size_bytes);
+  AFUBuffer* create_buffer_aligned(uint32_t size_bytes);
 
   inline volatile void *dsm_address(uint32_t offset) {
     return (void *)(dsm_buffer->virtual_address + offset);

@@ -33,83 +33,97 @@
 // verilog.  Since we subordinate the CCI interface as a device
 // driver, we use verilog OOMRs to bypass the interface.
 
-module qpi_wrapper#(parameter TXHDR_WIDTH=61, RXHDR_WIDTH=18, CACHE_WIDTH=512)
+module qpi_wrapper#(parameter TXHDR_WIDTH=61, RXHDR_WIDTH=18, CACHE_WIDTH=512, UMF_WIDTH=128)
 (
     // ---------------------------global signals-------------------------------------------------
     clk,                 //              in    std_logic;  -- Core clock
     resetb,              //              in    std_logic;  -- Use SPARINGLY only for control
-    // ---------------------------IF signals between SPL and FPL  --------------------------------
-    rx_c0_header,        // [RXHDR_WIDTH-1:0]   cci_intf:           Rx header to SPL channel 0
-    rx_c0_data,          // [CACHE_WIDTH-1:0]   cci_intf:           data response to SPL | no back pressure
-    rx_c0_wrvalid,       //                     cci_intf:           write response enable
-    rx_c0_rdvalid,       //                     cci_intf:           read response enable
-    rx_c0_cfgvalid,      //                     cci_intf:           config response enable
-    rx_c1_header,        // [RXHDR_WIDTH-1:0]   cci_intf:           Rx header to SPL channel 1
-    rx_c1_wrvalid,       //                     cci_intf:           write response valid
 
-    tx_c0_header,        // [TXHDR_WIDTH-1:0]   cci_intf:           Tx Header from SPL channel 0
-    tx_c0_rdvalid,       //                     cci_intf:           Tx read request enable
-    tx_c1_header,        //                     cci_intf:           Tx Header from SPL channel 1
-    tx_c1_data,          //                     cci_intf:           Tx data from SPL
-    tx_c1_wrvalid,       //                     cci_intf:           Tx write request enable
-    tx_c0_almostfull,    //                     cci_intf:           Tx memory channel 0 almost full
-    tx_c1_almostfull,    //                     cci_intf:           TX memory channel 1 almost full
+    // --------------------------- LEAP Facing Interface           --------------------------------
+    // RX side
+    rx_data,
+    rx_not_empty,
+    rx_rdy,
+    rx_enable,
 
-    lp_initdone          // Link initialization is complete
+    // TX side
+    tx_data,
+    tx_not_full,
+    tx_rdy,
+    tx_enable
+
 );
 
 
    output                     clk;                // Core clock
    output                     resetb;             // Use SPARINGLY only for control
 
-   output [RXHDR_WIDTH-1:0]   rx_c0_header;       // Rx header to SPL channel 0
-   output [CACHE_WIDTH-1:0]   rx_c0_data;         // data response to SPL | no back pressure
-   output                     rx_c0_wrvalid;      // write response enable
-   output                     rx_c0_rdvalid;      // read response enable
-   output                     rx_c0_cfgvalid;     // config response enable
-   output [RXHDR_WIDTH-1:0]   rx_c1_header;       // Rx header to SPL channel 1
-   output                     rx_c1_wrvalid;      // write response valid
-
-   input [TXHDR_WIDTH-1:0]    tx_c0_header;       // Tx Header from SPL channel 0
-   input                      tx_c0_rdvalid;      // Tx read request enable
-   input [TXHDR_WIDTH-1:0]    tx_c1_header;       // Tx Header from SPL channel 1
-   input [CACHE_WIDTH-1:0]    tx_c1_data;         // Tx data from SPL
-   input                      tx_c1_wrvalid;      // Tx write request enable
-   output                     tx_c0_almostfull;   // Tx memory channel 0 almost full
-   output                     tx_c1_almostfull;   // TX memory channel 1 almost full
-
-   output 		     lp_initdone;        // Link initialization is complete
-
+   // LEAP facing interface
+   output [UMF_WIDTH-1:0]    rx_data;   
+   output                    rx_not_empty;
+   output                    rx_rdy;
+   input                     rx_enable;
+   
+   // TX side
+   input [UMF_WIDTH-1:0]     tx_data;
+   output                    tx_not_full;
+   output                    tx_rdy;
+   input                     tx_enable;
+   
    // Instantiate simulation controller.  The cci_mem_translator has
    // an empty interface, since it uses some kind of vpi-style
    // interdface for communications.
    
    cci_mem_translator translator();
 
-   // Wire the external signals up as OOMRs.
-   // Input
-   assign clk = translator.afu_wrapper_inst.cafu_top_0.clk;          
-   assign resetb = translator.afu_wrapper_inst.cafu_top_0.resetb;       
+   // Wire the external signals to driver as OOMRs.
 
-   assign rx_c0_header     = translator.afu_wrapper_inst.cafu_top_0.rx_c0_header; 
-   assign rx_c0_data       = translator.afu_wrapper_inst.cafu_top_0.rx_c0_data;   
-   assign rx_c0_wrvalid    = translator.afu_wrapper_inst.cafu_top_0.rx_c0_wrvalid;
-   assign rx_c0_rdvalid    = translator.afu_wrapper_inst.cafu_top_0.rx_c0_rdvalid;
-   assign rx_c0_cfgvalid   = translator.afu_wrapper_inst.cafu_top_0.rx_c0_cfgvalid;
-   assign rx_c1_header     = translator.afu_wrapper_inst.cafu_top_0.rx_c1_header; 
-   assign rx_c1_wrvalid    = translator.afu_wrapper_inst.cafu_top_0.rx_c1_wrvalid;
-                             
-   assign tx_c1_wrvalid    = translator.afu_wrapper_inst.cafu_top_0.tx_c1_wrvalid;
-   assign tx_c0_almostfull = translator.afu_wrapper_inst.cafu_top_0.tx_c0_almostfull;   
-   assign tx_c1_almostfull = translator.afu_wrapper_inst.cafu_top_0.tx_c1_almostfull;
+   assign clk = translator.afu_wrapper_inst.cafu_top_0.clk;
+   assign resetb = translator.afu_wrapper_inst.cafu_top_0.resetb;
+   
+   qpi_driver driver(
+                        .clk(translator.afu_wrapper_inst.cafu_top_0.clk),          
+                        .resetb(translator.afu_wrapper_inst.cafu_top_0.resetb),       
 
-   assign lp_initdone    = translator.afu_wrapper_inst.cafu_top_0.lp_initdone;  
+                        .rx_c0_header(translator.afu_wrapper_inst.cafu_top_0.rx_c0_header), 
+                        .rx_c0_data(translator.afu_wrapper_inst.cafu_top_0.rx_c0_data),   
+                        .rx_c0_wrvalid(translator.afu_wrapper_inst.cafu_top_0.rx_c0_wrvalid),
+                        .rx_c0_rdvalid(translator.afu_wrapper_inst.cafu_top_0.rx_c0_rdvalid),
+                        .rx_c0_cfgvalid(translator.afu_wrapper_inst.cafu_top_0.rx_c0_cfgvalid),
+                        .rx_c1_header(translator.afu_wrapper_inst.cafu_top_0.rx_c1_header), 
+                        .rx_c1_wrvalid(translator.afu_wrapper_inst.cafu_top_0.rx_c1_wrvalid),
+                        
+                        .tx_c0_header(translator.afu_wrapper_inst.cafu_top_0.tx_c0_header), 
+                        .tx_c0_rdvalid(translator.afu_wrapper_inst.cafu_top_0.tx_c0_rdvalid),
+                        .tx_c1_header(translator.afu_wrapper_inst.cafu_top_0.tx_c1_header),  
+                        .tx_c1_data(translator.afu_wrapper_inst.cafu_top_0.tx_c1_data),                                               
+                        .tx_c1_wrvalid(translator.afu_wrapper_inst.cafu_top_0.tx_c1_wrvalid),
+                        .tx_c0_almostfull(translator.afu_wrapper_inst.cafu_top_0.tx_c0_almostfull),   
+                        .tx_c1_almostfull(translator.afu_wrapper_inst.cafu_top_0.tx_c1_almostfull),
 
-   // Output
-   assign translator.afu_wrapper_inst.cafu_top_0.tx_c0_header  = tx_c0_header; 
-   assign translator.afu_wrapper_inst.cafu_top_0.tx_c0_rdvalid = tx_c0_rdvalid;
-   assign translator.afu_wrapper_inst.cafu_top_0.tx_c1_header  = tx_c1_header; 
-   assign translator.afu_wrapper_inst.cafu_top_0.tx_c1_data    =  tx_c1_data;   
-                                             
+                        .lp_initdone(translator.afu_wrapper_inst.cafu_top_0.lp_initdone),  
+
+                        .rx_data(rx_data),
+                        .rx_not_empty(rx_not_empty),
+                        .rx_rdy(rx_rdy),
+                        .rx_enable(rx_enable),
+
+                        // TX side
+                        .tx_data(tx_data),
+                        .tx_not_full(tx_not_full),
+                        .tx_rdy(tx_rdy),
+                        .tx_enable(tx_enable)
+                                          
+                     );
+                                                                 
+   initial
+     begin
+        
+        $dumpfile("driver_dump.vcd");
+        $dumpvars(0, driver);        
+        $dumpon;
+        
+     end
+                           
 endmodule
    

@@ -31,8 +31,10 @@
 
 // This code wraps the QPI CCI (coherent cache interface) in bluespec.
 
-import FIFOF::*;
+import Clocks::*;
 import Vector::*;
+import FIFO::*;
+import FIFOF::*;
 
 `include "awb/provides/umf.bsh"
 `include "awb/provides/physical_platform_utils.bsh"
@@ -68,37 +70,72 @@ endinterface
 // rx_header ~some response from the cache
 interface QPI_DEVICE_UG#(numeric type tx_header, numeric type rx_header, numeric type cache_width);
 
+    method Action                           deq();
+    method Bit#(SizeOf#(UMF_CHUNK))         first();
+    method Action                           write(Bit#(SizeOf#(UMF_CHUNK)) chunk);
+    method Bool                             write_ready();
+
     interface Clock qpi_clk;
     interface Reset qpi_rst_n;
 endinterface
 
+Integer umfChunkSize = valueOf(SizeOf#(UMF_CHUNK));
+
 import "BVI" qpi_wrapper = 
-module mkQPIDevice_UG  (QPI_DEVICE_UG#(`CCI_TXHDR_WIDTH, `CCI_RXHDR_WIDTH, `CCI_CACHE_WIDTH));
+module mkQPIDevice_UG  (QPI_DRIVER);
 
     parameter TXHDR_WIDTH = `CCI_TXHDR_WIDTH;
     parameter RXHDR_WIDTH = `CCI_RXHDR_WIDTH;
     parameter CACHE_WIDTH = `CCI_CACHE_WIDTH;
+    parameter UMF_WIDTH   = umfChunkSize;
+
+    output_clock clock(clk);
+    output_reset reset(resetb) clocked_by (clock);
 
     default_clock no_clock;
     default_reset no_reset;
 
-    output_clock qpi_clk(clk);
-    output_reset qpi_rst_n(resetb) clocked_by (qpi_clk);
+    method deq() ready(rx_rdy) enable(rx_enable) clocked_by(clock) reset_by(reset);
+    method rx_data first() ready(rx_rdy) clocked_by(clock) reset_by(reset);
+    method write(tx_data) ready(tx_rdy) enable(tx_enable) clocked_by(clock) reset_by(reset);
+    method tx_not_full write_ready() clocked_by(clock) reset_by(reset);
+
+    schedule (deq) C (deq);
+    schedule (deq) CF (first, write, write_ready);
+    schedule (first) CF (deq, first, write, write_ready);
+    schedule (write) C (write);    
+    schedule (write) CF (deq, first, write_ready);
+    schedule (write_ready) CF (deq, first, write, write_ready);
 
 endmodule
 
 module [CONNECTED_MODULE] mkQPIDevice#(SOFT_RESET_TRIGGER softResetTrigger) (QPI_DEVICE);
 
+    // FIFOs for coming out of QPI domain.
+
     let qpiDevice <- mkQPIDevice_UG; 
 
-    interface QPI_DRIVER driver;
-        method deq = ?;
-        method first = ?;
-        method write = ?;
-        method write_ready = ?;
+    SyncFIFOIfc#(UMF_CHUNK) syncReadQ <- mkSyncFIFOToCC(16, qpiDevice.clock, qpiDevice.reset);
+    SyncFIFOIfc#(UMF_CHUNK) syncWriteQ <- mkSyncFIFOFromCC(16, qpiDevice.clock);
 
-        interface clock = qpiDevice.qpi_clk;
-        interface reset = qpiDevice.qpi_rst_n;
+    rule pullDataIn;
+        syncReadQ.enq(qpiDevice.first);
+        qpiDevice.deq;
+    endrule
+
+    rule pushDataOut;
+        qpiDevice.write(syncWriteQ.first);
+        syncWriteQ.deq;
+    endrule
+
+    interface QPI_DRIVER driver;
+        method deq = syncReadQ.deq;
+        method first = syncReadQ.first;
+        method write = syncWriteQ.enq;
+        method write_ready = syncWriteQ.notFull;
+
+        interface clock = qpiDevice.clock;
+        interface reset = qpiDevice.reset;
     endinterface
 
     interface QPI_WIRES wires;

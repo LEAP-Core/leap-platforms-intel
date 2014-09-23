@@ -40,9 +40,10 @@ module frame_release
   (
     input logic clk,
     input logic resetb,
-   
-    cci_bus_t cci_bus,
-    afu_bus_t afu_bus,
+
+    input  afu_csr_t           csr,
+    output frame_arb_t         frame_reader,
+    input  channel_grant_arb_t write_grant,   
 
     input [LOG_FRAME_BASE_POINTER - 1:0] frame_base_pointer,
     input release_frame
@@ -63,7 +64,7 @@ module frame_release
          frame_number_clear <= 0;
       end else begin
          // If we get a grant, proceed to the next frame.
-         frame_number_clear <= frame_number_clear + afu_bus.frame_reader.write.grant;
+         frame_number_clear <= frame_number_clear + write_grant.reader_grant;
       end
    end
 
@@ -71,7 +72,7 @@ module frame_release
       frames_to_be_cleared_next = frames_to_be_cleared;      
       if(release_frame)
         frames_to_be_cleared_next = frames_to_be_cleared_next + 1;
-      if(afu_bus.frame_reader.write.grant)
+      if(write_grant.reader_grant)
         frames_to_be_cleared_next = frames_to_be_cleared_next - 1;      
    end
    
@@ -85,14 +86,14 @@ module frame_release
 
    tx_header_t write_header;
 
-   assign afu_bus.frame_reader.write.request = ( frames_to_be_cleared > 0);
+   assign frame_reader.write.request = ( frames_to_be_cleared > 0);
   
    always_comb begin
-      afu_bus.frame_reader.writeHeader = 0;
-      afu_bus.frame_reader.writeHeader.request_type = WrLine;
-      afu_bus.frame_reader.writeHeader.address = {frame_base_pointer, frame_number_clear, frame_chunks_zero}; 
-      afu_bus.frame_reader.writeHeader.mdata = 0; // No metadata necessary
-      afu_bus.frame_reader.writeData = 1'b0; // only need to set bottom bit.
+      frame_reader.write_header = 0;
+      frame_reader.write_header.request_type = WrLine;
+      frame_reader.write_header.address = {frame_base_pointer, frame_number_clear, frame_chunks_zero}; 
+      frame_reader.write_header.mdata = 0; // No metadata necessary
+      frame_reader.data = 1'b0; // only need to set bottom bit.
    end
 
    

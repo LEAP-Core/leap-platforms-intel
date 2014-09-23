@@ -108,16 +108,33 @@ module qpi_driver#(parameter TXHDR_WIDTH=61, RXHDR_WIDTH=18, CACHE_WIDTH=512, UM
    output                    tx_rdy;
    input                     tx_enable;
 
-   cci_bus_t cci_bus();
+   // Internal module wiring.
 
-   // connect CCI pins to cci_bus
-   cci_adaptor cci_adaptor_inst(.*);
+   afu_csr_t              csr;
+ 
+   frame_arb_t            frame_writer;
+   frame_arb_t            frame_reader;
+   frame_arb_t            status_writer;
+   channel_grant_arb_t    write_grant;
+   channel_grant_arb_t    read_grant;
    
-   qpi_csr qpi_csr_inst(.*);
+   tx_c0_t                tx0;
+   tx_c1_t                tx1;
+   rx_c0_t                rx0;
+   rx_c1_t                rx1;
+   logic                  tx0_almostfull;
+   logic                  tx1_almostfull;
+              
+   // connect CCI pins to cci_bus
+   cci_adaptor       cci_adaptor_inst(.*);
+   
+   qpi_csr           qpi_csr_inst(.*);
 
-   frame_reader frame_reader_inst(.*);
-   frame_writer frame_writer_inst(.*);
+   frame_reader      frame_reader_inst(.*);
+   frame_writer      frame_writer_inst(.*);
+   status_writer     status_writer_inst(.*);
+   cci_write_arbiter write_arb(.*);
+   cci_read_arbiter  read_arb(.*);
   
-
 endmodule
    

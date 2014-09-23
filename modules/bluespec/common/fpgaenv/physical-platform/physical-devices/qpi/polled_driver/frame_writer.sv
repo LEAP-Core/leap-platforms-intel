@@ -36,10 +36,14 @@ module frame_writer
   (
     input logic clk,
     input logic resetb,
-   
-    cci_bus_t cci_bus,
-    afu_bus_t afu_bus,
 
+    input rx_c0_t rx0,
+
+    input  afu_csr_t           csr,
+    output frame_arb_t         frame_writer,
+    input  channel_grant_arb_t write_grant,
+    input  channel_grant_arb_t read_grant,
+   
     // LEAP-facing interface 
     input [UMF_WIDTH-1:0]     tx_data,
     output                    tx_not_full,
@@ -68,36 +72,40 @@ module frame_writer
 
    
    // Extract frame base pointer from CSRs.
-   assign frame_base_pointer = afu_bus.csr.afu_write_frame[QPI_ADDR_SZ+QPI_ADDR_OFFSET:QPI_ADDR_SZ+QPI_ADDR_OFFSET-LOG_FRAME_BASE_POINTER];
+   assign frame_base_pointer = csr.afu_write_frame[QPI_ADDR_SZ+QPI_ADDR_OFFSET:QPI_ADDR_SZ+QPI_ADDR_OFFSET-LOG_FRAME_BASE_POINTER];
 
    read_metadata_t response_read_metadata;
 
-   assign response_read_metadata = unpack_read_metadata(cci_bus.rx0.header);
+   assign response_read_metadata = unpack_read_metadata(rx0.header);
 
    logic frame_header_valid;
-   assign frame_header_valid = cci_bus.rx0.rdvalid && ~response_read_metadata.is_read;
+   assign frame_header_valid = rx0.rdvalid && ~response_read_metadata.is_read && response_read_metadata.is_header;
    // If header is not valid for reading, then it is valid for writing.
-   logic frame_ready_for_write = ~header_valid(cci_bus.rx0.data);
+   logic frame_ready_for_write;
+   assign frame_ready_for_write = ~header_in_use(rx0.data);
 
    // We're done with a frame if
    // 1) Idle count expired and data in frame
    // 2) Frame might be full this cycle (whether it is or not is a non-issue).
-   logic done_with_writing = ((idle_count == ~0) && (frame_chunks != 1)) || (frame_chunks == (~0 ^ 1'b1));
+   logic done_with_writing;   
+   assign done_with_writing = ((idle_count == ~0) && (frame_chunks != 1)) || (frame_chunks == (~0 ^ 1'b1));
 
-   logic data_write_success = (state == WRITE) && afu_bus.frame_writer_grant.write_grant;
+   logic data_write_success;   
+   assign data_write_success = (state == WRITE) && write_grant.writer_grant;
 
    logic [UMF_WIDTH-1:0] write_data;
-   logic [UMF_WIDTH-1:0] write_data_rdy;
+   logic                 write_data_rdy;
    
    
    logic deq_rdy;
    logic first_rdy;
    
-   logic data_availble = deq_rdy && first_rdy;
+   logic data_available;
+   assign data_available = deq_rdy && first_rdy;
 
    // FSM state
    always_ff @(posedge clk) begin
-      if (!resetb || !afu_bus.csr.afu_en) begin
+      if (!resetb || !csr.afu_en) begin
          state <= IDLE;
       end else begin
          state <= next_state;
@@ -110,19 +118,20 @@ module frame_writer
         IDLE :
           next_state = POLL_HEADER;
         POLL_HEADER :
-          next_state = (afu_bus.frame_writer_grant.read_grant) ? WAIT_HEADER : POLL_HEADER;
+          next_state = (read_grant.writer_grant) ? WAIT_HEADER : POLL_HEADER;
         WAIT_HEADER :
           begin
-             next_state = WAIT_HEADER;
+             // No header -or- header not for us.
+             next_state = WAIT_HEADER;            
              if(frame_header_valid && frame_ready_for_write)
                begin
                   next_state = WRITE;                  
                end
-             else if(~frame_header_valid)
+             else if(frame_header_valid && ~frame_ready_for_write) // we got a header, but it has not been freed by software.
                begin
                   // Need to poll again.
                   next_state = POLL_HEADER;                  
-               end             
+               end
           end // case: WAIT_HEADER
         WRITE:
           begin
@@ -130,9 +139,9 @@ module frame_writer
              next_state = (done_with_writing)?WRITE_FENCE:WRITE;             
           end
         WRITE_FENCE:
-          next_state = (afu_bus.frame_writer_grant.write_grant)?WRITE_FENCE:WRITE_CONTROL;
+          next_state = (write_grant.writer_grant)?WRITE_FENCE:WRITE_CONTROL;
         WRITE_CONTROL:
-          next_state = (afu_bus.frame_writer_grant.write_grant)?WRITE_CONTROL:POLL_HEADER;        
+          next_state = (write_grant.writer_grant)?WRITE_CONTROL:POLL_HEADER;        
         default :
           next_state = state;
       endcase // case (state)
@@ -157,7 +166,7 @@ module frame_writer
         end
 
       // If we succeed in writing back control we'll move on.
-      if(state == WRITE_CONTROL && afu_bus.frame_writer_grant.write_grant)
+      if(state == WRITE_CONTROL && write_grant.writer_grant)
         begin
            frame_number_next = frame_number + 1;
         end      
@@ -173,6 +182,7 @@ module frame_writer
 
       if(data_write_success)
         begin
+           $display("Finished writing chunk %d", frame_chunks);           
            frame_chunks_next = frame_chunks + 1;
         end
    end // always_comb
@@ -203,26 +213,26 @@ module frame_writer
       read_header = 0;
       read_header.request_type = RdLine;
       read_header.address = {frame_base_pointer,frame_number,frame_chunks_zero}; 
-      read_header.mdata = header_read_metadata;      
+      read_header.mdata = pack_read_metadata(header_read_metadata);      
    end
 
    tx_header_t write_header;
    // Request a write for a fence, write control, or if we have data.
    // 
-   assign afu_bus.frame_writer.write.request = (state == WRITE_FENCE) || (state == WRITE_CONTROL) || (state == WRITE && write_data_rdy);
+   assign frame_writer.write.request = (state == WRITE_FENCE) || (state == WRITE_CONTROL) || (state == WRITE && write_data_rdy);
   
    always_comb begin
-      afu_bus.frame_writer.writeHeader = 0;
-      afu_bus.frame_writer.writeData = (WRITE)?{0,write_data}:{0,frame_chunks - 1,1'b1};                                                                                                            
-      afu_bus.frame_writer.writeHeader.request_type = (state == WRITE_FENCE)?WrFence:WrLine;
-      afu_bus.frame_writer.writeHeader.address = {frame_base_pointer, frame_number, (state == WRITE)?frame_chunks:frame_chunks_zero}; 
-      afu_bus.frame_writer.writeHeader.mdata = 0; // No metadata necessary
+      frame_writer.write_header = 0;
+      frame_writer.data = (WRITE)?{0,write_data}:{'hdead0000,frame_chunks - 1,1'b1};                                                                                                            
+      frame_writer.write_header.request_type = (state == WRITE_FENCE)?WrFence:WrLine;
+      frame_writer.write_header.address = {frame_base_pointer, frame_number, (state == WRITE)?frame_chunks:frame_chunks_zero}; 
+      frame_writer.write_header.mdata = 0; // No metadata necessary
    end
   
    assign header_read_rdy = state == POLL_HEADER;
 
-   assign afu_bus.frame_writer.read.request = header_read_rdy;
-   assign afu_bus.frame_writer.read_header = read_header;
+   assign frame_writer.read.request = header_read_rdy;
+   assign frame_writer.read_header = read_header;
    
 
    mkSizedFIFOUMF dataBuf(
@@ -245,7 +255,7 @@ module frame_writer
 		      .notEmpty(),
 		      .RDY_notEmpty(),
 
-		      .EN_clear(),
+		      .EN_clear(1'b0),
 		      .RDY_clear());
         
 

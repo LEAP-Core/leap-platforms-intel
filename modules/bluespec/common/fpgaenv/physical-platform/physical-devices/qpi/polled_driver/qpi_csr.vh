@@ -14,6 +14,15 @@ localparam ADDR_AFU_CNTXT_BASEH    = 13'ha0c;
 
 localparam ADDR_AFU_EN             = 13'ha10;
 
+localparam ADDR_READ_FRAME_BASEL    = 13'ha18;
+
+localparam ADDR_READ_FRAME_BASEH    = 13'ha1c;
+
+localparam ADDR_WRITE_FRAME_BASEL   = 13'ha20;
+
+localparam ADDR_WRITE_FRAME_BASEH   = 13'ha24;
+
+
 typedef struct
                 {
                    logic afu_dsm_base_valid;
@@ -21,8 +30,9 @@ typedef struct
                    logic        afu_cntxt_base_valid;
                    logic [63:0] afu_cntxt_base;
                    logic        afu_en;
+                   logic [63:0] afu_write_frame;
+                   logic [63:0] afu_read_frame;
                 } afu_csr_t;
-
 
 `endif //  `ifndef AFU_CSR_VH
 

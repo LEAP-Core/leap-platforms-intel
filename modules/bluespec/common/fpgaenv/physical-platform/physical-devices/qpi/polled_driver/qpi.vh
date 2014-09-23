@@ -84,16 +84,17 @@
 
  typedef struct
    {
-      logic read_grant;
-      logic write_grant;  
+      logic reader_grant;
+      logic writer_grant;
+      logic status_grant;  
    } channel_grant_arb_t;
 
  typedef struct
    {
     channel_req_arb_t read;
-    tx_header_t   readHeader;  
+    tx_header_t   read_header;  
     channel_req_arb_t write;
-    tx_header_t   writeHeader;
+    tx_header_t   write_header;
     logic [511:0] data;
   } frame_arb_t;
     
@@ -102,7 +103,6 @@
    {
     tx_header_t  header;
     logic         rdvalid;
-    logic         almostfull;
     } tx_c0_t;
 
  typedef struct
@@ -110,7 +110,6 @@
     tx_header_t   header;
     logic [511:0] data;
     logic         wrvalid;
-    logic         almostfull;
     } tx_c1_t;
 
  typedef struct
@@ -147,17 +146,17 @@
 
  // Function: Packs read metadata 
  function automatic read_metadata_t unpack_read_metadata;
-    input    [12:0] metadata;
+    input    [17:0] metadata;
     begin
        unpack_read_metadata = {is_read: metadata[12], is_header: metadata[11], rob_addr: metadata[10:0]};
     end
  endfunction //
 
 
- function automatic header_valid;
+ function automatic header_in_use;
     input    [CACHE_WIDTH-1:0]  header;
     begin
-       header_valid = header[0];
+       header_in_use = header[0];
     end
  endfunction //
 
@@ -167,22 +166,24 @@
        header_chunks = header[LOG_FRAME_CHUNKS:1];
     end
  endfunction
+
+//package QPI_DRIVER:
+// interface cci_bus_t;
+//    tx_c0_t tx0;
+//    tx_c1_t tx1;
+//    rx_c0_t rx0;
+//    rx_c1_t rx1;
+//    logic   lp_initdone;
+// endinterface // cci_bus_t
+
+// interface afu_bus_t;
+//    afu_csr_t    csr;
+//    frame_arb_t   frame_reader;
+//    frame_arb_t   frame_writer;
+//    channel_grant_arb_t frame_reader_grant;
+//    channel_grant_arb_t frame_writer_grant;  
+// endinterface // afu_bus_t
+//endpackage
   
 `endif //  `ifndef QPI_VH
-
- interface cci_bus_t;
-    tx_c0_t tx0;
-    tx_c1_t tx1;
-    rx_c0_t rx0;
-    rx_c1_t rx1;
-    logic   lp_initdone;
- endinterface // cci_bus_t
-
- interface afu_bus_t;
-    afu_csr_t    csr;
-    frame_arb_t   frame_reader;
-    frame_arb_t   frame_writer;
-    channel_grant_arb_t frame_reader_grant;
-    channel_grant_arb_t frame_writer_grant;  
- endinterface // afu_bus_t
 

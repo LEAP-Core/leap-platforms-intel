@@ -41,9 +41,13 @@ module frame_reader
     input logic clk,
     input logic resetb,
    
-    cci_bus_t cci_bus,
-    afu_bus_t afu_bus,
-
+    input rx_c0_t rx0,
+   
+    input  afu_csr_t           csr,
+    output frame_arb_t         frame_reader,
+    input  channel_grant_arb_t read_grant,
+    input  channel_grant_arb_t write_grant,
+   
     output [UMF_WIDTH-1:0]    rx_data,   
     output                    rx_not_empty,
     output                    rx_rdy,
@@ -74,7 +78,7 @@ module frame_reader
    logic [LOG_FRAME_CHUNKS - 1:0]       frame_chunks_total_next;
 
    // Extract frame base pointer from CSRs.
-   assign frame_base_pointer = afu_bus.csr.afu_read_frame[QPI_ADDR_SZ+QPI_ADDR_OFFSET:QPI_ADDR_SZ+QPI_ADDR_OFFSET-LOG_FRAME_BASE_POINTER];
+   assign frame_base_pointer = csr.afu_read_frame[QPI_ADDR_SZ+QPI_ADDR_OFFSET:QPI_ADDR_SZ+QPI_ADDR_OFFSET-LOG_FRAME_BASE_POINTER];
       
    state_t state;
    state_t next_state;
@@ -82,11 +86,11 @@ module frame_reader
 
    read_metadata_t response_read_metadata;
 
-   assign response_read_metadata = unpack_read_metadata(cci_bus.rx0.header);
+   assign response_read_metadata = unpack_read_metadata(rx0.header);
    
    // FSM state
    always_ff @(posedge clk) begin
-      if (!resetb || !afu_bus.csr.afu_en) begin
+      if (!resetb || !csr.afu_en) begin
          state <= IDLE;
       end else begin
          state <= next_state;
@@ -94,10 +98,13 @@ module frame_reader
    end
 
    logic frame_header_valid;
-   assign frame_header_valid = cci_bus.rx0.rdvalid && response_read_metadata.is_read && response_read_metadata.is_header;
-   logic frame_ready_for_read = header_valid(cci_bus.rx0.data);
+   logic frame_ready_for_read;
 
-   assign data_read_accepted = afu_bus.frame_reader_grant.read_grant && (state == READ);                                           
+   
+   assign frame_header_valid = rx0.rdvalid && response_read_metadata.is_read && response_read_metadata.is_header;
+   assign frame_ready_for_read = header_in_use(rx0.data);
+
+   assign data_read_accepted = read_grant.reader_grant && (state == READ);                                           
    assign last_data_read_accepted = data_read_accepted && (frame_chunks_total == frame_chunks);
    
    always_comb begin
@@ -105,19 +112,20 @@ module frame_reader
         IDLE :
           next_state = POLL_HEADER;
         POLL_HEADER :
-          next_state = (afu_bus.frame_reader_grant.read_grant) ? WAIT_HEADER : POLL_HEADER;
+          next_state = (read_grant.reader_grant) ? WAIT_HEADER : POLL_HEADER;
         WAIT_HEADER :
           begin
-             next_state = WAIT_HEADER;
+             // No header or header was not for me.
+             next_state = WAIT_HEADER;            
              if(frame_header_valid && frame_ready_for_read)
-               begin
+               begin                  
                   next_state = READ;                  
                end
-             else if(~frame_header_valid)
+             else if(frame_header_valid && ~frame_ready_for_read)
                begin
                   // Need to poll again.
                   next_state = POLL_HEADER;                  
-               end             
+               end
           end // case: WAIT_HEADER
         READ:
           begin
@@ -145,9 +153,9 @@ module frame_reader
 
    always_comb begin
       frame_chunks_total_next = frame_chunks_total;
-      if(state == WAIT_HEADER)
+      if(state != READ)
         begin
-           frame_chunks_total_next = header_chunks(cci_bus.rx0.data);
+           frame_chunks_total_next = header_chunks(rx0.data);
         end
    end
    
@@ -172,7 +180,7 @@ module frame_reader
            frame_chunks_next = 0;           
         end
 
-      if(state == READ && afu_bus.frame_reader_grant.read_grant)
+      if(state == READ && read_grant.reader_grant)
         begin
            frame_chunks_next = frame_chunks + 1;
         end
@@ -187,7 +195,21 @@ module frame_reader
    logic incoming_read_valid;
    logic scoreboard_ready;
 
-   assign incoming_read_valid = cci_bus.rx0.rdvalid && cci_bus.rx0.read_metadata.is_header && cci_bus.rx0.read_metadata.is_read;
+   assign incoming_read_valid = rx0.rdvalid && response_read_metadata.is_read && !response_read_metadata.is_header;
+
+   always@(negedge clk)
+     begin
+         if(rx0.data != 0)
+          begin
+             $display("Frame reader got a response: header %h data %h (low: %h)", rx0.header, rx0.data, rx0.data[LOG_FRAME_CHUNKS:0]);
+             $display("Frame reader got a response: decode header ready %h chunks %h", frame_ready_for_read, frame_chunks_total_next);
+             $display("Frame reader got a response: is_read %h is_header %h", response_read_metadata.is_read, response_read_metadata.is_header);
+          end
+        if(state == READ)
+          begin
+             $display("Transition to READ!!!");             
+          end        
+     end
    
    logic [CACHE_WIDTH-1:0]       read_line;
    logic                         read_line_score_rdy;
@@ -221,8 +243,8 @@ module frame_reader
    assign data_read_rdy = scoreboard_slot_rdy && state == READ;
    assign header_read_rdy = state == POLL_HEADER;
 
-   assign afu_bus.frame_reader.read.request = data_read_rdy || header_read_rdy;
-   assign afu_bus.frame_reader.read_header = read_header;
+   assign frame_reader.read.request = data_read_rdy || header_read_rdy;
+   assign frame_reader.read_header = read_header;
                            
    assign data_read_metadata.is_read   = 1'b1;   
    assign data_read_metadata.is_header = 1'b0;   
@@ -252,8 +274,8 @@ module frame_reader
 		   .enq(scoreboard_slot_id),
 		   .RDY_enq(scoreboard_slot_rdy),
 
-		   .setValue_id(cci_bus.rx0.read_metadata.rob_addr[BUFFER_ADDR_WIDTH-1:0]),
-		   .setValue_data(cci_bus.rx0.data),
+		   .setValue_id(response_read_metadata.rob_addr[BUFFER_ADDR_WIDTH-1:0]),
+		   .setValue_data(rx0.data),
 		   .EN_setValue(incoming_read_valid),
 		   .RDY_setValue(scoreboard_ready), // We had better be ready.
 
@@ -293,15 +315,21 @@ module frame_reader
 		      .notEmpty(),
 		      .RDY_notEmpty(),
 
-		      .EN_clear(),
+		      .EN_clear(1'b0),
 		      .RDY_clear());
 
+   frame_arb_t         frame_reader_release;
+   assign frame_reader.write_header  = frame_reader_release.write_header;
+   assign frame_reader.write.request = frame_reader_release.write.request;
+   assign frame_reader.data          = frame_reader_release.data;
+      
    frame_release releaseMod(
                       .clk(clk),
                       .resetb(resetb),
    
-                      .cci_bus(cci_bus),
-                      .afu_bus(afu_bus),
+                      .csr(csr),
+                      .frame_reader(frame_reader_release),
+                      .write_grant(write_grant),   
 
                       .frame_base_pointer(frame_base_pointer),
                       .release_frame(release_frame)

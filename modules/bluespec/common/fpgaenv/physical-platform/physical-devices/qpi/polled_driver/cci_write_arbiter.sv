@@ -35,9 +35,17 @@ module cci_write_arbiter
   (
     input logic clk,
     input logic resetb,
+
+    input  afu_csr_t           csr,
    
-    cci_bus_t cci_bus,
-    afu_bus_t afu_bus
+    input   frame_arb_t            frame_writer,
+    input   frame_arb_t            frame_reader,
+    input   frame_arb_t            status_writer,
+    output  channel_grant_arb_t    write_grant,
+   
+    output tx_c1_t                 tx1,
+    input  logic                   tx1_almostfull
+
    );
 
 
@@ -52,14 +60,15 @@ module cci_write_arbiter
    // Issue control FSM
    cci_can_issue issue_control( .clk(clk),
                                 .resetb(resetb),
-                                .almostfull(cci_bus.tx1.almostfull),
+                                .almostfull(tx1_almostfull),
                                 .can_issue(can_issue),
-                                .issue(afu_bus.frame_reader_grant.write_grant | afu_bus.frame_writer_grant.write_grant)
-                              )
+                                .issue(write_grant.reader_grant | write_grant.writer_grant)
+                              );
+   
        
    // FSM state
    always_ff @(posedge clk) begin
-      if (!resetb || !afu_bus.csr.afu_en) begin
+      if (!resetb || !csr.afu_en) begin
          state <= FAVOR_FRAME_READER;
       end else begin
          state <= next_state;
@@ -67,7 +76,7 @@ module cci_write_arbiter
    end
 
    always_comb begin
-      if(afu_bus.frame_reader_grant.write_grant)
+      if(write_grant.writer_grant)
           next_state = FAVOR_FRAME_WRITER;
       else
           next_state = FAVOR_FRAME_READER;
@@ -79,43 +88,49 @@ module cci_write_arbiter
 
    // Set outgoing write control packet.
    always_comb begin
+      write_grant.reader_grant = 0;
+      write_grant.writer_grant = 0;
+      write_grant.status_grant = 0;                                           
+
+      header  = status_writer.write_header;
+      data    = status_writer.data;
       
-      if(afu_bus.frame_reader.write.request && (state == FAVOR_FRAME_READER || !afu_bus.frame_reader.write.request))
+      if(status_writer.write.request)
+        begin
+            write_grant.status_grant = can_issue;
+        end                                           
+      else if(frame_reader.write.request && (state == FAVOR_FRAME_READER || !frame_reader.write.request))
          begin
-            header  = afu_bus.frame_reader.writeHeader;
-            data    = afu_bus.frame_reader.data;
+            header  = frame_reader.write_header;
+            data    = frame_reader.data;
             
-            afu_bus.frame_reader_grant.write_grant = can_issue;                                           
+            write_grant.reader_grant = can_issue;                                           
          end
-      else if(afu_bus.frame_writer.write.request)
+      else if(frame_writer.write.request)
         begin
-            header  = afu_bus.frame_writer.writeHeader;
-            data    = afu_bus.frame_writer.data;
-            afu_bus.frame_writer_grant.write_grant = can_issue;                                           
+            header  = frame_writer.write_header;
+            data    = frame_writer.data;
+            write_grant.writer_grant = can_issue;                                           
         end
-      else
-        begin
-           afu_bus.frame_reader_grant.write_grant = 0;
-           afu_bus.frame_writer_grant.write_grant = 0;                                           
-        end
-      wrvalid = (afu_bus.frame_reader.write.request || afu_bus.frame_writer.write.request) && can_issue;   
+
+      wrvalid = (frame_reader.write.request || frame_writer.write.request || status_writer.write.request) && can_issue;   
    end
 
    // Register outgoing control packet.
    always_ff @(posedge clk) begin
       
-      cci_bus.header      <= header;
+      tx1.header      <= header;
       // Should we be setting this while in reset? Who knows...
-      cci_bus.tx1.wrvalid <= wrvalid;
-      cci_bus.tx1.data    <= data;
+      tx1.wrvalid <= wrvalid;
+      tx1.data    <= data;
 
    end
 
    // Some assertions
    always_comb begin
-      if(afu_bus.frame_writer_grant.write_grant && afu_bus.frame_reader_grant.write_grant)
+      if(write_grant.writer_grant && write_grant.reader_grant && resetb && ~clk)
         begin
-           $display("Double grant.");        
+           $display("Double grant of reader %d %d.", write_grant.reader_grant, write_grant.writer_grant);        
            $finish;           
         end
    end

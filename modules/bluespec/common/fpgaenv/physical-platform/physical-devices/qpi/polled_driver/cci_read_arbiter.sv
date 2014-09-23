@@ -35,9 +35,16 @@ module cci_read_arbiter
   (
     input logic clk,
     input logic resetb,
+
+    input   afu_csr_t           csr,
    
-    cci_bus_t cci_bus,
-    afu_bus_t afu_bus
+    input   frame_arb_t            frame_writer,
+    input   frame_arb_t            frame_reader,
+
+    output  channel_grant_arb_t    read_grant,
+   
+    output tx_c0_t                 tx0,
+    input  logic                   tx0_almostfull
    );
 
 
@@ -52,14 +59,14 @@ module cci_read_arbiter
    // Issue control FSM
    cci_can_issue issue_control( .clk(clk),
                                 .resetb(resetb),
-                                .almostfull(cci_bus.tx0.almostfull),
+                                .almostfull(tx0_almostfull),
                                 .can_issue(can_issue),
-                                .issue(afu_bus.frame_reader_grant.read_grant | afu_bus.frame_writer_grant.read_grant)
-                              )
+                                .issue(read_grant.reader_grant | read_grant.writer_grant)
+                              );
        
    // FSM state
    always_ff @(posedge clk) begin
-      if (!resetb || !afu_bus.csr.afu_en) begin
+      if (!resetb || !csr.afu_en) begin
          state <= FAVOR_FRAME_READER;
       end else begin
          state <= next_state;
@@ -67,7 +74,7 @@ module cci_read_arbiter
    end
 
    always_comb begin
-      if(afu_bus.frame_reader_grant.read_grant)
+      if(read_grant.reader_grant)
           next_state = FAVOR_FRAME_WRITER;
       else
           next_state = FAVOR_FRAME_READER;
@@ -78,40 +85,39 @@ module cci_read_arbiter
 
    // Set outgoing write control packet.
    always_comb begin
-      
-      if(afu_bus.frame_reader.read.request && (state == FAVOR_FRAME_READER || !afu_bus.frame_reader.read.request))
+      read_grant.reader_grant = 0;
+      read_grant.writer_grant = 0;
+      read_grant.status_grant = 0; // status never reads...                                           
+
+      if(frame_reader.read.request && (state == FAVOR_FRAME_READER || !frame_reader.read.request))
          begin
-            header = afu_bus.frame_reader.readHeader;
-            afu_bus.frame_reader_grant.read_grant = can_issue;                                           
+            header = frame_reader.read_header;
+            read_grant.reader_grant = can_issue;                                           
          end
-      else if(afu_bus.frame_writer.read.request)
+      else if(frame_writer.read.request)
         begin
-            header = afu_bus.frame_writer.readHeader;
-            afu_bus.frame_writer_grant.read_grant = can_issue;                                           
+            header = frame_writer.read_header;
+            read_grant.writer_grant = can_issue;                                           
         end
-      else
-        begin
-           afu_bus.frame_reader_grant.read_grant = 0;
-           afu_bus.frame_writer_grant.read_grant = 0;                                           
-        end
-      rdvalid = (afu_bus.frame_reader.read.request || afu_bus.frame_writer.read.request) && can_issue;   
+
+      rdvalid = (frame_reader.read.request || frame_writer.read.request) && can_issue;   
    end
 
    // Register outgoing control packet.
    always_ff @(posedge clk) begin
       
-      cci_bus.tx0.header      <= header;
+      tx0.header      <= header;
       // Should we be setting this while in reset? Who knows...
-      cci_bus.tx0.rdvalid <= rdvalid;
-
+      tx0.rdvalid     <= rdvalid;
+      
    end
    
  
    // Some assertions
    always_comb begin
-      if(afu_bus.frame_writer_grant.read_grant && afu_bus.frame_reader_grant.read_grant)
+      if(read_grant.reader_grant && read_grant.writer_grant && resetb && ~clk)
         begin
-           $display("Double grant.");        
+           $display("Double grant of reader %d %d.", read_grant.reader_grant, read_grant.writer_grant);        
            $finish;           
         end
    end

@@ -63,12 +63,19 @@
 # define MB(x)                     ((x) * 1024 * 1024)
 #endif // MB                                                                                                                                                                       
 
-#define CACHELINE_ALIGNED_ADDR(p)  ((p) >> LOG2_CL)
+#define CACHELINE_ALIGNED_ADDR(p)  (((UINT64)p) >> LOG2_CL)
 #define AFU_BUFFER_SIZE           CL(128)
 #define DSM_SIZE                  MB(4)
 
 
 #define AFU_BUFFER_SIZE           CL(128)
+
+#define FRAME_NUMBER            128
+#define FRAME_CHUNKS            64
+#define BUFFER_SIZE             CL(FRAME_NUMBER * FRAME_CHUNKS)
+#define FRAME_SIZE              CL(FRAME_CHUNKS)
+// For now, one chunk/cache line
+#define CHUNK_SIZE              CL(1)
 
 // DSM byte offset:                          0           4           8           c                                                                                                                        
 const uint32_t EXPECTED_AFU_ID[] = {0xaced0000, 0xaced0001, 0xaced0002, 0xaced0003};
@@ -88,21 +95,15 @@ class QPI_DEVICE_CLASS: public PLATFORMS_MODULE_CLASS
     AFU afu;
 
     // process/pipe state (physical channel)
-    int                       inpipe[2], outpipe[2];
-    int                       childpid;
-    class tbb::atomic<bool>   childAlive;
-    std::string               ioFile; 
-    std::string               *logicalName; 
-    pthread_t                 ReaderThreads[1];
-    pthread_t                 WriterThreads[1];
+    class tbb::atomic<bool> initReadComplete;
+    class tbb::atomic<bool> initWriteComplete;
 
-    int ParentRead() const { return inpipe[0]; };
-    int ParentWrite() const { return outpipe[1]; };
-    int ChildRead() const { return outpipe[0]; };
-    int ChildWrite() const { return inpipe[1]; };
-
-    class tbb::atomic<UINT64> initReadComplete;
-    class tbb::atomic<UINT64> initWriteComplete;
+    AFUBuffer                 *readBuffer;
+    AFUBuffer                 *writeBuffer;
+    UINT32                    readFrameNumber;
+    UINT32                    writeFrameNumber;
+    UINT32                    readChunkNumber;
+    UINT32                    readChunksTotal;
 
   public:
     QPI_DEVICE_CLASS(PLATFORMS_MODULE);
@@ -118,6 +119,17 @@ class QPI_DEVICE_CLASS: public PLATFORMS_MODULE_CLASS
     void Read(unsigned char*, int);    // blocking read
     void Write(unsigned char*, int);   // write
     void RegisterLogicalDeviceName(string name);
+    
+  private:
+    // This function is going to be woefully inefficient.
+    volatile UMF_CHUNK * getChunkAddress(AFUBuffer* buffer, int frameNumber, int chunkNumber)
+    {
+        //printf("Buffer virtual address %p (line %p)\n", buffer->virtual_address, CACHELINE_ALIGNED_ADDR(buffer->virtual_address));
+        volatile UMF_CHUNK *chunkAddr = (volatile UMF_CHUNK *)(((volatile char *)(buffer->virtual_address)) + frameNumber * FRAME_SIZE + chunkNumber * CHUNK_SIZE); 
+        //printf("Returning chunkAddr %p\n", chunkAddr);
+        return chunkAddr;
+    }
+
 };
 
 #endif

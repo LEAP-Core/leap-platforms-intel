@@ -19,13 +19,18 @@ AFU::AFU(const uint32_t* expected_afu_id, CCIDeviceImplementation imp, uint32_t 
   // reset AFU
   reset_afu();
 
+  printf("Writing DSM base %llx ...\n", dsm_buffer->physical_address);
+
   // write physical address of DSM to AFU CSR
   write_csr_64(CSR_AFU_DSM_BASE, dsm_buffer->physical_address);
 
   printf("Waiting for DSM update...\n");
 
   // poll AFU_ID until it is non-zero
-  while (read_dsm(0) == 0) {}
+
+  while (read_dsm(0) == 0) {
+    printf("Polling DSM...\n"); sleep(1);
+  }
 
   // check AFU_ID against expected value
   for (int i = 0; i < 4; i++) {
@@ -70,6 +75,44 @@ AFU::create_buffer(uint32_t size_bytes) {
 
   // set contents of buffer to 0
   memset((void *)buffer->virtual_address, 0, size_bytes);
+
+  // return buffer struct
+  return buffer;
+}
+
+
+AFUBuffer* 
+AFU::create_buffer_aligned(uint32_t size_bytes) {
+  // create a buffer struct instance
+ 
+  // Check that the input is a power of two
+  if(((size_bytes ^ (size_bytes - 1)) + 1) != 2 * size_bytes)
+  {
+      printf("Asked to align a non-power of two region, but this is not supported\n");
+      exit(1);
+  } 
+
+  AFUBuffer* buffer = create_buffer(2 * size_bytes);
+
+  printf(" Unaligned buffer: (virt) %p, (phy) %llx\n", buffer->virtual_address, buffer->physical_address);
+  // Now, let's adjust the pointers to create alignment.
+  // Note that we're aligning the PA to simplify the hardware. 
+  phys_addr original_diff = ((uintptr_t)(buffer->virtual_address)) - buffer->physical_address;
+  phys_addr aligned_addr = (phys_addr) (((buffer->physical_address + size_bytes)) & ~((phys_addr)size_bytes - 1)); 
+  phys_addr byte_difference =   aligned_addr - buffer->physical_address;  
+  buffer->physical_address = aligned_addr;
+
+  // Align the virtual ptr based on the physical alignment.
+  buffer->virtual_address = (uint8_t*) (((uintptr_t)(buffer->virtual_address) + byte_difference)); 
+
+  printf(" Aligned buffer: (virt) %p, (phy) %llx\n", buffer->virtual_address, buffer->physical_address);
+
+  phys_addr new_diff = ((uintptr_t)(buffer->virtual_address)) - buffer->physical_address;
+
+  if (original_diff != new_diff)
+  {
+      printf("Original: %llx != new %llx\n", original_diff, new_diff);
+  }
 
   // return buffer struct
   return buffer;

@@ -44,6 +44,7 @@
 #include <string.h>
 #include <errno.h>
 #include <iostream>
+#include <atomic>
 
 #include "platforms-module.h"
 #include "default-switches.h"
@@ -67,53 +68,6 @@ extern GLOBAL_ARGS globalArgs;
 // class constructor is non-blocking. 
 // ============================================
 
-void * QPI_DEVICE_CLASS::openReadThread(void *argv) {
-    QPI_DEVICE_CLASS *objectHandle = (QPI_DEVICE_CLASS*) argv;
-
-    int retries = 0;
-    string readFile(objectHandle->ioFile + "_FROM"); 
-
-    do
-    {
-        objectHandle->inpipe[0] =  open(readFile.c_str(), O_RDONLY);
-        retries ++;
-        sleep(1);
-    } while ((objectHandle->inpipe[0] < 0) && (retries < 120));
-
-    if(objectHandle->inpipe[0] < 0) 
-    {
-        fprintf(stderr, "CPU Timed out waiting for %s, transfers on this line result in deadlocks\n", readFile.c_str());
-        exit(1);
-    }
-
-    objectHandle->initReadComplete = 1;
-
-}
-
-void * QPI_DEVICE_CLASS::openWriteThread(void *argv) {
-    QPI_DEVICE_CLASS *objectHandle = (QPI_DEVICE_CLASS*) argv;
-    string writeFile(objectHandle->ioFile + "_TO"); 
-
-    // create write side first
-    mkfifo(writeFile.c_str(), S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
-
-    // This should block...
-    // maybe we need to wait a while for the FPGA to come up.
-    objectHandle->outpipe[1] = open(writeFile.c_str(), O_WRONLY);
-
-    if (objectHandle->ParentWrite() < 0)
-    {
-       printf("Failed trying to open %s\n", writeFile.c_str());
-
-       perror("output pipe WriterThread");
-       exit(1);
-    }
-
-    objectHandle->initWriteComplete = 1;
-
-}
-
-
 // ============================================
 //           Class member functions
 // ============================================
@@ -124,14 +78,14 @@ QPI_DEVICE_CLASS::QPI_DEVICE_CLASS(
         PLATFORMS_MODULE_CLASS(p),
         initReadComplete(),
         initWriteComplete(),
-        childAlive(),
-        ioFile(),
         afu(EXPECTED_AFU_ID, CCI_SIMULATION ? CCI_ASE : CCI_DIRECT)
 {
-    initReadComplete = 0;
-    initWriteComplete = 0;
-    childAlive = false;
-    logicalName = NULL;
+    initReadComplete = false;
+    initWriteComplete = false;
+    readFrameNumber = 0;
+    writeFrameNumber = 0;
+    readChunksTotal = 0;
+    readChunkNumber = 0;
     deviceSwitch = new COMMAND_SWITCH_DICTIONARY_CLASS("DEVICE_DICTIONARY");
 }
 
@@ -149,88 +103,42 @@ QPI_DEVICE_CLASS::Init()
     string executionDirectory = "";
     char * leapExecutionDirectory = getenv("LEAP_EXECUTION_DIRECTORY");
 
-
-    afu.write_csr(CSR_READ_BUFFER_LINES, 16);
-
-    // disable AFU                                                                                                                                                                                          
+    // disable AFU                             
+    cout << "Attempting to disable afu" << endl;                                                                                                                                                             
     afu.write_csr(CSR_AFU_EN, 0);
 
     // create buffers                                                                                                                                                                                       
-    AFUBuffer *pBuffer = afu.create_buffer(AFU_BUFFER_SIZE);
-    afu.write_csr_64(CSR_READ_BUFFER_BASE, pBuffer->physical_address);
+    readBuffer = afu.create_buffer_aligned(BUFFER_SIZE);
+    writeBuffer = afu.create_buffer_aligned(BUFFER_SIZE);
 
-    // clear doorbell                                                                                                                                                                                       
-    afu.write_csr(CSR_DOORBELL, 0);
+    if (readBuffer == NULL) 
+    {
+        printf("Failed to create AFU readBuffer\n");
+        exit(1);
+    }
 
-    // clear PLL reset                                                                                                                                                                                      
-    afu.write_csr(CSR_PLL_RESET, 0);
+    if (writeBuffer == NULL) 
+    {
+        printf("Failed to create AFU writeBuffer\n");
+        exit(1);
+    }
 
-    afu.write_csr(CSR_WRITE_FENCE, 0);
+    
+    // Notic that we swap the read/write frames. Our read buffer is
+    // the FPGA write buffer. Our write buffer is the FPGA read
+    // buffer.
+    afu.write_csr_64(CSR_WRITE_FRAME, readBuffer->physical_address);
+    printf("Writing READ_FRAME base %p (line %p) ...\n", readBuffer->physical_address, CACHELINE_ALIGNED_ADDR(readBuffer->physical_address));
+    cout << "Setting write buffer" << endl;
+    afu.write_csr_64(CSR_READ_FRAME, writeBuffer->physical_address);
+    printf("Writing WRITE_FRAME base %p (line %p) ...\n", writeBuffer->physical_address, CACHELINE_ALIGNED_ADDR(writeBuffer->physical_address));
 
     // enable AFU                                                                                                                                                                                           
-    afu.write_csr(CSR_AFU_EN, 0);
+    cout << "Attempting to enable afu" << endl;
     afu.write_csr(CSR_AFU_EN, 1);
 
-
-    // Newer builds will tell us where the pipes file is
-    // located. Let's find out. 
-    if (leapExecutionDirectory != NULL)
-    {
-       executionDirectory = leapExecutionDirectory;
-    }
-
-    // Let's find out what our file target is
-    if ((logicalName != NULL) && (deviceSwitch->SwitchValue(*logicalName) != NULL))
-    {
-        ioFile = executionDirectory + "/pipes/" + *(deviceSwitch->SwitchValue(*logicalName));
-    }
-    else if((logicalName != NULL) && (*logicalName == FPGA_PLATFORM_NAME))
-    {  
-        // backwards compatible support for old-style RRR. 
-        ioFile = executionDirectory + "/pipes/" + *logicalName;
-    }
-    else 
-    {
-        // This device is not being used. No initialization necessary...
-        return;
-    }
-
-    fflush(stdout);
-    string commDirectory = executionDirectory + "/pipes/";
-    
-    if (mkdir(commDirectory.c_str(), S_IRWXU) != 0) 
-    {
-        if (errno != EEXIST)
-        {
-            fprintf(stderr, "Comm directory creation failed, bailing\n");
-            exit(1);
-        }
-    }
-
-
-    // Invoke threads for opening the I/O channels. This allows the
-    // constructor to terminate.  However, subsequent I/O requests
-    // will block until the initialization is complete.
-    if (pthread_create(&ReaderThreads[0],
-		       NULL,
-		       openReadThread,
-		       this))
-    {
-	perror("pthread_create, ReaderThread: ");
-	exit(1);
-    }
-
-    if (pthread_create(&WriterThreads[0],
-                       NULL,
-                       openWriteThread,
-                       this))
-    {
-      perror("pthread_create, WriterThread: ");
-      exit(1);
-    }
-
-    childAlive = true;
-
+    initReadComplete = true;
+    initWriteComplete = true;
 
 }
 
@@ -240,21 +148,13 @@ void
 QPI_DEVICE_CLASS::Uninit()
 {
 
-    // do basic cleanup
-    Cleanup();
-
 }
 
 // cleanup: close the pipe.  The other side will exit.
 void
 QPI_DEVICE_CLASS::Cleanup()
 {
-    if (childAlive)
-    {
-        close(ParentRead());
-        close(ParentWrite());
-        childAlive = false;
-    }
+
 }
 
 // probe pipe to look for fresh data
@@ -263,47 +163,13 @@ QPI_DEVICE_CLASS::Probe()
 {
     if (!initReadComplete) return false;
 
-    // test for incoming data on physical channel
-    struct timeval  timeout;
-    int             data_available;
-    fd_set          readfds;
-
-    FD_ZERO(&readfds);
-    FD_SET(ParentRead(), &readfds);
-
-    timeout.tv_sec  = 0;
-    timeout.tv_usec = SELECT_TIMEOUT;
-
-    data_available = select(ParentRead() + 1, &readfds, NULL, NULL, &timeout);
-
-    if (data_available == -1)
+    UMF_CHUNK controlChunk = *(getChunkAddress(readBuffer, readFrameNumber, 0));
+    if(controlChunk != 0)
     {
-        if ((errno == EINTR) || ! childAlive)
-        {
-            data_available = 0;
-        }
-        else
-        {
-            perror("unix-pipe-device select");
-            exit(1);
-        }
+        printf("Probe control chunk %llx\n", controlChunk);
     }
 
-    if (data_available != 0)
-    {
-        // incoming! sanity check
-        if (data_available != 1 || FD_ISSET(ParentRead(), &readfds) == 0)
-        {
-            cerr << "unix-pipe: activity detected on unknown descriptor" << endl;
-            exit(1);
-        }
-
-        // yes, data is available
-        return true;
-    }
-
-    // no fresh data
-    return false;
+    return (controlChunk & 0x1);
 
 }
 
@@ -318,27 +184,40 @@ QPI_DEVICE_CLASS::Read(
         sleep(1);
     }
 
-    // assume we can read data in one shot
-    int bytes_read = read(inpipe[0], buf, bytes_requested);
+    int chunkNumber = 0, bytesRead = 0;
+    UMF_CHUNK controlChunk = 0;
 
-    // pipe read something funny, which implies that hardware process
-    // has terminated or that we are in the process of tearing down
-    // the software side.
-    if (bytes_read != bytes_requested)
+    // I really only want to deal in chunks for now.
+    assert(bytes_requested % UMF_CHUNK_BYTES == 0);
+
+    if(readChunksTotal == 0)
     {
+        do
+        {
+            controlChunk = *getChunkAddress(readBuffer, readFrameNumber, chunkNumber);            
+        } while(!(controlChunk & 0x1));
 
-        // Check to see if there's an uninit in progress, in which
-        // case a short return value is expected.
-        if (!UninitInProgress())
-        {  
-            cout << "Unexpected Read Short Count.  Did the simulation/FPGA terminate?" << endl; 
-            CallbackExit(0);
-        }
-
-        // otherwise, kill this thread
-        pthread_exit(NULL);
+        readChunksTotal = ((controlChunk) >> 1) & 0xffff;
+        readChunkNumber = 0;
     }
 
+    for(;  (bytesRead < bytes_requested) && (readChunkNumber < readChunksTotal); bytesRead += UMF_CHUNK_BYTES)
+    {
+        readChunkNumber++;
+        *((UMF_CHUNK *)(buf+bytesRead)) = *getChunkAddress(readBuffer, readFrameNumber, readChunkNumber);
+    }
+
+    if(readChunkNumber == readChunksTotal)
+    {
+        // free block
+        *getChunkAddress(readBuffer, readFrameNumber, 0) = 0;
+        readFrameNumber++;
+        // Got any data remaining to read? if so tail recurse!
+        if(bytesRead < bytes_requested)
+        {
+            Read(buf+bytesRead, bytes_requested - bytesRead);
+        }
+    }
 }
 
 // write
@@ -347,32 +226,44 @@ QPI_DEVICE_CLASS::Write(
     unsigned char* buf,
     int bytes_requested)
 {
+    int chunkNumber = 0;
+    volatile UMF_CHUNK *controlAddr = getChunkAddress(writeBuffer, writeFrameNumber, chunkNumber);
+    UMF_CHUNK controlChunk;
     while(!initWriteComplete) 
     {
+        printf("WRITE: waiting for init complete\n"); 
         sleep(1);
     }
+   
+    assert(bytes_requested < FRAME_CHUNKS * UMF_CHUNK_BYTES);
 
-    // assume we can write data in one shot
-    int bytes_written = write(outpipe[1], buf, bytes_requested);
-
-    if (bytes_written != bytes_requested)
+    // Spin for next frame.
+    do
     {
-        // Check to see if there's an uninit in progress, in which
-        // case a short return value is expected.
-        if (!UninitInProgress())
-        {
-            cout << "Unexpected Write Short Count.  Did the simulation/FPGA terminate?" << endl; 
-            CallbackExit(0);
-        }
+        controlChunk = *controlAddr;
+        printf("WRITE: Control chunk %p is %llx \n", controlAddr, controlChunk);
+    } while(controlChunk & 0x1);
 
-        // otherwise, kill this thread
-        pthread_exit(NULL);
+
+    for(int offset = 0;  offset < bytes_requested; offset += UMF_CHUNK_BYTES)
+    {
+        chunkNumber++;
+        volatile UMF_CHUNK *chunkAddr = getChunkAddress(writeBuffer, writeFrameNumber, chunkNumber);
+        *chunkAddr = *((UMF_CHUNK *)(buf+offset));
+        printf("WRITE writing chunk address %p %llx %llx\n", chunkAddr, *chunkAddr, *((UMF_CHUNK *)(buf+offset))); 
     }
+
+    // Write control word.  Need fence here...
+    atomic_thread_fence(std::memory_order_release);
+    controlChunk = (chunkNumber << 1) | 0xdeadbeef0001;
+    *controlAddr = controlChunk;
+    printf("WRITE Control chunk %p is %llx \n", controlAddr, controlChunk);
+    writeFrameNumber = (writeFrameNumber + 1) % FRAME_NUMBER;   
 }
 
 void QPI_DEVICE_CLASS::RegisterLogicalDeviceName(string name)
 {
-    logicalName = new string(name);
+
 }
 
 

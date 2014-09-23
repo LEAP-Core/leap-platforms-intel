@@ -405,6 +405,30 @@ void dpi_dbg_memtest(struct buffer_t *mem)
     }
 }
 
+void dpi_dbg_dumpmem(struct buffer_t *mem)
+{
+  uint64_t *memptr;
+  uint64_t *low_addr, *high_addr;
+
+  // Memory test errors counter
+  int memtest_errors = 0;
+
+  // Calculate DPI low and high address
+  low_addr = (uint64_t*)mem->pbase;
+  high_addr = (uint64_t*)((uint64_t)mem->pbase + mem->memsize);
+
+  //printf("SIM-C: MEMDUMP START\n"); 
+  // Start checker
+  for(memptr = low_addr; memptr < high_addr; memptr++)
+    {
+      if(*memptr != 0)
+        {
+          printf("SIM-C: MEMDUMP %p: %llx\n", memptr, *memptr);
+        }
+    }
+
+}
+
 
 // ---------------------------------------------------------------------
 // Alternate memory shim
@@ -428,6 +452,7 @@ uint64_t* dpi_fakeaddr_to_vaddr(uint64_t req_paddr)
     {
       if((req_paddr >= trav_ptr->fake_paddr) && (req_paddr < trav_ptr->fake_paddr_hi))
 	{
+          dpi_dbg_dumpmem(trav_ptr);
 	  real_offset = req_paddr - trav_ptr->fake_paddr;
 	  calc_pbase = trav_ptr->pbase;
 	  dpi_pbase = (uint64_t*)(calc_pbase + real_offset);

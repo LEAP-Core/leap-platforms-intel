@@ -12,13 +12,9 @@
 %sources -t CPP    -v PRIVATE AFU.cpp
 
 %sources -t VERILOG    -v PRIVATE mkBRAMScoreboardQPI.v
-%sources -t VERILOG    -v PRIVATE mkDemarshallerHighToLowQPI.v
-%sources -t VERILOG    -v PRIVATE mkDemarshallerQPI.v
-%sources -t VERILOG    -v PRIVATE mkMarshallerHighToLowQPI.v
-%sources -t VERILOG    -v PRIVATE mkMarshallerQPI.v
 %sources -t VERILOG    -v PRIVATE mkScoreboardQPI.v
-%sources -t VERILOG    -v PRIVATE mkSizeFIFOUMF.v
-%sources -t VERILOG    -v PRIVATE mkSizeFIFOQPI.v
+%sources -t VERILOG    -v PRIVATE mkSizedFIFOUMF.v
+%sources -t VERILOG    -v PRIVATE mkSizedFIFOQPI.v
 
 %sources -t VERILOG_H  -v PRIVATE qpi.vh  
 %sources -t VERILOG_H  -v PRIVATE qpi_csr.vh  
@@ -27,6 +23,7 @@
 %sources -t VERILOG    -v PRIVATE frame_reader.sv  
 %sources -t VERILOG    -v PRIVATE frame_release.sv  
 %sources -t VERILOG    -v PRIVATE frame_writer.sv  
+%sources -t VERILOG    -v PRIVATE status_writer.sv  
 %sources -t VERILOG    -v PRIVATE cci_read_arbiter.sv  
 %sources -t VERILOG    -v PRIVATE cci_write_arbiter.sv  
 %sources -t VERILOG    -v PRIVATE cci_can_issue.sv  

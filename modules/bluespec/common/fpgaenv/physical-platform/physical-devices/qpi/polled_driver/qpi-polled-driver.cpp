@@ -202,6 +202,11 @@ QPI_DEVICE_CLASS::Read(
         do
         {
             controlChunk = *getChunkAddress(readBuffer, readFrameNumber, chunkNumber);            
+            printf("READ needs sppinning for control chunk for frame %d: %p -> %llx\n", readFrameNumber, getChunkAddress(readBuffer, readFrameNumber, chunkNumber), controlChunk);
+            if(!(controlChunk & 0x1))
+            {
+                sleep(1);
+            }
         } while(!(controlChunk & 0x1));
 
         readChunksTotal = ((controlChunk) >> 1) & 0xfff;
@@ -212,14 +217,15 @@ QPI_DEVICE_CLASS::Read(
     {
         readChunkNumber++;
         *((UMF_CHUNK *)(buf+bytesRead)) = *getChunkAddress(readBuffer, readFrameNumber, readChunkNumber);
-        printf("Read chunk %p -> %llx, chunk number: %d, chunk total: %d\n", getChunkAddress(readBuffer, readFrameNumber, readChunkNumber), *getChunkAddress(readBuffer, readFrameNumber, readChunkNumber), readChunkNumber, readChunksTotal);
+        printf("Read chunk %p -> %llx, chunk number: %x, chunk total: %d\n", getChunkAddress(readBuffer, readFrameNumber, readChunkNumber), *getChunkAddress(readBuffer, readFrameNumber, readChunkNumber), readChunkNumber, readChunksTotal);
     }
 
     if(readChunkNumber == readChunksTotal)
     {
         // free block
+        printf("Read frees frame number %d\n",  readFrameNumber);
         *getChunkAddress(readBuffer, readFrameNumber, 0) = 0;
-        readFrameNumber++;
+        readFrameNumber = (readFrameNumber + 1) % FRAME_NUMBER;
         readChunksTotal = 0; // No more data left.
         // Got any data remaining to read? if so tail recurse!
         if(bytesRead < bytes_requested)

@@ -100,11 +100,6 @@ module frame_writer
    logic [UMF_WIDTH-1:0] write_data;
    logic                 write_data_rdy;
 
-   always_comb begin
-      if(frame_chunks > 20)
-        $finish;      
-   end
-   
    logic deq_rdy;
    logic first_rdy;
    
@@ -239,7 +234,7 @@ module frame_writer
   
    always_comb begin
       frame_writer.write_header = 0;
-      frame_writer.data = (state==WRITE)?{384'h0,write_data}:{505'hdeadbeef0000,frame_chunks - 1,1'b1};                                                                                                         
+      frame_writer.data = (state==WRITE)?{384'h0,write_data}:{512'hdeadbeef0000}|{515'b0,frame_chunks - 1,1'b1};                                                                                                         
       frame_writer.write_header.request_type = (state == WRITE_FENCE)?WrFence:WrLine;
       frame_writer.write_header.address = {frame_base_pointer, frame_number, (state == WRITE)?frame_chunks:frame_chunks_zero}; 
       frame_writer.write_header.mdata = 0; // No metadata necessary

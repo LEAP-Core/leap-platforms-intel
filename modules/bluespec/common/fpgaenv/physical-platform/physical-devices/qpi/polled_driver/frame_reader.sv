@@ -199,7 +199,7 @@ module frame_reader
 
    always@(negedge clk)
      begin
-         if(rx0.data != 0)
+         if(rx0.data != 0 && response_read_metadata.is_read)
           begin
              $display("Frame reader got a response: header %h data %h (low: %h)", rx0.header, rx0.data, rx0.data[LOG_FRAME_CHUNKS:0]);
              $display("Frame reader got a response: decode header ready %h chunks %h", frame_ready_for_read, frame_chunks_total_next);

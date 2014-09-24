@@ -120,11 +120,13 @@ module [CONNECTED_MODULE] mkQPIDevice#(SOFT_RESET_TRIGGER softResetTrigger) (QPI
 
     rule pullDataIn;
         syncReadQ.enq(qpiDevice.first);
+        $display("PHYREAD: %h", qpiDevice.first);        
         qpiDevice.deq;
     endrule
 
     rule pushDataOut;
         qpiDevice.write(syncWriteQ.first);
+        $display("PHYWRITE: %h", syncWriteQ.first); 
         syncWriteQ.deq;
     endrule
 

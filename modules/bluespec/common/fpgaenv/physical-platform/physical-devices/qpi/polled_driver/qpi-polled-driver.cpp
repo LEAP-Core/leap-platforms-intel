@@ -128,10 +128,10 @@ QPI_DEVICE_CLASS::Init()
     // the FPGA write buffer. Our write buffer is the FPGA read
     // buffer.
     afu.write_csr_64(CSR_WRITE_FRAME, readBuffer->physical_address);
-    printf("Writing READ_FRAME base %p (line %p) ...\n", readBuffer->physical_address, CACHELINE_ALIGNED_ADDR(readBuffer->physical_address));
+    printf("Writing Host READ_FRAME base %p (line %p) ...\n", readBuffer->physical_address, CACHELINE_ALIGNED_ADDR(readBuffer->physical_address));
     cout << "Setting write buffer" << endl;
     afu.write_csr_64(CSR_READ_FRAME, writeBuffer->physical_address);
-    printf("Writing WRITE_FRAME base %p (line %p) ...\n", writeBuffer->physical_address, CACHELINE_ALIGNED_ADDR(writeBuffer->physical_address));
+    printf("Writing Host WRITE_FRAME base %p (line %p) ...\n", writeBuffer->physical_address, CACHELINE_ALIGNED_ADDR(writeBuffer->physical_address));
 
     // enable AFU                                                                                                                                                                                           
     cout << "Attempting to enable afu" << endl;
@@ -163,6 +163,11 @@ QPI_DEVICE_CLASS::Probe()
 {
     if (!initReadComplete) return false;
 
+    if(readChunksTotal != 0)
+    {
+        return true;
+    }
+
     UMF_CHUNK controlChunk = *(getChunkAddress(readBuffer, readFrameNumber, 0));
     if(controlChunk != 0)
     {
@@ -190,6 +195,8 @@ QPI_DEVICE_CLASS::Read(
     // I really only want to deal in chunks for now.
     assert(bytes_requested % UMF_CHUNK_BYTES == 0);
 
+    printf("READ needs %d bytes\n", bytes_requested);
+
     if(readChunksTotal == 0)
     {
         do
@@ -197,7 +204,7 @@ QPI_DEVICE_CLASS::Read(
             controlChunk = *getChunkAddress(readBuffer, readFrameNumber, chunkNumber);            
         } while(!(controlChunk & 0x1));
 
-        readChunksTotal = ((controlChunk) >> 1) & 0xffff;
+        readChunksTotal = ((controlChunk) >> 1) & 0xfff;
         readChunkNumber = 0;
     }
 
@@ -205,6 +212,7 @@ QPI_DEVICE_CLASS::Read(
     {
         readChunkNumber++;
         *((UMF_CHUNK *)(buf+bytesRead)) = *getChunkAddress(readBuffer, readFrameNumber, readChunkNumber);
+        printf("Read chunk %p -> %llx, chunk number: %d, chunk total: %d\n", getChunkAddress(readBuffer, readFrameNumber, readChunkNumber), *getChunkAddress(readBuffer, readFrameNumber, readChunkNumber), readChunkNumber, readChunksTotal);
     }
 
     if(readChunkNumber == readChunksTotal)
@@ -212,9 +220,11 @@ QPI_DEVICE_CLASS::Read(
         // free block
         *getChunkAddress(readBuffer, readFrameNumber, 0) = 0;
         readFrameNumber++;
+        readChunksTotal = 0; // No more data left.
         // Got any data remaining to read? if so tail recurse!
         if(bytesRead < bytes_requested)
         {
+            printf("Tail recurse for read needed\n");
             Read(buf+bytesRead, bytes_requested - bytesRead);
         }
     }

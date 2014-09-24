@@ -250,12 +250,12 @@ int cci_rdline_req(int cl_rd_addr, int mdata)
     printf("%02x", (unsigned char)read_cl_data[cl_iter]);
   printf("\n"); 
 #else
-  printf("SIM-C : CL view -> RDLINE vaddr = %p, paddr = %x\n", rd_target_vaddr, fake_rd_addr);
-  printf("SIM-C : CL data -> ");
-  for(cl_iter = 0; cl_iter < CL_BYTE_WIDTH; cl_iter++)
-    printf("%02x", (unsigned char)read_cl_data[cl_iter]);
-  printf("\n"); 
-  printf("SIM-C : READ  -> CL addr = %x, meta = %d\n", cl_rd_addr, mdata);
+  //printf("SIM-C : CL view -> RDLINE vaddr = %p, paddr = %x\n", rd_target_vaddr, fake_rd_addr);
+  //printf("SIM-C : CL data -> ");
+  //for(cl_iter = 0; cl_iter < CL_BYTE_WIDTH; cl_iter++)
+  //  printf("%02x", (unsigned char)read_cl_data[cl_iter]);
+  //printf("\n"); 
+  //printf("SIM-C : READ  -> CL addr = %x, meta = %d\n", cl_rd_addr, mdata);
 #endif
 
   // Log event, if OK to do so

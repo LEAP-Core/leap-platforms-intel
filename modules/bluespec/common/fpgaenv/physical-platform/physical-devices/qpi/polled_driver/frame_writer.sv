@@ -87,15 +87,23 @@ module frame_writer
    // We're done with a frame if
    // 1) Idle count expired and data in frame
    // 2) Frame might be full this cycle (whether it is or not is a non-issue).
-   logic done_with_writing;   
-   assign done_with_writing = ((idle_count == ~0) && (frame_chunks != 1)) || (frame_chunks == (~0 ^ 1'b1));
+   logic done_with_writing;
+   logic c1, c2, c3;
+   assign c1 = (idle_count == 4'hf);
+   assign c2 = (frame_chunks != 1);
+   assign c3 = (frame_chunks == ((~0) ^ 1'b1));   
+   assign done_with_writing = ((idle_count == 4'hf) && (frame_chunks != 1)) || (frame_chunks == ((~0) ^ 1'b1));
 
    logic data_write_success;   
    assign data_write_success = (state == WRITE) && write_grant.writer_grant;
 
    logic [UMF_WIDTH-1:0] write_data;
    logic                 write_data_rdy;
-   
+
+   always_comb begin
+      if(frame_chunks > 20)
+        $finish;      
+   end
    
    logic deq_rdy;
    logic first_rdy;
@@ -139,9 +147,9 @@ module frame_writer
              next_state = (done_with_writing)?WRITE_FENCE:WRITE;             
           end
         WRITE_FENCE:
-          next_state = (write_grant.writer_grant)?WRITE_FENCE:WRITE_CONTROL;
+          next_state = (write_grant.writer_grant)?WRITE_CONTROL:WRITE_FENCE;
         WRITE_CONTROL:
-          next_state = (write_grant.writer_grant)?WRITE_CONTROL:POLL_HEADER;        
+          next_state = (write_grant.writer_grant)?POLL_HEADER:WRITE_CONTROL;        
         default :
           next_state = state;
       endcase // case (state)
@@ -179,7 +187,7 @@ module frame_writer
            // We begin writing one past the first chunk in the frame.
            frame_chunks_next = 1;            
         end
-
+      
       if(data_write_success)
         begin
            $display("Finished writing chunk %d", frame_chunks);           
@@ -220,10 +228,18 @@ module frame_writer
    // Request a write for a fence, write control, or if we have data.
    // 
    assign frame_writer.write.request = (state == WRITE_FENCE) || (state == WRITE_CONTROL) || (state == WRITE && write_data_rdy);
+
+   always @ (negedge clk)
+     begin
+        if(state == WRITE_CONTROL)
+          $display("FRAME_WRITE of control: %h -> %h ", frame_writer.write_header.address,  frame_writer.data);     
+        if(data_write_success)
+          $display("FRAME_WRITER: writing out %h -> %h", frame_writer.write_header.address, frame_writer.data);        
+     end
   
    always_comb begin
       frame_writer.write_header = 0;
-      frame_writer.data = (WRITE)?{0,write_data}:{'hdead0000,frame_chunks - 1,1'b1};                                                                                                            
+      frame_writer.data = (state==WRITE)?{384'h0,write_data}:{505'hdeadbeef0000,frame_chunks - 1,1'b1};                                                                                                         
       frame_writer.write_header.request_type = (state == WRITE_FENCE)?WrFence:WrLine;
       frame_writer.write_header.address = {frame_base_pointer, frame_number, (state == WRITE)?frame_chunks:frame_chunks_zero}; 
       frame_writer.write_header.mdata = 0; // No metadata necessary

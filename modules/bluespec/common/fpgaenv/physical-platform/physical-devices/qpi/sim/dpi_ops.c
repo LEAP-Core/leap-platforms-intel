@@ -452,7 +452,7 @@ uint64_t* dpi_fakeaddr_to_vaddr(uint64_t req_paddr)
     {
       if((req_paddr >= trav_ptr->fake_paddr) && (req_paddr < trav_ptr->fake_paddr_hi))
 	{
-          dpi_dbg_dumpmem(trav_ptr);
+          //dpi_dbg_dumpmem(trav_ptr);
 	  real_offset = req_paddr - trav_ptr->fake_paddr;
 	  calc_pbase = trav_ptr->pbase;
 	  dpi_pbase = (uint64_t*)(calc_pbase + real_offset);

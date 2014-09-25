@@ -205,10 +205,6 @@ module frame_reader
              $display("Frame reader got a response: decode header ready %h chunks %h", frame_ready_for_read, frame_chunks_total_next);
              $display("Frame reader got a response: is_read %h is_header %h", response_read_metadata.is_read, response_read_metadata.is_header);
           end
-        if(state == READ)
-          begin
-             $display("Transition to READ!!!");             
-          end        
      end
    
    logic [CACHE_WIDTH-1:0]       read_line;

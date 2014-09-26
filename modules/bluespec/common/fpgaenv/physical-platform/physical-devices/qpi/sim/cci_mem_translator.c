@@ -374,8 +374,8 @@ int cci_wrline_req(int cl_wr_addr, int mdata,  char *wr_data)
     printf("%02x", (unsigned char)write_cl_data[cl_iter]);
   printf("\n"); 
 #else
-  printf("SIM-C : CL view -> WrLine vaddr = %p, paddr = %x\n", wr_target_vaddr, fake_wr_addr);
-  printf("SIM-C : WRITE -> CL addr = %x, meta = %d, Chan = %d\n", cl_wr_addr, mdata, chanRand);
+  //printf("SIM-C : CL view -> WrLine vaddr = %p, paddr = %x\n", wr_target_vaddr, fake_wr_addr);
+  //printf("SIM-C : WRITE -> CL addr = %x, meta = %d, Chan = %d\n", cl_wr_addr, mdata, chanRand);
 #endif
 
   FUNC_CALL_EXIT;

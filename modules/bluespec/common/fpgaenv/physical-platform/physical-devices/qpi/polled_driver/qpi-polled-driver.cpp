@@ -128,13 +128,18 @@ QPI_DEVICE_CLASS::Init()
     // the FPGA write buffer. Our write buffer is the FPGA read
     // buffer.
     afu.write_csr_64(CSR_WRITE_FRAME, readBuffer->physical_address);
-    printf("Writing Host READ_FRAME base %p (line %p) ...\n", readBuffer->physical_address, CACHELINE_ALIGNED_ADDR(readBuffer->physical_address));
-    cout << "Setting write buffer" << endl;
+    if (QPI_DRIVER_DEBUG)
+    {
+        printf("Writing Host READ_FRAME base %p (line %p) ...\n", readBuffer->physical_address, CACHELINE_ALIGNED_ADDR(readBuffer->physical_address));
+    }
+
     afu.write_csr_64(CSR_READ_FRAME, writeBuffer->physical_address);
-    printf("Writing Host WRITE_FRAME base %p (line %p) ...\n", writeBuffer->physical_address, CACHELINE_ALIGNED_ADDR(writeBuffer->physical_address));
+    if (QPI_DRIVER_DEBUG)
+    {
+        printf("Writing Host WRITE_FRAME base %p (line %p) ...\n", writeBuffer->physical_address, CACHELINE_ALIGNED_ADDR(writeBuffer->physical_address));
+    }
 
     // enable AFU                                                                                                                                                                                           
-    cout << "Attempting to enable afu" << endl;
     afu.write_csr(CSR_AFU_EN, 1);
 
     initReadComplete = true;
@@ -169,11 +174,15 @@ QPI_DEVICE_CLASS::Probe()
     }
 
     UMF_CHUNK controlChunk = *(getChunkAddress(readBuffer, readFrameNumber, 0));
-    if(controlChunk != 0)
-    {
-        printf("Probe control chunk %llx\n", controlChunk);
-    }
 
+    if (QPI_DRIVER_DEBUG)
+    {
+        if(controlChunk != 0)
+        {
+            printf("Probe control chunk %llx\n", controlChunk);
+        }
+    }
+        
     return (controlChunk & 0x1);
 
 }
@@ -195,18 +204,26 @@ QPI_DEVICE_CLASS::Read(
     // I really only want to deal in chunks for now.
     assert(bytes_requested % UMF_CHUNK_BYTES == 0);
 
-    printf("READ needs %d bytes\n", bytes_requested);
+    if (QPI_DRIVER_DEBUG)
+    {
+        printf("READ needs %d bytes\n", bytes_requested);
+    }
 
     if(readChunksTotal == 0)
     {
         do
         {
             controlChunk = *getChunkAddress(readBuffer, readFrameNumber, chunkNumber);            
-            printf("READ needs sppinning for control chunk for frame %d: %p -> %llx\n", readFrameNumber, getChunkAddress(readBuffer, readFrameNumber, chunkNumber), controlChunk);
+            if (QPI_DRIVER_DEBUG)
+            {
+                printf("READ needs sppinning for control chunk for frame %d: %p -> %llx\n", readFrameNumber, getChunkAddress(readBuffer, readFrameNumber, chunkNumber), controlChunk);
+            }
+
             if(!(controlChunk & 0x1))
             {
                 sleep(1);
             }
+
         } while(!(controlChunk & 0x1));
 
         readChunksTotal = ((controlChunk) >> 1) & 0xfff;
@@ -217,20 +234,32 @@ QPI_DEVICE_CLASS::Read(
     {
         readChunkNumber++;
         *((UMF_CHUNK *)(buf+bytesRead)) = *getChunkAddress(readBuffer, readFrameNumber, readChunkNumber);
-        printf("Read chunk %p -> %llx, chunk number: %x, chunk total: %d\n", getChunkAddress(readBuffer, readFrameNumber, readChunkNumber), *getChunkAddress(readBuffer, readFrameNumber, readChunkNumber), readChunkNumber, readChunksTotal);
+
+        if (QPI_DRIVER_DEBUG)
+        {
+            printf("Read chunk %p -> %llx, chunk number: %x, chunk total: %d\n", getChunkAddress(readBuffer, readFrameNumber, readChunkNumber), *getChunkAddress(readBuffer, readFrameNumber, readChunkNumber), readChunkNumber, readChunksTotal);
+        }
     }
 
     if(readChunkNumber == readChunksTotal)
     {
         // free block
-        printf("Read frees frame number %d\n",  readFrameNumber);
+        if (QPI_DRIVER_DEBUG)
+        {
+            printf("Read frees frame number %d\n",  readFrameNumber);
+        }
+
         *getChunkAddress(readBuffer, readFrameNumber, 0) = 0;
         readFrameNumber = (readFrameNumber + 1) % FRAME_NUMBER;
         readChunksTotal = 0; // No more data left.
         // Got any data remaining to read? if so tail recurse!
         if(bytesRead < bytes_requested)
         {
-            printf("Tail recurse for read needed\n");
+            if (QPI_DRIVER_DEBUG)
+            {
+                printf("Tail recurse for read needed\n");
+            }
+
             Read(buf+bytesRead, bytes_requested - bytesRead);
         }
     }
@@ -245,9 +274,13 @@ QPI_DEVICE_CLASS::Write(
     int chunkNumber = 0;
     volatile UMF_CHUNK *controlAddr = getChunkAddress(writeBuffer, writeFrameNumber, chunkNumber);
     UMF_CHUNK controlChunk;
-    while(!initWriteComplete) 
-    {
-        printf("WRITE: waiting for init complete\n"); 
+    while (!initWriteComplete) 
+    {  
+        if (QPI_DRIVER_DEBUG)
+        {
+            printf("WRITE: waiting for init complete\n");
+        }
+ 
         sleep(1);
     }
    
@@ -257,7 +290,10 @@ QPI_DEVICE_CLASS::Write(
     do
     {
         controlChunk = *controlAddr;
-        printf("WRITE: Control chunk %p is %llx \n", controlAddr, controlChunk);
+        if (QPI_DRIVER_DEBUG)
+        {
+            printf("WRITE: Control chunk %p is %llx \n", controlAddr, controlChunk);
+        }
     } while(controlChunk & 0x1);
 
 
@@ -266,14 +302,21 @@ QPI_DEVICE_CLASS::Write(
         chunkNumber++;
         volatile UMF_CHUNK *chunkAddr = getChunkAddress(writeBuffer, writeFrameNumber, chunkNumber);
         *chunkAddr = *((UMF_CHUNK *)(buf+offset));
-        printf("WRITE writing chunk address %p %llx %llx\n", chunkAddr, *chunkAddr, *((UMF_CHUNK *)(buf+offset))); 
+        if (QPI_DRIVER_DEBUG)
+        {
+            printf("WRITE writing chunk address %p %llx %llx\n", chunkAddr, *chunkAddr, *((UMF_CHUNK *)(buf+offset))); 
+        }
     }
 
     // Write control word.  Need fence here...
     atomic_thread_fence(std::memory_order_release);
     controlChunk = (chunkNumber << 1) | 0xdeadbeef0001;
     *controlAddr = controlChunk;
-    printf("WRITE Control chunk %p is %llx \n", controlAddr, controlChunk);
+    if (QPI_DRIVER_DEBUG)
+    {
+        printf("WRITE Control chunk %p is %llx \n", controlAddr, controlChunk);
+    }
+
     writeFrameNumber = (writeFrameNumber + 1) % FRAME_NUMBER;   
 }
 

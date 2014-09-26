@@ -56,6 +56,10 @@ module frame_release
    logic [LOG_FRAME_NUMBER - 1:0]       frames_to_be_cleared_next;
    logic [LOG_FRAME_CHUNKS - 1:0]       frame_chunks_zero;
 
+   tx_header_t write_header;
+
+   assign frame_reader.write.request = ( frames_to_be_cleared > 0);
+
    assign frame_chunks_zero = 0;
    
    // FSM state
@@ -83,11 +87,7 @@ module frame_release
          frames_to_be_cleared <= frames_to_be_cleared_next;
       end
    end
-
-   tx_header_t write_header;
-
-   assign frame_reader.write.request = ( frames_to_be_cleared > 0);
-  
+ 
    always_comb begin
       frame_reader.write_header = 0;
       frame_reader.write_header.request_type = WrLine;
@@ -95,8 +95,5 @@ module frame_release
       frame_reader.write_header.mdata = 0; // No metadata necessary
       frame_reader.data = 1'b0; // only need to set bottom bit.
    end
-
-   
-   
    
 endmodule

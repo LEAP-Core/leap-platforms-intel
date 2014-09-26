@@ -82,7 +82,7 @@ endinterface
 Integer umfChunkSize = valueOf(SizeOf#(UMF_CHUNK));
 
 import "BVI" qpi_wrapper = 
-module mkQPIDevice_UG  (QPI_DRIVER);
+module mkQPIDeviceImport  (QPI_DRIVER);
 
     parameter TXHDR_WIDTH = `CCI_TXHDR_WIDTH;
     parameter RXHDR_WIDTH = `CCI_RXHDR_WIDTH;
@@ -113,20 +113,18 @@ module [CONNECTED_MODULE] mkQPIDevice#(SOFT_RESET_TRIGGER softResetTrigger) (QPI
 
     // FIFOs for coming out of QPI domain.
 
-    let qpiDevice <- mkQPIDevice_UG; 
+    let qpiDevice <- mkQPIDeviceImport; 
 
     SyncFIFOIfc#(UMF_CHUNK) syncReadQ <- mkSyncFIFOToCC(16, qpiDevice.clock, qpiDevice.reset);
     SyncFIFOIfc#(UMF_CHUNK) syncWriteQ <- mkSyncFIFOFromCC(16, qpiDevice.clock);
 
     rule pullDataIn;
         syncReadQ.enq(qpiDevice.first);
-        $display("PHYREAD: %h", qpiDevice.first);        
         qpiDevice.deq;
     endrule
 
     rule pushDataOut;
         qpiDevice.write(syncWriteQ.first);
-        $display("PHYWRITE: %h", syncWriteQ.first); 
         syncWriteQ.deq;
     endrule
 

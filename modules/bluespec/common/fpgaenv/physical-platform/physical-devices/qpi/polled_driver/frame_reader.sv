@@ -77,17 +77,85 @@ module frame_reader
    logic [LOG_FRAME_CHUNKS - 1:0]       frame_chunks_next;
    logic [LOG_FRAME_CHUNKS - 1:0]       frame_chunks_total_next;
 
-   // Extract frame base pointer from CSRs.
-   assign frame_base_pointer = csr.afu_read_frame[QPI_ADDR_SZ+QPI_ADDR_OFFSET:QPI_ADDR_SZ+QPI_ADDR_OFFSET-LOG_FRAME_BASE_POINTER];
-      
+   logic frame_header_valid;
+   logic frame_ready_for_read;
+
    state_t state;
    state_t next_state;
 
+   // Logic for dealing with returning data response.
+   logic incoming_read_valid;
+   logic scoreboard_ready;
 
-   read_metadata_t response_read_metadata;
-
-   assign response_read_metadata = unpack_read_metadata(rx0.header);
+   logic [CACHE_WIDTH-1:0]       read_line;
+   logic                         read_line_score_rdy;
+   logic                         read_line_marsh_rdy;
+   logic                         read_line_en;
    
+   logic [BUFFER_ADDR_WIDTH-1:0] scoreboard_slot_id;
+   logic                         scoreboard_slot_rdy;
+   logic                         scoreboard_slot_en;
+
+   logic data_read_rdy;
+   logic header_read_rdy;
+   logic enqueue_last;
+
+   // Code related to frame release
+   logic frame_release_count_up;
+   
+
+   tx_header_t read_header;
+   read_metadata_t response_read_metadata;
+   read_metadata_t data_read_metadata;
+   read_metadata_t header_read_metadata;
+
+   frame_arb_t         frame_reader_release;
+      
+   // Extract frame base pointer from CSRs.
+   assign frame_base_pointer = csr.afu_read_frame[QPI_ADDR_SZ+QPI_ADDR_OFFSET:QPI_ADDR_SZ+QPI_ADDR_OFFSET-LOG_FRAME_BASE_POINTER];
+   assign response_read_metadata = unpack_read_metadata(rx0.header);
+
+   // Monitor frame data
+   assign frame_header_valid = rx0.rdvalid && response_read_metadata.is_read && response_read_metadata.is_header;
+   assign frame_ready_for_read = header_in_use(rx0.data);
+
+   // Monitor grants for data reads.
+   assign data_read_accepted = read_grant.reader_grant && (state == READ);                                           
+   assign last_data_read_accepted = data_read_accepted && (frame_chunks_total == frame_chunks);
+
+
+   assign incoming_read_valid = rx0.rdvalid && response_read_metadata.is_read && !response_read_metadata.is_header;
+
+
+
+   assign data_read_rdy = scoreboard_slot_rdy && state == READ;
+   assign header_read_rdy = state == POLL_HEADER;
+
+   assign frame_reader.read.request = data_read_rdy || header_read_rdy;
+   assign frame_reader.read_header = read_header;
+
+   // Read metadata                           
+   assign data_read_metadata.is_read   = 1'b1;   
+   assign data_read_metadata.is_header = 1'b0;   
+   assign data_read_metadata.rob_addr  = {0,scoreboard_slot_id};
+
+   // Header metadata
+   assign header_read_metadata.is_read   = 1'b1;   
+   assign header_read_metadata.is_header = 1'b1;   
+   assign header_read_metadata.rob_addr  = {0,scoreboard_slot_id};
+
+   assign release_frame = frame_release_count_up && rx_enable;
+   
+   assign read_line_en = read_line_score_rdy && read_line_marsh_rdy;
+
+   // Signals related to releasing read frames
+   assign frame_reader.write_header  = frame_reader_release.write_header;
+   assign frame_reader.write.request = frame_reader_release.write.request;
+   assign frame_reader.data          = frame_reader_release.data;
+
+   assign rx_data = read_line[UMF_WIDTH-1:0];
+
+      
    // FSM state
    always_ff @(posedge clk) begin
       if (!resetb || !csr.afu_en) begin
@@ -97,15 +165,6 @@ module frame_reader
       end
    end
 
-   logic frame_header_valid;
-   logic frame_ready_for_read;
-
-   
-   assign frame_header_valid = rx0.rdvalid && response_read_metadata.is_read && response_read_metadata.is_header;
-   assign frame_ready_for_read = header_in_use(rx0.data);
-
-   assign data_read_accepted = read_grant.reader_grant && (state == READ);                                           
-   assign last_data_read_accepted = data_read_accepted && (frame_chunks_total == frame_chunks);
    
    always_comb begin
       case (state)
@@ -191,35 +250,20 @@ module frame_reader
         end      
    end
    
-   // Logic for dealing with returning data response.
-   logic incoming_read_valid;
-   logic scoreboard_ready;
-
-   assign incoming_read_valid = rx0.rdvalid && response_read_metadata.is_read && !response_read_metadata.is_header;
 
    always@(negedge clk)
      begin
-         if(rx0.data != 0 && response_read_metadata.is_read)
-          begin
-             $display("Frame reader got a response: header %h data %h (low: %h)", rx0.header, rx0.data, rx0.data[LOG_FRAME_CHUNKS:0]);
-             $display("Frame reader got a response: decode header ready %h chunks %h", frame_ready_for_read, frame_chunks_total_next);
-             $display("Frame reader got a response: is_read %h is_header %h", response_read_metadata.is_read, response_read_metadata.is_header);
-          end
+       if(QPI_DRIVER_DEBUG)
+         begin  
+            if(rx0.data != 0 && response_read_metadata.is_read)
+              begin              
+                 $display("Frame reader got a response: header %h data %h (low: %h)", rx0.header, rx0.data, rx0.data[LOG_FRAME_CHUNKS:0]);
+                 $display("Frame reader got a response: decode header ready %h chunks %h", frame_ready_for_read, frame_chunks_total_next);
+                 $display("Frame reader got a response: is_read %h is_header %h", response_read_metadata.is_read, response_read_metadata.is_header);
+              end
+         end
      end
    
-   logic [CACHE_WIDTH-1:0]       read_line;
-   logic                         read_line_score_rdy;
-   logic                         read_line_marsh_rdy;
-   logic                         read_line_en;
-   
-   logic [BUFFER_ADDR_WIDTH-1:0] scoreboard_slot_id;
-   logic                         scoreboard_slot_rdy;
-   logic                         scoreboard_slot_en;
-
-   tx_header_t read_header;
-
-   read_metadata_t data_read_metadata;
-   read_metadata_t header_read_metadata;
 
    
    always_comb begin
@@ -228,31 +272,6 @@ module frame_reader
       read_header.address = {frame_base_pointer,frame_number,frame_chunks}; 
       read_header.mdata = (state == READ) ? pack_read_metadata(data_read_metadata) : pack_read_metadata(header_read_metadata);      
    end
-
-
-   logic data_read_rdy;
-   logic header_read_rdy;
-   logic enqueue_last;
-   logic frame_release_count_up;
-   
-
-   assign data_read_rdy = scoreboard_slot_rdy && state == READ;
-   assign header_read_rdy = state == POLL_HEADER;
-
-   assign frame_reader.read.request = data_read_rdy || header_read_rdy;
-   assign frame_reader.read_header = read_header;
-                           
-   assign data_read_metadata.is_read   = 1'b1;   
-   assign data_read_metadata.is_header = 1'b0;   
-   assign data_read_metadata.rob_addr  = {0,scoreboard_slot_id};
-
-   assign header_read_metadata.is_read   = 1'b1;   
-   assign header_read_metadata.is_header = 1'b1;   
-   assign header_read_metadata.rob_addr  = {0,scoreboard_slot_id};
-
-   assign release_frame = frame_release_count_up && rx_enable;
-   
-   assign read_line_en = read_line_score_rdy && read_line_marsh_rdy;
 
    always_comb begin
       if(incoming_read_valid && !scoreboard_ready)
@@ -290,7 +309,7 @@ module frame_reader
 		   .deqEntryId(),
 		   .RDY_deqEntryId());
 
-   assign rx_data = read_line[UMF_WIDTH-1:0];
+
                    
    mkSizedFIFOQPI ctrlFIFO(.CLK(clk),
 		      .RST_N(resetb),
@@ -314,10 +333,6 @@ module frame_reader
 		      .EN_clear(1'b0),
 		      .RDY_clear());
 
-   frame_arb_t         frame_reader_release;
-   assign frame_reader.write_header  = frame_reader_release.write_header;
-   assign frame_reader.write.request = frame_reader_release.write.request;
-   assign frame_reader.data          = frame_reader_release.data;
       
    frame_release releaseMod(
                       .clk(clk),

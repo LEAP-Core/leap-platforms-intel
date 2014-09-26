@@ -95,10 +95,13 @@ module status_writer
 
    always@(negedge clk)
      begin
-        if(status_writer.write.request)
-          $display("Status writer attempts to write 0x%h to CL 0x%h", status_writer.data, status_writer.write_header.address);
-        if(write_grant.status_grant)
-          $display("Status writer write request granted");        
+        if(QPI_DRIVER_DEBUG)
+         begin  
+            if(status_writer.write.request)
+              $display("Status writer attempts to write 0x%h to CL 0x%h", status_writer.data, status_writer.write_header.address);
+            if(write_grant.status_grant)
+              $display("Status writer write request granted");        
+         end
      end
    
    always_comb begin

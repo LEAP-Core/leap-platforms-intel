@@ -4,6 +4,8 @@
 
 %provides qpi_driver
 
+%param QPI_DRIVER_DEBUG   0      "Is the CCI implementation actually a simulator?"
+
 %sources -t H      -v PUBLIC  qpi-polled-driver.h
 %sources -t CPP    -v PRIVATE qpi-polled-driver.cpp
 

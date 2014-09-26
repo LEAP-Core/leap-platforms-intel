@@ -50,8 +50,11 @@ module cci_write_arbiter
 
 
    logic        can_issue;
-   
-   
+
+   tx_header_t   header;
+   logic [511:0] data;   
+   logic         wrvalid;
+      
    typedef enum logic {FAVOR_FRAME_READER, FAVOR_FRAME_WRITER} state_t;
    
    state_t state;
@@ -82,9 +85,6 @@ module cci_write_arbiter
           next_state = FAVOR_FRAME_READER;
    end // always_comb begin
 
-   tx_header_t   header;
-   logic [511:0] data;   
-   logic         wrvalid;
 
    // Set outgoing write control packet.
    always_comb begin
@@ -117,13 +117,11 @@ module cci_write_arbiter
    end
 
    // Register outgoing control packet.
-   always_ff @(posedge clk) begin
-      
+   always_ff @(posedge clk) begin      
       tx1.header      <= header;
       // Should we be setting this while in reset? Who knows...
       tx1.wrvalid <= wrvalid;
       tx1.data    <= data;
-
    end
 
    // Some assertions

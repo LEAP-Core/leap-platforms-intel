@@ -19,6 +19,9 @@
    
  `include "qpi_csr.vh"
 
+ localparam QPI_DRIVER_DEBUG = 0;
+
+
  localparam CACHE_WIDTH = 512;
 
  // Parameters related to frame buffer sizing.
@@ -167,23 +170,5 @@
     end
  endfunction
 
-//package QPI_DRIVER:
-// interface cci_bus_t;
-//    tx_c0_t tx0;
-//    tx_c1_t tx1;
-//    rx_c0_t rx0;
-//    rx_c1_t rx1;
-//    logic   lp_initdone;
-// endinterface // cci_bus_t
-
-// interface afu_bus_t;
-//    afu_csr_t    csr;
-//    frame_arb_t   frame_reader;
-//    frame_arb_t   frame_writer;
-//    channel_grant_arb_t frame_reader_grant;
-//    channel_grant_arb_t frame_writer_grant;  
-// endinterface // afu_bus_t
-//endpackage
-  
 `endif //  `ifndef QPI_VH
 

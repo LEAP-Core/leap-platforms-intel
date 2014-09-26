@@ -1,0 +1,193 @@
+
+[Global]
+SaveParameters=0
+Description=Hybrid Simulation FPGA Environment
+File=fpgaenv-hybrid-vc707-pcie-no-mem
+Version=2.2
+Type=HAsim
+Name=Hybrid Verilog QPI Simulation FPGA Environment (No Memory)
+Class=Asim::Model
+DefaultBenchmark=
+DefaultRunOpts=
+RootName=FPGA Environment
+RootProvides=fpgaenv
+
+[Model]
+DefaultAttributes=hybrid exe
+model=FPGA Environment
+
+[FPGA Environment]
+File=modules/leap/virtual-platform/fpga-environment.awb
+Packagehint=leap
+
+[FPGA Environment/Requires]
+virtual_platform=Standard Virtual Platform
+fpga_components=Software FPGA Components
+librl_bsv=RL Bluespec Library Submodel
+build_pipeline=IVerilog Build Pipeline
+soft_services=Soft Services Submodel
+
+[Standard Virtual Platform]
+File=modules/leap/virtual-platform/std-virtual-platform.awb
+Packagehint=leap
+
+[Standard Virtual Platform/Requires]
+virtual_devices=Standard Virtual Devices (No Memory Service) Submodel
+low_level_platform_interface=Low Level Platform Interface Hybrid
+umf=Little-Endian Unified Message Format
+platform_services=Standard Platform Service (No Memory Service)
+
+[RRR Clients and Servers]
+File=modules/leap/virtual-platform/rrr/basic/basic-rrr.awb
+Packagehint=leap
+
+[Basic Virtual Channel Multiplexer]
+File=modules/leap/virtual-platform/channelio/basic/basic-channelio.awb
+Packagehint=leap
+
+[Basic Virtual Channel Multiplexer/Requires]
+physical_channel=QPI Physical Channel
+
+[Software FPGA Components]
+File=modules/bluespec/common/fpgaenv/fpga-components/software-fpga-components.awb
+Packagehint=leap-platforms
+
+[Null Physical Platform Debugger]
+File=modules/bluespec/common/fpgaenv/physical-platform/debuggers/null/null-debugger.awb
+Packagehint=leap-platforms
+
+[Simulation Clocks Device]
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/clocks/simulation/sim-clocks-device.awb
+Packagehint=leap-platforms
+
+[Common Physical Platform Utilities]
+File=modules/bluespec/common/fpgaenv/physical-platform/utils/utils.awb
+Packagehint=leap-platforms
+
+[Null Remote Memory]
+File=modules/leap/virtual-platform/low-level-platform-interface/remote-memory/null/null-remote-memory.awb
+Packagehint=leap
+
+[Little-Endian Unified Message Format]
+File=modules/bluespec/common/fpgaenv/virtual-platform/umf/little-endian/umf-little-endian.awb
+Packagehint=leap-platforms
+
+[RRR Common Module]
+File=modules/leap/virtual-platform/rrr/rrr-common/rrr-common.awb
+Packagehint=leap
+
+[RRR Clients and Servers/Requires]
+rrr_common=RRR Common Module
+
+[RL Bluespec Library Submodel]
+File=config/pm/leap/submodels/common/librl-bsv.apm
+Packagehint=leap
+
+[Soft Services Submodel]
+File=config/pm/leap/submodels/common/soft-services.apm
+Packagehint=leap
+
+[DDR SDRAM Emulator in BRAM]
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/ddr-sdram/ddr-sdram-bram/ddr-sdram-bram.awb
+Packagehint=leap-platforms
+
+[Low Level Platform Interface Hybrid]
+File=modules/leap/virtual-platform/low-level-platform-interface/hybrid-llpi.awb
+Packagehint=leap
+
+[Low Level Platform Interface Hybrid/Requires]
+physical_platform=QPI with DDR
+remote_memory=Null Remote Memory
+channelio=Basic Virtual Channel Multiplexer
+rrr=RRR Clients and Servers
+physical_platform_debugger=Null Physical Platform Debugger
+local_mem=NULL Local Memory Interface
+
+[Common Physical Platform Utilities/Requires]
+physical_platform_defs=Common Physical Platform Definitions
+
+[Common Physical Platform Definitions]
+File=modules/bluespec/common/fpgaenv/physical-platform/utils/physical-defs.awb
+Packagehint=leap-platforms
+
+[QPI Simulation Device]
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qpi/sim/qpi-sim.awb
+Packagehint=leap-platforms-intel
+
+[QPI with DDR]
+File=modules/bluespec/common/fpgaenv/physical-platform/qpi/qpi-platform.awb
+Packagehint=leap-platforms-intel
+
+[QPI with DDR/Requires]
+clocks_device=Simulation Clocks Device
+qpi_device=QPI Simulation Device
+physical_platform_utils=Common Physical Platform Utilities
+ddr_sdram_device=DDR SDRAM Emulator in BRAM
+
+[QPI Physical Channel]
+File=modules/leap/virtual-platform/physical-channel/qpi/qpi-physical-channel.awb
+Packagehint=leap-platforms-intel
+
+[QPI Simulation Device/Requires]
+qpi_driver=QPI Polled Driver
+
+[QPI Polled Driver]
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qpi/polled_driver/qpi-polled-driver.awb
+Packagehint=leap-platforms-intel
+
+[Little-Endian Unified Message Format/Params]
+UMF_CHUNK_BYTES=16
+
+[Standard Virtual Devices (No Memory Service) Submodel]
+File=config/pm/leap/submodels/virtual-devices/std-virtual-devices-null-mem.apm
+Packagehint=leap
+
+[Standard Platform Service (No Memory Service)]
+File=config/pm/leap/submodels/platform-services/standard-platform-null-mem.apm
+Packagehint=leap
+
+[NULL Local Memory Interface]
+File=modules/leap/virtual-platform/low-level-platform-interface/local-mem/local-mem-null.awb
+Packagehint=leap
+
+[Synthesis Boundary Wrapper generation tool]
+File=modules/leap/build-support/build-pipelines/stages/wrapper_gen/synthesis_boundary_wrapper_gen.awb
+Packagehint=leap
+
+[LEAP LI Module Handler]
+File=modules/leap/build-support/build-pipelines/stages/li_module/li_module.awb
+Packagehint=leap
+
+[IVerilog Build Pipeline/Requires]
+verilog_tool=VCS Build Tool
+li_module=LEAP LI Module Handler
+software_tool=Software build tool
+wrapper_gen_tool=Synthesis Boundary Wrapper generation tool
+iface_tool=Interface builder
+bsv_tool=BSV Build Tool (First Phase)
+
+[Interface builder]
+File=modules/leap/build-support/build-pipelines/stages/iface/iface.awb
+Packagehint=leap
+
+[BSV Build Tool (First Phase)/Params]
+BUILD_VERILOG=0
+
+[Software build tool]
+File=modules/leap/build-support/build-pipelines/stages/software/software.awb
+Packagehint=leap
+
+[IVerilog Build Pipeline]
+File=modules/leap/build-support/build-pipelines/pipelines/verilog/verilog-build-pipeline.awb
+Packagehint=leap
+
+[BSV Build Tool (First Phase)]
+File=modules/leap/build-support/build-pipelines/stages/bluespec/bsv.awb
+Packagehint=leap
+
+[VCS Build Tool]
+File=modules/leap/build-support/build-pipelines/stages/verilog/vcs/verilog.awb
+Packagehint=leap
+
+[VCS Build Tool/Params]
+VCS_ARGUMENTS=" -Xv -LDFLAGS -Xv -lstdc++ -Xv -LDFLAGS -Xv -lpthread   -Xv -LDFLAGS -Xv -lrt   -Xv -override_timescale=10ps/10ps "

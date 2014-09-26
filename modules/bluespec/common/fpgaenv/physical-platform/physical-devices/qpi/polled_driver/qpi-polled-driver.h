@@ -124,9 +124,7 @@ class QPI_DEVICE_CLASS: public PLATFORMS_MODULE_CLASS
     // This function is going to be woefully inefficient.
     volatile UMF_CHUNK * getChunkAddress(AFUBuffer* buffer, int frameNumber, int chunkNumber)
     {
-        //printf("Buffer virtual address %p (line %p)\n", buffer->virtual_address, CACHELINE_ALIGNED_ADDR(buffer->virtual_address));
         volatile UMF_CHUNK *chunkAddr = (volatile UMF_CHUNK *)(((volatile char *)(buffer->virtual_address)) + frameNumber * FRAME_SIZE + chunkNumber * CHUNK_SIZE); 
-        //printf("Returning chunkAddr %p\n", chunkAddr);
         return chunkAddr;
     }
 

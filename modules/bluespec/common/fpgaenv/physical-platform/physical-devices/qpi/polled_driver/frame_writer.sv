@@ -106,6 +106,29 @@ module frame_writer
    logic data_available;
    assign data_available = deq_rdy && first_rdy;
 
+   tx_header_t read_header;
+
+   read_metadata_t header_read_metadata;
+
+   assign header_read_metadata.is_read   = 1'b0;   
+   assign header_read_metadata.is_header = 1'b1;   
+   assign header_read_metadata.rob_addr  = 1'b0;
+   logic [LOG_FRAME_CHUNKS - 1:0]       frame_chunks_zero;
+   logic header_read_rdy;
+   
+   assign frame_chunks_zero = 0;
+   
+   tx_header_t write_header;
+   // Request a write for a fence, write control, or if we have data.
+   // 
+   assign frame_writer.write.request = (state == WRITE_FENCE) || (state == WRITE_CONTROL) || (state == WRITE && write_data_rdy);
+
+      assign header_read_rdy = state == POLL_HEADER;
+
+   assign frame_writer.read.request = header_read_rdy;
+   assign frame_writer.read_header = read_header;
+   
+   
    // FSM state
    always_ff @(posedge clk) begin
       if (!resetb || !csr.afu_en) begin
@@ -184,8 +207,7 @@ module frame_writer
         end
       
       if(data_write_success)
-        begin
-           $display("Finished writing chunk %d", frame_chunks);           
+        begin         
            frame_chunks_next = frame_chunks + 1;
         end
    end // always_comb
@@ -200,18 +222,6 @@ module frame_writer
         end
    end
 
-   tx_header_t read_header;
-
-   read_metadata_t header_read_metadata;
-
-   assign header_read_metadata.is_read   = 1'b0;   
-   assign header_read_metadata.is_header = 1'b1;   
-   assign header_read_metadata.rob_addr  = 1'b0;
-   logic [LOG_FRAME_CHUNKS - 1:0]       frame_chunks_zero;
-   logic header_read_rdy;
-   
-   assign frame_chunks_zero = 0;
-   
    always_comb begin
       read_header = 0;
       read_header.request_type = RdLine;
@@ -219,17 +229,16 @@ module frame_writer
       read_header.mdata = pack_read_metadata(header_read_metadata);      
    end
 
-   tx_header_t write_header;
-   // Request a write for a fence, write control, or if we have data.
-   // 
-   assign frame_writer.write.request = (state == WRITE_FENCE) || (state == WRITE_CONTROL) || (state == WRITE && write_data_rdy);
 
    always @ (negedge clk)
      begin
-        if(state == WRITE_CONTROL)
-          $display("FRAME_WRITE of control: %h -> %h ", frame_writer.write_header.address,  frame_writer.data);     
-        if(data_write_success)
-          $display("FRAME_WRITER: writing out %h -> %h", frame_writer.write_header.address, frame_writer.data);        
+       if(QPI_DRIVER_DEBUG)
+         begin  
+            if(state == WRITE_CONTROL)
+              $display("FRAME_WRITE of control: %h -> %h ", frame_writer.write_header.address,  frame_writer.data);     
+            if(data_write_success)
+              $display("FRAME_WRITER: writing out %h -> %h", frame_writer.write_header.address, frame_writer.data);        
+         end
      end
   
    always_comb begin
@@ -240,11 +249,6 @@ module frame_writer
       frame_writer.write_header.mdata = 0; // No metadata necessary
    end
   
-   assign header_read_rdy = state == POLL_HEADER;
-
-   assign frame_writer.read.request = header_read_rdy;
-   assign frame_writer.read_header = read_header;
-   
 
    mkSizedFIFOUMF dataBuf(
                       .CLK(clk),

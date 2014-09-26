@@ -46,11 +46,11 @@ module cci_can_issue
 
 
    logic almostfull_ff;
+
+   assign can_issue = ~almostfull_ff;
    
    always_ff @(posedge clk) begin
       almostfull_ff <= almostfull;
    end
-
-   assign can_issue = ~almostfull_ff;
 
 endmodule

@@ -1,0 +1,45 @@
+
+[Global]
+SaveParameters=0
+Description=RRR Test and Benchmarking Program (Bluesim)
+File=rrrtest_hybrid_qpi_vexe
+Version=2.2
+Name=RRR Test and Benchmarking Program (Bluesim)
+DefaultBenchmark=config/bm/leap/demos.cfx/benchmarks/null.cfg
+Type=Leap
+Class=Asim::Model
+DefaultRunOpts=
+RootName=HW/SW Hybrid Pipeline Build
+RootProvides=model
+
+[Model]
+DefaultAttributes=rrrtest unconnected hybrid project exe
+model=HW/SW Hybrid Pipeline Build
+
+[Bluespec RRR Test and Benchmarking Program]
+File=modules/apps/examples/rrrtest/rrrtest.awb
+Packagehint=leap-examples
+
+[Default Hybrid Project Common Utilities]
+File=config/pm/leap/submodels/common/project-common-default.apm
+Packagehint=leap
+
+[HW/SW Hybrid Pipeline Build/Requires]
+project_common=Default Hybrid Project Common Utilities
+fpgaenv=Hybrid Verilog QPI Simulation FPGA Environment (No Memory)
+application_env=Soft Services Hybrid Application Environment
+
+[HW/SW Hybrid Pipeline Build]
+File=modules/leap/build-support/project/project-pipeline.awb
+Packagehint=leap
+
+[Hybrid Verilog QPI Simulation FPGA Environment (No Memory)]
+File=config/pm/leap/submodels/fpgaenv/intel/qpi/fpgaenv-hybrid-vc707-pcie-no-mem.apm
+Packagehint=leap-platforms-intel
+
+[Soft Services Hybrid Application Environment]
+File=modules/leap/build-support/project/application-env/soft-services/application-env-hybrid-soft-service.awb
+Packagehint=leap
+
+[Soft Services Hybrid Application Environment/Requires]
+connected_application=Bluespec RRR Test and Benchmarking Program

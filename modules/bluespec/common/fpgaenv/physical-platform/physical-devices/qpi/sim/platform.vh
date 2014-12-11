@@ -4,7 +4,7 @@
 /*
  * Simulation Timescale 
  */ 
- `timescale 10ps/10ps
+// `timescale 10ps/10ps
 
 /*
  * Select the platform to test

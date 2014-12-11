@@ -53,7 +53,7 @@ import Clocks::*;
 interface PHYSICAL_DRIVERS;
     interface CLOCKS_DRIVER                        clocksDriver;
     interface QPI_DRIVER                           qpiDriver;
-    interface Vector#(FPGA_DDR_BANKS, DDR_DRIVER)  ddrDriver;
+    interface DDR_DRIVER                           ddrDriver;
 endinterface
 
 // TOP_LEVEL_WIRES

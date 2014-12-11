@@ -38,3 +38,4 @@
 %sources -t BDPI_C -v PRIVATE shm_ops.c
 %sources -t BDPI_C -v PRIVATE tstamp_ops.c
 
+%syslibrary -lrt

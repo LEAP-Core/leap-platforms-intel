@@ -24,7 +24,7 @@ Packagehint=leap
 virtual_platform=Standard Virtual Platform
 fpga_components=Software FPGA Components
 librl_bsv=RL Bluespec Library Submodel
-build_pipeline=IVerilog Build Pipeline
+build_pipeline=Verilog Simulator Build Pipeline
 soft_services=Soft Services Submodel
 
 [Standard Virtual Platform]
@@ -32,7 +32,7 @@ File=modules/leap/virtual-platform/std-virtual-platform.awb
 Packagehint=leap
 
 [Standard Virtual Platform/Requires]
-virtual_devices=Standard Virtual Devices (No Memory Service) Submodel
+virtual_devices=Standard Virtual Devices Submodel
 low_level_platform_interface=Low Level Platform Interface Hybrid
 umf=Little-Endian Unified Message Format
 platform_services=Standard Platform Service (No Memory Service)
@@ -138,9 +138,6 @@ Packagehint=leap-platforms-intel
 [Little-Endian Unified Message Format/Params]
 UMF_CHUNK_BYTES=16
 
-[Standard Virtual Devices (No Memory Service) Submodel]
-File=config/pm/leap/submodels/virtual-devices/std-virtual-devices-null-mem.apm
-Packagehint=leap
 
 [Standard Platform Service (No Memory Service)]
 File=config/pm/leap/submodels/platform-services/standard-platform-null-mem.apm
@@ -158,13 +155,6 @@ Packagehint=leap
 File=modules/leap/build-support/build-pipelines/stages/li_module/li_module.awb
 Packagehint=leap
 
-[IVerilog Build Pipeline/Requires]
-verilog_tool=VCS Build Tool
-li_module=LEAP LI Module Handler
-software_tool=Software build tool
-wrapper_gen_tool=Synthesis Boundary Wrapper generation tool
-iface_tool=Interface builder
-bsv_tool=BSV Build Tool (First Phase)
 
 [Interface builder]
 File=modules/leap/build-support/build-pipelines/stages/iface/iface.awb
@@ -177,9 +167,6 @@ BUILD_VERILOG=0
 File=modules/leap/build-support/build-pipelines/stages/software/software.awb
 Packagehint=leap
 
-[IVerilog Build Pipeline]
-File=modules/leap/build-support/build-pipelines/pipelines/verilog/verilog-build-pipeline.awb
-Packagehint=leap
 
 [BSV Build Tool (First Phase)]
 File=modules/leap/build-support/build-pipelines/stages/bluespec/bsv.awb
@@ -191,3 +178,19 @@ Packagehint=leap
 
 [VCS Build Tool/Params]
 VCS_ARGUMENTS=" -Xv -LDFLAGS -Xv -lstdc++ -Xv -LDFLAGS -Xv -lpthread   -Xv -LDFLAGS -Xv -lrt   -Xv -override_timescale=10ps/10ps "
+
+[Verilog Simulator Build Pipeline]
+File=modules/leap/build-support/build-pipelines/pipelines/verilog/verilog-build-pipeline.awb
+Packagehint=leap
+
+[Standard Virtual Devices Submodel]
+File=config/pm/leap/submodels/virtual-devices/std-virtual-devices.apm
+Packagehint=leap
+
+[Verilog Simulator Build Pipeline/Requires]
+verilog_tool=VCS Build Tool
+li_module=LEAP LI Module Handler
+software_tool=Software build tool
+wrapper_gen_tool=Synthesis Boundary Wrapper generation tool
+iface_tool=Interface builder
+bsv_tool=BSV Build Tool (First Phase)

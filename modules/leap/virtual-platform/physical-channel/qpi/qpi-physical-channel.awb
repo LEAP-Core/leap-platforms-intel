@@ -10,5 +10,5 @@
 %sources -t H       -v PUBLIC   qpi-physical-channel.h
 %sources -t CPP     -v PRIVATE  qpi-physical-channel.cpp
 %sources -t LOG     -v PUBLIC   qpi-physical-channel.log
-%library libtbb.so
+%syslibrary tbb
 

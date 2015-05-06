@@ -87,9 +87,6 @@ Packagehint=leap
 File=config/pm/leap/submodels/common/soft-services.apm
 Packagehint=leap
 
-[DDR SDRAM Emulator in BRAM]
-File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/ddr-sdram/ddr-sdram-bram/ddr-sdram-bram.awb
-Packagehint=leap-platforms
 
 [Low Level Platform Interface Hybrid]
 File=modules/leap/virtual-platform/low-level-platform-interface/hybrid-llpi.awb
@@ -122,7 +119,7 @@ Packagehint=leap-platforms-intel
 clocks_device=Simulation Clocks Device
 qpi_device=QPI Simulation Device
 physical_platform_utils=Common Physical Platform Utilities
-ddr_sdram_device=DDR SDRAM Emulator in BRAM
+ddr_sdram_device=Null DDR SDRAM Physical Device
 
 [QPI Physical Channel]
 File=modules/leap/virtual-platform/physical-channel/qpi/qpi-physical-channel.awb
@@ -137,7 +134,6 @@ Packagehint=leap-platforms-intel
 
 [Little-Endian Unified Message Format/Params]
 UMF_CHUNK_BYTES=16
-
 
 [Standard Platform Service (No Memory Service)]
 File=config/pm/leap/submodels/platform-services/standard-platform-null-mem.apm
@@ -155,7 +151,6 @@ Packagehint=leap
 File=modules/leap/build-support/build-pipelines/stages/li_module/li_module.awb
 Packagehint=leap
 
-
 [Interface builder]
 File=modules/leap/build-support/build-pipelines/stages/iface/iface.awb
 Packagehint=leap
@@ -166,7 +161,6 @@ BUILD_VERILOG=0
 [Software build tool]
 File=modules/leap/build-support/build-pipelines/stages/software/software.awb
 Packagehint=leap
-
 
 [BSV Build Tool (First Phase)]
 File=modules/leap/build-support/build-pipelines/stages/bluespec/bsv.awb
@@ -194,3 +188,14 @@ software_tool=Software build tool
 wrapper_gen_tool=Synthesis Boundary Wrapper generation tool
 iface_tool=Interface builder
 bsv_tool=BSV Build Tool (First Phase)
+
+[Null DDR SDRAM Physical Device]
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/ddr-sdram/ddr-sdram-null/ddr-sdram-null.awb
+Packagehint=leap-platforms
+
+[Null DDR SDRAM Physical Device/Requires]
+ddr_sdram_definitions=DDR SDRAM Common Definitions
+
+[DDR SDRAM Common Definitions]
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/ddr-sdram/ddr-sdram.awb
+Packagehint=leap-platforms

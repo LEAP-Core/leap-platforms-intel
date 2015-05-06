@@ -32,15 +32,20 @@
 import FIFO::*;
 import Vector::*;
 import Clocks::*;
+import DefaultValue::*;
+
 
 //
-// Standard physical platform for QPI boards with on-board DDR storage
+// Standard physical platform for QPI-attached FPGAs.
 //
 
 `include "awb/provides/qpi_device.bsh"
 `include "awb/provides/clocks_device.bsh"
 `include "awb/provides/ddr_sdram_device.bsh"
+`include "awb/provides/ddr_sdram_definitions.bsh"
+
 `include "awb/provides/physical_platform_utils.bsh"
+`include "awb/provides/fpga_components.bsh"
 `include "awb/provides/soft_connections.bsh"
 
 
@@ -97,19 +102,22 @@ module [CONNECTED_MODULE] mkPhysicalPlatform
     Clock clk = clocks.driver.clock;
     Reset rst = clocks.driver.reset;
 
-    // There is a strong assumption that the clock for this module is the 200MHz
-    // differential clock.
-    DDR_DEVICE sdram <- mkDDRDevice(clocks.driver.rawClock,
-                                    clocks.driver.rawReset, 
+    let ddrConfig = defaultValue;
+    ddrConfig.internalClock = clocks.driver.rawClock;
+    ddrConfig.internalReset = clocks.driver.rawReset;
+    ddrConfig.modelResetNeedsFanout = False;
+    
+    let ddrRst <- mkResetFanout(clocks.driver.baseReset, clocked_by clk);
+    DDR_DEVICE sdram <- mkDDRDevice(ddrConfig,
                                     clocked_by clk,
-                                    reset_by rst);
+                                    reset_by ddrRst);
 
     // Next, create the physical device that can trigger a soft reset. Pass along the
     // interface to the trigger module that the clocks device has given us.
-
+    let qpiRst <- mkResetFanout(clocks.driver.baseReset, clocked_by clk);
     QPI_DEVICE qpi <- mkQPIDevice(clocks.softResetTrigger,
                                   clocked_by clk,
-                                  reset_by rst);
+                                  reset_by qpiRst);
 
     //
     // Pass reset from QPI to the model.  The host holds reset long enough that

@@ -27,84 +27,46 @@
  *
  * **************************************************************************
  * 
- * Module Info: Generic register block & Latency pipe
- * Language   : System{Verilog} | C/C++
+ * Module Info: Generic counter
+ * Language   : System{Verilog}
  * Owner      : Rahul R Sharma
  *              rahul.r.sharma@intel.com
  *              Intel Corporation
  * 
  */
 
-module register
+
+module counter
   #(
-    parameter REG_WIDTH = 1
+    parameter int COUNT_WIDTH = 32
     )
    (
-    input logic 		 clk,
-    input logic 		 rst,
-    input logic [REG_WIDTH-1:0]  d,
-    output logic [REG_WIDTH-1:0] q
+    input logic 		   clk,
+    input logic 		   rst,
+    input logic 		   cnt_en,
+    input logic [COUNT_WIDTH-1:0]  load_cnt,
+    input logic [COUNT_WIDTH-1:0]  max_cnt, 
+    output logic [COUNT_WIDTH-1:0] count_out,
+    output logic 		   terminal_cnt
     );
 
+   logic [COUNT_WIDTH-1:0] 	   cnt_reg;
+ 	   
+   // Count out
+   assign count_out = cnt_reg;
 
-   // DFF behaviour
-   always @( posedge clk or posedge rst ) begin
-      if (rst)
-	q <= 0;
+   // Terminal count
+   assign terminal_cnt = (cnt_reg == max_cnt) ? 1'b1 : 1'b0;
+   
+   // Counter process
+   always @(posedge clk) begin
+      if (rst == 1'b1) 
+	cnt_reg <= load_cnt;
+      else if ( (rst == 1'b0) && (cnt_en == 1'b1) &&  (cnt_reg < max_cnt) )
+	cnt_reg <= cnt_reg + 1;
       else
-	q <= d;
+	cnt_reg <= cnt_reg;      
    end
 
-endmodule
+endmodule // counter
 
-
-/*
- * latency_pipe : A generic N-stage, W-width pipeline that delays
- * input by a known number of clocks
- */
-module latency_pipe
-  #(
-    parameter NUM_DELAY = 5,
-    parameter PIPE_WIDTH = 1
-    )
-   (
-    input logic 		  clk,
-    input logic 		  rst,
-    input logic [PIPE_WIDTH-1:0]  pipe_in,
-    output logic [PIPE_WIDTH-1:0] pipe_out
-    );
-
-   logic [PIPE_WIDTH-1:0] 	 pipe_in_tmp [0:NUM_DELAY-1];
-   logic [PIPE_WIDTH-1:0] 	 pipe_out_tmp [0:NUM_DELAY-1];
-
-
-   // Register stages (instantiated here, not connected)
-   genvar 		    ii;
-   generate
-      for(ii = 0; ii < NUM_DELAY; ii = ii + 1) begin
-	 register
-	       #(
-		 .REG_WIDTH (PIPE_WIDTH)
-		 )
-	 reg_i
-	       (
-		.clk (clk),
-		.rst (rst),
-		.d   (pipe_in_tmp[ii]),
-		.q   (pipe_out_tmp[ii])
-		);
-      end
-   endgenerate
-
-   // Pipeline stages connected here
-   genvar 		    jj;
-   generate
-      for(jj = 1; jj < NUM_DELAY; jj = jj + 1) begin
-	 assign pipe_in_tmp[jj] = pipe_out_tmp[jj - 1];
-      end
-   endgenerate
-
-   assign pipe_in_tmp[0] = pipe_in;
-   assign pipe_out = pipe_out_tmp[NUM_DELAY-1];
-
-endmodule

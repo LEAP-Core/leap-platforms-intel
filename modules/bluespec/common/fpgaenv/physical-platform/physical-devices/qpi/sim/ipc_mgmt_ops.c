@@ -1,4 +1,4 @@
-// Copyright (c) 2013-2014, Intel Corporation
+// Copyright (c) 2014-2015, Intel Corporation
 //
 // Redistribution  and  use  in source  and  binary  forms,  with  or  without
 // modification, are permitted provided that the following conditions are met:
@@ -23,7 +23,14 @@
 // CONTRACT,  STRICT LIABILITY,  OR TORT  (INCLUDING NEGLIGENCE  OR OTHERWISE)
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,  EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
-
+// **************************************************************************
+/* 
+ * Module Info: IPC management functions
+ * Language   : C/C++
+ * Owner      : Rahul R Sharma
+ *              rahul.r.sharma@intel.com
+ *              Intel Corporation
+ */ 
 
 
 #include "ase_common.h"
@@ -42,21 +49,13 @@ void create_ipc_listfile()
     {
       ase_error_report("fopen", errno, ASE_OS_FOPEN_ERR);
       printf("Local IPC file cannot be opened\n");
-      exit(1);
+      start_simkill_countdown(); // RRS: exit(1);
     }
   else
     {
       printf("SIM-C : IPC Watchdog file %s opened\n", IPC_LOCAL_FILENAME);
     }
   
-  /* global_ipc_fp = fopen(IPC_GLOBAL_FILENAME, "a+"); */
-  /* if (global_ipc_fp == NULL)  */
-  /*   { */
-  /*     ase_error_report("fopen", errno, ASE_OS_FOPEN_ERR); */
-  /*     printf("Global IPC file cannot be opened\n"); */
-  /*     exit(1); */
-  /*   } */
-
   FUNC_CALL_EXIT;
 }
 
@@ -69,14 +68,16 @@ void add_to_ipc_list(char *ipc_type, char *ipc_name)
   FUNC_CALL_ENTRY;
   int ret;
 
-  /* char *ipc_type_copy, *ipc_name_copy; */
-  /* ipc_type_copy = malloc(4); */
-  /* ipc_name_copy = malloc(ASE_MQ_NAME_LEN); */
-  /* strcpy(ipc_type_copy, ipc_type); */
-  /* strcpy(ipc_name_copy, ipc_name); */
-
   // Add name to local IPC list
   ret = fprintf(local_ipc_fp, "%s\t%s\n", ipc_type, ipc_name);
+
+  if (ret < 0)
+    {
+      BEGIN_RED_FONTCOLOR;
+      printf("add_to_ipc_list: Failed to update IPC management file, cleanup may be incomplete\n");
+      printf("                 Simulation will continue\n");
+      END_RED_FONTCOLOR;
+    }
 
   FUNC_CALL_EXIT;
 }
@@ -90,55 +91,56 @@ void final_ipc_cleanup()
   FUNC_CALL_ENTRY;
   char ipc_type[4];
   char ipc_name[40];
-  int ret;
 
   // Close global/local files
   fclose(local_ipc_fp);
-  /* fclose(global_ipc_fp); */
 
   // Reopen local IPC listfile
   local_ipc_fp = fopen(IPC_LOCAL_FILENAME, "r");
   if (local_ipc_fp == NULL) 
     {
       ase_error_report("fopen", errno, ASE_IPCKILL_CATERR);
-      exit(1);
+      start_simkill_countdown(); // RRS: exit(1);
     }
   
   // Parse through list
-  while(!feof(local_ipc_fp))
+  //  while(!feof(local_ipc_fp))
+  while(1)
     {
       fscanf(local_ipc_fp, "%s\t%s", ipc_type, ipc_name);
+      if (feof(local_ipc_fp))
+	break;
 
       if (strcmp (ipc_type, "MQ") == 0)
 	{
-	  printf("Removing MQ  %s ... ", ipc_name);
+	  printf("        Removing MQ  %s ... ", ipc_name);
 	  if ( mq_unlink(ipc_name) == -1 )
 	    {
-	      BEGIN_GREEN_FONTCOLOR;
+	      BEGIN_YELLOW_FONTCOLOR;
 	      printf("Removed already !!\n");
-	      END_GREEN_FONTCOLOR;
+	      END_YELLOW_FONTCOLOR;
 	    }
 	  else
 	    {
-	      BEGIN_GREEN_FONTCOLOR;
+	      BEGIN_YELLOW_FONTCOLOR;
 	      printf("DONE\n");
-	      END_GREEN_FONTCOLOR;
+	      END_YELLOW_FONTCOLOR;
 	    }
 	}	 
       else if (strcmp (ipc_type, "SHM") == 0)
 	{
-	  printf("Removing SHM %s ... ", ipc_name);
+	  printf("        Removing SHM %s ... ", ipc_name);
 	  if ( shm_unlink(ipc_name) == -1 )
 	    {
-	      BEGIN_GREEN_FONTCOLOR;	    
+	      BEGIN_YELLOW_FONTCOLOR;	    
 	      printf("Already removed !!\n");
-	      END_GREEN_FONTCOLOR;
+	      END_YELLOW_FONTCOLOR;
 	    }
 	  else
 	    {
-	      BEGIN_GREEN_FONTCOLOR;	    
+	      BEGIN_YELLOW_FONTCOLOR;	    
 	      printf("DONE\n");
-	      END_GREEN_FONTCOLOR;
+	      END_YELLOW_FONTCOLOR;
 	    }
 	}	 	
     }

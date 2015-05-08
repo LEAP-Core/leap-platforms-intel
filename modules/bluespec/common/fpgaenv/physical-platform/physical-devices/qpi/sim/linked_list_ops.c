@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2014, Intel Corporation
+// Copyright (c) 2014-2015, Intel Corporation
 //
 // Redistribution  and  use  in source  and  binary  forms,  with  or  without
 // modification, are permitted provided that the following conditions are met:
@@ -23,24 +23,39 @@
 // CONTRACT,  STRICT LIABILITY,  OR TORT  (INCLUDING NEGLIGENCE  OR OTHERWISE)
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,  EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
+// **************************************************************************
+/* 
+ * Module Info: Linked List memory buffer controls
+ * Language   : C/C++
+ * Owner      : Rahul R Sharma
+ *              rahul.r.sharma@intel.com
+ *              Intel Corporation
+ * 
+ */
+
 #include "ase_common.h"
 
 // --------------------------------------------------------------------
 // ll_print_info: Print linked list node info
+// Thu Oct  2 15:50:06 PDT 2014 : Modified for cleanliness
 // --------------------------------------------------------------------
 void ll_print_info(struct buffer_t *print_ptr)
 {
   FUNC_CALL_ENTRY;
 
-  printf("%p  ", print_ptr);
   printf("%d  ", print_ptr->index);
-  printf("%x  ", print_ptr->valid);
-  printf("%5s ", print_ptr->memname);
+  if (print_ptr->valid == ASE_BUFFER_VALID) 
+    printf("ADDED   ");
+  else
+    printf("REMOVED ");
+  printf("%5s \t", print_ptr->memname);
   printf("%p  ", (uint32_t*)print_ptr->vbase);
   printf("%p  ", (uint32_t*)print_ptr->pbase);
   printf("%p  ", (uint32_t*)print_ptr->fake_paddr);
-  printf("%p  ", (uint32_t*)print_ptr->fake_off_hi);
-  printf("%p\n", (*print_ptr).next);
+  printf("%x  ", print_ptr->memsize);
+  printf("%d  ", print_ptr->is_dsm);
+  printf("%d  ", print_ptr->is_privmem);
+  printf("\n");
 
   FUNC_CALL_EXIT;
 }
@@ -170,5 +185,28 @@ struct buffer_t* ll_search_buffer(int search_index)
 }
 
 
+/*
+ * Check if physical address is used
+ * RETURN 0 if not found, 1 if found
+ */
+uint32_t check_if_physaddr_used(uint64_t paddr)
+{
+  struct buffer_t *search_ptr;
+  int flag = 0;
 
+  search_ptr = head;
+  while(search_ptr != NULL)
+    {
+      if ( (paddr >= search_ptr->fake_paddr) && (paddr < search_ptr->fake_paddr_hi) )
+	{
+	  flag = 1;
+	  break;
+	}
+      else
+	{
+	  search_ptr = search_ptr->next;
+	}
+    }
+  return flag;
+}
 

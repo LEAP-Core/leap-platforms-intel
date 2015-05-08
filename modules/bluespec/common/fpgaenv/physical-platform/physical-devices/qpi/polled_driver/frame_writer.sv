@@ -121,9 +121,11 @@ module frame_writer
    tx_header_t write_header;
    // Request a write for a fence, write control, or if we have data.
    // 
-   assign frame_writer.write.request = (state == WRITE_FENCE) || (state == WRITE_CONTROL) || (state == WRITE && write_data_rdy);
+//FIXME: WRITE_FENCE broken
+//   assign frame_writer.write.request = (state == WRITE_FENCE) || (state == WRITE_CONTROL) || (state == WRITE && write_data_rdy);
+   assign frame_writer.write.request = (state == WRITE_CONTROL) || (state == WRITE && write_data_rdy);
 
-      assign header_read_rdy = state == POLL_HEADER;
+   assign header_read_rdy = state == POLL_HEADER;
 
    assign frame_writer.read.request = header_read_rdy;
    assign frame_writer.read_header = read_header;
@@ -138,7 +140,6 @@ module frame_writer
       end
    end
 
-//  typedef enum logic [2:0] {IDLE, POLL_HEADER, WAIT_HEADER, WRITE, WRITE_FENCE, WRITE_CONTROL} state_t;
    always_comb begin
       case (state)
         IDLE :
@@ -161,11 +162,13 @@ module frame_writer
           end // case: WAIT_HEADER
         WRITE:
           begin
-             // Read a whole frame 
+             // Write a whole frame
              next_state = (done_with_writing)?WRITE_FENCE:WRITE;             
           end
         WRITE_FENCE:
-          next_state = (write_grant.writer_grant)?WRITE_CONTROL:WRITE_FENCE;
+//FIXME: WRITE_FENCE broken
+//         next_state = (write_grant.writer_grant)?WRITE_CONTROL:WRITE_FENCE;
+         next_state = WRITE_CONTROL;
         WRITE_CONTROL:
           next_state = (write_grant.writer_grant)?POLL_HEADER:WRITE_CONTROL;        
         default :
@@ -243,9 +246,19 @@ module frame_writer
   
    always_comb begin
       frame_writer.write_header = 0;
-      frame_writer.data = (state==WRITE)?{384'h0,write_data}:{512'hdeadbeef0000}|{515'b0,frame_chunks - 1,1'b1};                                                                                                         
+      frame_writer.data = (state==WRITE)?{384'h0,write_data}:{512'hdeadbeef0000}|{515'b0,frame_chunks - 1,1'b1};
+
       frame_writer.write_header.request_type = (state == WRITE_FENCE)?WrFence:WrLine;
-      frame_writer.write_header.address = {frame_base_pointer, frame_number, (state == WRITE)?frame_chunks:frame_chunks_zero}; 
+
+      case (state)
+        WRITE_FENCE:
+          frame_writer.write_header.address = 0;
+        WRITE_CONTROL:
+          frame_writer.write_header.address = {frame_base_pointer, frame_number, frame_chunks_zero};
+        default:
+          frame_writer.write_header.address = {frame_base_pointer, frame_number, frame_chunks};
+      endcase // case (state)
+
       frame_writer.write_header.mdata = 0; // No metadata necessary
    end
   

@@ -97,9 +97,9 @@ AFU::create_buffer_aligned(uint32_t size_bytes) {
   printf(" Unaligned buffer: (virt) %p, (phy) %llx\n", buffer->virtual_address, buffer->physical_address);
   // Now, let's adjust the pointers to create alignment.
   // Note that we're aligning the PA to simplify the hardware. 
-  phys_addr original_diff = ((uintptr_t)(buffer->virtual_address)) - buffer->physical_address;
-  phys_addr aligned_addr = (phys_addr) (((buffer->physical_address + size_bytes)) & ~((phys_addr)size_bytes - 1)); 
-  phys_addr byte_difference =   aligned_addr - buffer->physical_address;  
+  btPhysAddr original_diff = ((uintptr_t)(buffer->virtual_address)) - buffer->physical_address;
+  btPhysAddr aligned_addr = (btPhysAddr) (((buffer->physical_address + size_bytes)) & ~((btPhysAddr)size_bytes - 1)); 
+  btPhysAddr byte_difference =   aligned_addr - buffer->physical_address;  
   buffer->physical_address = aligned_addr;
 
   // Align the virtual ptr based on the physical alignment.
@@ -107,7 +107,7 @@ AFU::create_buffer_aligned(uint32_t size_bytes) {
 
   printf(" Aligned buffer: (virt) %p, (phy) %llx\n", buffer->virtual_address, buffer->physical_address);
 
-  phys_addr new_diff = ((uintptr_t)(buffer->virtual_address)) - buffer->physical_address;
+  btPhysAddr new_diff = ((uintptr_t)(buffer->virtual_address)) - buffer->physical_address;
 
   if (original_diff != new_diff)
   {
@@ -121,7 +121,7 @@ AFU::create_buffer_aligned(uint32_t size_bytes) {
 
 void
 AFU::reset_afu() {
-  cci_csr_t csr;
+  bt32bitCSR csr;
 
   // Assert CAFU Reset
   csr = 0;

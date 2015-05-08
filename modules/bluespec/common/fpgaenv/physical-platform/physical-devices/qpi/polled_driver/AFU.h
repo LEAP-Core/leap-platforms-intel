@@ -12,11 +12,12 @@
 USING_NAMESPACE(std)
 USING_NAMESPACE(CCILib)
 
-struct AFUBuffer{
-  ICCIWorkspace    *workspace;
-  volatile uint8_t *virtual_address;
-  phys_addr         physical_address;
-  uint64_t          num_bytes;
+struct AFUBuffer
+{
+    ICCIWorkspace    *workspace;
+    volatile uint8_t *virtual_address;
+    btPhysAddr        physical_address;
+    uint64_t          num_bytes;
 };
 
 
@@ -47,11 +48,11 @@ public:
     return *(volatile uint64_t *)(dsm_buffer->virtual_address + offset);
   }
 
-  inline bool write_csr(uintptr_t offset, int64_t value) {
+  inline bool write_csr(btCSROffset offset, bt32bitCSR value) {
     return pCCIDevice->SetCSR(offset, value);
   }
 
-  inline bool write_csr_64(uintptr_t offset, int64_t value) {
+  inline bool write_csr_64(btCSROffset offset, bt64bitCSR value) {
     bool result = pCCIDevice->SetCSR(offset + 4, value >> 32);
     result |= pCCIDevice->SetCSR(offset, value & 0xffffffff);
     return result;

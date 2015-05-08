@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2014, Intel Corporation
+// Copyright (c) 2014-2015, Intel Corporation
 //
 // Redistribution  and  use  in source  and  binary  forms,  with  or  without
 // modification, are permitted provided that the following conditions are met:
@@ -23,212 +23,338 @@
 // CONTRACT,  STRICT LIABILITY,  OR TORT  (INCLUDING NEGLIGENCE  OR OTHERWISE)
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,  EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
-// ------------------------------------------------------------------
-// Private memory access functions - C Module (no main() here)
-// Author: Rahul R Sharma <rahul.r.sharma@intel.com>
-//         Intel Corporation
-//
-// Revisions
-// RRS         3rd Mar 2014      - Private memory subsystem, not connected to
-//                                 linked list, private buffer only
-//
-// -------------------------------------------------------------------
-
+// **************************************************************************
+/* 
+ * Module Info: Private memory access functions - C Module (no main() here)
+ * Language   : System{Verilog} | C/C++
+ * Owner      : Rahul R Sharma
+ *              rahul.r.sharma@intel.com
+ *              Intel Corporation
+ * 
+ * Revisions
+ * RRS         3rd Mar 2014      - Private memory subsystem, not connected to
+ *                                 linked list, private buffer only
+ *
+ */
 
 #include "ase_common.h"
 
-// -------------------------------------------------------------------
-// capcm_init : Initialize a private memory buffer, not accessible
-//              to software application
-// CA-PCM is implemented as a region in /dev/shm
-// This will also allow dumping to file if needed
-// -------------------------------------------------------------------
-void capcm_init(int capcm_num_cl)
-{
-  FUNC_CALL_ENTRY;
-  
-  // Create unique name (BASENAME + timestamp)
-  memset(capcm_memname, '\0', 64);
-  strcpy(capcm_memname, CAPCM_BASENAME);
-  strcat(capcm_memname, get_timestamp() );
 
-  // Initialize CAPCM byte size
-  capcm_memsize = capcm_num_cl * CL_BYTE_WIDTH;
-
-  // CAPCM Open & map
-  capcm_fd = shm_open(capcm_memname, O_CREAT|O_RDWR, S_IREAD|S_IWRITE);
-  if(capcm_fd < 0) 
-    {
-      perror("shm_open");
-      exit(1);
-    }
-
-  // Add to IPC list
-#ifdef SIM_SIDE
-  add_to_ipc_list ("SHM", capcm_memname);
-#endif
-
-  // Mmap vbase to virtual space
-  capcm_vbase = (uint64_t) mmap(NULL, capcm_memsize, PROT_READ|PROT_WRITE, MAP_SHARED, capcm_fd, 0);
-  if(capcm_vbase == (uint64_t) MAP_FAILED) {
-      perror("mmap");
-      exit(1);
-  }
-
-  // Extend memory to required size
-  ftruncate(capcm_fd, (off_t)capcm_memsize); 
-
-  // Print info
-  printf("CAPCM : QPI-FPGA CA Private memory READY, size = %d bytes\n", capcm_memsize);
-
-  FUNC_CALL_EXIT;
-}
-
-
-// -------------------------------------------------------------------
-// capcm_deinit : Deinitialize/civilized shutdown of CAPCM
-//                /dev/shm closure as in shm_ops.c
-// -------------------------------------------------------------------
-void capcm_deinit()
+/*
+ * capcm_init : Initialize a private memory buffer, not accessible
+ *              to software application
+ * CA-PCM is implemented as a region in /dev/shm
+ * This will also allow dumping to file if needed
+ *
+ */
+void capcm_init(uint64_t capcm_memsize)
 {
   FUNC_CALL_ENTRY;
 
+  int mem_i;
   int ret;
-  char rm_shm_path[50];
-  memset(rm_shm_path, '\0', sizeof(rm_shm_path));
-  strcat(rm_shm_path, "rm -f /dev/shm");
-  strcat(rm_shm_path, capcm_memname);
+  char gen_memname[ASE_SHM_NAME_LEN];
 
-  ret = munmap((void*)capcm_vbase, (size_t)capcm_memsize);
-  if(0 != ret) {
-    perror("munmap");
-    exit(1);
-  }
-
-  /* RRS: **FIXME** */
-  // Unlink CAPCM
-  /* if (shm_unlink(capcm_memname) != 0) */
-  /*   perror("shm_unlink"); */
-
-  // Remove shm related 
-  /* system( rm_shm_path ); */
-  
-  // Print info
-  printf("CAPCM : QPI-FPGA CA Private memory removed\n");
-
-  FUNC_CALL_EXIT;
-}
-
-
-// -------------------------------------------------------------------
-// capcm_rdline : CA-PCM read a line in private cached memory
-// ------------------------------------------------------------------
-void capcm_rdline_req(int cl_rd_addr, int mdata)
-{
-  FUNC_CALL_ENTRY;
-  
-  // Temporary variables
-  uint64_t* rd_target_vaddr = (uint64_t*) NULL;
-  unsigned char read_cl_data[CL_BYTE_WIDTH];
-  uint32_t cl_iter;
-
-  // Log event, if OK to do so
-#ifdef ASE_CCI_TRANSACTION_LOGGER
-  ase_cci_logger("CAPCM_RD_Line", mdata, 0, cl_rd_addr, 0, NULL);
-#endif
-
-  // Read address
-  rd_target_vaddr = (uint64_t *)((uint64_t)capcm_vbase + cl_rd_addr);
-
-  // Copy data from memory
-  memcpy(read_cl_data, rd_target_vaddr, CL_BYTE_WIDTH );
-
-  // Print info, either detail or succint
-#ifdef ASE_CL_VIEW
-  printf("SIM-C : CL view -> RDLINE vaddr = %p\n", rd_target_vaddr);
-  printf("SIM-C : CL data -> ");
-  for(cl_iter = 0; cl_iter < CL_BYTE_WIDTH; cl_iter++)
-    printf("%02x", (unsigned char)read_cl_data[cl_iter]);
-  printf("\n"); 
-#else
-   printf("SIM-C : READ  -> CL addr = %x, meta = %d\n", cl_rd_addr, mdata);
-#endif
-
-  // Log event, if OK to do so
-#ifdef ASE_CCI_TRANSACTION_LOGGER
-   ase_cci_logger("CAPCM_RD_Resp", mdata, 0, cl_rd_addr, (uint64_t)rd_target_vaddr, (unsigned char*)&read_cl_data);
-#endif
-   
-   /* // Response  */
-   /* capcm_rdline_resp(ASE_RX0_RD_RESP, mdata, read_cl_data); */
-
-  // Send data back as a response
-  cci_ase2cafu_rdResp_ch0(ASE_RX0_RD_RESP, mdata, read_cl_data);
-
-   FUNC_CALL_EXIT;
-}
-
-
-
-// -------------------------------------------------------------------
-// capcm_wrline : CA-PCM write a line in private cached memory
-// -------------------------------------------------------------------
-void capcm_wrline_req(int cl_wr_addr, int mdata, char* wr_data)
-{
-  FUNC_CALL_ENTRY;
-
-  // Temporary variables
-  uint64_t* wr_target_vaddr = (uint64_t*)NULL;
-  char write_cl_data[CL_BYTE_WIDTH];
-  uint32_t cl_iter;
-
-  // Log event, if OK to do so
-#ifdef ASE_CCI_TRANSACTION_LOGGER
-  ase_cci_logger("CAPCM_WR_Line", mdata, 1, cl_wr_addr, 0, wr_data);
-#endif
-
-  // Copy incoming data to known size string (solving memcpy hose-up)
-  memcpy((unsigned char*) write_cl_data, (unsigned char*) wr_data, CL_BYTE_WIDTH);
-
-  wr_target_vaddr = (uint64_t *)((uint64_t)capcm_vbase + cl_wr_addr);
-
-  // Copy data to memory
-  memcpy(wr_target_vaddr, write_cl_data, CL_BYTE_WIDTH);
-
-  // Send response back on some random channel if enabled
-  int chanRand = rand()%10;
-  if(chanRand < 1)
-    //if(0)
+  // Zero check
+  if (capcm_size == 0)
     {
-      // Log data if OK to do so
-      #ifdef ASE_CCI_TRANSACTION_LOGGER
-      ase_cci_logger("CAPCM_WR_Resp", mdata, 0, cl_wr_addr, wr_target_vaddr, NULL);
-      #endif
-      cci_ase2cafu_wrResp_ch0(ASE_RX0_WR_RESP, mdata, (unsigned char*)null_str);
+      printf("SIM-C : CAPCM size requested was zero bytes - NO memory allocated\n");
     }
   else
     {
-      // Log data if OK to do so
-      #ifdef ASE_CCI_TRANSACTION_LOGGER
-      ase_cci_logger("CAPCM_WR_Resp", mdata, 1, cl_wr_addr, (uint64_t)wr_target_vaddr, NULL);
-      #endif
-      cci_ase2cafu_ch1(ASE_RX1_WR_RESP, mdata);
+      // Calculate number of chunks required for implementing CAPCM
+      capcm_num_buffers = capcm_size/CAPCM_CHUNKSIZE;
+      printf("SIM-C : CAPCM will use %lu chunks of 0x%lx bytes each \n", capcm_num_buffers, CAPCM_CHUNKSIZE );
+
+      
+      // Malloc control structures
+      capcm_buf = (struct buffer_t *)malloc(capcm_num_buffers * sizeof(struct buffer_t));
+      if (capcm_buf == NULL) 
+	{
+	  printf("SIM-C : CAPCM control structures could not be allocated... EXITING\n");
+	  ase_error_report("malloc", errno, ASE_OS_MALLOC_ERR);
+	  start_simkill_countdown();
+	}
+
+      // Start adding chain of CAPCMs to buffer chain
+      for(mem_i = 0; mem_i < capcm_num_buffers; mem_i++)
+	{
+	  // Set memory name & open file descriptor
+	  ret = sprintf( gen_memname, "%s%d.%s", CAPCM_BASENAME, mem_i, get_timestamp(0) );
+	  if (ret < 0)
+	    {
+	      ase_error_report("sprintf", errno, ASE_OS_STRING_ERR);
+	      start_simkill_countdown();
+	    }
+	  strcpy(capcm_buf[mem_i].memname, gen_memname); 
+	  capcm_buf[mem_i].index = 1000000 + mem_i;
+	  add_to_ipc_list ("SHM", capcm_buf[mem_i].memname);	  
+	  
+	  // Map memory name, calculate memory high, ftruncate to given size
+	  capcm_buf[mem_i].fd_ase = shm_open(capcm_buf[mem_i].memname, O_CREAT|O_RDWR, S_IREAD|S_IWRITE);
+	  if (capcm_buf[mem_i].fd_ase < 0)
+	    {
+	      ase_error_report("shm_open", errno, ASE_OS_SHM_ERR);
+	      ase_perror_teardown();
+	      start_simkill_countdown();
+	    }
+
+	  capcm_buf[mem_i].fd_app = 0;
+
+	  // Map to virtual memory system	  
+	  capcm_buf[mem_i].vbase = 0;
+	  capcm_buf[mem_i].pbase = (uint64_t)  mmap(NULL,
+						     CAPCM_CHUNKSIZE,
+						     PROT_READ|PROT_WRITE,
+						     MAP_PRIVATE,
+						     capcm_buf[mem_i].fd_ase,
+						     0);
+	  if(capcm_buf[mem_i].pbase == (uint64_t) MAP_FAILED)
+	    {
+	      ase_error_report("mmap", errno, ASE_OS_MEMMAP_ERR);
+	      ase_perror_teardown();
+	      start_simkill_countdown();
+	    }
+
+	  // Extend the map
+	  ret = ftruncate(capcm_buf[mem_i].fd_ase, (off_t) CAPCM_CHUNKSIZE);
+	  if(0 != ret)
+	    {
+	      ase_error_report("ftruncate", errno, ASE_OS_MEMMAP_ERR);
+	      ase_perror_teardown();
+	      start_simkill_countdown();
+	    }
+
+
+	  // Set physical memsize, LO and HI
+	  capcm_buf[mem_i].memsize = CAPCM_CHUNKSIZE;
+	  capcm_buf[mem_i].fake_paddr = capcm_phys_lo + mem_i * CAPCM_CHUNKSIZE;
+	  capcm_buf[mem_i].fake_paddr_hi = capcm_phys_lo + CAPCM_CHUNKSIZE - 1;
+
+	  // Set buffer flags
+	  capcm_buf[mem_i].valid = ASE_BUFFER_VALID;
+	  capcm_buf[mem_i].is_privmem = 1;
+	  capcm_buf[mem_i].is_dsm = 0;
+	    
+	  // Append buffer to ASE-control
+	  ll_append_buffer( &capcm_buf[mem_i] );
+	}    
+      
+      // Print notice
+      printf("SIM-C : CAPCM buffer space has been allocated\n");  
+      ll_traverse_print();      
     }
 
 
-  // Print info
-#ifdef ASE_CL_VIEW
-  printf("SIM-C : CL view -> WrLine vaddr = %p, paddr = %x\n", wr_target_vaddr, fake_wr_addr);
-  printf("SIM-C : CL data -> ");
-  for(cl_iter = 0; cl_iter < CL_BYTE_WIDTH; cl_iter++)
-    printf("%02x", (unsigned char)write_cl_data[cl_iter]);
-  printf("\n"); 
-#else
-  printf("SIM-C : WRITE -> CL addr = %x, meta = %d, Chan = %d\n", cl_wr_addr, mdata, chanRand);
-#endif
+  
+
+  /*
+   * CAPCM chaining and implementation
+   */
+  /* for(mem_i = 0; mem_i < capcm_num_buffers; mem_i++) */
+  /*   { */
+      
+
+  /*     /\* */
+  /*      * Map Memory low vbase */
+  /*      *\/ */
+  /*     capcm_buf[mem_i].vmem_lo = (uint64_t*)  mmap(NULL,  */
+  /* 						   CAPCM_CHUNKSIZE,  */
+  /* 						   PROT_READ|PROT_WRITE,  */
+  /* 						   MAP_PRIVATE,  */
+  /* 						   capcm_buf[mem_i].fd,  */
+  /* 						   0); */
+  /*     if(capcm_buf[mem_i].vmem_lo == (void *) MAP_FAILED)  */
+  /* 	{ */
+  /* 	  ase_error_report("mmap", errno, ASE_OS_MEMMAP_ERR); */
+  /* 	  ase_perror_teardown(); */
+  /* 	  start_simkill_countdown(); // RRS: exit(1); */
+  /* 	} */
+      
+  /*     capcm_buf[mem_i].vmem_hi = (uint64_t*)((uint64_t)capcm_buf[mem_i].vmem_lo + CAPCM_CHUNKSIZE - 1) ; */
+      
+  /*     ret = ftruncate(capcm_buf[mem_i].fd, (off_t) CAPCM_CHUNKSIZE); */
+  /*     if(0 != ret)  */
+  /* 	{ */
+  /* 	  ase_error_report("ftruncate", errno, ASE_OS_MEMMAP_ERR); */
+  /* 	  ase_perror_teardown(); */
+  /* 	  start_simkill_countdown(); // RRS: exit(1); */
+  /* 	} */
+      
+  /*     /\* */
+  /*      * Print success or failure */
+  /*      *\/ */
+  /*     if (cfg->enable_bufferinfo != 0)  */
+  /* 	{ */
+  /* 	  if (mem_i == 0) */
+  /* 	    { */
+  /* 	      printf("----------------------------------------------------------------------------------\n"); */
+  /* 	      printf("    /dev/shm/<memname>\t\t\tfd\toff_lo\t\toff_hi\n"); */
+  /* 	      printf("----------------------------------------------------------------------------------\n"); */
+  /* 	    } */
+  /* 	  printf("%32s\t%016lx\t%016lx\n",  */
+  /* 		 capcm_buf[mem_i].memname, capcm_buf[mem_i].byte_offset_lo, capcm_buf[mem_i].byte_offset_hi); */
+  /* 	} */
+  /*   } */
 
 
   FUNC_CALL_EXIT;
 }
+
+
+/*
+ * DPI Function: ReadLine Request to CA private memory
+ */
+/* void rd_capcmline_dex(cci_pkt *pkt, int *cl_addr, int *mdata ) */
+/* { */
+/*   FUNC_CALL_ENTRY; */
+
+/*   uint64_t byte_offset, offset_in_buf; */
+/*   uint64_t* rd_target_vaddr = (uint64_t*)NULL; */
+/*   int i; */
+/*   int target_buf_id; */
+
+/*   // Find buffer offset where cache address lies */
+/*   byte_offset = (uint64_t)(*cl_addr) << 6; */
+
+/*   // Find buffer location, calculate offset inside buffer */
+/*   for (i = 0; i < capcm_num_buffers; i++) */
+/*     if ((byte_offset > capcm_buf[i].byte_offset_lo) && (byte_offset < capcm_buf[i].byte_offset_hi)) */
+/*       { */
+/* 	target_buf_id = i; */
+/* 	offset_in_buf = byte_offset - capcm_buf[i].byte_offset_lo; */
+/*       } */
+
+/*   // Translate to virtual address */
+/*   rd_target_vaddr = (uint64_t*)( (uint64_t)capcm_buf[offset_in_buf].vmem_lo + offset_in_buf ); */
+
+/*   // Copy data to memory */
+/*   memcpy(pkt->qword, rd_target_vaddr, CL_BYTE_WIDTH); */
+
+/*   // Loop around metadata */
+/*   pkt->meta = (ASE_RX0_RD_RESP << 14) | (*mdata); */
+  
+/*   // Valid signals */
+/*   pkt->cfgvalid = 0; */
+/*   pkt->wrvalid  = 0; */
+/*   pkt->rdvalid  = 1; */
+/*   pkt->intrvalid = 0; */
+/*   pkt->umsgvalid = 0; */
+
+/*   FUNC_CALL_EXIT; */
+/* } */
+
+
+/* /\* */
+/*  * DPI Function: ReadLine Request to CA private memory */
+/*  *\/ */
+/* void wr_capcmline_dex(cci_pkt *pkt, int *cl_addr, int *mdata, char *wr_data ) */
+/* { */
+/*   FUNC_CALL_ENTRY; */
+
+/*   uint64_t byte_offset, offset_in_buf; */
+/*   uint64_t* wr_target_vaddr = (uint64_t*)NULL; */
+/*   int i; */
+/*   int target_buf_id; */
+
+/*   // Find buffer offset where cache address lies */
+/*   byte_offset = (uint64_t)(*cl_addr) << 6; */
+
+/*   // Find buffer location, calculate byte address offset of write address */
+/*   for (i = 0; i < capcm_num_buffers; i++) */
+/*     if ((byte_offset > capcm_buf[i].byte_offset_lo) && (byte_offset < capcm_buf[i].byte_offset_hi)) */
+/*       { */
+/* 	target_buf_id = i; */
+/* 	offset_in_buf = byte_offset - capcm_buf[i].byte_offset_lo; */
+/*       } */
+
+/*   // Translate CAPCM offset to Virtual address */
+/*   wr_target_vaddr = (uint64_t*)( (uint64_t)capcm_buf[offset_in_buf].vmem_lo + offset_in_buf ); */
+ 
+/*   // Copy data to memory */
+/*   memcpy(wr_target_vaddr, wr_data, CL_BYTE_WIDTH); */
+  
+/*   //////////// Write this to RX-path ////////////// */
+/*   // Zero out data buffer */
+/*   for(i = 0; i < 8; i++) */
+/*     pkt->qword[i] = 0x0; */
+
+/*   // Loop around metadata */
+/*   pkt->meta = (ASE_RX0_WR_RESP << 14) | (*mdata); */
+
+/*   // Valid signals */
+/*   pkt->cfgvalid = 0; */
+/*   pkt->wrvalid  = 1; */
+/*   pkt->rdvalid  = 0; */
+/*   pkt->intrvalid = 0; */
+/*   pkt->umsgvalid = 0; */
+
+/*   FUNC_CALL_EXIT; */
+/* } */
+
+
+/* // ------------------------------------------------------------------- */
+/* // capcm_deinit : Deinitialize/civilized shutdown of CAPCM */
+/* //                /dev/shm closure as in shm_ops.c */
+/* // ------------------------------------------------------------------- */
+/* void capcm_deinit() */
+/* { */
+/*   FUNC_CALL_ENTRY; */
+
+/* #if 0 */
+/*   int ret; */
+/*   char rm_shm_path[50]; */
+/*   memset(rm_shm_path, '\0', sizeof(rm_shm_path)); */
+/*   strcat(rm_shm_path, "rm -f /dev/shm"); */
+/*   strcat(rm_shm_path, capcm_memname); */
+
+/*   ret = munmap((void*)capcm_vbase, (size_t)capcm_memsize); */
+/*   if(0 != ret) { */
+/*     perror("munmap"); */
+/*     exit(1); */
+/*   } */
+
+/*   /\* RRS: **FIXME** *\/ */
+/*   // Unlink CAPCM */
+/*   /\* if (shm_unlink(capcm_memname) != 0) *\/ */
+/*   /\*   perror("shm_unlink"); *\/ */
+
+/*   // Remove shm related  */
+/*   /\* system( rm_shm_path ); *\/ */
+  
+/*   // Print info */
+/*   printf("CAPCM : QPI-FPGA CA Private memory removed\n"); */
+/* #endif */
+  
+/*   int mem_i; */
+/*   int ret; */
+  
+/*   /\* printf("SIM-C : Deallocating CAPCM memory allocations....\n"); *\/ */
+/*   /\* for(mem_i = 0; mem_i < capcm_num_buffers; mem_i++) *\/ */
+/*   /\*   { *\/ */
+/*   /\*     /\\* *\/ */
+/*   /\*      * Unmap memory allocated to CAPCM memory chunk *\/ */
+/*   /\*      *\\/ *\/ */
+/*   /\*     ret = munmap( (void*)capcm_buf[mem_i].memname, (size_t)CAPCM_CHUNKSIZE ); *\/ */
+/*   /\*     if(0 != ret) *\/ */
+/*   /\*     	{ *\/ */
+/*   /\*     	  ase_error_report("munmap", errno, ASE_OS_MEMMAP_ERR); *\/ */
+/*   /\*     	  ase_perror_teardown(); *\/ */
+/*   /\*     	  exit(1); *\/ */
+/*   /\*     	} *\/ */
+      
+/*   /\*     /\\* *\/ */
+/*   /\*      * Unlink /dev/shm region *\/ */
+/*   /\*      *\\/ *\/ */
+/*   /\*     if (shm_unlink( capcm_buf[mem_i].memname ) != 0) *\/ */
+/*   /\*     	{ *\/ */
+/*   /\*     	  ase_error_report("shm_unlink", errno, ASE_OS_SHM_ERR); *\/ */
+/*   /\*     	  ase_perror_teardown(); *\/ */
+/*   /\*     	  exit(1); *\/ */
+/*   /\*     	} *\/ */
+/*   /\*   } *\/ */
+
+/*   FUNC_CALL_EXIT; */
+/* } */
 
 

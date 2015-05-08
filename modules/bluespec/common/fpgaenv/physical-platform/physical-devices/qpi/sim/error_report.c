@@ -1,4 +1,4 @@
-// Copyright (c) 2013-2014, Intel Corporation
+// Copyright (c) 2014-2015, Intel Corporation
 //
 // Redistribution  and  use  in source  and  binary  forms,  with  or  without
 // modification, are permitted provided that the following conditions are met:
@@ -23,6 +23,14 @@
 // CONTRACT,  STRICT LIABILITY,  OR TORT  (INCLUDING NEGLIGENCE  OR OTHERWISE)
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,  EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
+// **************************************************************************
+/* 
+ * Module Info: ASE Error reporting functions
+ * Language   : System{Verilog} | C/C++
+ * Owner      : Rahul R Sharma
+ *              rahul.r.sharma@intel.com
+ *              Intel Corporation
+ */ 
 
 #include "ase_common.h"
 
@@ -61,15 +69,23 @@ void ase_error_report(char *err_func, int err_num, int err_code)
       printf("2. File system permissions are not optimal\n");
       break;
       
+      // Memory map/unmap failed
     case ASE_OS_MEMMAP_ERR:
       printf("A problem occured when mapping or unmapping a memory region to a virtual base pointer.\n");
       break;
 
+      // MQ send/receive error
     case ASE_OS_MQTXRX_ERR:
       printf("There was a problem when sending/receiving messages using the POSIX message queues.\n");
       printf("This may be due to sub-optimal message queue attributes.\n");
       break;
-      
+
+      // Malloc error
+    case ASE_OS_MALLOC_ERR:
+      printf("There was a problem with memory allocation system, NULL was returned.\n");
+      printf("Simulator will attempt to close down.\n");
+      break;
+
       // IPCkill catastrophic error
     case ASE_IPCKILL_CATERR:
       printf("There was an ERROR when trying to open IPC local listfile for cleaning.\n");

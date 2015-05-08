@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2014, Intel Corporation
+// Copyright (c) 2014-2015, Intel Corporation
 //
 // Redistribution  and  use  in source  and  binary  forms,  with  or  without
 // modification, are permitted provided that the following conditions are met:
@@ -23,17 +23,14 @@
 // CONTRACT,  STRICT LIABILITY,  OR TORT  (INCLUDING NEGLIGENCE  OR OTHERWISE)
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,  EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
-// ---------------------------------------------------------------
-// mqueue_ops.c Message queue management functions
-// Author: Rahul R Sharma
-//         Intel Corporation
-// --------------------------------------------------------------- 
-// These are a set of functions that help make mqueue(s) easier
-// NOTE:
-// - All message queues here are SIMPLEX only
-// - Message queue is created or opened by passing name and permission
-// 
-// --------------------------------------------------------------- 
+// **************************************************************************
+/*
+ * Module Info: Message queue functions
+ * Language   : System{Verilog} | C/C++
+ * Owner      : Rahul R Sharma
+ *              rahul.r.sharma@intel.com
+ *              Intel Corporation
+ */
 
 #include "ase_common.h"
 
@@ -52,31 +49,35 @@ mqd_t mqueue_create(char* mq_name_prefix, int perm_flag)
   mq_name = malloc (ASE_MQ_NAME_LEN);
 
   // Form a unique message queue name
-  memset(mq_name, '\0', sizeof(mq_name));
+  memset(mq_name, '\0', ASE_MQ_NAME_LEN); // sizeof(mq_name));
   strcpy(mq_name, mq_name_prefix);
-  strcat(mq_name, get_timestamp());
+  strcat(mq_name, get_timestamp(0));
 
   // Open a queue with default parameters
   mq = mq_open(mq_name, perm_flag, 0666, NULL);
   if(mq == -1)
     {
       ase_error_report("mq_open", errno, ASE_OS_MQUEUE_ERR);
-      perror("mq_open");
+      /* perror("mq_open"); */
 #ifdef SIM_SIDE
-      dpi_perror_teardown();
+      ase_perror_teardown();
+      start_simkill_countdown();
+#else
+      exit(1); // APP-side exit
 #endif
-      exit(1);
     }
 
   // Get the attributes of MQ
   if(mq_getattr(mq, &attr) == -1)
     {
       ase_error_report("mq_getattr", errno, ASE_OS_MQUEUE_ERR);
-      perror("mq_getattr"); 
+      /* perror("mq_getattr"); */
 #ifdef SIM_SIDE
-      dpi_perror_teardown();
+      ase_perror_teardown();
+      start_simkill_countdown();
+#else
+      exit(1); // APP-side exit
 #endif
-      exit(1);
     }
 
   // Update IPC list
@@ -105,6 +106,12 @@ void mqueue_close(mqd_t mq)
   if(mq_close(mq) == -1)
     {
       ase_error_report("mq_close", errno, ASE_OS_MQUEUE_ERR);
+#ifdef SIM_SIDE
+      ase_perror_teardown();
+      start_simkill_countdown();
+#else
+      exit(1); // APP-side exit
+#endif
       /* perror("mq_close"); */
     }
   FUNC_CALL_EXIT;
@@ -115,21 +122,26 @@ void mqueue_close(mqd_t mq)
 // mqueue_destroy(): Unlink message queue, must be called from API
 // -----------------------------------------------------------
 void mqueue_destroy(char* mq_name_prefix)
-{ 
+{
   FUNC_CALL_ENTRY;
   char *mq_name;
   mq_name = malloc (ASE_MQ_NAME_LEN);
 
   // Form a unique message queue name
-  memset(mq_name, '\0', sizeof(mq_name));
+  memset(mq_name, '\0', ASE_MQ_NAME_LEN); // sizeof(mq_name));
   strcpy(mq_name, mq_name_prefix);
-  strcat(mq_name, get_timestamp());
+  strcat(mq_name, get_timestamp(0));
 
   if(mq_unlink(mq_name) == -1)
     {
       ase_error_report("mq_unlink", errno, ASE_OS_MQUEUE_ERR);
       /* perror("mq_unlink"); */
-      exit(1);
+#ifdef SIM_SIDE
+      ase_perror_teardown();
+      start_simkill_countdown();
+#else
+      exit(1);  // APP-side exit
+#endif
     }
   FUNC_CALL_EXIT;
 }
@@ -144,9 +156,16 @@ void mqueue_send(mqd_t mq, char* str)
   FUNC_CALL_ENTRY;
 
   // Print message if enabled
-#ifdef ASE_MSG_VIEW
-  printf("ASE_msg sent  : %s\n", str);
+  //#ifdef ASE_MSG_VIEW
+#ifdef SIM_SIDE
+  if (cfg->enable_asedbgdump)
+    {
+      BEGIN_YELLOW_FONTCOLOR;
+      printf("ASE_msg sent  : %s\n", str);
+      END_YELLOW_FONTCOLOR;
+    }
 #endif
+  //#endif
 
   // Send message
   if(mq_send(mq, str, ASE_MQ_MSGSIZE, 0) == -1)
@@ -154,9 +173,11 @@ void mqueue_send(mqd_t mq, char* str)
       ase_error_report("mq_send", errno, ASE_OS_MQTXRX_ERR);
       /* perror("mq_send"); */
 #ifdef SIM_SIDE
-      dpi_perror_teardown();
+      ase_perror_teardown();
+      start_simkill_countdown();
+#else
+      exit(1); // APP-side exit
 #endif
-      exit(1);
     }
 
   FUNC_CALL_EXIT;
@@ -173,20 +194,22 @@ int mqueue_recv(mqd_t mq, char* str)
   FUNC_CALL_ENTRY;
 
    struct mq_attr stat_attr;
-   
+
    if(mq_getattr(mq, &stat_attr) == -1)
    {
         /* perror("mq_getattr"); */
      ase_error_report("mq_getattr", errno, ASE_OS_MQUEUE_ERR);
 #ifdef SIM_SIDE
-     dpi_perror_teardown();
+     ase_perror_teardown();
+     start_simkill_countdown();
+#else
+     exit(1); // APP-side exit
 #endif
-     exit(1);
    }
 
-    
+
 //  printf("M Q current msgs= %d",stat_attr.mq_curmsgs);
-  if(stat_attr.mq_curmsgs>0)  
+  if(stat_attr.mq_curmsgs>0)
   {
           // Message receive
           if(mq_receive(mq, str, ASE_MQ_MSGSIZE, 0) == -1)
@@ -194,15 +217,24 @@ int mqueue_recv(mqd_t mq, char* str)
 	      ase_error_report("mq_receive", errno, ASE_OS_MQTXRX_ERR);
               /* perror("mq_receive"); */
         #ifdef SIM_SIDE
-              dpi_perror_teardown();
+              ase_perror_teardown();
+	      start_simkill_countdown();
+        #else
+              exit(1);  // APP-side exit
         #endif
-              exit(1);
-            } 
+            }
 
           // Print message if enabled
-        #ifdef ASE_MSG_VIEW
-          printf("ASE_msg recvd : %s\n", str);
+	  //#ifdef ASE_MSG_VIEW
+        #ifdef SIM_SIDE
+	  if (cfg->enable_asedbgdump)
+	    {
+	      BEGIN_YELLOW_FONTCOLOR;
+	      printf("ASE_msg recvd : %s\n", str);
+	      END_YELLOW_FONTCOLOR;
+	    }
         #endif
+	  //#endif
         FUNC_CALL_EXIT;
         return 1;
    }

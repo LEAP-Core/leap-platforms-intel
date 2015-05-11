@@ -36,8 +36,6 @@ Packagehint=leap
 File=modules/leap/build-support/build-pipelines/stages/bluespec/bsv.awb
 Packagehint=leap
 
-
-
 [Verilog Simulator Build Pipeline]
 File=modules/leap/build-support/build-pipelines/pipelines/verilog/verilog-build-pipeline.awb
 Packagehint=leap
@@ -50,7 +48,9 @@ wrapper_gen_tool=Synthesis Boundary Wrapper generation tool
 iface_tool=Interface builder
 bsv_tool=BSV Build Tool (First Phase)
 
-
 [ASE (VCS) Build Tool]
 File=modules/leap/build-support/build-pipelines/stages/verilog/ase/verilog.awb
 Packagehint=leap-platforms-intel
+
+[Verilog Simulator Build Pipeline/Params]
+BUILD_PIPELINE_SIM_TYPE="ASE"

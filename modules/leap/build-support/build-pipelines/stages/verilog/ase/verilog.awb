@@ -1,0 +1,12 @@
+%name ASE (VCS) Build Tool
+%desc Build using Intel AFU simulation environment
+
+%attributes tool
+
+%provides verilog_tool
+
+%notes README
+
+%scons %library verilog.py
+
+%param VCS_ARGUMENTS "-Xv -LDFLAGS -Xv -lstdc++ -Xv -LDFLAGS -Xv -lpthread -Xv -LDFLAGS -Xv -lrt   -Xv -override_timescale=10ps/10ps" "Extra VCS arguments"

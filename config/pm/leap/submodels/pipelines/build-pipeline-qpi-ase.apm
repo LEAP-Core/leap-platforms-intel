@@ -1,0 +1,56 @@
+
+[Global]
+SaveParameters=0
+Description=Simulation of Intel QPI/Altera platform using AFU simulation environment
+File=build-pipeline-qpi-ase
+Version=2.2
+Type=Leap
+Name=Build Pipeline QPI ASE (using VCSI)
+Class=Asim::Model
+DefaultBenchmark=
+DefaultRunOpts=
+RootName=Verilog Simulator Build Pipeline
+RootProvides=build_pipeline
+
+[Model]
+DefaultAttributes=hybrid exe
+model=Verilog Simulator Build Pipeline
+
+[Synthesis Boundary Wrapper generation tool]
+File=modules/leap/build-support/build-pipelines/stages/wrapper_gen/synthesis_boundary_wrapper_gen.awb
+Packagehint=leap
+
+[LEAP LI Module Handler]
+File=modules/leap/build-support/build-pipelines/stages/li_module/li_module.awb
+Packagehint=leap
+
+[Interface builder]
+File=modules/leap/build-support/build-pipelines/stages/iface/iface.awb
+Packagehint=leap
+
+[Software build tool]
+File=modules/leap/build-support/build-pipelines/stages/software/software.awb
+Packagehint=leap
+
+[BSV Build Tool (First Phase)]
+File=modules/leap/build-support/build-pipelines/stages/bluespec/bsv.awb
+Packagehint=leap
+
+
+
+[Verilog Simulator Build Pipeline]
+File=modules/leap/build-support/build-pipelines/pipelines/verilog/verilog-build-pipeline.awb
+Packagehint=leap
+
+[Verilog Simulator Build Pipeline/Requires]
+verilog_tool=ASE (VCS) Build Tool
+li_module=LEAP LI Module Handler
+software_tool=Software build tool
+wrapper_gen_tool=Synthesis Boundary Wrapper generation tool
+iface_tool=Interface builder
+bsv_tool=BSV Build Tool (First Phase)
+
+
+[ASE (VCS) Build Tool]
+File=modules/leap/build-support/build-pipelines/stages/verilog/ase/verilog.awb
+Packagehint=leap-platforms-intel

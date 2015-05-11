@@ -24,7 +24,7 @@ Packagehint=leap
 virtual_platform=Standard Virtual Platform
 fpga_components=Software FPGA Components
 librl_bsv=RL Bluespec Library Submodel
-build_pipeline=Build Pipeline VCS
+build_pipeline=Build Pipeline QPI ASE (using VCSI)
 soft_services=Soft Services Submodel
 
 [Standard Virtual Platform]
@@ -136,9 +136,6 @@ qpi_device=QPI Simulation Device
 physical_platform_utils=Common Physical Platform Utilities
 ddr_sdram_device=DDR SDRAM Emulator in BRAM
 
-[Build Pipeline VCS]
-File=config/pm/leap/submodels/pipelines/build-pipeline-vcs.apm
-Packagehint=leap-debug-intel
 
 [QPI Physical Channel]
 File=modules/leap/virtual-platform/physical-channel/qpi/qpi-physical-channel.awb
@@ -160,3 +157,7 @@ ddr_sdram_definitions=DDR SDRAM Common Definitions
 [DDR SDRAM Common Definitions]
 File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/ddr-sdram/ddr-sdram.awb
 Packagehint=leap-platforms
+
+[Build Pipeline QPI ASE (using VCSI)]
+File=config/pm/leap/submodels/pipelines/build-pipeline-qpi-ase.apm
+Packagehint=leap-platforms-intel

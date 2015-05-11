@@ -24,7 +24,7 @@ Packagehint=leap
 virtual_platform=Standard Virtual Platform
 fpga_components=Software FPGA Components
 librl_bsv=RL Bluespec Library Submodel
-build_pipeline=Verilog Simulator Build Pipeline
+build_pipeline=Build Pipeline QPI ASE (using VCSI)
 soft_services=Soft Services Submodel
 
 [Standard Virtual Platform]
@@ -87,7 +87,6 @@ Packagehint=leap
 File=config/pm/leap/submodels/common/soft-services.apm
 Packagehint=leap
 
-
 [Low Level Platform Interface Hybrid]
 File=modules/leap/virtual-platform/low-level-platform-interface/hybrid-llpi.awb
 Packagehint=leap
@@ -143,51 +142,9 @@ Packagehint=leap
 File=modules/leap/virtual-platform/low-level-platform-interface/local-mem/local-mem-null.awb
 Packagehint=leap
 
-[Synthesis Boundary Wrapper generation tool]
-File=modules/leap/build-support/build-pipelines/stages/wrapper_gen/synthesis_boundary_wrapper_gen.awb
-Packagehint=leap
-
-[LEAP LI Module Handler]
-File=modules/leap/build-support/build-pipelines/stages/li_module/li_module.awb
-Packagehint=leap
-
-[Interface builder]
-File=modules/leap/build-support/build-pipelines/stages/iface/iface.awb
-Packagehint=leap
-
-[BSV Build Tool (First Phase)/Params]
-BUILD_VERILOG=0
-
-[Software build tool]
-File=modules/leap/build-support/build-pipelines/stages/software/software.awb
-Packagehint=leap
-
-[BSV Build Tool (First Phase)]
-File=modules/leap/build-support/build-pipelines/stages/bluespec/bsv.awb
-Packagehint=leap
-
-[VCS Build Tool]
-File=modules/leap/build-support/build-pipelines/stages/verilog/vcs/verilog.awb
-Packagehint=leap
-
-[VCS Build Tool/Params]
-VCS_ARGUMENTS=" -Xv -LDFLAGS -Xv -lstdc++ -Xv -LDFLAGS -Xv -lpthread   -Xv -LDFLAGS -Xv -lrt   -Xv -override_timescale=10ps/10ps "
-
-[Verilog Simulator Build Pipeline]
-File=modules/leap/build-support/build-pipelines/pipelines/verilog/verilog-build-pipeline.awb
-Packagehint=leap
-
 [Standard Virtual Devices Submodel]
 File=config/pm/leap/submodels/virtual-devices/std-virtual-devices.apm
 Packagehint=leap
-
-[Verilog Simulator Build Pipeline/Requires]
-verilog_tool=VCS Build Tool
-li_module=LEAP LI Module Handler
-software_tool=Software build tool
-wrapper_gen_tool=Synthesis Boundary Wrapper generation tool
-iface_tool=Interface builder
-bsv_tool=BSV Build Tool (First Phase)
 
 [Null DDR SDRAM Physical Device]
 File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/ddr-sdram/ddr-sdram-null/ddr-sdram-null.awb
@@ -199,3 +156,7 @@ ddr_sdram_definitions=DDR SDRAM Common Definitions
 [DDR SDRAM Common Definitions]
 File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/ddr-sdram/ddr-sdram.awb
 Packagehint=leap-platforms
+
+[Build Pipeline QPI ASE (using VCSI)]
+File=config/pm/leap/submodels/pipelines/build-pipeline-qpi-ase.apm
+Packagehint=leap-platforms-intel

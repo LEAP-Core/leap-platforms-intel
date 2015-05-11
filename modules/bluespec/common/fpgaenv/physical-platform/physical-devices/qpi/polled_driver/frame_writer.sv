@@ -121,9 +121,7 @@ module frame_writer
    tx_header_t write_header;
    // Request a write for a fence, write control, or if we have data.
    // 
-//FIXME: WRITE_FENCE broken
-//   assign frame_writer.write.request = (state == WRITE_FENCE) || (state == WRITE_CONTROL) || (state == WRITE && write_data_rdy);
-   assign frame_writer.write.request = (state == WRITE_CONTROL) || (state == WRITE && write_data_rdy);
+   assign frame_writer.write.request = (state == WRITE_FENCE) || (state == WRITE_CONTROL) || (state == WRITE && write_data_rdy);
 
    assign header_read_rdy = state == POLL_HEADER;
 
@@ -166,9 +164,7 @@ module frame_writer
              next_state = (done_with_writing)?WRITE_FENCE:WRITE;             
           end
         WRITE_FENCE:
-//FIXME: WRITE_FENCE broken
-//         next_state = (write_grant.writer_grant)?WRITE_CONTROL:WRITE_FENCE;
-         next_state = WRITE_CONTROL;
+         next_state = (write_grant.writer_grant)?WRITE_CONTROL:WRITE_FENCE;
         WRITE_CONTROL:
           next_state = (write_grant.writer_grant)?POLL_HEADER:WRITE_CONTROL;        
         default :

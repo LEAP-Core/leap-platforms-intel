@@ -73,6 +73,15 @@ module ase_fifo
    logic [DEPTH_BASE2-1:0] 	  wr_addr;
    logic [DEPTH_BASE2:0] 	  counter;
    
+   // bypass RAM the cycle after transition from empty to full since the RAM
+   // response will be stale.
+   logic                          ram_bypass_v;
+   logic [DATA_WIDTH-1:0]         ram_bypass_data;
+   logic [DATA_WIDTH-1:0]         ram_out;
+
+   assign data_out = (ram_bypass_v) ? ram_bypass_data : ram_out;
+
+
    // discard incoming data when FIFO is full
    assign mywr_en = wr_en & (~full_current);
    assign count   = counter [DEPTH_BASE2-1:0];
@@ -107,7 +116,7 @@ module ase_fifo
           .waddr (wr_addr),
           .din   (data_in),
           .raddr (rd_addr),
-          .dout  (data_out)
+          .dout  (ram_out)
           );
 
    // reading empty FIFO will not get valid data, reading pointer doesn't change.
@@ -163,6 +172,15 @@ module ase_fifo
 	       empty_next = 1;
 	  end
       endcase
+   end
+
+   // Bypass the next cycle's FIFO RAM on transition from empty to full since
+   // the data written this cycle won't be available for two cycles.
+   always @(posedge clk) begin
+      // No need to check whether wr_en is set.  The empty_next logic will
+      // block reads if the FIFO remains empty.
+      ram_bypass_v <= empty_current;
+      ram_bypass_data <= data_in;
    end
 
    always @(posedge clk) begin

@@ -836,6 +836,11 @@ module cci_emulator();
       );
 `else // !`ifdef ASE_RANDOMIZE_TRANSACTIONS
    // FIFO (no shuffling, simple forwarding)
+
+   // Drop WrFence.  No response expected and writes are already ordered.
+   logic cf2as_latbuf_ch1_wr_en;
+   assign cf2as_latbuf_ch1_wr_en = tx_c1_wrvalid && (tx_c1_header[`TX_META_TYPERANGE] != `ASE_TX1_WRFENCE);
+
    ase_fifo
      #(
        .DATA_WIDTH     ( `CCI_TX_HDR_WIDTH + `CCI_DATA_WIDTH ),
@@ -846,7 +851,7 @@ module cci_emulator();
      (
       .clk        ( clk_32ui ),
       .rst        ( ~sys_reset_n ),
-      .wr_en      ( tx_c1_wrvalid ),
+      .wr_en      ( cf2as_latbuf_ch1_wr_en ),
       .data_in    ( {tx_c1_header,tx_c1_data} ),
       .rd_en      ( cf2as_latbuf_ch1_read ),
       .data_out   ( {cf2as_latbuf_ch1_header,cf2as_latbuf_ch1_data} ),

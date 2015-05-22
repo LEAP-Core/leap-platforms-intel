@@ -26,8 +26,8 @@ class Verilog():
     ALL_LIB_DIRS_FROM_ROOT   = ALL_DIRS_FROM_ROOT + ':' + ALL_BUILD_DIRS_FROM_ROOT
 
     # Search the ASE source directory
-    ase_hw_dir = moduleList.env['ENV']['AAL_QPI_ASE'] + '/hw'
-    ase_sw_dir = moduleList.env['ENV']['AAL_QPI_ASE'] + '/sw'
+    ase_hw_dir = moduleList.env['ENV']['AAL_QA_ASE'] + '/hw'
+    ase_sw_dir = moduleList.env['ENV']['AAL_QA_ASE'] + '/sw'
     vsearch_path = ALL_LIB_DIRS_FROM_ROOT
     vsearch_path += ':' + ase_hw_dir
 

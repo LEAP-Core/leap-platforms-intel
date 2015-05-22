@@ -56,15 +56,15 @@ module mkPhysicalChannel#(PHYSICAL_DRIVERS drivers)
     
     method ActionValue#(UMF_CHUNK) read();
         
-        drivers.qpiDriver.deq();
-        return drivers.qpiDriver.first;
+        drivers.qaDriver.deq();
+        return drivers.qaDriver.first;
         
     endmethod
 
 
-    method deq = drivers.qpiDriver.deq;
-    method first = drivers.qpiDriver.first;
-    method write = drivers.qpiDriver.write;
-    method write_ready = drivers.qpiDriver.write_ready;
+    method deq = drivers.qaDriver.deq;
+    method first = drivers.qaDriver.first;
+    method write = drivers.qaDriver.write;
+    method write_ready = drivers.qaDriver.write_ready;
 
 endmodule

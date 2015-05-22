@@ -29,7 +29,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-// This code wraps the QPI CCI (coherent cache interface) in bluespec.
+// This code wraps the QA CCI (coherent cache interface) in bluespec.
 
 import Clocks::*;
 import Vector::*;
@@ -45,7 +45,7 @@ import FIFOF::*;
 `include "awb/provides/soft_services_deps.bsh"
 
 
-interface QPI_DRIVER;
+interface QA_DRIVER;
 
     method Action                           deq();
     method Bit#(SizeOf#(UMF_CHUNK))         first();
@@ -57,32 +57,32 @@ interface QPI_DRIVER;
 
 endinterface
 
-interface QPI_WIRES;
+interface QA_WIRES;
 
 endinterface
 
-interface QPI_DEVICE;
-    interface QPI_DRIVER driver; 
-    interface QPI_WIRES  wires;
+interface QA_DEVICE;
+    interface QA_DRIVER driver; 
+    interface QA_WIRES  wires;
 endinterface
 
 // tx_header ~some request to the cache
 // rx_header ~some response from the cache
-interface QPI_DEVICE_UG#(numeric type tx_header, numeric type rx_header, numeric type cache_width);
+interface QA_DEVICE_UG#(numeric type tx_header, numeric type rx_header, numeric type cache_width);
 
     method Action                           deq();
     method Bit#(SizeOf#(UMF_CHUNK))         first();
     method Action                           write(Bit#(SizeOf#(UMF_CHUNK)) chunk);
     method Bool                             write_ready();
 
-    interface Clock qpi_clk;
-    interface Reset qpi_rst_n;
+    interface Clock qa_clk;
+    interface Reset qa_rst_n;
 endinterface
 
 Integer umfChunkSize = valueOf(SizeOf#(UMF_CHUNK));
 
 import "BVI" qa_wrapper = 
-module mkQPIDeviceImport  (QPI_DRIVER);
+module mkQADeviceImport  (QA_DRIVER);
 
     parameter TXHDR_WIDTH = `CCI_TXHDR_WIDTH;
     parameter RXHDR_WIDTH = `CCI_RXHDR_WIDTH;
@@ -109,36 +109,36 @@ module mkQPIDeviceImport  (QPI_DRIVER);
 
 endmodule
 
-module [CONNECTED_MODULE] mkQPIDevice#(SOFT_RESET_TRIGGER softResetTrigger) (QPI_DEVICE);
+module [CONNECTED_MODULE] mkQADevice#(SOFT_RESET_TRIGGER softResetTrigger) (QA_DEVICE);
 
-    // FIFOs for coming out of QPI domain.
+    // FIFOs for coming out of QA domain.
 
-    let qpiDevice <- mkQPIDeviceImport; 
+    let qaDevice <- mkQADeviceImport; 
 
-    SyncFIFOIfc#(UMF_CHUNK) syncReadQ <- mkSyncFIFOToCC(16, qpiDevice.clock, qpiDevice.reset);
-    SyncFIFOIfc#(UMF_CHUNK) syncWriteQ <- mkSyncFIFOFromCC(16, qpiDevice.clock);
+    SyncFIFOIfc#(UMF_CHUNK) syncReadQ <- mkSyncFIFOToCC(16, qaDevice.clock, qaDevice.reset);
+    SyncFIFOIfc#(UMF_CHUNK) syncWriteQ <- mkSyncFIFOFromCC(16, qaDevice.clock);
 
     rule pullDataIn;
-        syncReadQ.enq(qpiDevice.first);
-        qpiDevice.deq;
+        syncReadQ.enq(qaDevice.first);
+        qaDevice.deq;
     endrule
 
     rule pushDataOut;
-        qpiDevice.write(syncWriteQ.first);
+        qaDevice.write(syncWriteQ.first);
         syncWriteQ.deq;
     endrule
 
-    interface QPI_DRIVER driver;
+    interface QA_DRIVER driver;
         method deq = syncReadQ.deq;
         method first = syncReadQ.first;
         method write = syncWriteQ.enq;
         method write_ready = syncWriteQ.notFull;
 
-        interface clock = qpiDevice.clock;
-        interface reset = qpiDevice.reset;
+        interface clock = qaDevice.clock;
+        interface reset = qaDevice.reset;
     endinterface
 
-    interface QPI_WIRES wires;
+    interface QA_WIRES wires;
             
     endinterface
 

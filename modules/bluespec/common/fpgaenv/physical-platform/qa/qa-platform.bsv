@@ -56,9 +56,9 @@ import DefaultValue::*;
 // We use other modules to actually do the work.
 
 interface PHYSICAL_DRIVERS;
-    interface CLOCKS_DRIVER                        clocksDriver;
-    interface QPI_DRIVER                           qpiDriver;
-    interface DDR_DRIVER                           ddrDriver;
+    interface CLOCKS_DRIVER   clocksDriver;
+    interface QA_DRIVER       qaDriver;
+    interface DDR_DRIVER      ddrDriver;
 endinterface
 
 // TOP_LEVEL_WIRES
@@ -70,9 +70,9 @@ endinterface
 
 interface TOP_LEVEL_WIRES;
     // wires from devices
-    interface CLOCKS_WIRES                        clocksWires;
-    interface QPI_WIRES                           qpiWires;
-    interface DDR_WIRES                           ddrWires;
+    interface CLOCKS_WIRES    clocksWires;
+    interface QA_WIRES        qaWires;
+    interface DDR_WIRES       ddrWires;
 endinterface
 
 // PHYSICAL_PLATFORM
@@ -114,28 +114,28 @@ module [CONNECTED_MODULE] mkPhysicalPlatform
 
     // Next, create the physical device that can trigger a soft reset. Pass along the
     // interface to the trigger module that the clocks device has given us.
-    let qpiRst <- mkResetFanout(clocks.driver.baseReset, clocked_by clk);
-    QPI_DEVICE qpi <- mkQPIDevice(clocks.softResetTrigger,
-                                  clocked_by clk,
-                                  reset_by qpiRst);
+    let qaRst <- mkResetFanout(clocks.driver.baseReset, clocked_by clk);
+    QA_DEVICE qa <- mkQADevice(clocks.softResetTrigger,
+                               clocked_by clk,
+                               reset_by qaRst);
 
     //
-    // Pass reset from QPI to the model.  The host holds reset long enough that
+    // Pass reset from QA to the model.  The host holds reset long enough that
     // a crossing wire to the model clock domain is sufficient.
     //
-    Reg#(Bool) qpiInReset <- mkReg(True,
-                                   clocked_by qpi.driver.clock,
-                                   reset_by qpi.driver.reset);
+    Reg#(Bool) qaInReset <- mkReg(True,
+                                  clocked_by qa.driver.clock,
+                                  reset_by qa.driver.reset);
 
     ReadOnly#(Bool) assertModelReset <-
         mkNullCrossingWire(clocks.driver.clock,
-                           qpiInReset,
-                           clocked_by qpi.driver.clock,
-                           reset_by qpi.driver.reset);
+                           qaInReset,
+                           clocked_by qa.driver.clock,
+                           reset_by qa.driver.reset);
     
     (* fire_when_enabled, no_implicit_conditions *)
-    rule exitResetQpi (qpiInReset);
-        qpiInReset <= False;
+    rule exitResetQa (qaInReset);
+        qaInReset <= False;
     endrule
 
     (* fire_when_enabled *)
@@ -148,7 +148,7 @@ module [CONNECTED_MODULE] mkPhysicalPlatform
     //
     interface PHYSICAL_DRIVERS physicalDrivers;
         interface clocksDriver = clocks.driver;
-        interface qpiDriver    = qpi.driver;
+        interface qaDriver     = qa.driver;
         interface ddrDriver    = sdram.driver;
     endinterface
     
@@ -157,7 +157,7 @@ module [CONNECTED_MODULE] mkPhysicalPlatform
     //
     interface TOP_LEVEL_WIRES topLevelWires;
         interface clocksWires = clocks.wires;
-        interface qpiWires    = qpi.wires;
+        interface qaWires     = qa.wires;
         interface ddrWires    = sdram.wires;
     endinterface
                

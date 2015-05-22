@@ -29,8 +29,8 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef __QPI_SOFTWARE_DRIVER__
-#define __QPI_SOFTWARE_DRIVER__
+#ifndef __QA_SOFTWARE_DRIVER__
+#define __QA_SOFTWARE_DRIVER__
 
 #include "platforms-module.h"
 #include "command-switches.h"
@@ -81,10 +81,10 @@
 const uint32_t EXPECTED_AFU_ID[] = {0xaced0000, 0xaced0001, 0xaced0002, 0xaced0003};
 
 // ==============================================
-//          QPI Physical Device, software driver
+//          QA Physical Device, software driver
 // ==============================================
-typedef class QPI_DEVICE_CLASS* QPI_DEVICE;
-class QPI_DEVICE_CLASS: public PLATFORMS_MODULE_CLASS
+typedef class QA_DEVICE_CLASS* QA_DEVICE;
+class QA_DEVICE_CLASS: public PLATFORMS_MODULE_CLASS
 {
   private:
     // switches for acquiring device uniquifier
@@ -106,8 +106,8 @@ class QPI_DEVICE_CLASS: public PLATFORMS_MODULE_CLASS
     UINT32                    readChunksTotal;
 
   public:
-    QPI_DEVICE_CLASS(PLATFORMS_MODULE);
-    ~QPI_DEVICE_CLASS();
+    QA_DEVICE_CLASS(PLATFORMS_MODULE);
+    ~QA_DEVICE_CLASS();
 
     static void * openReadThread(void *argv);
     static void * openWriteThread(void *argv);

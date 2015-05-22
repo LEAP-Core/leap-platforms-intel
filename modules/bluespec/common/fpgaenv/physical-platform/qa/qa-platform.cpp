@@ -35,7 +35,7 @@
 PHYSICAL_DEVICES_CLASS::PHYSICAL_DEVICES_CLASS(
     PLATFORMS_MODULE p) : 
     PLATFORMS_MODULE_CLASS(p), 
-    qpiDev(this)
+    qaDev(this)
 {
 }
 

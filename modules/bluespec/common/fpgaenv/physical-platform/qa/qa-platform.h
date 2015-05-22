@@ -47,7 +47,7 @@ typedef class PHYSICAL_DEVICES_CLASS* PHYSICAL_DEVICES;
 class PHYSICAL_DEVICES_CLASS: public PLATFORMS_MODULE_CLASS
 {
     private:
-        QPI_PHYSICAL_CHANNEL_CLASS qpiDev;
+        QA_PHYSICAL_CHANNEL_CLASS qaDev;
 
     public:
         // constructor-destructor
@@ -56,8 +56,8 @@ class PHYSICAL_DEVICES_CLASS: public PLATFORMS_MODULE_CLASS
 
         PHYSICAL_CHANNEL GetLegacyPhysicalChannel() 
         { 
-            qpiDev.RegisterLogicalDeviceName(FPGA_PLATFORM_NAME);
-            return &qpiDev; 
+            qaDev.RegisterLogicalDeviceName(FPGA_PLATFORM_NAME);
+            return &qaDev; 
         }
 
 };

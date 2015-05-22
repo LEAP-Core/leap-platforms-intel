@@ -59,7 +59,7 @@ using namespace std;
 extern GLOBAL_ARGS globalArgs;
 
 // ============================================
-//           QPI Physical Device
+//           QA Physical Device
 // ============================================
 
 // ============================================
@@ -73,7 +73,7 @@ extern GLOBAL_ARGS globalArgs;
 // ============================================
 
 // constructor: set up hardware partition
-QPI_DEVICE_CLASS::QPI_DEVICE_CLASS(
+QA_DEVICE_CLASS::QA_DEVICE_CLASS(
     PLATFORMS_MODULE p) :
         PLATFORMS_MODULE_CLASS(p),
         initReadComplete(),
@@ -90,14 +90,14 @@ QPI_DEVICE_CLASS::QPI_DEVICE_CLASS(
 }
 
 // destructor
-QPI_DEVICE_CLASS::~QPI_DEVICE_CLASS()
+QA_DEVICE_CLASS::~QA_DEVICE_CLASS()
 {
     // cleanup
     Cleanup();
 }
 
 void
-QPI_DEVICE_CLASS::Init()
+QA_DEVICE_CLASS::Init()
 {
 
     string executionDirectory = "";
@@ -150,21 +150,21 @@ QPI_DEVICE_CLASS::Init()
 // override default chain-uninit method because
 // we need to do something special
 void
-QPI_DEVICE_CLASS::Uninit()
+QA_DEVICE_CLASS::Uninit()
 {
 
 }
 
 // cleanup: close the pipe.  The other side will exit.
 void
-QPI_DEVICE_CLASS::Cleanup()
+QA_DEVICE_CLASS::Cleanup()
 {
 
 }
 
 // probe pipe to look for fresh data
 bool
-QPI_DEVICE_CLASS::Probe()
+QA_DEVICE_CLASS::Probe()
 {
     if (!initReadComplete) return false;
 
@@ -189,7 +189,7 @@ QPI_DEVICE_CLASS::Probe()
 
 // blocking read
 void
-QPI_DEVICE_CLASS::Read(
+QA_DEVICE_CLASS::Read(
     unsigned char* buf,
     int bytes_requested)
 {
@@ -267,7 +267,7 @@ QPI_DEVICE_CLASS::Read(
 
 // write
 void
-QPI_DEVICE_CLASS::Write(
+QA_DEVICE_CLASS::Write(
     unsigned char* buf,
     int bytes_requested)
 {
@@ -320,7 +320,7 @@ QPI_DEVICE_CLASS::Write(
     writeFrameNumber = (writeFrameNumber + 1) % FRAME_NUMBER;   
 }
 
-void QPI_DEVICE_CLASS::RegisterLogicalDeviceName(string name)
+void QA_DEVICE_CLASS::RegisterLogicalDeviceName(string name)
 {
 
 }

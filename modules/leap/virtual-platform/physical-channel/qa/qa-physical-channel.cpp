@@ -52,13 +52,13 @@ using namespace std;
 // ============================================
 
 // constructor
-QPI_PHYSICAL_CHANNEL_CLASS::QPI_PHYSICAL_CHANNEL_CLASS(
+QA_PHYSICAL_CHANNEL_CLASS::QA_PHYSICAL_CHANNEL_CLASS(
     PLATFORMS_MODULE     p
     ) :
     PHYSICAL_CHANNEL_CLASS(p),
     writeQ(),
     uninitialized(),
-    qpiDevice((PLATFORMS_MODULE) (PHYSICAL_CHANNEL) this)
+    qaDevice((PLATFORMS_MODULE) (PHYSICAL_CHANNEL) this)
     
 {
     incomingMessage = NULL;
@@ -69,7 +69,7 @@ QPI_PHYSICAL_CHANNEL_CLASS::QPI_PHYSICAL_CHANNEL_CLASS(
     // Start up write thread
     void ** writerArgs = NULL;
     writerArgs = (void**) malloc(2*sizeof(void*));
-    writerArgs[0] = &qpiDevice;
+    writerArgs[0] = &qaDevice;
     writerArgs[1] = this;
     if (pthread_create(&writerThread,
 		       NULL,
@@ -82,12 +82,12 @@ QPI_PHYSICAL_CHANNEL_CLASS::QPI_PHYSICAL_CHANNEL_CLASS(
 }
 
 // destructor
-QPI_PHYSICAL_CHANNEL_CLASS::~QPI_PHYSICAL_CHANNEL_CLASS()
+QA_PHYSICAL_CHANNEL_CLASS::~QA_PHYSICAL_CHANNEL_CLASS()
 {
     Uninit();
 }
 
-void QPI_PHYSICAL_CHANNEL_CLASS::Uninit()
+void QA_PHYSICAL_CHANNEL_CLASS::Uninit()
 {
     if (!uninitialized.fetch_and_store(1))
     {
@@ -100,7 +100,7 @@ void QPI_PHYSICAL_CHANNEL_CLASS::Uninit()
 // blocking read.  A return value of tells us that the underlying
 // infrastructure is in the process of begin torn down. 
 UMF_MESSAGE
-QPI_PHYSICAL_CHANNEL_CLASS::Read()
+QA_PHYSICAL_CHANNEL_CLASS::Read()
 {
     // blocking loop
     while (true)
@@ -124,11 +124,11 @@ QPI_PHYSICAL_CHANNEL_CLASS::Read()
 
 // non-blocking read
 UMF_MESSAGE
-QPI_PHYSICAL_CHANNEL_CLASS::TryRead()
+QA_PHYSICAL_CHANNEL_CLASS::TryRead()
 {
 
     // if there's fresh data on the pipe, update
-    if (qpiDevice.Probe())
+    if (qaDevice.Probe())
     {
         readPipe();
     }
@@ -147,7 +147,7 @@ QPI_PHYSICAL_CHANNEL_CLASS::TryRead()
 
 // write
 void
-QPI_PHYSICAL_CHANNEL_CLASS::Write(
+QA_PHYSICAL_CHANNEL_CLASS::Write(
     UMF_MESSAGE message)
 {
     writeQ.push(message);
@@ -155,7 +155,7 @@ QPI_PHYSICAL_CHANNEL_CLASS::Write(
 
 // read un-processed data on the pipe
 void
-QPI_PHYSICAL_CHANNEL_CLASS::readPipe()
+QA_PHYSICAL_CHANNEL_CLASS::readPipe()
 {
     // determine if we are starting a new message
     if (incomingMessage == NULL)
@@ -163,7 +163,7 @@ QPI_PHYSICAL_CHANNEL_CLASS::readPipe()
         // new message: read header
         unsigned char header[UMF_CHUNK_BYTES];
 
-        qpiDevice.Read(header, UMF_CHUNK_BYTES);
+        qaDevice.Read(header, UMF_CHUNK_BYTES);
 
         // create a new message
         incomingMessage = umfFactory->createUMFMessage();
@@ -186,7 +186,7 @@ QPI_PHYSICAL_CHANNEL_CLASS::readPipe()
             bytes_requested = incomingMessage->BytesUnwritten();
         }
 
-        qpiDevice.Read(buf, bytes_requested);
+        qaDevice.Read(buf, bytes_requested);
 
         // append read bytes into message
         incomingMessage->AppendBytes(bytes_requested, buf);

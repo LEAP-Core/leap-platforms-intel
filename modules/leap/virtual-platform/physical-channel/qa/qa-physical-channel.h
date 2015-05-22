@@ -29,8 +29,8 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef __QPI_PHYSICAL_CHANNEL__
-#define __QPI_PHYSICAL_CHANNEL__
+#ifndef __QA_PHYSICAL_CHANNEL__
+#define __QA_PHYSICAL_CHANNEL__
 
 #include "awb/provides/umf.h"
 #include "awb/provides/physical_platform_utils.h"
@@ -43,12 +43,12 @@
 // ============================================
 //               Physical Channel              
 // ============================================
-typedef class QPI_PHYSICAL_CHANNEL_CLASS* QPI_PHYSICAL_CHANNEL;
-class QPI_PHYSICAL_CHANNEL_CLASS: public PHYSICAL_CHANNEL_CLASS
+typedef class QA_PHYSICAL_CHANNEL_CLASS* QA_PHYSICAL_CHANNEL;
+class QA_PHYSICAL_CHANNEL_CLASS: public PHYSICAL_CHANNEL_CLASS
 {
     private:
         // our lower-level physical device.
-        QPI_DEVICE_CLASS qpiDevice;
+        QA_DEVICE_CLASS qaDevice;
         
         // queue for storing messages 
 	class tbb::concurrent_bounded_queue<UMF_MESSAGE> writeQ;
@@ -66,14 +66,14 @@ class QPI_PHYSICAL_CHANNEL_CLASS: public PHYSICAL_CHANNEL_CLASS
         class tbb::atomic<bool> uninitialized;
 
     public:
-        QPI_PHYSICAL_CHANNEL_CLASS(PLATFORMS_MODULE);
-        ~QPI_PHYSICAL_CHANNEL_CLASS();
+        QA_PHYSICAL_CHANNEL_CLASS(PLATFORMS_MODULE);
+        ~QA_PHYSICAL_CHANNEL_CLASS();
 
         static void * WriterThread(void *argv) {
 	    void ** args = (void**) argv;
-	    QPI_PHYSICAL_CHANNEL physicalChannel = (QPI_PHYSICAL_CHANNEL) args[1];
+	    QA_PHYSICAL_CHANNEL physicalChannel = (QA_PHYSICAL_CHANNEL) args[1];
 	    tbb::concurrent_bounded_queue<UMF_MESSAGE> *incomingQ = &(physicalChannel->writeQ); 
-	    QPI_DEVICE qpiDevice = (QPI_DEVICE) args[0];
+	    QA_DEVICE qaDevice = (QA_DEVICE) args[0];
 	    while(1) {
 	        UMF_MESSAGE message;
 	        incomingQ->pop(message);
@@ -85,7 +85,7 @@ class QPI_PHYSICAL_CHANNEL_CLASS: public PHYSICAL_CHANNEL_CLASS
                 {
                     if (!physicalChannel->uninitialized)
                     {
-                        cerr << "QPI_PHYSICAL_CHANNEL got an unexpected NULL value" << endl;
+                        cerr << "QA_PHYSICAL_CHANNEL got an unexpected NULL value" << endl;
                     }
 
                     pthread_exit(0);
@@ -95,7 +95,7 @@ class QPI_PHYSICAL_CHANNEL_CLASS: public PHYSICAL_CHANNEL_CLASS
 	        UMF_CHUNK header = 0;
 	        message->EncodeHeader((unsigned char *)&header);
 
-                qpiDevice->Write((unsigned char *)&header, UMF_CHUNK_BYTES);
+                qaDevice->Write((unsigned char *)&header, UMF_CHUNK_BYTES);
 
 	        // write message data to pipe                                                     
 	        // NOTE: hardware demarshaller expects chunk pattern to start from most       	    
@@ -105,7 +105,7 @@ class QPI_PHYSICAL_CHANNEL_CLASS: public PHYSICAL_CHANNEL_CLASS
                 while (message->CanExtract())
                 {
                     UMF_CHUNK chunk = message->ExtractChunk();
-                    qpiDevice->Write((unsigned char*)&chunk, sizeof(UMF_CHUNK));
+                    qaDevice->Write((unsigned char*)&chunk, sizeof(UMF_CHUNK));
                 }
 
                 // de-allocate message                                                                                 	
@@ -119,7 +119,7 @@ class QPI_PHYSICAL_CHANNEL_CLASS: public PHYSICAL_CHANNEL_CLASS
         void        Uninit(); 
         class tbb::concurrent_bounded_queue<UMF_MESSAGE> *GetWriteQ() { return &writeQ; }
         void SetUMFFactory(UMF_FACTORY factoryInit) { umfFactory = factoryInit; };
-        void RegisterLogicalDeviceName(string name) { qpiDevice.RegisterLogicalDeviceName(name); }
+        void RegisterLogicalDeviceName(string name) { qaDevice.RegisterLogicalDeviceName(name); }
 };
 
 #endif

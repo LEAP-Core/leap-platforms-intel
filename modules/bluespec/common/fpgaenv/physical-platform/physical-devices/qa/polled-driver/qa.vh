@@ -13,8 +13,8 @@
 //
 //====================================================================
 
-`ifndef QPI_VH
- `define QPI_VH
+`ifndef QA_VH
+ `define QA_VH
 
    
  `include "qa_csr.vh"
@@ -25,13 +25,13 @@
  localparam CACHE_WIDTH = 512;
 
  // Parameters related to frame buffer sizing.
- localparam QPI_ADDR_SZ            = 32;
- localparam QPI_ADDR_OFFSET        = 6;
+ localparam QA_ADDR_SZ             = 32;
+ localparam QA_ADDR_OFFSET         = 6;
  localparam FRAME_NUMBER           = 128;
  localparam LOG_FRAME_NUMBER       = 7;
  localparam FRAME_CHUNKS           = 64;
  localparam LOG_FRAME_CHUNKS       = 6;
- localparam LOG_FRAME_BASE_POINTER = QPI_ADDR_SZ - LOG_FRAME_NUMBER - LOG_FRAME_CHUNKS;
+ localparam LOG_FRAME_BASE_POINTER = QA_ADDR_SZ - LOG_FRAME_NUMBER - LOG_FRAME_CHUNKS;
 
  typedef enum logic [3:0] {WrThru=4'h1, WrLine=4'h2, RdLine=4'h4, WrFence=4'h5} tx_request_t;
 
@@ -170,5 +170,5 @@
     end
  endfunction
 
-`endif //  `ifndef QPI_VH
+`endif //  `ifndef QA_VH
 

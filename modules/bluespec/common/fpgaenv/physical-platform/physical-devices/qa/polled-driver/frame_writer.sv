@@ -72,7 +72,7 @@ module frame_writer
 
    
    // Extract frame base pointer from CSRs.
-   assign frame_base_pointer = csr.afu_write_frame[QPI_ADDR_SZ+QPI_ADDR_OFFSET:QPI_ADDR_SZ+QPI_ADDR_OFFSET-LOG_FRAME_BASE_POINTER];
+   assign frame_base_pointer = csr.afu_write_frame[QA_ADDR_SZ+QA_ADDR_OFFSET:QA_ADDR_SZ+QA_ADDR_OFFSET-LOG_FRAME_BASE_POINTER];
 
    read_metadata_t response_read_metadata;
 

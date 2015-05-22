@@ -112,7 +112,7 @@ module frame_reader
    frame_arb_t         frame_reader_release;
       
    // Extract frame base pointer from CSRs.
-   assign frame_base_pointer = csr.afu_read_frame[QPI_ADDR_SZ+QPI_ADDR_OFFSET:QPI_ADDR_SZ+QPI_ADDR_OFFSET-LOG_FRAME_BASE_POINTER];
+   assign frame_base_pointer = csr.afu_read_frame[QA_ADDR_SZ+QA_ADDR_OFFSET:QA_ADDR_SZ+QA_ADDR_OFFSET-LOG_FRAME_BASE_POINTER];
    assign response_read_metadata = unpack_read_metadata(rx0.header);
 
    // Monitor frame data

@@ -77,7 +77,7 @@
   `define BSV_RESET_EDGE negedge
 `endif
 
-module mkBRAMScoreboardQPI(CLK,
+module mkBRAMScoreboardQA(CLK,
 			   RST_N,
 
 			   EN_enq,
@@ -754,5 +754,5 @@ module mkBRAMScoreboardQPI(CLK,
   end
   `endif // BSV_NO_INITIAL_BLOCKS
   // synopsys translate_on
-endmodule  // mkBRAMScoreboardQPI
+endmodule  // mkBRAMScoreboardQA
 

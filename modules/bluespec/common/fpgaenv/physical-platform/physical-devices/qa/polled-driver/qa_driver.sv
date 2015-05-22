@@ -37,7 +37,7 @@ module qa_driver#(parameter TXHDR_WIDTH=61, RXHDR_WIDTH=18, CACHE_WIDTH=512, UMF
     clk,                 //              in    std_logic;  -- Core clock
     resetb,              //              in    std_logic;  -- Use SPARINGLY only for control
 
-    // --------------------------- QPI Facing Interface           --------------------------------
+    // --------------------------- QA Facing Interface           --------------------------------
     // --------------------------- IF signals between SPL and FPL --------------------------------
     rx_c0_header,        // [RXHDR_WIDTH-1:0]   cci_intf:           Rx header to SPL channel 0
     rx_c0_data,          // [CACHE_WIDTH-1:0]   cci_intf:           data response to SPL | no back pressure
@@ -73,7 +73,7 @@ module qa_driver#(parameter TXHDR_WIDTH=61, RXHDR_WIDTH=18, CACHE_WIDTH=512, UMF
    
 );
 
-   // QPI facing interface
+   // QA facing interface
    
    input                     clk;                // Core clock
    input                     resetb;             // Use SPARINGLY only for control

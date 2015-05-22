@@ -61,7 +61,7 @@
   `define BSV_RESET_EDGE negedge
 `endif
 
-module mkDemarshallerQPI(CLK,
+module mkDemarshallerQA(CLK,
 			 RST_N,
 
 			 enq_fifoData,
@@ -252,5 +252,5 @@ module mkDemarshallerQPI(CLK,
   end
   `endif // BSV_NO_INITIAL_BLOCKS
   // synopsys translate_on
-endmodule  // mkDemarshallerQPI
+endmodule  // mkDemarshallerQA
 

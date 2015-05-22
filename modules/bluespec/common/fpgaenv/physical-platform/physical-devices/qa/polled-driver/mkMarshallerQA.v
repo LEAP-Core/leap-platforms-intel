@@ -59,7 +59,7 @@
   `define BSV_RESET_EDGE negedge
 `endif
 
-module mkMarshallerQPI(CLK,
+module mkMarshallerQA(CLK,
 		       RST_N,
 
 		       enq_inData,
@@ -281,5 +281,5 @@ module mkMarshallerQPI(CLK,
   end
   `endif // BSV_NO_INITIAL_BLOCKS
   // synopsys translate_on
-endmodule  // mkMarshallerQPI
+endmodule  // mkMarshallerQA
 

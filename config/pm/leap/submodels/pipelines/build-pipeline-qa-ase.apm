@@ -1,11 +1,11 @@
 
 [Global]
 SaveParameters=0
-Description=Simulation of Intel QPI/Altera platform using AFU simulation environment
-File=build-pipeline-qpi-ase
+Description=Simulation of Intel QuickAssist FPGA platform using AFU simulation environment
+File=build-pipeline-qa-ase
 Version=2.2
 Type=Leap
-Name=Build Pipeline QPI ASE (using VCSI)
+Name=Build Pipeline Intel QuickAssist ASE (using VCSI)
 Class=Asim::Model
 DefaultBenchmark=
 DefaultRunOpts=

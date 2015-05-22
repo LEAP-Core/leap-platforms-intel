@@ -34,8 +34,8 @@
 
 #include "awb/provides/umf.h"
 #include "awb/provides/physical_platform_utils.h"
-#include "awb/provides/qpi_device.h"
-#include "awb/provides/qpi_driver.h"
+#include "awb/provides/qa_device.h"
+#include "awb/provides/qa_driver.h"
 #include "tbb/concurrent_queue.h"
 #include "tbb/atomic.h"
 #include <pthread.h>

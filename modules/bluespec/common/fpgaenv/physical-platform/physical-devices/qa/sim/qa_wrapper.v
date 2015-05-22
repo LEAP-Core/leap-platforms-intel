@@ -33,7 +33,7 @@
 // verilog.  Since we subordinate the CCI interface as a device
 // driver, we use verilog OOMRs to bypass the interface.
 
-module qpi_wrapper#(parameter TXHDR_WIDTH=61, RXHDR_WIDTH=18, CACHE_WIDTH=512, UMF_WIDTH=128)
+module qa_wrapper#(parameter TXHDR_WIDTH=61, RXHDR_WIDTH=18, CACHE_WIDTH=512, UMF_WIDTH=128)
 (
     // ---------------------------global signals-------------------------------------------------
     clk,                 //              in    std_logic;  -- Core clock
@@ -81,7 +81,7 @@ module qpi_wrapper#(parameter TXHDR_WIDTH=61, RXHDR_WIDTH=18, CACHE_WIDTH=512, U
    assign clk = emulator.cci_std_afu.vl_clk_LPdomain_32ui;
    assign resetb = emulator.cci_std_afu.ffs_vl_LP32ui_lp2sy_SoftReset_n;
    
-   qpi_driver driver(
+   qa_driver driver(
         .clk(emulator.cci_std_afu.vl_clk_LPdomain_32ui),
         .resetb(emulator.cci_std_afu.ffs_vl_LP32ui_lp2sy_SoftReset_n),
 

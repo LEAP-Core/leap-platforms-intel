@@ -1,10 +1,10 @@
-%name QPI Simulation Device
-%desc QPI Simulation Device
+%name Intel QuickAssist Simulation Device
+%desc Intel QuickAssist Simulation Device
 
-%provides qpi_device
-%requires qpi_driver
+%provides qa_device
+%requires qa_driver
 
-%public qpi-import.bsv
+%public qa-import.bsv
 
 %param CCI_CACHE_WIDTH  512    "Cache line width"
 %param CCI_TXHDR_WIDTH  61     "TX Header width"
@@ -12,6 +12,6 @@
 %param CCI_SIMULATION   1      "Is the CCI implementation actually a simulator?"
 
 %sources -t VERILOG -v PRIVATE cci_std_afu.sv
-%sources -t VERILOG -v PRIVATE qpi_wrapper.v
+%sources -t VERILOG -v PRIVATE qa_wrapper.v
 
 %syslibrary rt

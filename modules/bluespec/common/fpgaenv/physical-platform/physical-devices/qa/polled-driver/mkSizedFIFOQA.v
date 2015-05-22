@@ -59,7 +59,7 @@
   `define BSV_RESET_EDGE negedge
 `endif
 
-module mkSizedFIFOQPI(CLK,
+module mkSizedFIFOQA(CLK,
 		      RST_N,
 
 		      enq_1,
@@ -176,5 +176,5 @@ module mkSizedFIFOQPI(CLK,
   assign m_ENQ = EN_enq ;
   assign m_DEQ = EN_deq ;
   assign m_CLR = EN_clear ;
-endmodule  // mkSizedFIFOQPI
+endmodule  // mkSizedFIFOQA
 

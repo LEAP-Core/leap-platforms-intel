@@ -32,7 +32,7 @@
 import FIFOF::*;
 import Vector::*;
 
-`include "awb/provides/qpi_device.bsh"
+`include "awb/provides/qa_device.bsh"
 `include "awb/provides/physical_platform.bsh"
 `include "awb/provides/umf.bsh"
 

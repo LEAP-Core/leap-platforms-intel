@@ -29,7 +29,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-`include "qpi.vh"
+`include "qa.vh"
 
 module status_writer
   (
@@ -95,7 +95,7 @@ module status_writer
 
    always@(negedge clk)
      begin
-        if(QPI_DRIVER_DEBUG)
+        if(QA_DRIVER_DEBUG)
          begin  
             if(status_writer.write.request)
               $display("Status writer attempts to write 0x%h to CL 0x%h", status_writer.data, status_writer.write_header.address);

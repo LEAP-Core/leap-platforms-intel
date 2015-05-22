@@ -30,7 +30,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-`include "qpi.vh"
+`include "qa.vh"
 
 // The BUFFER_DEPTH and BUFFER_ADDR_WIDTH parameters are not actually
 // parameters, since we grabbed modules from bluespec. Probably this

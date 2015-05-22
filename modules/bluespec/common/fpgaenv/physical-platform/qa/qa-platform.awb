@@ -1,0 +1,14 @@
+%name Intel QuickAssist Platform
+%desc Intel QuickAssist Platform
+
+%provides physical_platform
+
+%requires clocks_device
+%requires qa_device
+%requires ddr_sdram_device
+%requires physical_platform_utils
+
+%sources -t BSV -v PUBLIC  qa-platform.bsv
+%sources -t BSH -v PUBLIC  qa-platform.bsh
+%sources -t CPP -v PRIVATE qa-platform.cpp
+%sources -t H   -v PUBLIC  qa-platform.h

@@ -24,7 +24,7 @@ Packagehint=leap
 virtual_platform=Standard Virtual Platform
 fpga_components=Software FPGA Components
 librl_bsv=RL Bluespec Library Submodel
-build_pipeline=Build Pipeline QPI ASE (using VCSI)
+build_pipeline=Build Pipeline Intel QuickAssist ASE (using VCSI)
 soft_services=Soft Services Submodel
 
 [Standard Virtual Platform]
@@ -92,7 +92,7 @@ File=modules/leap/virtual-platform/low-level-platform-interface/hybrid-llpi.awb
 Packagehint=leap
 
 [Low Level Platform Interface Hybrid/Requires]
-physical_platform=QPI with DDR
+physical_platform=Intel QuickAssist Platform
 remote_memory=Null Remote Memory
 channelio=Basic Virtual Channel Multiplexer
 rrr=RRR Clients and Servers
@@ -105,27 +105,6 @@ physical_platform_defs=Common Physical Platform Definitions
 [Common Physical Platform Definitions]
 File=modules/bluespec/common/fpgaenv/physical-platform/utils/physical-defs.awb
 Packagehint=leap-platforms
-
-[QPI Simulation Device]
-File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qpi/sim/qpi-sim.awb
-Packagehint=leap-platforms-intel
-
-[QPI with DDR]
-File=modules/bluespec/common/fpgaenv/physical-platform/qpi/qpi-platform.awb
-Packagehint=leap-platforms-intel
-
-[QPI with DDR/Requires]
-clocks_device=Simulation Clocks Device
-qpi_device=QPI Simulation Device
-physical_platform_utils=Common Physical Platform Utilities
-ddr_sdram_device=Null DDR SDRAM Physical Device
-
-[QPI Simulation Device/Requires]
-qpi_driver=QPI Polled Driver
-
-[QPI Polled Driver]
-File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qpi/polled_driver/qpi-polled-driver.awb
-Packagehint=leap-platforms-intel
 
 [Little-Endian Unified Message Format/Params]
 UMF_CHUNK_BYTES=16
@@ -153,10 +132,31 @@ ddr_sdram_definitions=DDR SDRAM Common Definitions
 File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/ddr-sdram/ddr-sdram.awb
 Packagehint=leap-platforms
 
-[Build Pipeline QPI ASE (using VCSI)]
-File=config/pm/leap/submodels/pipelines/build-pipeline-qpi-ase.apm
-Packagehint=leap-platforms-intel
-
 [Intel QuickAssist FPGA Physical Channel]
 File=modules/leap/virtual-platform/physical-channel/qa/qa-physical-channel.awb
+Packagehint=leap-platforms-intel
+
+[Build Pipeline Intel QuickAssist ASE (using VCSI)]
+File=config/pm/leap/submodels/pipelines/build-pipeline-qa-ase.apm
+Packagehint=leap-platforms-intel
+
+[Intel QuickAssist Polled Driver]
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/polled-driver/qa-polled-driver.awb
+Packagehint=leap-platforms-intel
+
+[Intel QuickAssist Simulation Device/Requires]
+qa_driver=Intel QuickAssist Polled Driver
+
+[Intel QuickAssist Platform]
+File=modules/bluespec/common/fpgaenv/physical-platform/qa/qa-platform.awb
+Packagehint=leap-platforms-intel
+
+[Intel QuickAssist Platform/Requires]
+qa_device=Intel QuickAssist Simulation Device
+clocks_device=Simulation Clocks Device
+physical_platform_utils=Common Physical Platform Utilities
+ddr_sdram_device=Null DDR SDRAM Physical Device
+
+[Intel QuickAssist Simulation Device]
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/sim/qa-sim.awb
 Packagehint=leap-platforms-intel

@@ -49,9 +49,9 @@
 #include "platforms-module.h"
 #include "default-switches.h"
 
-#include "awb/provides/qpi_driver.h"
+#include "awb/provides/qa_driver.h"
 #include "awb/provides/physical_platform_defs.h"
-#include "awb/provides/qpi_device.h"
+#include "awb/provides/qa_device.h"
 
 
 using namespace std;
@@ -128,13 +128,13 @@ QPI_DEVICE_CLASS::Init()
     // the FPGA write buffer. Our write buffer is the FPGA read
     // buffer.
     afu.write_csr_64(CSR_WRITE_FRAME, readBuffer->physical_address);
-    if (QPI_DRIVER_DEBUG)
+    if (QA_DRIVER_DEBUG)
     {
         printf("Writing Host READ_FRAME base %p (line %p) ...\n", readBuffer->physical_address, CACHELINE_ALIGNED_ADDR(readBuffer->physical_address));
     }
 
     afu.write_csr_64(CSR_READ_FRAME, writeBuffer->physical_address);
-    if (QPI_DRIVER_DEBUG)
+    if (QA_DRIVER_DEBUG)
     {
         printf("Writing Host WRITE_FRAME base %p (line %p) ...\n", writeBuffer->physical_address, CACHELINE_ALIGNED_ADDR(writeBuffer->physical_address));
     }
@@ -175,7 +175,7 @@ QPI_DEVICE_CLASS::Probe()
 
     UMF_CHUNK controlChunk = *(getChunkAddress(readBuffer, readFrameNumber, 0));
 
-    if (QPI_DRIVER_DEBUG)
+    if (QA_DRIVER_DEBUG)
     {
         if(controlChunk != 0)
         {
@@ -204,7 +204,7 @@ QPI_DEVICE_CLASS::Read(
     // I really only want to deal in chunks for now.
     assert(bytes_requested % UMF_CHUNK_BYTES == 0);
 
-    if (QPI_DRIVER_DEBUG)
+    if (QA_DRIVER_DEBUG)
     {
         printf("READ needs %d bytes\n", bytes_requested);
     }
@@ -214,7 +214,7 @@ QPI_DEVICE_CLASS::Read(
         do
         {
             controlChunk = *getChunkAddress(readBuffer, readFrameNumber, chunkNumber);            
-            if (QPI_DRIVER_DEBUG)
+            if (QA_DRIVER_DEBUG)
             {
                 printf("READ needs sppinning for control chunk for frame %d: %p -> %llx\n", readFrameNumber, getChunkAddress(readBuffer, readFrameNumber, chunkNumber), controlChunk);
             }
@@ -235,7 +235,7 @@ QPI_DEVICE_CLASS::Read(
         readChunkNumber++;
         *((UMF_CHUNK *)(buf+bytesRead)) = *getChunkAddress(readBuffer, readFrameNumber, readChunkNumber);
 
-        if (QPI_DRIVER_DEBUG)
+        if (QA_DRIVER_DEBUG)
         {
             printf("Read chunk %p -> %llx, chunk number: %x, chunk total: %d\n", getChunkAddress(readBuffer, readFrameNumber, readChunkNumber), *getChunkAddress(readBuffer, readFrameNumber, readChunkNumber), readChunkNumber, readChunksTotal);
         }
@@ -244,7 +244,7 @@ QPI_DEVICE_CLASS::Read(
     if(readChunkNumber == readChunksTotal)
     {
         // free block
-        if (QPI_DRIVER_DEBUG)
+        if (QA_DRIVER_DEBUG)
         {
             printf("Read frees frame number %d\n",  readFrameNumber);
         }
@@ -255,7 +255,7 @@ QPI_DEVICE_CLASS::Read(
         // Got any data remaining to read? if so tail recurse!
         if(bytesRead < bytes_requested)
         {
-            if (QPI_DRIVER_DEBUG)
+            if (QA_DRIVER_DEBUG)
             {
                 printf("Tail recurse for read needed\n");
             }
@@ -276,7 +276,7 @@ QPI_DEVICE_CLASS::Write(
     UMF_CHUNK controlChunk;
     while (!initWriteComplete) 
     {  
-        if (QPI_DRIVER_DEBUG)
+        if (QA_DRIVER_DEBUG)
         {
             printf("WRITE: waiting for init complete\n");
         }
@@ -290,7 +290,7 @@ QPI_DEVICE_CLASS::Write(
     do
     {
         controlChunk = *controlAddr;
-        if (QPI_DRIVER_DEBUG)
+        if (QA_DRIVER_DEBUG)
         {
             printf("WRITE: Control chunk %p is %llx \n", controlAddr, controlChunk);
         }
@@ -302,7 +302,7 @@ QPI_DEVICE_CLASS::Write(
         chunkNumber++;
         volatile UMF_CHUNK *chunkAddr = getChunkAddress(writeBuffer, writeFrameNumber, chunkNumber);
         *chunkAddr = *((UMF_CHUNK *)(buf+offset));
-        if (QPI_DRIVER_DEBUG)
+        if (QA_DRIVER_DEBUG)
         {
             printf("WRITE writing chunk address %p %llx %llx\n", chunkAddr, *chunkAddr, *((UMF_CHUNK *)(buf+offset))); 
         }
@@ -312,7 +312,7 @@ QPI_DEVICE_CLASS::Write(
     atomic_thread_fence(std::memory_order_release);
     controlChunk = (chunkNumber << 1) | 0xdeadbeef0001;
     *controlAddr = controlChunk;
-    if (QPI_DRIVER_DEBUG)
+    if (QA_DRIVER_DEBUG)
     {
         printf("WRITE Control chunk %p is %llx \n", controlAddr, controlChunk);
     }

@@ -29,7 +29,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-`include "qpi.vh"
+`include "qa.vh"
 
 module cci_can_issue
   #(parameter CAN_ISSUE_FULL=4)

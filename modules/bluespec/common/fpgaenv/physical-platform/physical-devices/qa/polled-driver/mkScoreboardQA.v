@@ -80,7 +80,7 @@
   `define BSV_RESET_EDGE negedge
 `endif
 
-module mkScoreboardQPI(CLK,
+module mkScoreboardQA(CLK,
 		       RST_N,
 
 		       EN_enq,
@@ -459,5 +459,5 @@ module mkScoreboardQPI(CLK,
   end
   `endif // BSV_NO_INITIAL_BLOCKS
   // synopsys translate_on
-endmodule  // mkScoreboardQPI
+endmodule  // mkScoreboardQA
 

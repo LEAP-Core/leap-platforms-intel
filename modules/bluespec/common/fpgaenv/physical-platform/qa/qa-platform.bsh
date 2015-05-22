@@ -2,8 +2,6 @@
 // Include details of the specific physical platform
 //
 
-
-`include "awb/provides/qpi_device.bsh"
+`include "awb/provides/qa_device.bsh"
 `include "awb/provides/clocks_device.bsh"
 `include "awb/provides/ddr_sdram_device.bsh"
-

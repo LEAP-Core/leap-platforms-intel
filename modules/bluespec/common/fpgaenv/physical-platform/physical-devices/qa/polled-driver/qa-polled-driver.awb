@@ -1,27 +1,26 @@
+%name Intel QuickAssist Polled Driver
+%desc Intel QuickAssist Polled Driver
 
-%name QPI Polled Driver
-%desc QPI Polled Driver
+%provides qa_driver
 
-%provides qpi_driver
+%param QA_DRIVER_DEBUG   0      "Is the CCI implementation actually a simulator?"
 
-%param QPI_DRIVER_DEBUG   0      "Is the CCI implementation actually a simulator?"
-
-%sources -t H      -v PUBLIC  qpi-polled-driver.h
-%sources -t CPP    -v PRIVATE qpi-polled-driver.cpp
+%sources -t H      -v PUBLIC  qa-polled-driver.h
+%sources -t CPP    -v PRIVATE qa-polled-driver.cpp
 
 %sources -t H      -v PUBLIC  AFU.h
 %sources -t H      -v PUBLIC  AFU_csr.h
 %sources -t CPP    -v PRIVATE AFU.cpp
 
-%sources -t VERILOG    -v PRIVATE mkBRAMScoreboardQPI.v
-%sources -t VERILOG    -v PRIVATE mkScoreboardQPI.v
+%sources -t VERILOG    -v PRIVATE mkBRAMScoreboardQA.v
+%sources -t VERILOG    -v PRIVATE mkScoreboardQA.v
 %sources -t VERILOG    -v PRIVATE mkSizedFIFOUMF.v
-%sources -t VERILOG    -v PRIVATE mkSizedFIFOQPI.v
+%sources -t VERILOG    -v PRIVATE mkSizedFIFOQA.v
 
-%sources -t VERILOG_H  -v PRIVATE qpi.vh  
-%sources -t VERILOG_H  -v PRIVATE qpi_csr.vh  
-%sources -t VERILOG    -v PRIVATE qpi_csr.sv  
-%sources -t VERILOG    -v PRIVATE qpi_driver.sv  
+%sources -t VERILOG_H  -v PRIVATE qa.vh  
+%sources -t VERILOG_H  -v PRIVATE qa_csr.vh  
+%sources -t VERILOG    -v PRIVATE qa_csr.sv  
+%sources -t VERILOG    -v PRIVATE qa_driver.sv  
 %sources -t VERILOG    -v PRIVATE frame_reader.sv  
 %sources -t VERILOG    -v PRIVATE frame_release.sv  
 %sources -t VERILOG    -v PRIVATE frame_writer.sv  
@@ -36,7 +35,3 @@
 %library libOSAL.so
 %library libltdl.so
 %library libaalclp.so
-
-
-
-

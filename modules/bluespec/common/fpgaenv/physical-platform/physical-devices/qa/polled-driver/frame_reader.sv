@@ -30,7 +30,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-`include "qpi.vh"
+`include "qa.vh"
 
 // The BUFFER_DEPTH and BUFFER_ADDR_WIDTH parameters are not actually
 // parameters, since we grabbed modules from bluespec. Probably this
@@ -253,7 +253,7 @@ module frame_reader
 
    always@(negedge clk)
      begin
-       if(QPI_DRIVER_DEBUG)
+       if(QA_DRIVER_DEBUG)
          begin  
             if(rx0.data != 0 && response_read_metadata.is_read)
               begin              
@@ -282,7 +282,7 @@ module frame_reader
    end
    
    // modules for interfacing with  downstream code
-   mkScoreboardQPI scoreboard(.CLK(clk),
+   mkScoreboardQA scoreboard(.CLK(clk),
 		   .RST_N(resetb),
 
 		   .EN_enq(data_read_accepted),
@@ -311,7 +311,7 @@ module frame_reader
 
 
                    
-   mkSizedFIFOQPI ctrlFIFO(.CLK(clk),
+   mkSizedFIFOQA ctrlFIFO(.CLK(clk),
 		      .RST_N(resetb),
 
 		      .enq_1(last_data_read_accepted),

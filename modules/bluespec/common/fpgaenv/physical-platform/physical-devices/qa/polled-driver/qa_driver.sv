@@ -29,9 +29,9 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-`include "qpi.vh"
+`include "qa.vh"
 
-module qpi_driver#(parameter TXHDR_WIDTH=61, RXHDR_WIDTH=18, CACHE_WIDTH=512, UMF_WIDTH=128)
+module qa_driver#(parameter TXHDR_WIDTH=61, RXHDR_WIDTH=18, CACHE_WIDTH=512, UMF_WIDTH=128)
 (
     // ---------------------------global signals-------------------------------------------------
     clk,                 //              in    std_logic;  -- Core clock
@@ -128,7 +128,7 @@ module qpi_driver#(parameter TXHDR_WIDTH=61, RXHDR_WIDTH=18, CACHE_WIDTH=512, UM
    // connect CCI pins to cci_bus
    cci_adaptor       cci_adaptor_inst(.*);
    
-   qpi_csr           qpi_csr_inst(.*);
+   qa_csr            qa_csr_inst(.*);
 
    frame_reader      frame_reader_inst(.*);
    frame_writer      frame_writer_inst(.*);

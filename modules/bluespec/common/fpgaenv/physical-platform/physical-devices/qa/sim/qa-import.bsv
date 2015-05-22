@@ -81,7 +81,7 @@ endinterface
 
 Integer umfChunkSize = valueOf(SizeOf#(UMF_CHUNK));
 
-import "BVI" qpi_wrapper = 
+import "BVI" qa_wrapper = 
 module mkQPIDeviceImport  (QPI_DRIVER);
 
     parameter TXHDR_WIDTH = `CCI_TXHDR_WIDTH;

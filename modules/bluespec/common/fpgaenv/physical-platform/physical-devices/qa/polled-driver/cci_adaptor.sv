@@ -13,7 +13,7 @@
 //
 //====================================================================
 
-`include "qpi.vh"
+`include "qa.vh"
 
 module cci_adaptor
   #(parameter TXHDR_WIDTH=61, RXHDR_WIDTH=18, CACHE_WIDTH=512)

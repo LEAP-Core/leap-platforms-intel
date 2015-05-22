@@ -17,9 +17,9 @@
  `define QPI_VH
 
    
- `include "qpi_csr.vh"
+ `include "qa_csr.vh"
 
- localparam QPI_DRIVER_DEBUG = 0;
+ localparam QA_DRIVER_DEBUG = 0;
 
 
  localparam CACHE_WIDTH = 512;

@@ -1,6 +1,6 @@
-`include "qpi.vh"
+`include "qa.vh"
 
-module qpi_csr
+module qa_csr
      (
           input logic clk,
           input logic resetb,

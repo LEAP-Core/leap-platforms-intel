@@ -29,7 +29,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-`include "qpi.vh"
+`include "qa.vh"
 
 module frame_writer
   #(parameter BUFFER_DEPTH=64, BUFFER_ADDR_WIDTH=6, CACHE_WIDTH=512, UMF_WIDTH=128)
@@ -231,7 +231,7 @@ module frame_writer
 
    always @ (negedge clk)
      begin
-       if(QPI_DRIVER_DEBUG)
+       if(QA_DRIVER_DEBUG)
          begin  
             if(state == WRITE_CONTROL)
               $display("FRAME_WRITE of control: %h -> %h ", frame_writer.write_header.address,  frame_writer.data);     

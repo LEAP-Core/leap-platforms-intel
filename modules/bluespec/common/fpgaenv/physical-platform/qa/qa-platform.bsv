@@ -36,10 +36,10 @@ import DefaultValue::*;
 
 
 //
-// Standard physical platform for QPI-attached FPGAs.
+// Standard physical platform for Intel QuickAssist FPGAs.
 //
 
-`include "awb/provides/qpi_device.bsh"
+`include "awb/provides/qa_device.bsh"
 `include "awb/provides/clocks_device.bsh"
 `include "awb/provides/ddr_sdram_device.bsh"
 `include "awb/provides/ddr_sdram_definitions.bsh"

@@ -1,0 +1,13 @@
+%name Intel QuickAssist FPGA Physical Channel
+%desc Intel QuickAssist FPGA Physical Channel
+
+%provides physical_channel
+
+%notes README
+
+%sources -t BSV     -v PUBLIC   qa-physical-channel.bsv
+%sources -t H       -v PUBLIC   qa-physical-channel.h
+%sources -t CPP     -v PRIVATE  qa-physical-channel.cpp
+%sources -t LOG     -v PUBLIC   qa-physical-channel.log
+%syslibrary tbb
+

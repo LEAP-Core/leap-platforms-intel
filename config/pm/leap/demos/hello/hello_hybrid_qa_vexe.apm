@@ -2,7 +2,7 @@
 [Global]
 SaveParameters=0
 Description=Hello World Demo using hybrid streams
-File=hello_hybrid_qpi_no_mem_vexe
+File=hello_hybrid_qa_vexe
 Version=2.2
 Name=Hello World
 DefaultBenchmark=config/bm/leap/demos.cfx/benchmarks/null.cfg
@@ -26,7 +26,7 @@ Packagehint=leap
 
 [HW/SW Hybrid Pipeline Build/Requires]
 project_common=Default Hybrid Project Common Utilities
-fpgaenv=Hybrid Verilog QPI Simulation FPGA Environment (No Memory)
+fpgaenv=Intel QuickAssist Simulation FPGA Environment
 application_env=Soft Services Hybrid Application Environment
 
 [HW/SW Hybrid Pipeline Build]
@@ -40,6 +40,7 @@ Packagehint=leap
 [Soft Services Hybrid Application Environment/Requires]
 connected_application=Hello World
 
-[Hybrid Verilog QPI Simulation FPGA Environment (No Memory)]
-File=config/pm/leap/submodels/fpgaenv/intel/qpi/fpgaenv-hybrid-vc707-pcie-no-mem.apm
+
+[Intel QuickAssist Simulation FPGA Environment]
+File=config/pm/leap/submodels/fpgaenv/intel/qa/fpgaenv-hybrid-qa-vexe.apm
 Packagehint=leap-platforms-intel

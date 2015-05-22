@@ -2,7 +2,7 @@
 [Global]
 SaveParameters=0
 Description=Traffic Light from Bluespec Tutorial for simulation w. synthesis boundary
-File=traffic_light_qpi_vexe_synth
+File=traffic_light_qa_vexe_synth
 Version=2.2
 Name=Traffic Light Model - Exe with synthesis boundary
 DefaultBenchmark=config/bm/leap/demos.cfx/benchmarks/null.cfg
@@ -47,7 +47,7 @@ Packagehint=leap
 
 [HW/SW Hybrid Pipeline Build/Requires]
 project_common=Default Hybrid Project Common Utilities
-fpgaenv=Hybrid Verilog QPI Simulation FPGA Environment (No Memory)
+fpgaenv=Intel QuickAssist Simulation FPGA Environment
 application_env=Soft Services Hybrid Application Environment
 
 [Traffic light function w. synthesis boundary/Params]
@@ -57,6 +57,7 @@ SIGNAL_CHANGE_DELAY=10000
 File=config/pm/leap/submodels/common/project-common-default.apm
 Packagehint=leap
 
-[Hybrid Verilog QPI Simulation FPGA Environment (No Memory)]
-File=config/pm/leap/submodels/fpgaenv/intel/qpi/fpgaenv-hybrid-vc707-pcie-no-mem.apm
+
+[Intel QuickAssist Simulation FPGA Environment]
+File=config/pm/leap/submodels/fpgaenv/intel/qa/fpgaenv-hybrid-qa-vexe.apm
 Packagehint=leap-platforms-intel

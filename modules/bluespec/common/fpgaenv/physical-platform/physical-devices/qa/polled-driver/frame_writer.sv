@@ -84,15 +84,21 @@ module frame_writer
    logic frame_ready_for_write;
    assign frame_ready_for_write = ~header_in_use(rx0.data);
 
+   //
+   // Some convenient frame indices.  The first and last entries in the frame.
+   //
+   logic [LOG_FRAME_CHUNKS - 1:0] frame_chunks_first;
+   logic [LOG_FRAME_CHUNKS - 1:0] frame_chunks_last;
+   assign frame_chunks_first = 0;
+   assign frame_chunks_last = (~frame_chunks_first ^ 1'b1);
+
    // We're done with a frame if
    // 1) Idle count expired and data in frame
-   // 2) Frame might be full this cycle (whether it is or not is a non-issue).
+   // 2) Frame might be full this cycle.  Allowing more data would cause
+   //    the frame pointer to wrap and overwrite the header.
    logic done_with_writing;
-   logic c1, c2, c3;
-   assign c1 = (idle_count == 4'hf);
-   assign c2 = (frame_chunks != 1);
-   assign c3 = (frame_chunks == ((~0) ^ 1'b1));   
-   assign done_with_writing = ((idle_count == 4'hf) && (frame_chunks != 1)) || (frame_chunks == ((~0) ^ 1'b1));
+   assign done_with_writing = ((idle_count == 4'hf) && (frame_chunks != 1)) ||
+                              (frame_chunks == frame_chunks_last);
 
    logic data_write_success;   
    assign data_write_success = (state == WRITE) && write_grant.writer_grant;
@@ -113,10 +119,7 @@ module frame_writer
    assign header_read_metadata.is_read   = 1'b0;   
    assign header_read_metadata.is_header = 1'b1;   
    assign header_read_metadata.rob_addr  = 1'b0;
-   logic [LOG_FRAME_CHUNKS - 1:0]       frame_chunks_zero;
    logic header_read_rdy;
-   
-   assign frame_chunks_zero = 0;
    
    tx_header_t write_header;
    // Request a write for a fence, write control, or if we have data.
@@ -224,7 +227,7 @@ module frame_writer
    always_comb begin
       read_header = 0;
       read_header.request_type = RdLine;
-      read_header.address = {frame_base_pointer,frame_number,frame_chunks_zero}; 
+      read_header.address = {frame_base_pointer, frame_number, frame_chunks_first}; 
       read_header.mdata = pack_read_metadata(header_read_metadata);      
    end
 
@@ -250,7 +253,7 @@ module frame_writer
         WRITE_FENCE:
           frame_writer.write_header.address = 0;
         WRITE_CONTROL:
-          frame_writer.write_header.address = {frame_base_pointer, frame_number, frame_chunks_zero};
+          frame_writer.write_header.address = {frame_base_pointer, frame_number, frame_chunks_first};
         default:
           frame_writer.write_header.address = {frame_base_pointer, frame_number, frame_chunks};
       endcase // case (state)

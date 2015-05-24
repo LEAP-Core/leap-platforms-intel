@@ -137,12 +137,12 @@ module frame_reader
    // Read metadata                           
    assign data_read_metadata.is_read   = 1'b1;   
    assign data_read_metadata.is_header = 1'b0;   
-   assign data_read_metadata.rob_addr  = {0,scoreboard_slot_id};
+   assign data_read_metadata.rob_addr  = scoreboard_slot_id;
 
    // Header metadata
    assign header_read_metadata.is_read   = 1'b1;   
    assign header_read_metadata.is_header = 1'b1;   
-   assign header_read_metadata.rob_addr  = {0,scoreboard_slot_id};
+   assign header_read_metadata.rob_addr  = scoreboard_slot_id;
 
    assign release_frame = frame_release_count_up && rx_enable;
    

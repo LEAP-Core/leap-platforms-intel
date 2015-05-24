@@ -237,7 +237,11 @@ QA_DEVICE_CLASS::Read(
 
         if (QA_DRIVER_DEBUG)
         {
-            printf("Read chunk %p -> %llx, chunk number: %x, chunk total: %d\n", getChunkAddress(readBuffer, readFrameNumber, readChunkNumber), *getChunkAddress(readBuffer, readFrameNumber, readChunkNumber), readChunkNumber, readChunksTotal);
+            printf("Read chunk %p -> 0x%016llx %016llx, chunk number: %d, chunk total: %d\n",
+                   getChunkAddress(readBuffer, readFrameNumber, readChunkNumber),
+                   uint64_t(*getChunkAddress(readBuffer, readFrameNumber, readChunkNumber) >> 64),
+                   uint64_t(*getChunkAddress(readBuffer, readFrameNumber, readChunkNumber)),
+                   readChunkNumber, readChunksTotal);
         }
     }
 

@@ -1,0 +1,9 @@
+The Intel QuickAssist (QA) driver.
+
+QA instantiates an accelerator by constructing a cci_std_afu().  The LEAP
+version is provided here.  LEAP's cci_std_afu() passes the wires to the
+usual mk_model_Wrapper method.
+
+LEAP's QA platform and driver expose all the QA wires in mk_model_Wrapper.
+The wires are passed down to the clock generator and to the QA driver,
+which implements the LEAP physical channel and CCI memory interfaces.

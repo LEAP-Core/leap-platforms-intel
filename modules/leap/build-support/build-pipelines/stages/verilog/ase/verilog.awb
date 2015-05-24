@@ -8,5 +8,8 @@
 %notes README
 
 %scons %library verilog.py
+%sources -t VERILOG -v PRIVATE qa_sim_top_level.v
+
+%syslibrary rt
 
 %param VCS_ARGUMENTS "-Xv -LDFLAGS -Xv -lstdc++ -Xv -LDFLAGS -Xv -lpthread -Xv -LDFLAGS -Xv -lrt   -Xv -override_timescale=10ps/10ps" "Extra VCS arguments"

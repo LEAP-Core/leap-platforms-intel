@@ -29,9 +29,11 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-// This module wraps the QuickAssist cache coherence interface in
-// verilog.  Since we subordinate the CCI interface as a device
-// driver, we use verilog OOMRs to bypass the interface.
+//
+// Takes all the wires from the QuickAssist CCI interface and builds
+// a driver that implements a LEAP physical channel.  A read/write interface
+// to the physical channel is also exposed in the qa_wrapper interface.
+//
 
 module qa_wrapper#(parameter TXHDR_WIDTH=61, RXHDR_WIDTH=18, CACHE_WIDTH=512, UMF_WIDTH=128)
 (

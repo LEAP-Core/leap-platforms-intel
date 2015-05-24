@@ -4,5 +4,10 @@ This stage invokes verilog simulator compilation. Invocation is done through
 the Bluespec compiler so selection of particular verilog simulator (iverilog,
 vcs, etc) may be done through environment variables.
 
+The Intel QuickAssist simulator is the top level of the compilation.  The
+Verilog module in this directory instantiates a QA emulator which then
+instantiates the rest of the system.
+
 The compliation is mostly generic for vcs but has some special handling for
-the Intel AFU simulation environment (ASE).
+adding the Intel simulation environment from a shared installation using
+the AAL_QA_ASE environment variable.

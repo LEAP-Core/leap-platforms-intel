@@ -35,11 +35,7 @@
 
 module qa_wrapper#(parameter TXHDR_WIDTH=61, RXHDR_WIDTH=18, CACHE_WIDTH=512, UMF_WIDTH=128)
 (
-    // ---------------------------global signals-------------------------------------------------
-    clk,                 //              in    std_logic;  -- Core clock
-    resetb,              //              in    std_logic;  -- Use SPARINGLY only for control
-
-    // --------------------------- LEAP Facing Interface           --------------------------------
+    // ------------------- LEAP Facing Interface --------------------------
     // RX side
     rx_data,
     rx_not_empty,
@@ -50,62 +46,107 @@ module qa_wrapper#(parameter TXHDR_WIDTH=61, RXHDR_WIDTH=18, CACHE_WIDTH=512, UM
     tx_data,
     tx_not_full,
     tx_rdy,
-    tx_enable
+    tx_enable,
 
+    // ------------------- Intel QuickAssist Interface --------------------
+    vl_clk_LPdomain_32ui,
+    vl_clk_LPdomain_16ui,
+    ffs_vl_LP32ui_lp2sy_SystemReset_n,
+    ffs_vl_LP32ui_lp2sy_SoftReset_n,
+
+    ffs_vl18_LP32ui_lp2sy_C0RxHdr,
+    ffs_vl512_LP32ui_lp2sy_C0RxData,
+    ffs_vl_LP32ui_lp2sy_C0RxWrValid,
+    ffs_vl_LP32ui_lp2sy_C0RxRdValid,
+    ffs_vl_LP32ui_lp2sy_C0RxCgValid,
+    ffs_vl_LP32ui_lp2sy_C0RxUgValid,
+    ffs_vl_LP32ui_lp2sy_C0RxIrValid,
+
+    ffs_vl18_LP32ui_lp2sy_C1RxHdr,
+    ffs_vl_LP32ui_lp2sy_C1RxWrValid,
+    ffs_vl_LP32ui_lp2sy_C1RxIrValid,
+
+    ffs_vl61_LP32ui_sy2lp_C0TxHdr,
+    ffs_vl_LP32ui_sy2lp_C0TxRdValid,
+
+    ffs_vl61_LP32ui_sy2lp_C1TxHdr,
+    ffs_vl512_LP32ui_sy2lp_C1TxData,
+    ffs_vl_LP32ui_sy2lp_C1TxWrValid,
+    ffs_vl_LP32ui_sy2lp_C1TxIrValid,
+
+    ffs_vl_LP32ui_lp2sy_C0TxAlmFull,
+    ffs_vl_LP32ui_lp2sy_C1TxAlmFull,
+
+    ffs_vl_LP32ui_lp2sy_InitDnForSys
 );
 
+    // LEAP facing interface
+    output [UMF_WIDTH-1:0]    rx_data;   
+    output                    rx_not_empty;
+    output                    rx_rdy;
+    input                     rx_enable;
 
-   output                     clk;                // Core clock
-   output                     resetb;             // Use SPARINGLY only for control
+    // TX side
+    input [UMF_WIDTH-1:0]     tx_data;
+    output                    tx_not_full;
+    output                    tx_rdy;
+    input                     tx_enable;
 
-   // LEAP facing interface
-   output [UMF_WIDTH-1:0]    rx_data;   
-   output                    rx_not_empty;
-   output                    rx_rdy;
-   input                     rx_enable;
-   
-   // TX side
-   input [UMF_WIDTH-1:0]     tx_data;
-   output                    tx_not_full;
-   output                    tx_rdy;
-   input                     tx_enable;
-   
-   // Instantiate simulation controller.  The cci_mem_translator has
-   // an empty interface, since it uses some kind of vpi-style
-   // interdface for communications.
-   
-   cci_emulator emulator();
+    // Intel QuickAssist interface
+    input           vl_clk_LPdomain_32ui;
+    input           vl_clk_LPdomain_16ui;
+    input           ffs_vl_LP32ui_lp2sy_SystemReset_n;
+    input           ffs_vl_LP32ui_lp2sy_SoftReset_n;
 
-   // Wire the external signals to driver as OOMRs.
+    input   [17:0]  ffs_vl18_LP32ui_lp2sy_C0RxHdr;
+    input   [511:0] ffs_vl512_LP32ui_lp2sy_C0RxData;
+    input           ffs_vl_LP32ui_lp2sy_C0RxWrValid;
+    input           ffs_vl_LP32ui_lp2sy_C0RxRdValid;
+    input           ffs_vl_LP32ui_lp2sy_C0RxCgValid;
+    input           ffs_vl_LP32ui_lp2sy_C0RxUgValid;
+    input           ffs_vl_LP32ui_lp2sy_C0RxIrValid;
 
-   assign clk = emulator.cci_std_afu.vl_clk_LPdomain_32ui;
-   assign resetb = emulator.cci_std_afu.ffs_vl_LP32ui_lp2sy_SoftReset_n;
-   
-   qa_driver driver(
-        .clk(emulator.cci_std_afu.vl_clk_LPdomain_32ui),
-        .resetb(emulator.cci_std_afu.ffs_vl_LP32ui_lp2sy_SoftReset_n),
+    input    [17:0] ffs_vl18_LP32ui_lp2sy_C1RxHdr;
+    input           ffs_vl_LP32ui_lp2sy_C1RxWrValid;
+    input           ffs_vl_LP32ui_lp2sy_C1RxIrValid;
 
-        .rx_c0_header(emulator.cci_std_afu.ffs_vl18_LP32ui_lp2sy_C0RxHdr),
-        .rx_c0_data(emulator.cci_std_afu.ffs_vl512_LP32ui_lp2sy_C0RxData),
-        .rx_c0_wrvalid(emulator.cci_std_afu.ffs_vl_LP32ui_lp2sy_C0RxWrValid),
-        .rx_c0_rdvalid(emulator.cci_std_afu.ffs_vl_LP32ui_lp2sy_C0RxRdValid),
-        .rx_c0_cfgvalid(emulator.cci_std_afu.ffs_vl_LP32ui_lp2sy_C0RxCgValid),
+    output   [60:0] ffs_vl61_LP32ui_sy2lp_C0TxHdr;
+    output          ffs_vl_LP32ui_sy2lp_C0TxRdValid;
+
+    output   [60:0] ffs_vl61_LP32ui_sy2lp_C1TxHdr;
+    output  [511:0] ffs_vl512_LP32ui_sy2lp_C1TxData;
+    output          ffs_vl_LP32ui_sy2lp_C1TxWrValid;
+    output          ffs_vl_LP32ui_sy2lp_C1TxIrValid;
+
+    input           ffs_vl_LP32ui_lp2sy_C0TxAlmFull;
+    input           ffs_vl_LP32ui_lp2sy_C1TxAlmFull;
+
+    input           ffs_vl_LP32ui_lp2sy_InitDnForSys;
+
+    qa_driver driver(
+        .clk(vl_clk_LPdomain_32ui),
+        .resetb(ffs_vl_LP32ui_lp2sy_SoftReset_n),
+        .rx_c0_header(ffs_vl18_LP32ui_lp2sy_C0RxHdr),
+        .rx_c0_data(ffs_vl512_LP32ui_lp2sy_C0RxData),
+        .rx_c0_wrvalid(ffs_vl_LP32ui_lp2sy_C0RxWrValid),
+        .rx_c0_rdvalid(ffs_vl_LP32ui_lp2sy_C0RxRdValid),
+        .rx_c0_cfgvalid(ffs_vl_LP32ui_lp2sy_C0RxCgValid),
         //    rb2cf_C0RxUMsgValid
         //    rb2cf_C0RxIntrValid
-        .rx_c1_header(emulator.cci_std_afu.ffs_vl18_LP32ui_lp2sy_C1RxHdr),
-        .rx_c1_wrvalid(emulator.cci_std_afu.ffs_vl_LP32ui_lp2sy_C1RxWrValid),
+        .rx_c1_header(ffs_vl18_LP32ui_lp2sy_C1RxHdr),
+        .rx_c1_wrvalid(ffs_vl_LP32ui_lp2sy_C1RxWrValid),
         //    rb2cf_C1RxIntrValid
 
-        .tx_c0_header(emulator.cci_std_afu.ffs_vl61_LP32ui_sy2lp_C0TxHdr),
-        .tx_c0_rdvalid(emulator.cci_std_afu.ffs_vl_LP32ui_sy2lp_C0TxRdValid),
-        .tx_c1_header(emulator.cci_std_afu.ffs_vl61_LP32ui_sy2lp_C1TxHdr),
-        .tx_c1_data(emulator.cci_std_afu.ffs_vl512_LP32ui_sy2lp_C1TxData),
-        .tx_c1_wrvalid(emulator.cci_std_afu.ffs_vl_LP32ui_sy2lp_C1TxWrValid),
+        .tx_c0_header(ffs_vl61_LP32ui_sy2lp_C0TxHdr),
+        .tx_c0_rdvalid(ffs_vl_LP32ui_sy2lp_C0TxRdValid),
+        .tx_c1_header(ffs_vl61_LP32ui_sy2lp_C1TxHdr),
+        .tx_c1_data(ffs_vl512_LP32ui_sy2lp_C1TxData),
+        .tx_c1_wrvalid(ffs_vl_LP32ui_sy2lp_C1TxWrValid),
         //    cf2ci_C1TxIntrValid
-        .tx_c0_almostfull(emulator.cci_std_afu.ffs_vl_LP32ui_lp2sy_C0TxAlmFull),
-        .tx_c1_almostfull(emulator.cci_std_afu.ffs_vl_LP32ui_lp2sy_C1TxAlmFull),
+        .tx_c0_almostfull(ffs_vl_LP32ui_lp2sy_C0TxAlmFull),
+        .tx_c1_almostfull(ffs_vl_LP32ui_lp2sy_C1TxAlmFull),
 
-        .lp_initdone(emulator.cci_std_afu.ffs_vl_LP32ui_lp2sy_InitDnForSys),
+        .lp_initdone(ffs_vl_LP32ui_lp2sy_InitDnForSys),
 
         .rx_data(rx_data),
         .rx_not_empty(rx_not_empty),
@@ -118,15 +159,5 @@ module qa_wrapper#(parameter TXHDR_WIDTH=61, RXHDR_WIDTH=18, CACHE_WIDTH=512, UM
         .tx_rdy(tx_rdy),
         .tx_enable(tx_enable)
     );
-
-   initial
-     begin
-
-        $dumpfile("driver_dump.vcd");
-        $dumpvars(0, driver);
-        $dumpon;
-
-     end
-
 endmodule
 

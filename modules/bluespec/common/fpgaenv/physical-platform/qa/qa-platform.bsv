@@ -69,8 +69,11 @@ endinterface
 // These wires are defined in the individual devices.
 
 interface TOP_LEVEL_WIRES;
+    (* prefix = "" *)
+    interface CLOCKS_WIRES    qaClockWires;
+
     // wires from devices
-    interface CLOCKS_WIRES    clocksWires;
+    (* prefix = "" *)
     interface QA_WIRES        qaWires;
     interface DDR_WIRES       ddrWires;
 endinterface
@@ -93,10 +96,14 @@ module [CONNECTED_MODULE] mkPhysicalPlatform
     //interface: 
     (PHYSICAL_PLATFORM);
     
-    // The Platform is instantiated inside a NULL clock domain. Our first course of
-    // action should be to instantiate the Clocks Physical Device and obtain interfaces
-    // to clock and reset the other devices with.
-    
+    //
+    // The Platform is instantiated inside a NULL clock domain. Our first
+    // course of action should be to instantiate the Clocks Physical Device
+    // and obtain interfaces to clock and reset the other devices with.
+    //
+    // The clock is derived from the QuickAssist vl_clk_LPDomain_32ui.
+    // Reset is derived from ffs_vl_LP32ui_lp2sy_SoftReset_n.
+    //
     CLOCKS_DEVICE clocks <- mkClocksDevice();
     
     Clock clk = clocks.driver.clock;
@@ -112,10 +119,14 @@ module [CONNECTED_MODULE] mkPhysicalPlatform
                                     clocked_by clk,
                                     reset_by ddrRst);
 
+    let qa_driver_clock = clocks.driver.rawClock;
+    let qa_driver_reset = clocks.driver.rawReset;
+
     // Next, create the physical device that can trigger a soft reset. Pass along the
     // interface to the trigger module that the clocks device has given us.
     let qaRst <- mkResetFanout(clocks.driver.baseReset, clocked_by clk);
-    QA_DEVICE qa <- mkQADevice(clocks.softResetTrigger,
+    QA_DEVICE qa <- mkQADevice(qa_driver_clock, qa_driver_reset,
+                               clocks.softResetTrigger,
                                clocked_by clk,
                                reset_by qaRst);
 
@@ -124,14 +135,14 @@ module [CONNECTED_MODULE] mkPhysicalPlatform
     // a crossing wire to the model clock domain is sufficient.
     //
     Reg#(Bool) qaInReset <- mkReg(True,
-                                  clocked_by qa.driver.clock,
-                                  reset_by qa.driver.reset);
+                                  clocked_by qa_driver_clock,
+                                  reset_by qa_driver_reset);
 
     ReadOnly#(Bool) assertModelReset <-
         mkNullCrossingWire(clocks.driver.clock,
                            qaInReset,
-                           clocked_by qa.driver.clock,
-                           reset_by qa.driver.reset);
+                           clocked_by qa_driver_clock,
+                           reset_by qa_driver_reset);
     
     (* fire_when_enabled, no_implicit_conditions *)
     rule exitResetQa (qaInReset);
@@ -156,9 +167,9 @@ module [CONNECTED_MODULE] mkPhysicalPlatform
     // Aggregate the wires
     //
     interface TOP_LEVEL_WIRES topLevelWires;
-        interface clocksWires = clocks.wires;
-        interface qaWires     = qa.wires;
-        interface ddrWires    = sdram.wires;
+        interface qaClockWires = clocks.wires;
+        interface qaWires      = qa.wires;
+        interface ddrWires     = sdram.wires;
     endinterface
                
 endmodule

@@ -46,19 +46,43 @@ import FIFOF::*;
 
 
 interface QA_DRIVER;
-
-    method Action                           deq();
-    method Bit#(SizeOf#(UMF_CHUNK))         first();
-    method Action                           write(Bit#(SizeOf#(UMF_CHUNK)) chunk);
-    method Bool                             write_ready();
-
-    interface Clock clock;
-    interface Reset reset;
-
+    method Action                   deq();
+    method Bit#(SizeOf#(UMF_CHUNK)) first();
+    method Bool                     notEmpty();
+    method Action                   write(Bit#(SizeOf#(UMF_CHUNK)) chunk);
+    method Bool                     notFull();
 endinterface
 
 interface QA_WIRES;
+    (* prefix = "" *)
+    method Action inputWires(Bit#(1)   vl_clk_LPdomain_16ui,
+                             Bit#(1)   ffs_vl_LP32ui_lp2sy_SystemReset_n,
+                             Bit#(18)  ffs_vl18_LP32ui_lp2sy_C0RxHdr,
+                             Bit#(512) ffs_vl512_LP32ui_lp2sy_C0RxData,
+                             Bit#(1)   ffs_vl_LP32ui_lp2sy_C0RxWrValid,
+                             Bit#(1)   ffs_vl_LP32ui_lp2sy_C0RxRdValid,
+                             Bit#(1)   ffs_vl_LP32ui_lp2sy_C0RxCgValid,
+                             Bit#(1)   ffs_vl_LP32ui_lp2sy_C0RxUgValid,
+                             Bit#(1)   ffs_vl_LP32ui_lp2sy_C0RxIrValid,
+                             Bit#(18)  ffs_vl18_LP32ui_lp2sy_C1RxHdr,
+                             Bit#(1)   ffs_vl_LP32ui_lp2sy_C1RxWrValid,
+                             Bit#(1)   ffs_vl_LP32ui_lp2sy_C1RxIrValid,
+                             Bit#(1)   ffs_vl_LP32ui_lp2sy_C0TxAlmFull,
+                             Bit#(1)   ffs_vl_LP32ui_lp2sy_C1TxAlmFull,
+                             Bit#(1)   ffs_vl_LP32ui_lp2sy_InitDnForSys);
 
+    (* prefix = "", always_ready *)
+    method Bit#(61)  ffs_vl61_LP32ui_sy2lp_C0TxHdr;
+    (* prefix = "", always_ready *)
+    method Bit#(1)   ffs_vl_LP32ui_sy2lp_C0TxRdValid;
+    (* prefix = "", always_ready *)
+    method Bit#(61)  ffs_vl61_LP32ui_sy2lp_C1TxHdr;
+    (* prefix = "", always_ready *)
+    method Bit#(512) ffs_vl512_LP32ui_sy2lp_C1TxData;
+    (* prefix = "", always_ready *)
+    method Bit#(1)   ffs_vl_LP32ui_sy2lp_C1TxWrValid;
+    (* prefix = "", always_ready *)
+    method Bit#(1)   ffs_vl_LP32ui_sy2lp_C1TxIrValid;
 endinterface
 
 interface QA_DEVICE;
@@ -66,80 +90,120 @@ interface QA_DEVICE;
     interface QA_WIRES  wires;
 endinterface
 
-// tx_header ~some request to the cache
-// rx_header ~some response from the cache
-interface QA_DEVICE_UG#(numeric type tx_header, numeric type rx_header, numeric type cache_width);
-
-    method Action                           deq();
-    method Bit#(SizeOf#(UMF_CHUNK))         first();
-    method Action                           write(Bit#(SizeOf#(UMF_CHUNK)) chunk);
-    method Bool                             write_ready();
-
-    interface Clock qa_clk;
-    interface Reset qa_rst_n;
-endinterface
-
 Integer umfChunkSize = valueOf(SizeOf#(UMF_CHUNK));
 
 import "BVI" qa_wrapper = 
-module mkQADeviceImport  (QA_DRIVER);
+module mkQADeviceImport#(Clock vl_clk_LPdomain_32ui,
+                         Reset ffs_vl_LP32ui_lp2sy_SoftReset_n)
+    // Interface:
+    (QA_DEVICE);
 
     parameter TXHDR_WIDTH = `CCI_TXHDR_WIDTH;
     parameter RXHDR_WIDTH = `CCI_RXHDR_WIDTH;
     parameter CACHE_WIDTH = `CCI_CACHE_WIDTH;
     parameter UMF_WIDTH   = umfChunkSize;
 
-    output_clock clock(clk);
-    output_reset reset(resetb) clocked_by (clock);
+    input_clock (vl_clk_LPdomain_32ui) = vl_clk_LPdomain_32ui;
+    default_clock vl_clk_LPdomain_32ui;
 
-    default_clock no_clock;
-    default_reset no_reset;
+    input_reset (ffs_vl_LP32ui_lp2sy_SoftReset_n) = ffs_vl_LP32ui_lp2sy_SoftReset_n;
+    default_reset ffs_vl_LP32ui_lp2sy_SoftReset_n;
 
-    method deq() ready(rx_rdy) enable(rx_enable) clocked_by(clock) reset_by(reset);
-    method rx_data first() ready(rx_rdy) clocked_by(clock) reset_by(reset);
-    method write(tx_data) ready(tx_rdy) enable(tx_enable) clocked_by(clock) reset_by(reset);
-    method tx_not_full write_ready() clocked_by(clock) reset_by(reset);
+    interface QA_DRIVER driver;
+        method deq() ready(rx_rdy) enable(rx_enable);
+        method rx_data first() ready(rx_rdy);
+        method rx_not_empty notEmpty();
+        method write(tx_data) ready(tx_rdy) enable(tx_enable);
+        method tx_not_full notFull();
+    endinterface
 
-    schedule (deq) C (deq);
-    schedule (deq) CF (first, write, write_ready);
-    schedule (first) CF (deq, first, write, write_ready);
-    schedule (write) C (write);    
-    schedule (write) CF (deq, first, write_ready);
-    schedule (write_ready) CF (deq, first, write, write_ready);
+    interface QA_WIRES wires;
+        method inputWires(vl_clk_LPdomain_16ui,
+                          ffs_vl_LP32ui_lp2sy_SystemReset_n,
+                          ffs_vl18_LP32ui_lp2sy_C0RxHdr,
+                          ffs_vl512_LP32ui_lp2sy_C0RxData,
+                          ffs_vl_LP32ui_lp2sy_C0RxWrValid,
+                          ffs_vl_LP32ui_lp2sy_C0RxRdValid,
+                          ffs_vl_LP32ui_lp2sy_C0RxCgValid,
+                          ffs_vl_LP32ui_lp2sy_C0RxUgValid,
+                          ffs_vl_LP32ui_lp2sy_C0RxIrValid,
+                          ffs_vl18_LP32ui_lp2sy_C1RxHdr,
+                          ffs_vl_LP32ui_lp2sy_C1RxWrValid,
+                          ffs_vl_LP32ui_lp2sy_C1RxIrValid,
+                          ffs_vl_LP32ui_lp2sy_C0TxAlmFull,
+                          ffs_vl_LP32ui_lp2sy_C1TxAlmFull,
+                          ffs_vl_LP32ui_lp2sy_InitDnForSys)
+            enable((*inhigh*) EN) clocked_by(no_clock);
 
+        method ffs_vl61_LP32ui_sy2lp_C0TxHdr ffs_vl61_LP32ui_sy2lp_C0TxHdr() clocked_by(no_clock);
+        method ffs_vl_LP32ui_sy2lp_C0TxRdValid ffs_vl_LP32ui_sy2lp_C0TxRdValid() clocked_by(no_clock);
+        method ffs_vl61_LP32ui_sy2lp_C1TxHdr ffs_vl61_LP32ui_sy2lp_C1TxHdr() clocked_by(no_clock);
+        method ffs_vl512_LP32ui_sy2lp_C1TxData ffs_vl512_LP32ui_sy2lp_C1TxData() clocked_by(no_clock);
+        method ffs_vl_LP32ui_sy2lp_C1TxWrValid ffs_vl_LP32ui_sy2lp_C1TxWrValid() clocked_by(no_clock);
+        method ffs_vl_LP32ui_sy2lp_C1TxIrValid ffs_vl_LP32ui_sy2lp_C1TxIrValid() clocked_by(no_clock);
+    endinterface
+
+    schedule (driver_deq) C (driver_deq);
+    schedule (driver_deq) CF (driver_first, driver_write, driver_notEmpty, driver_notFull);
+    schedule (driver_first) CF (driver_deq, driver_first, driver_write, driver_notEmpty, driver_notFull);
+    schedule (driver_write) C (driver_write);    
+    schedule (driver_write) CF (driver_deq, driver_first, driver_notEmpty, driver_notFull);
+    schedule (driver_notFull, driver_notEmpty) CF (driver_deq, driver_first, driver_write, driver_notEmpty, driver_notFull);
+
+    schedule (wires_inputWires,
+              wires_ffs_vl61_LP32ui_sy2lp_C0TxHdr,
+              wires_ffs_vl_LP32ui_sy2lp_C0TxRdValid,
+              wires_ffs_vl61_LP32ui_sy2lp_C1TxHdr,
+              wires_ffs_vl512_LP32ui_sy2lp_C1TxData,
+              wires_ffs_vl_LP32ui_sy2lp_C1TxWrValid,
+              wires_ffs_vl_LP32ui_sy2lp_C1TxIrValid)
+             CF
+             (wires_inputWires,
+              wires_ffs_vl61_LP32ui_sy2lp_C0TxHdr,
+              wires_ffs_vl_LP32ui_sy2lp_C0TxRdValid,
+              wires_ffs_vl61_LP32ui_sy2lp_C1TxHdr,
+              wires_ffs_vl512_LP32ui_sy2lp_C1TxData,
+              wires_ffs_vl_LP32ui_sy2lp_C1TxWrValid,
+              wires_ffs_vl_LP32ui_sy2lp_C1TxIrValid,
+              driver_deq, driver_first, driver_write, driver_notFull);
 endmodule
 
-module [CONNECTED_MODULE] mkQADevice#(SOFT_RESET_TRIGGER softResetTrigger) (QA_DEVICE);
+
+module [CONNECTED_MODULE] mkQADevice#(Clock vl_clk_LPdomain_32ui,
+                                      Reset ffs_vl_LP32ui_lp2sy_SoftReset_n,
+                                      SOFT_RESET_TRIGGER softResetTrigger)
+    // Interface:
+    (QA_DEVICE);
+
+    let qa_clock = vl_clk_LPdomain_32ui;
+    let qa_reset = ffs_vl_LP32ui_lp2sy_SoftReset_n;
 
     // FIFOs for coming out of QA domain.
 
-    let qaDevice <- mkQADeviceImport; 
+    let qaDevice <- mkQADeviceImport(vl_clk_LPdomain_32ui,
+                                     ffs_vl_LP32ui_lp2sy_SoftReset_n);
+    let qa_driver = qaDevice.driver;
 
-    SyncFIFOIfc#(UMF_CHUNK) syncReadQ <- mkSyncFIFOToCC(16, qaDevice.clock, qaDevice.reset);
-    SyncFIFOIfc#(UMF_CHUNK) syncWriteQ <- mkSyncFIFOFromCC(16, qaDevice.clock);
+    SyncFIFOIfc#(UMF_CHUNK) syncReadQ <- mkSyncFIFOToCC(16, qa_clock, qa_reset);
+    SyncFIFOIfc#(UMF_CHUNK) syncWriteQ <- mkSyncFIFOFromCC(16, qa_clock);
 
     rule pullDataIn;
-        syncReadQ.enq(qaDevice.first);
-        qaDevice.deq;
+        syncReadQ.enq(qa_driver.first);
+        qa_driver.deq;
     endrule
 
     rule pushDataOut;
-        qaDevice.write(syncWriteQ.first);
+        qa_driver.write(syncWriteQ.first);
         syncWriteQ.deq;
     endrule
 
     interface QA_DRIVER driver;
         method deq = syncReadQ.deq;
         method first = syncReadQ.first;
+        method notEmpty = syncReadQ.notEmpty;
         method write = syncWriteQ.enq;
-        method write_ready = syncWriteQ.notFull;
-
-        interface clock = qaDevice.clock;
-        interface reset = qaDevice.reset;
+        method notFull = syncWriteQ.notFull;
     endinterface
 
-    interface QA_WIRES wires;
-            
-    endinterface
-
+    interface QA_WIRES wires = qaDevice.wires;
 endmodule

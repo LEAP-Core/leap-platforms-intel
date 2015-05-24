@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2014, Intel Corporation
+// Copyright (c) 2015, Intel Corporation
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -27,43 +27,27 @@
 // CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
+
+
+
+//
+// This is the top level of the Intel QuickAssist simulation for LEAP.
+// Bluespec expects the top level simulation build to have only CLK and RST_N.
+// This module instantiates the simulation environment, which instantiates
+// the user code through the usual QuickAssist cci_stf_afu() module.
 //
 
-import FIFOF::*;
-import Vector::*;
+module qa_sim_top_level(CLK,
+                        RST_N);
+    input CLK;
+    input RST_N;
 
-`include "awb/provides/qa_device.bsh"
-`include "awb/provides/physical_platform.bsh"
-`include "awb/provides/umf.bsh"
+    cci_emulator emulator();
 
-// physical channel interface
-interface PHYSICAL_CHANNEL;
-    
-    method ActionValue#(UMF_CHUNK) read();
-    method Action                  write(UMF_CHUNK chunk);
-
-    // this interface needed for LIM compiler.
-    method UMF_CHUNK first();
-    method Action    deq();
-    method Bool      write_ready();
-
-endinterface
-
-// physical channel module
-module mkPhysicalChannel#(PHYSICAL_DRIVERS drivers)
-    // interface
-                  (PHYSICAL_CHANNEL);
-    
-    method ActionValue#(UMF_CHUNK) read();
-        
-        drivers.qaDriver.deq();
-        return drivers.qaDriver.first;
-        
-    endmethod
-
-
-    method deq = drivers.qaDriver.deq;
-    method first = drivers.qaDriver.first;
-    method write = drivers.qaDriver.write;
-    method write_ready = drivers.qaDriver.notFull;
-endmodule
+    initial
+    begin
+        $dumpfile("driver_dump.vcd");
+        $dumpvars(0, emulator);
+        $dumpon;
+    end
+endmodule // qa_sim_top_level

@@ -13,5 +13,6 @@
 
 %sources -t VERILOG -v PRIVATE cci_std_afu.sv
 %sources -t VERILOG -v PRIVATE qa_wrapper.v
+%sources -t VERILOG -v PRIVATE qa_sim_top_level.v
 
 %syslibrary rt

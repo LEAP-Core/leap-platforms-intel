@@ -56,10 +56,6 @@ Packagehint=leap-platforms
 File=modules/bluespec/common/fpgaenv/physical-platform/debuggers/null/null-debugger.awb
 Packagehint=leap-platforms
 
-[Simulation Clocks Device]
-File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/clocks/simulation/sim-clocks-device.awb
-Packagehint=leap-platforms
-
 [Common Physical Platform Utilities]
 File=modules/bluespec/common/fpgaenv/physical-platform/utils/utils.awb
 Packagehint=leap-platforms
@@ -153,10 +149,20 @@ Packagehint=leap-platforms-intel
 
 [Intel QuickAssist Platform/Requires]
 qa_device=Intel QuickAssist Simulation Device
-clocks_device=Simulation Clocks Device
+clocks_device=Single-Ended Crystal Clocks Device
 physical_platform_utils=Common Physical Platform Utilities
 ddr_sdram_device=Null DDR SDRAM Physical Device
 
 [Intel QuickAssist Simulation Device]
 File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/sim/qa-sim.awb
 Packagehint=leap-platforms-intel
+
+[Single-Ended Crystal Clocks Device]
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/clocks/single-ended/single-ended-clocks-device.awb
+Packagehint=leap-platforms
+
+[Single-Ended Crystal Clocks Device/Params]
+CRYSTAL_CLOCK_FREQ=200
+MODEL_CLOCK_FREQ=200
+SINGLE_ENDED_CLOCKS_CLK="vl_clk_LPdomain_32ui"
+SINGLE_ENDED_CLOCKS_RST_N="ffs_vl_LP32ui_lp2sy_SoftReset_n"

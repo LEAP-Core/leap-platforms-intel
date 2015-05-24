@@ -159,7 +159,7 @@ class Verilog():
                         (' -Xv ' + ase_sw_dir + '/').join(sorted([f for f in os.listdir(ase_sw_dir) if (f[-2:] == '.c')]))
 
     # Bluespec requires that source files terminate the command line.
-    vexe_gen_command += ' -verilog -e ' + ROOT_WRAPPER_SYNTH_ID + ' ' +\
+    vexe_gen_command += ' -verilog -e qa_sim_top_level ' +\
                         moduleList.env['DEFS']['BDPI_CS']
 
     if (model.getBuildPipelineDebug(moduleList) != 0):

@@ -61,6 +61,19 @@ module cci_std_afu(
 /* User AFU goes here
 */
 
+    // Instantiate LEAP top level.
+    mk_model_Wrapper model_wrapper(
+        .*,
+
+        // Unconnected wires exposed by Bluespec that we can't turn off...
+        .CLK(1'b0),
+        .RST_N(1'b1),
+        .RDY_clock_wire(),
+        .RDY_reset_n_wire(),
+        .EN_inputWires(1'b1),
+        .RDY_inputWires()
+    );
+   
    // since we use OOMRs, this code is completely empty.
 
 endmodule

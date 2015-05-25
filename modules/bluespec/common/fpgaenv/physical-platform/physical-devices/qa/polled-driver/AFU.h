@@ -29,7 +29,7 @@ public:
   // CCI_ASE     = AFU Simulation Environment implementation.
   // CCI_DIRECT  = Direct CCI driver implementation.
 
-  AFU(const uint32_t *expected_afu_id, CCIDeviceImplementation imp=CCI_ASE, uint32_t dsm_size_bytes=4*512);
+  AFU(const uint32_t *expected_afu_id, CCIDeviceImplementation imp=CCI_ASE, uint32_t dsm_size_bytes=4096);
 
   ~AFU();
 

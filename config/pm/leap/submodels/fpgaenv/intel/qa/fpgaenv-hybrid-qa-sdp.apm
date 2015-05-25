@@ -1,11 +1,11 @@
 
 [Global]
 SaveParameters=0
-Description=Hybrid Simulation FPGA Environment
-File=fpgaenv-hybrid-qa-vexe
+Description=Intel QuickAssist FPGA Canoe Pass SDP
+File=fpgaenv-hybrid-qa-sdp
 Version=2.2
 Type=Leap
-Name=Intel QuickAssist Simulation FPGA Environment
+Name=Intel QuickAssist FPGA Canoe Pass SDP
 Class=Asim::Model
 DefaultBenchmark=
 DefaultRunOpts=
@@ -22,9 +22,9 @@ Packagehint=leap
 
 [FPGA Environment/Requires]
 virtual_platform=Standard Virtual Platform
-fpga_components=Software FPGA Components
+fpga_components=Hardware FPGA Components for StratixIII
 librl_bsv=RL Bluespec Library Submodel
-build_pipeline=Build Pipeline Intel QuickAssist ASE (using VCSI)
+build_pipeline=FPGA Build Pipeline Altera for QuickAssist Canoe Pass SDP
 soft_services=Soft Services Submodel
 
 [Standard Virtual Platform]
@@ -47,10 +47,6 @@ Packagehint=leap
 
 [Basic Virtual Channel Multiplexer/Requires]
 physical_channel=Intel QuickAssist FPGA Physical Channel
-
-[Software FPGA Components]
-File=modules/bluespec/common/fpgaenv/fpga-components/software-fpga-components.awb
-Packagehint=leap-platforms
 
 [Null Physical Platform Debugger]
 File=modules/bluespec/common/fpgaenv/physical-platform/debuggers/null/null-debugger.awb
@@ -132,10 +128,6 @@ Packagehint=leap-platforms
 File=modules/leap/virtual-platform/physical-channel/qa/qa-physical-channel.awb
 Packagehint=leap-platforms-intel
 
-[Build Pipeline Intel QuickAssist ASE (using VCSI)]
-File=config/pm/leap/submodels/pipelines/build-pipeline-qa-ase.apm
-Packagehint=leap-platforms-intel
-
 [Intel QuickAssist Polled Driver]
 File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/polled-driver/qa-polled-driver.awb
 Packagehint=leap-platforms-intel
@@ -174,5 +166,11 @@ rrr_debug=RRR Debug Module
 File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-wrapper/qa-wrapper.awb
 Packagehint=leap-platforms-intel
 
-[Intel QuickAssist Device/Params]
-CCI_SIMULATION=1
+[Hardware FPGA Components for StratixIII]
+File=modules/bluespec/common/fpgaenv/fpga-components/hardware-fpga-components-stratixIII.awb
+Packagehint=leap-platforms
+
+
+[FPGA Build Pipeline Altera for QuickAssist Canoe Pass SDP]
+File=config/pm/leap/submodels/pipelines/build-pipeline-qa-sdp.apm
+Packagehint=leap-platforms-intel

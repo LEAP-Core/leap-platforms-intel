@@ -74,6 +74,4 @@ module cci_std_afu(
         .RDY_inputWires()
     );
    
-   // since we use OOMRs, this code is completely empty.
-
 endmodule

@@ -151,7 +151,9 @@
  function automatic read_metadata_t unpack_read_metadata;
     input    [17:0] metadata;
     begin
-       unpack_read_metadata = {is_read: metadata[12], is_header: metadata[11], rob_addr: metadata[10:0]};
+       unpack_read_metadata.is_read = metadata[12];
+       unpack_read_metadata.is_header = metadata[11];
+       unpack_read_metadata.rob_addr = metadata[10:0];
     end
  endfunction //
 
@@ -171,4 +173,3 @@
  endfunction
 
 `endif //  `ifndef QA_VH
-

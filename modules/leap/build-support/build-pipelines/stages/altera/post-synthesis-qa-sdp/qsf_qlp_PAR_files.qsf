@@ -1,0 +1,68 @@
+
+#-------------------------------------------------------------------------------------------------------------------
+#                                           QLP Files
+#-------------------------------------------------------------------------------------------------------------------
+
+# Search paths
+set_global_assignment -name SEARCH_PATH $RTL_SRC/common/include_files
+set_global_assignment -name SEARCH_PATH $RTL_SRC/nlb/include_files/altr
+set_global_assignment -name SEARCH_PATH ./
+
+# common files
+set_global_assignment -name VERILOG_FILE $RTL_SRC/common/memory/quad_ram.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/common/memory/gram_tdp.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/common/memory/gram_sdp.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/common/fifo/sb_gfifo.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/common/fifo/sbv_gfifo.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/common/fifo/gfifo.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/common/fifo/rx_fifo.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/common/fifo/quad_fifo.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/common/fifo/quad_que.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/common/fifo/afifo.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/common/fifo/bfifo.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/common/fifo/cfifo.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/common/fifo/dfifo.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/common/fifo/mfifo.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/common/fifo/wfifo.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/common/fifo/ufifo.v
+
+
+# qlp/cci core files
+set_global_assignment -name VERILOG_FILE $RTL_SRC/top/qlp_top.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/qlp/tx_packet.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/qlp/tx_header.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/qlp/tx_flit.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/qlp/tx_trace_DMA.v
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qlp/rx_packet.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/qlp/rx_tracer.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/qlp/rx_flit.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/qlp/rx_barrel.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/qlp/csi_link.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/qlp/csi_fsm.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/csr/csr_top.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/csr/config_box.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/cci/tag_n_cache.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/cci/tag_data.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/cci/re_request.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/cci/pu_inject.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/cci/pseudo_lru.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/cci/fpga_tag_intv.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/cci/fpga_tag.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/cci/fpga_cache.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/cci/cci_top.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/cci/cci_request_buffer.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/cci/cci_pu.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/cci/cci_hold.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/cci/cci_cnflt.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/cci/cache_ram.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/cci/req_monitor.v
+
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/tpc/temp_ctrl.sv
+set_global_assignment -name VERILOG_FILE $RTL_SRC/tpc/temp_alttempsense.v
+set_global_assignment -name QIP_FILE $RTL_SRC/tpc/temp_alttempsense.qip
+set_global_assignment -name VERILOG_FILE $RTL_SRC/tpc/tpc_probe.v
+set_global_assignment -name QIP_FILE     $RTL_SRC/tpc/tpc_probe.qip
+
+set_global_assignment -name VERILOG_FILE $RTL_SRC/top/qlp_top.v
+set_global_assignment -name QIP_FILE     $RTL_SRC/qlp/qlp_crc.qip
+

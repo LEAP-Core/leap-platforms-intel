@@ -170,7 +170,9 @@ Packagehint=leap-platforms-intel
 File=modules/bluespec/common/fpgaenv/fpga-components/hardware-fpga-components-stratixIII.awb
 Packagehint=leap-platforms
 
-
 [FPGA Build Pipeline Altera for QuickAssist Canoe Pass SDP]
 File=config/pm/leap/submodels/pipelines/build-pipeline-qa-sdp.apm
 Packagehint=leap-platforms-intel
+
+[Hardware FPGA Components for StratixIII/Params]
+BROKEN_REGFILE=0

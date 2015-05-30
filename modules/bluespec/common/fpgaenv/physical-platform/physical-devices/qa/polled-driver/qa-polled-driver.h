@@ -120,6 +120,9 @@ class QA_DEVICE_CLASS: public PLATFORMS_MODULE_CLASS
     void Write(unsigned char*, int);   // write
     void RegisterLogicalDeviceName(string name);
     
+    // Dump driver state by writing a CSR and waiting for a response in DSM.
+    void DebugDump();
+
   private:
     // This function is going to be woefully inefficient.
     volatile UMF_CHUNK * getChunkAddress(AFUBuffer* buffer, int frameNumber, int chunkNumber)

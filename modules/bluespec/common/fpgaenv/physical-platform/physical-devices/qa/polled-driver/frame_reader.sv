@@ -49,10 +49,10 @@ module frame_reader
     input  channel_grant_arb_t write_grant,
    
     output [UMF_WIDTH-1:0]    rx_data,   
-    output                    rx_not_empty,
     output                    rx_rdy,
-    input                     rx_enable
+    input                     rx_enable,
    
+    output t_AFU_DEBUG_RSP    dbg_frame_reader
    );
 
    //=================================================================
@@ -75,7 +75,6 @@ module frame_reader
 
    logic [LOG_FRAME_NUMBER - 1:0]       frame_number_next;
    logic [LOG_FRAME_CHUNKS - 1:0]       frame_chunks_next;
-   logic [LOG_FRAME_CHUNKS - 1:0]       frame_chunks_total_next;
 
    logic frame_header_valid;
    logic frame_ready_for_read;
@@ -85,12 +84,9 @@ module frame_reader
 
    // Logic for dealing with returning data response.
    logic incoming_read_valid;
-   logic scoreboard_ready;
 
    logic [CACHE_WIDTH-1:0]       read_line;
-   logic                         read_line_score_rdy;
-   logic                         read_line_marsh_rdy;
-   logic                         read_line_en;
+   logic [CACHE_WIDTH-1:0]       read_line_last;
    
    logic [BUFFER_ADDR_WIDTH-1:0] scoreboard_slot_id;
    logic                         scoreboard_slot_rdy;
@@ -146,12 +142,10 @@ module frame_reader
 
    assign release_frame = frame_release_count_up && rx_enable;
    
-   assign read_line_en = read_line_score_rdy && read_line_marsh_rdy;
-
    // Signals related to releasing read frames
    assign frame_reader.write_header  = frame_reader_release.write_header;
    assign frame_reader.write.request = frame_reader_release.write.request;
-   assign frame_reader.data          = frame_reader_release.data;
+   assign frame_reader.data          = {read_line_last[CACHE_WIDTH-1:1], 1'b0};
 
    assign rx_data = read_line[UMF_WIDTH-1:0];
 
@@ -165,6 +159,15 @@ module frame_reader
       end
    end
 
+   always_ff @(posedge clk) begin
+      if (incoming_read_valid) begin
+         read_line_last <= rx0.data;
+      end
+      else begin
+         // Identity -- not a latch
+         read_line_last <= read_line_last;
+      end
+   end
    
    always_comb begin
       case (state)
@@ -206,15 +209,13 @@ module frame_reader
       frame_chunks <= frame_chunks_next;
    end
 
+   // Capture the number of chunks in a frame.  The chunk count arrives
+   // with the header.  This code doesn't check that the header has actually
+   // arrived this cycle.  Other logic will handle that.
    always_ff @(posedge clk) begin
-      frame_chunks_total <= frame_chunks_total_next;
-   end
-
-   always_comb begin
-      frame_chunks_total_next = frame_chunks_total;
-      if(state != READ)
+      if (state == WAIT_HEADER)
         begin
-           frame_chunks_total_next = header_chunks(rx0.data);
+           frame_chunks_total <= header_chunks(rx0.data);
         end
    end
    
@@ -258,7 +259,7 @@ module frame_reader
             if(rx0.data != 0 && response_read_metadata.is_read)
               begin              
                  $display("Frame reader got a response: header %h data %h (low: %h)", rx0.header, rx0.data, rx0.data[LOG_FRAME_CHUNKS:0]);
-                 $display("Frame reader got a response: decode header ready %h chunks %h", frame_ready_for_read, frame_chunks_total_next);
+                 $display("Frame reader got a response: decode header ready %h chunks %h", frame_ready_for_read, header_chunks(rx0.data));
                  $display("Frame reader got a response: is_read %h is_header %h", response_read_metadata.is_read, response_read_metadata.is_header);
               end
          end
@@ -273,44 +274,24 @@ module frame_reader
       read_header.mdata = (state == READ) ? pack_read_metadata(data_read_metadata) : pack_read_metadata(header_read_metadata);      
    end
 
-   always_comb begin
-      if(incoming_read_valid && !scoreboard_ready)
-        begin
-           $display("Failed to place incoming data into scoreboard");           
-           $finish;           
-        end
-   end
    
-   // modules for interfacing with  downstream code
-   mkScoreboardQA scoreboard(.CLK(clk),
-		   .RST_N(resetb),
+    qa_drv_scoreboard#(.N_ENTRIES(8), .N_DATA_BITS($bits(t_QA_CACHE_LINE)))
+        scoreboard(.clk,
+                   .resetb,
 
-		   .EN_enq(data_read_accepted),
-		   .enq(scoreboard_slot_id),
-		   .RDY_enq(scoreboard_slot_rdy),
+                   .enq_en(data_read_accepted),
+                   .notFull(scoreboard_slot_rdy),
+		   .enqIdx(scoreboard_slot_id),
 
-		   .setValue_id(response_read_metadata.rob_addr[BUFFER_ADDR_WIDTH-1:0]),
-		   .setValue_data(rx0.data),
-		   .EN_setValue(incoming_read_valid),
-		   .RDY_setValue(scoreboard_ready), // We had better be ready.
+		   .enqData_en(incoming_read_valid),
+		   .enqDataIdx(response_read_metadata.rob_addr[BUFFER_ADDR_WIDTH-1:0]),
+		   .enqData(rx0.data),
 
-  	           .first(read_line),
-		   .RDY_first(),
-
-		   .EN_deq(rx_enable),
-		   .RDY_deq(rx_rdy),
-
-		   .notFull(),
-		   .RDY_notFull(),
-
-		   .notEmpty(rx_not_empty),
-		   .RDY_notEmpty(),
-
-		   .deqEntryId(),
-		   .RDY_deqEntryId());
+		   .deq_en(rx_enable),
+		   .notEmpty(rx_rdy),
+  	           .first(read_line));
 
 
-                   
    mkSizedFIFOQA ctrlFIFO(.CLK(clk),
 		      .RST_N(resetb),
 
@@ -332,8 +313,7 @@ module frame_reader
 
 		      .EN_clear(1'b0),
 		      .RDY_clear());
-
-      
+                   
    frame_release releaseMod(
                       .clk(clk),
                       .resetb(resetb),
@@ -347,4 +327,64 @@ module frame_reader
    );
 
    
+   //
+   // Debugging
+   //
+
+   // Low 32 bits of the most recent four read data responses
+   logic [3:0][31:0] dbg_data_read_data;
+
+   // The most recent four read data offsets from the region base
+   logic [3:0][31:0] dbg_data_read_addr_offsets;
+
+   // Number of data read requests and responses
+   logic [31:0] dbg_n_data_read_rsp;
+   logic [31:0] dbg_n_data_read_req;
+
+   assign dbg_frame_reader = {dbg_data_read_data,
+                              dbg_data_read_addr_offsets,
+                              dbg_n_data_read_rsp,
+                              dbg_n_data_read_req};
+
+   always_ff @(posedge clk) begin
+      if (!resetb) begin
+         dbg_n_data_read_rsp <= 0;
+         dbg_n_data_read_req <= 0;
+         for (int i = 0; i < 4; i++) begin
+            dbg_data_read_addr_offsets[i] <= 32'haaaaaaaa;
+            dbg_data_read_data[i] <= 32'haaaaaaaa;
+         end
+      end
+      else begin
+         // Read data request accepted
+         if (data_read_accepted) begin
+            dbg_n_data_read_req <= dbg_n_data_read_req + 1;
+            // Shift in request offset
+            for (int i = 3; i > 0; i--) begin
+               dbg_data_read_addr_offsets[i] <= dbg_data_read_addr_offsets[i - 1];
+            end
+            dbg_data_read_addr_offsets[0] <= {frame_number, frame_chunks};
+         end
+         else
+         begin
+            // Identity -- not a latch
+            dbg_data_read_addr_offsets <= dbg_data_read_addr_offsets;
+         end
+
+         // Read data response
+         if (incoming_read_valid) begin
+            dbg_n_data_read_rsp <= dbg_n_data_read_rsp + 1;
+            // Shift in response
+            for (int i = 3; i > 0; i--) begin
+               dbg_data_read_data[i] <= dbg_data_read_data[i - 1];
+            end
+            dbg_data_read_data[0] <= rx0.data;
+         end
+         else begin
+            // Identity -- not a latch
+            dbg_data_read_data <= dbg_data_read_data;
+         end
+      end
+   end
+
 endmodule

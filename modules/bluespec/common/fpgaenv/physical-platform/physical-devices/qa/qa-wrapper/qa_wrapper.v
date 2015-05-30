@@ -40,13 +40,11 @@ module qa_wrapper#(parameter TXHDR_WIDTH=61, RXHDR_WIDTH=18, CACHE_WIDTH=512, UM
     // ------------------- LEAP Facing Interface --------------------------
     // RX side
     rx_data,
-    rx_not_empty,
     rx_rdy,
     rx_enable,
 
     // TX side
     tx_data,
-    tx_not_full,
     tx_rdy,
     tx_enable,
 
@@ -84,13 +82,11 @@ module qa_wrapper#(parameter TXHDR_WIDTH=61, RXHDR_WIDTH=18, CACHE_WIDTH=512, UM
 
     // LEAP facing interface
     output [UMF_WIDTH-1:0]    rx_data;   
-    output                    rx_not_empty;
     output                    rx_rdy;
     input                     rx_enable;
 
     // TX side
     input [UMF_WIDTH-1:0]     tx_data;
-    output                    tx_not_full;
     output                    tx_rdy;
     input                     tx_enable;
 
@@ -125,6 +121,62 @@ module qa_wrapper#(parameter TXHDR_WIDTH=61, RXHDR_WIDTH=18, CACHE_WIDTH=512, UM
 
     input           ffs_vl_LP32ui_lp2sy_InitDnForSys;
 
+
+    //
+    // The QuickAssist specification demands that all outputs be registered.
+    // We guarantee that here.
+    //
+    reg      [60:0] reg_ffs_vl61_LP32ui_sy2lp_C0TxHdr;
+    reg             reg_ffs_vl_LP32ui_sy2lp_C0TxRdValid;
+
+    reg      [60:0] reg_ffs_vl61_LP32ui_sy2lp_C1TxHdr;
+    reg     [511:0] reg_ffs_vl512_LP32ui_sy2lp_C1TxData;
+    reg             reg_ffs_vl_LP32ui_sy2lp_C1TxWrValid;
+    reg             reg_ffs_vl_LP32ui_sy2lp_C1TxIrValid;
+
+    wire     [60:0] next_ffs_vl61_LP32ui_sy2lp_C0TxHdr;
+    wire            next_ffs_vl_LP32ui_sy2lp_C0TxRdValid;
+
+    wire     [60:0] next_ffs_vl61_LP32ui_sy2lp_C1TxHdr;
+    wire    [511:0] next_ffs_vl512_LP32ui_sy2lp_C1TxData;
+    wire            next_ffs_vl_LP32ui_sy2lp_C1TxWrValid;
+    wire            next_ffs_vl_LP32ui_sy2lp_C1TxIrValid;
+
+    // Forward registered requests to the platform.
+    assign ffs_vl61_LP32ui_sy2lp_C0TxHdr = reg_ffs_vl61_LP32ui_sy2lp_C0TxHdr;
+    assign ffs_vl_LP32ui_sy2lp_C0TxRdValid = reg_ffs_vl_LP32ui_sy2lp_C0TxRdValid;
+
+    assign ffs_vl61_LP32ui_sy2lp_C1TxHdr = reg_ffs_vl61_LP32ui_sy2lp_C1TxHdr;
+    assign ffs_vl512_LP32ui_sy2lp_C1TxData = reg_ffs_vl512_LP32ui_sy2lp_C1TxData;
+    assign ffs_vl_LP32ui_sy2lp_C1TxWrValid = reg_ffs_vl_LP32ui_sy2lp_C1TxWrValid;
+    assign ffs_vl_LP32ui_sy2lp_C1TxIrValid = reg_ffs_vl_LP32ui_sy2lp_C1TxIrValid;
+
+    // Forward our driver's requests to the request registers.
+    always @(posedge vl_clk_LPdomain_32ui)
+    begin
+        if (! ffs_vl_LP32ui_lp2sy_SystemReset_n)
+        begin
+            reg_ffs_vl_LP32ui_sy2lp_C0TxRdValid <= 0;
+            reg_ffs_vl_LP32ui_sy2lp_C1TxWrValid <= 0;
+            reg_ffs_vl_LP32ui_sy2lp_C1TxIrValid <= 0;
+        end
+        else
+        begin
+            reg_ffs_vl61_LP32ui_sy2lp_C0TxHdr = next_ffs_vl61_LP32ui_sy2lp_C0TxHdr;
+            reg_ffs_vl_LP32ui_sy2lp_C0TxRdValid = next_ffs_vl_LP32ui_sy2lp_C0TxRdValid;
+
+            reg_ffs_vl61_LP32ui_sy2lp_C1TxHdr = next_ffs_vl61_LP32ui_sy2lp_C1TxHdr;
+            reg_ffs_vl512_LP32ui_sy2lp_C1TxData = next_ffs_vl512_LP32ui_sy2lp_C1TxData;
+            reg_ffs_vl_LP32ui_sy2lp_C1TxWrValid = next_ffs_vl_LP32ui_sy2lp_C1TxWrValid;
+            // Note: we don't use C1TxIrValid
+        end
+    end
+
+
+    //
+    // Instantiate our driver.  Note that the driver's requests to the platform
+    // are written to registers and forwarded in the next cycle, above.
+    //
     qa_driver driver(
         .clk(vl_clk_LPdomain_32ui),
         .resetb(ffs_vl_LP32ui_lp2sy_SoftReset_n),
@@ -139,11 +191,11 @@ module qa_wrapper#(parameter TXHDR_WIDTH=61, RXHDR_WIDTH=18, CACHE_WIDTH=512, UM
         .rx_c1_wrvalid(ffs_vl_LP32ui_lp2sy_C1RxWrValid),
         //    rb2cf_C1RxIntrValid
 
-        .tx_c0_header(ffs_vl61_LP32ui_sy2lp_C0TxHdr),
-        .tx_c0_rdvalid(ffs_vl_LP32ui_sy2lp_C0TxRdValid),
-        .tx_c1_header(ffs_vl61_LP32ui_sy2lp_C1TxHdr),
-        .tx_c1_data(ffs_vl512_LP32ui_sy2lp_C1TxData),
-        .tx_c1_wrvalid(ffs_vl_LP32ui_sy2lp_C1TxWrValid),
+        .tx_c0_header(next_ffs_vl61_LP32ui_sy2lp_C0TxHdr),
+        .tx_c0_rdvalid(next_ffs_vl_LP32ui_sy2lp_C0TxRdValid),
+        .tx_c1_header(next_ffs_vl61_LP32ui_sy2lp_C1TxHdr),
+        .tx_c1_data(next_ffs_vl512_LP32ui_sy2lp_C1TxData),
+        .tx_c1_wrvalid(next_ffs_vl_LP32ui_sy2lp_C1TxWrValid),
         //    cf2ci_C1TxIntrValid
         .tx_c0_almostfull(ffs_vl_LP32ui_lp2sy_C0TxAlmFull),
         .tx_c1_almostfull(ffs_vl_LP32ui_lp2sy_C1TxAlmFull),
@@ -151,13 +203,11 @@ module qa_wrapper#(parameter TXHDR_WIDTH=61, RXHDR_WIDTH=18, CACHE_WIDTH=512, UM
         .lp_initdone(ffs_vl_LP32ui_lp2sy_InitDnForSys),
 
         .rx_data(rx_data),
-        .rx_not_empty(rx_not_empty),
         .rx_rdy(rx_rdy),
         .rx_enable(rx_enable),
 
         // TX side
         .tx_data(tx_data),
-        .tx_not_full(tx_not_full),
         .tx_rdy(tx_rdy),
         .tx_enable(tx_enable)
     );

@@ -61,13 +61,11 @@ module qa_driver#(parameter TXHDR_WIDTH=61, RXHDR_WIDTH=18, CACHE_WIDTH=512, UMF
     // --------------------------- LEAP Facing Interface           --------------------------------
     // RX side
     rx_data,
-    rx_not_empty,
     rx_rdy,
     rx_enable,
 
     // TX side
     tx_data,
-    tx_not_full,
     tx_rdy,
     tx_enable
    
@@ -98,13 +96,11 @@ module qa_driver#(parameter TXHDR_WIDTH=61, RXHDR_WIDTH=18, CACHE_WIDTH=512, UMF
 
    // LEAP facing interface
    output [UMF_WIDTH-1:0]    rx_data;   
-   output                    rx_not_empty;
    output                    rx_rdy;
    input                     rx_enable;
    
    // TX side
    input [UMF_WIDTH-1:0]     tx_data;
-   output                    tx_not_full;
    output                    tx_rdy;
    input                     tx_enable;
 
@@ -125,6 +121,8 @@ module qa_driver#(parameter TXHDR_WIDTH=61, RXHDR_WIDTH=18, CACHE_WIDTH=512, UMF
    logic                  tx0_almostfull;
    logic                  tx1_almostfull;
               
+   t_AFU_DEBUG_RSP        dbg_frame_reader;
+
    // connect CCI pins to cci_bus
    cci_adaptor       cci_adaptor_inst(.*);
    

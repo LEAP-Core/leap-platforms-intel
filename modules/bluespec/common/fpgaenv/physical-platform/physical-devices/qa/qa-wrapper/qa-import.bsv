@@ -112,9 +112,9 @@ module mkQADeviceImport#(Clock vl_clk_LPdomain_32ui,
     interface QA_DRIVER driver;
         method deq() ready(rx_rdy) enable(rx_enable);
         method rx_data first() ready(rx_rdy);
-        method rx_not_empty notEmpty();
+        method rx_rdy notEmpty();
         method write(tx_data) ready(tx_rdy) enable(tx_enable);
-        method tx_not_full notFull();
+        method tx_rdy notFull();
     endinterface
 
     interface QA_WIRES wires;

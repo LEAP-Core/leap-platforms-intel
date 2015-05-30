@@ -12,4 +12,5 @@
 
 %syslibrary rt
 
-%param VCS_ARGUMENTS "-Xv -LDFLAGS -Xv -lstdc++ -Xv -LDFLAGS -Xv -lpthread -Xv -LDFLAGS -Xv -lrt   -Xv -override_timescale=10ps/10ps" "Extra VCS arguments"
+%param VCS_ARGUMENTS      "-Xv -LDFLAGS -Xv -lstdc++ -Xv -LDFLAGS -Xv -lpthread -Xv -LDFLAGS -Xv -lrt   -Xv -override_timescale=10ps/10ps" "Extra VCS arguments"
+%param VCS_ENABLE_LINT    0      "Enable lint in VCS?"

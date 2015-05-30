@@ -103,8 +103,8 @@ QA_DEVICE_CLASS::Init()
     string executionDirectory = "";
     char * leapExecutionDirectory = getenv("LEAP_EXECUTION_DIRECTORY");
 
-    // disable AFU                             
-    cout << "Attempting to disable afu" << endl;                                                                                                                                                             
+    // disable AFU
+    cout << "Attempting to disable afu" << endl;
     afu.write_csr(CSR_AFU_EN, 0);
 
     // create buffers                                                                                                                                                                                       
@@ -123,7 +123,6 @@ QA_DEVICE_CLASS::Init()
         exit(1);
     }
 
-    
     // Notic that we swap the read/write frames. Our read buffer is
     // the FPGA write buffer. Our write buffer is the FPGA read
     // buffer.
@@ -308,14 +307,16 @@ QA_DEVICE_CLASS::Write(
         *chunkAddr = *((UMF_CHUNK *)(buf+offset));
         if (QA_DRIVER_DEBUG)
         {
-            printf("WRITE writing chunk address %p %llx %llx\n", chunkAddr, *chunkAddr, *((UMF_CHUNK *)(buf+offset))); 
+            printf("WRITE writing chunk address %p 0%016llx %016llx\n", chunkAddr, *chunkAddr, *((UMF_CHUNK *)(buf+offset))); 
         }
     }
 
     // Write control word.  Need fence here...
     atomic_thread_fence(std::memory_order_release);
+
     controlChunk = (chunkNumber << 1) | 0xdeadbeef0001;
     *controlAddr = controlChunk;
+
     if (QA_DRIVER_DEBUG)
     {
         printf("WRITE Control chunk %p is %llx \n", controlAddr, controlChunk);
@@ -329,5 +330,28 @@ void QA_DEVICE_CLASS::RegisterLogicalDeviceName(string name)
 
 }
 
+void
+QA_DEVICE_CLASS::DebugDump()
+{
+    // The FPGA will write to DSM line 0.  Clear it first.
+    memset((void*)afu.dsm_address(0), 0, CL(1));
 
+    // Write CSR to trigger a state dump.
+    afu.write_csr(CSR_AFU_TRIGGER_DEBUG, 1);
 
+    // Wait for the response, signalled by the high bit in the line being set.
+    while (afu.read_dsm(CL(1) - sizeof(uint32_t)) == 0) ;
+
+    printf("Debug READ DATA:\n");
+    printf("\tRead data requests:  %ld\n", afu.read_dsm(0));
+    printf("\tRead data responses: %ld\n", afu.read_dsm(4));
+    printf("\tRecent reads [offset, value] (newest first):\n");
+    for (int32_t i = 0; i < 4; i++)
+    {
+        const int32_t base_offsets = 8;
+        const int32_t base_values = base_offsets + 4 * 4;
+        printf("\t\t0x%08lx  0x%08lx\n",
+               afu.read_dsm(base_offsets + i * 4),
+               afu.read_dsm(base_values + i * 4));
+    }
+}

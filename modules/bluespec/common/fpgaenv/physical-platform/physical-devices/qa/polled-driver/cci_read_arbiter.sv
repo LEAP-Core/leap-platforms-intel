@@ -35,6 +35,7 @@ module cci_read_arbiter
   (
     input logic clk,
     input logic resetb,
+    input logic lp_initdone,
 
     input   afu_csr_t           csr,
    
@@ -47,8 +48,11 @@ module cci_read_arbiter
     input  logic                   tx0_almostfull
    );
 
-
-   logic        can_issue;     
+   // Only allow issue if the CCI is ready (cci_can_issue) and the accelerator
+   // is enabled by software.
+   logic         cci_can_issue;
+   logic         can_issue;
+   assign        can_issue = cci_can_issue && csr.afu_en;
 
    tx_header_t   header;
    logic         rdvalid;
@@ -61,14 +65,15 @@ module cci_read_arbiter
    // Issue control FSM
    cci_can_issue issue_control( .clk(clk),
                                 .resetb(resetb),
+                                .lp_initdone(lp_initdone),
                                 .almostfull(tx0_almostfull),
-                                .can_issue(can_issue),
+                                .can_issue(cci_can_issue),
                                 .issue(read_grant.reader_grant | read_grant.writer_grant)
                               );
        
    // FSM state
    always_ff @(posedge clk) begin
-      if (!resetb || !csr.afu_en) begin
+      if (!resetb) begin
          state <= FAVOR_FRAME_READER;
       end else begin
          state <= next_state;
@@ -84,29 +89,32 @@ module cci_read_arbiter
 
    // Set outgoing write control packet.
    always_comb begin
+      rdvalid = 0;
       read_grant.reader_grant = 0;
       read_grant.writer_grant = 0;
       read_grant.status_grant = 0; // status never reads...                                           
 
-      if(frame_reader.read.request && (state == FAVOR_FRAME_READER || !frame_reader.read.request))
+      // Set a default state for header to avoid needlessly muxing with 0
+      header = frame_reader.read_header;
+
+      if (frame_reader.read.request && (state == FAVOR_FRAME_READER || !frame_writer.read.request))
          begin
-            header = frame_reader.read_header;
-            read_grant.reader_grant = can_issue;                                           
+            // header is already set above
+            read_grant.reader_grant = can_issue;
+            rdvalid = can_issue;
          end
-      else if(frame_writer.read.request)
+      else if (frame_writer.read.request)
         begin
             header = frame_writer.read_header;
-            read_grant.writer_grant = can_issue;                                           
+            read_grant.writer_grant = can_issue;
+            rdvalid = can_issue;
         end
-
-      rdvalid = (frame_reader.read.request || frame_writer.read.request) && can_issue;   
    end
 
    // Register outgoing control packet.
    always_ff @(posedge clk) begin      
       tx0.header      <= header;
-      // Should we be setting this while in reset? Who knows...
-      tx0.rdvalid     <= rdvalid;      
+      tx0.rdvalid     <= rdvalid && resetb;
    end
    
  

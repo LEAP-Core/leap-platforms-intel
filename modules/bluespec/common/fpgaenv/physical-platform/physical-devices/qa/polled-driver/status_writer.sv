@@ -38,30 +38,67 @@ module status_writer
 
     input  afu_csr_t           csr,
     output frame_arb_t         status_writer,
-    input  channel_grant_arb_t write_grant
+    input  channel_grant_arb_t write_grant,
+   
+    input t_AFU_DEBUG_RSP      dbg_frame_reader
    );
 
-   typedef enum {IDLE, DONE} state_t;
+   typedef enum {STATE_INIT, STATE_IDLE, STATE_DEBUG} state_t;
    state_t state;
    state_t next_state;
      
-   bit [31:0]   status_array [15:0];
+
+   //
+   // AFU ID is used at the beginning of a run to tell the host the FPGA
+   // is alive.
+   //
+   bit [31:0]   afu_id_array [15:0];
    
-   logic [511:0] status;
-   assign status_array[3] = 32'haced0003;
-   assign status_array[2] = 32'haced0002;
-   assign status_array[1] = 32'haced0001;
-   assign status_array[0] = 32'haced0000;
+   logic [511:0] afu_id;
+   assign afu_id_array[3] = 32'haced0003;
+   assign afu_id_array[2] = 32'haced0002;
+   assign afu_id_array[1] = 32'haced0001;
+   assign afu_id_array[0] = 32'haced0000;
 
-   genvar        i;
-
+   genvar i;
    generate
-      for (i = 0; i < 16; i++) begin : gen_status
-         assign status[32*(i+1)-1:32*i] = status_array[i];        
+      for (i = 0; i < 16; i++) begin : gen_afu_id
+         assign afu_id[32*(i+1)-1:32*i] = afu_id_array[i];        
       end
    endgenerate
    
    
+   //
+   // Debugging state dump, triggered by CSR_AFU_TRIGGER_DEBUG.
+   //
+
+   // Request (from the CSR write)
+   t_AFU_DEBUG_REQ debug_req;
+   // Response (muxed from other modules below)
+   t_AFU_DEBUG_RSP debug_rsp;
+   // The full message to be written to DSM line 0.
+   logic [511:0] debug_rsp_line;
+   assign debug_rsp_line = {debug_req, debug_rsp};
+
+   // What debug info to write?
+   always_comb begin
+      case (debug_req)
+        1:
+          debug_rsp = dbg_frame_reader;
+        default:
+          debug_rsp = dbg_frame_reader;
+      endcase
+   end
+
+   // Grab the index of debugging requests.  It is illegal in the debugging
+   // protocol to trigger a new request before the previous one is done,
+   // making this logic simple.
+   always_ff @(posedge clk) begin
+      if (csr.afu_trigger_debug != 0) begin
+         debug_req <= csr.afu_trigger_debug;
+      end
+   end
+
       
    //=================================================================
    // FSM
@@ -69,21 +106,25 @@ module status_writer
 
    always_ff @(posedge clk) begin
       if (!resetb) begin
-         state <= IDLE;
+         state <= STATE_INIT;
       end else begin
          state <= next_state;
       end
    end
 
    always_comb begin
-      case (state)
-        IDLE :
-          next_state = (write_grant.status_grant)?DONE:IDLE;
-        default :
-          next_state = state;
-      endcase // case (state)
-   end // always_comb begin
+      next_state = state;
 
+      // Very simple protocol.  Only one thing may be active at a time.
+      // No other requests may be processed while in STATE_INIT.  No new
+      // DEBUG requests will be noticed until the current one completes.
+      if (write_grant.status_grant) begin
+         next_state = STATE_IDLE;
+      end
+      else if (csr.afu_trigger_debug != 0) begin
+         next_state = STATE_DEBUG;
+      end
+   end
 
    //=================================================================
    // create CCI Tx1 transaction
@@ -91,7 +132,7 @@ module status_writer
    logic [9:0] offset;
    logic [511:0] data;
 
-   assign status_writer.write.request = (state == IDLE) && csr.afu_dsm_base_valid;
+   assign status_writer.write.request = (state != STATE_IDLE) && csr.afu_dsm_base_valid;
 
    always@(negedge clk)
      begin
@@ -105,13 +146,15 @@ module status_writer
      end
    
    always_comb begin
+      // All writes are to DSM line 0
       offset = 0;
-      data = status;
+      // Write either a line of debug data or the AFU ID.
+      data = (state == STATE_DEBUG) ? debug_rsp_line : afu_id;
 
       status_writer.write_header = 0;
       status_writer.write_header.request_type = WrLine;
-      status_writer.write_header.address = dsm_offset2addr(0, csr.afu_dsm_base);
-      status_writer.data = status;      
+      status_writer.write_header.address = dsm_offset2addr(offset, csr.afu_dsm_base);
+      status_writer.data = data;
    end
    
 endmodule // status_writer

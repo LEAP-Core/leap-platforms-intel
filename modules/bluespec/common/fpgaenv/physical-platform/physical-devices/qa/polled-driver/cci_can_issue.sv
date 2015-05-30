@@ -36,21 +36,17 @@ module cci_can_issue
   (
     input  logic clk,
     input  logic resetb,
-   
+    input  logic lp_initdone,
     input  logic almostfull,
     input  logic issue,
     output logic can_issue
-
- 
    );
-
 
    logic almostfull_ff;
 
-   assign can_issue = ~almostfull_ff;
+   assign can_issue = ~almostfull_ff && lp_initdone;
    
    always_ff @(posedge clk) begin
       almostfull_ff <= almostfull;
    end
-
 endmodule

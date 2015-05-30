@@ -46,7 +46,6 @@ module frame_writer
    
     // LEAP-facing interface 
     input [UMF_WIDTH-1:0]     tx_data,
-    output                    tx_not_full,
     output                    tx_rdy,
     input                     tx_enable
    );
@@ -105,12 +104,6 @@ module frame_writer
 
    logic [UMF_WIDTH-1:0] write_data;
    logic                 write_data_rdy;
-
-   logic deq_rdy;
-   logic first_rdy;
-   
-   logic data_available;
-   assign data_available = deq_rdy && first_rdy;
 
    tx_header_t read_header;
 
@@ -276,7 +269,7 @@ module frame_writer
 		      .first(write_data),
 		      .RDY_first(),
 
-		      .notFull(tx_not_full),
+		      .notFull(),
 		      .RDY_notFull(),
 
 		      .notEmpty(),

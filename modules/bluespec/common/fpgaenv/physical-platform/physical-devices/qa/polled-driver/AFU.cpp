@@ -123,15 +123,17 @@ void
 AFU::reset_afu() {
   bt32bitCSR csr;
 
+  const uint32_t CIPUCTL_RESET_BIT = 0x01000000;
+
   // Assert CAFU Reset
   csr = 0;
   pCCIDevice->GetCSR(CSR_CIPUCTL, &csr);
-  csr |= 0x01000000;
+  csr |= CIPUCTL_RESET_BIT;
   pCCIDevice->SetCSR(CSR_CIPUCTL, csr);
   
   // De-assert CAFU Reset
   csr = 0;
   pCCIDevice->GetCSR(CSR_CIPUCTL, &csr);
-  csr &= ~0x01000000;
+  csr &= ~CIPUCTL_RESET_BIT;
   pCCIDevice->SetCSR(CSR_CIPUCTL, csr);
 }

@@ -35,8 +35,9 @@ module cci_write_arbiter
   (
     input logic clk,
     input logic resetb,
+    input logic lp_initdone,
 
-    input  afu_csr_t           csr,
+    input   afu_csr_t              csr,
    
     input   frame_arb_t            frame_writer,
     input   frame_arb_t            frame_reader,
@@ -49,7 +50,9 @@ module cci_write_arbiter
    );
 
 
-   logic        can_issue;
+   // The reader gates can issue with csr.afu_en.  The writer can't do this
+   // since the FPGA must write the AFU ID to DSM[0].
+   logic         can_issue;
 
    tx_header_t   header;
    logic [511:0] data;   
@@ -63,15 +66,16 @@ module cci_write_arbiter
    // Issue control FSM
    cci_can_issue issue_control( .clk(clk),
                                 .resetb(resetb),
+                                .lp_initdone(lp_initdone),
                                 .almostfull(tx1_almostfull),
                                 .can_issue(can_issue),
                                 .issue(write_grant.reader_grant | write_grant.writer_grant)
                               );
-   
-       
+
+
    // FSM state
    always_ff @(posedge clk) begin
-      if (!resetb || !csr.afu_en) begin
+      if (!resetb) begin
          state <= FAVOR_FRAME_READER;
       end else begin
          state <= next_state;
@@ -99,7 +103,7 @@ module cci_write_arbiter
         begin
             write_grant.status_grant = can_issue;
         end                                           
-      else if(frame_reader.write.request && (state == FAVOR_FRAME_READER || !frame_reader.write.request))
+      else if(frame_reader.write.request && (state == FAVOR_FRAME_READER || !frame_writer.write.request))
          begin
             header  = frame_reader.write_header;
             data    = frame_reader.data;

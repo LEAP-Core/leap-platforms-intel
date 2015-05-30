@@ -44,7 +44,7 @@ public:
     return *(volatile uint32_t *)(dsm_buffer->virtual_address + offset);
   }
 
-  inline volatile uint64_t read_dsm_64(uint64_t offset) {
+  inline volatile uint64_t read_dsm_64(uint32_t offset) {
     return *(volatile uint64_t *)(dsm_buffer->virtual_address + offset);
   }
 

@@ -1,17 +1,32 @@
-//====================================================================
 //
-// afu.vh
+// Copyright (c) 2015, Intel Corporation
+// All rights reserved.
 //
-// Original Author : George Powley
-// Original Date   : 2014/08/14
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
 //
-// Copyright (c) 2014 Intel Corporation
-// Intel Proprietary
+// Redistributions of source code must retain the above copyright notice, this
+// list of conditions and the following disclaimer.
 //
-// Description:
-// - Common types, structs, and functions used by AFU designs
+// Redistributions in binary form must reproduce the above copyright notice,
+// this list of conditions and the following disclaimer in the documentation
+// and/or other materials provided with the distribution.
 //
-//====================================================================
+// Neither the name of the Intel Corporation nor the names of its contributors
+// may be used to endorse or promote products derived from this software
+// without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+// ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+// SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+// CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+// POSSIBILITY OF SUCH DAMAGE.
 
 `ifndef QA_VH
  `define QA_VH
@@ -34,6 +49,8 @@
  localparam LOG_FRAME_BASE_POINTER = QA_ADDR_SZ - LOG_FRAME_NUMBER - LOG_FRAME_CHUNKS;
 
  typedef enum logic [3:0] {WrThru=4'h1, WrLine=4'h2, RdLine=4'h4, WrFence=4'h5} tx_request_t;
+
+ typedef logic [CACHE_WIDTH-1 : 0] t_QA_CACHE_LINE;
 
  // note: status_array is type bit so it doesn't hold Xs, which cause the status writer to write forever in simulation
  typedef struct 
@@ -165,11 +182,31 @@
     end
  endfunction //
 
- function automatic header_chunks;
+ function automatic [LOG_FRAME_CHUNKS - 1:0] header_chunks;
     input    [CACHE_WIDTH-1:0]  header;
     begin
        header_chunks = header[LOG_FRAME_CHUNKS:1];
     end
  endfunction
+
+
+// ========================================================================
+//
+//   Debugging --
+//
+//     Each module may declare one or more vectors of debugging state that
+//     are emitted by the status writer in response to CSR triggers.
+//     See status_writer for the mapping of trigger IDs to modules.
+//
+//     Debug requests arrive in CSR_AFU_TRIGGER_DEBUG.  The request value
+//     determines the state written back in status_writer to DSM line 0.
+//
+// ========================================================================
+
+localparam AFU_DEBUG_REQ_SZ = $bits(t_AFU_DEBUG_REQ);
+localparam AFU_DEBUG_RSP_SZ = 512 - AFU_DEBUG_REQ_SZ;
+
+typedef logic [AFU_DEBUG_RSP_SZ - 1 : 0] t_AFU_DEBUG_RSP;
+
 
 `endif //  `ifndef QA_VH

@@ -37,7 +37,7 @@ module cci_write_arbiter
     input logic resetb,
     input logic lp_initdone,
 
-    input   afu_csr_t              csr,
+    input   t_CSR_AFU_STATE        csr,
    
     input   frame_arb_t            frame_writer,
     input   frame_arb_t            frame_reader,

@@ -39,7 +39,7 @@ module frame_writer
 
     input rx_c0_t rx0,
 
-    input  afu_csr_t           csr,
+    input  t_CSR_AFU_STATE     csr,
     output frame_arb_t         frame_writer,
     input  channel_grant_arb_t write_grant,
     input  channel_grant_arb_t read_grant,

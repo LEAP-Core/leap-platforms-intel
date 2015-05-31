@@ -29,15 +29,19 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 
+//
+// Consume control/status register writes from the host and broadcast
+// CSR state to all consumers through the t_CSR_AFU_STATE type.
+//
+
 `include "qa.vh"
 
-module qa_csr
-   (
-        input logic clk,
-        input logic resetb,
-        input rx_c0_t rx0,
- 
-        output  afu_csr_t           csr
+module qa_drv_csr
+    (input logic clk,
+     input logic resetb,
+     input rx_c0_t rx0,
+
+     output t_CSR_AFU_STATE csr
     );
 
     always_comb

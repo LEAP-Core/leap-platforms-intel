@@ -83,14 +83,22 @@ module qa_drv_scoreboard
     always_ff @(posedge clk)
     begin
         if (! resetb)
+        begin
             newest <= 0;
+        end
         else if (enq_en)
+        begin
             newest <= newest + 1;
+
+            assert (notFull) else
+                $fatal("qa_drv_scoreboard: Can't ENQ when FULL!");
+        end
     end
 
 
-    // notEmpty is true after data arrives.  Client consumes the entry by
-    // asserting deq.
+    // notEmpty is true if the data has arrived for the oldest entry.
+    // Client consumes the entry by asserting deq.  Bump the oldest
+    // pointer when deq is enabled.
     assign oldest_next = oldest + deq_en;
 
     always_ff @(posedge clk)
@@ -99,6 +107,9 @@ module qa_drv_scoreboard
             oldest <= 0;
         else
             oldest <= oldest_next;
+
+        assert (!(deq_en && ! notEmpty)) else
+            $fatal("qa_drv_scoreboard: Can't DEQ when EMPTY!");
     end
 
 
@@ -158,22 +169,6 @@ module qa_drv_scoreboard
         else
         begin
             notEmpty <= dataValid[oldest_next];
-        end
-    end
-
-
-    always_comb
-    begin
-        if (enq_en && ! notFull)
-        begin
-            $display("qa_drv_scoreboard: ENQ when FULL!");
-            $finish;           
-        end
-
-        if (deq_en && ! notEmpty)
-        begin
-            $display("qa_drv_scoreboard: DEQ when EMPTY!");
-            $finish;           
         end
     end
 

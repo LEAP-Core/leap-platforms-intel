@@ -15,10 +15,13 @@
 %sources -t VERILOG    -v PRIVATE mkSizedFIFOUMF.v
 %sources -t VERILOG    -v PRIVATE mkSizedFIFOQA.v
 
-%sources -t VERILOG_H  -v PRIVATE qa.vh  
-%sources -t VERILOG_H  -v PRIVATE qa_csr.vh  
-%sources -t VERILOG    -v PRIVATE qa_csr.sv  
+%sources -t VERILOG_H  -v PRIVATE qa.vh
+%sources -t VERILOG_H  -v PRIVATE qa_drv_packages.vh
+
 %sources -t VERILOG    -v PRIVATE qa_driver.sv  
+%sources -t VERILOG    -v PRIVATE qa_drv_types.sv
+%sources -t VERILOG    -v PRIVATE qa_drv_csr_types.sv
+%sources -t VERILOG    -v PRIVATE qa_drv_csr.sv
 %sources -t VERILOG    -v PRIVATE qa_drv_scoreboard.sv
 %sources -t VERILOG    -v PRIVATE frame_reader.sv  
 %sources -t VERILOG    -v PRIVATE frame_release.sv  

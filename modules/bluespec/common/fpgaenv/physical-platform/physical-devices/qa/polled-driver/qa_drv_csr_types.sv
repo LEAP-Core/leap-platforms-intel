@@ -37,27 +37,47 @@
 
 package qa_drv_csr_types;
 
-    typedef enum logic [12:0]
+    typedef enum logic [15:0]
     {
         //
-        // CSR numbering match the software-side numbering exactly!
+        // CSR numbering must match the software-side numbering exactly!
         //
-        CSR_AFU_DSM_BASEL          = 13'h1a00,
-        CSR_AFU_DSM_BASEH          = 13'h1a04,
-        CSR_AFU_CNTXT_BASEL        = 13'h1a08,
-        CSR_AFU_CNTXT_BASEH        = 13'h1a0c,
-        CSR_AFU_EN                 = 13'h1a10,
-        CSR_AFU_TRIGGER_DEBUG      = 13'h1014,
-        CSR_AFU_READ_FRAME_BASEL   = 13'h1a18,
-        CSR_AFU_READ_FRAME_BASEH   = 13'h1a1c,
-        CSR_AFU_WRITE_FRAME_BASEL  = 13'h1a20,
-        CSR_AFU_WRITE_FRAME_BASEH  = 13'h1a24
+        CSR_AFU_DSM_BASEL          = 16'h1a00,
+        CSR_AFU_DSM_BASEH          = 16'h1a04,
+        CSR_AFU_CNTXT_BASEL        = 16'h1a08,
+        CSR_AFU_CNTXT_BASEH        = 16'h1a0c,
+        CSR_AFU_EN                 = 16'h1a10,
+
+        CSR_AFU_READ_FRAME_BASEL   = 16'h1a18,
+        CSR_AFU_READ_FRAME_BASEH   = 16'h1a1c,
+        CSR_AFU_WRITE_FRAME_BASEL  = 16'h1a20,
+        CSR_AFU_WRITE_FRAME_BASEH  = 16'h1a24,
+
+        CSR_AFU_TRIGGER_DEBUG      = 16'h1a28,
+        CSR_AFU_ENABLE_TEST        = 16'h1a2c
     }
-    t_CSR_AFU_ADDR;
+    t_CSR_AFU_MAP;
+
+    // Compare CSR address in a message header to the map above.  The CCI
+    // header is 18 bits.
+    function automatic csr_addr_matches;
+        input [17:0] header;
+        input t_CSR_AFU_MAP idx;
+        begin
+            // The address in the header is only 14 bits.  The low 2 bits are
+            // dropped because addresses are 4-byte aligned.
+            csr_addr_matches = (header[13:0] == idx[15:2]);
+        end
+    endfunction
+
 
     // CSR_AFU_TRIGGER_DEBUG passes a tag that may trigger writeback of
     // different debugging state.
     typedef logic [7:0] t_AFU_DEBUG_REQ;
+
+    // CSR_AFU_ENABLE_TEST passes a tag that may trigger a test in the
+    // driver.
+    typedef logic [3:0] t_AFU_ENABLE_TEST;
 
     typedef struct
     {
@@ -67,13 +87,16 @@ package qa_drv_csr_types;
         logic [63:0] afu_cntxt_base;
         logic        afu_en;
 
-        // Debug request.  The  manager will hold this
-        // register for one cycle after a request is received and
-        // then reset it to 0.
-        t_AFU_DEBUG_REQ  afu_trigger_debug;
-
         logic [63:0] afu_write_frame;
         logic [63:0] afu_read_frame;
+
+        // Debug request.  The manager will hold this
+        // register for one cycle after a request is received and
+        // then reset it to 0.
+        t_AFU_DEBUG_REQ afu_trigger_debug;
+
+        // Test request.  Held for one cycle, similar to afu_trigger_debug.
+        t_AFU_ENABLE_TEST afu_enable_test;
     }
     t_CSR_AFU_STATE;
 

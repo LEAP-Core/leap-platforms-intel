@@ -29,12 +29,13 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-// Compile all the packages.
-`include "qa_drv_packages.vh"
+//
+// Takes all the wires from the QuickAssist CCI interface and builds
+// a driver that implements a LEAP physical channel.  A read/write interface
+// to the physical channel is also exposed in the qa_wrapper interface.
+//
 
-`include "qa.vh"
-
-module qa_driver
+module qa_wrapper
   #(parameter TXHDR_WIDTH=61,
               RXHDR_WIDTH=18,
               CACHE_WIDTH=512,
@@ -60,7 +61,7 @@ module qa_driver
 
      // -------------------------------------------------------------------
      //
-     //   System interface.  These signals come directly from the CCI.
+     //   System interface
      //
      // -------------------------------------------------------------------
 
@@ -96,119 +97,7 @@ module qa_driver
      input  logic                   ffs_vl_LP32ui_lp2sy_InitDnForSys     // System layer is aok to run
     );
 
-    //
-    // The driver uses shorter names than the CCI AFU interface.
-    // Map names here.
-    //
-    logic                   clk;
-    assign                  clk = vl_clk_LPdomain_32ui;
+    qa_driver driver(.*);
 
-    logic                   resetb;
-    assign                  resetb = ffs_vl_LP32ui_lp2sy_SoftReset_n;
-
-    logic [RXHDR_WIDTH-1:0] rx_c0_header;
-    assign                  rx_c0_header = ffs_vl18_LP32ui_lp2sy_C0RxHdr;
-
-    logic [CACHE_WIDTH-1:0] rx_c0_data;
-    assign                  rx_c0_data = ffs_vl512_LP32ui_lp2sy_C0RxData;
-
-    logic                   rx_c0_wrvalid;
-    assign                  rx_c0_wrvalid = ffs_vl_LP32ui_lp2sy_C0RxWrValid;
-
-    logic                   rx_c0_rdvalid;
-    assign                  rx_c0_rdvalid = ffs_vl_LP32ui_lp2sy_C0RxRdValid;
-
-    logic                   rx_c0_cfgvalid;
-    assign                  rx_c0_cfgvalid = ffs_vl_LP32ui_lp2sy_C0RxCgValid;
-
-    logic [RXHDR_WIDTH-1:0] rx_c1_header;
-    assign                  rx_c1_header = ffs_vl18_LP32ui_lp2sy_C1RxHdr;
-
-    logic                   rx_c1_wrvalid;
-    assign                  rx_c1_wrvalid = ffs_vl_LP32ui_lp2sy_C1RxWrValid;
-
-    logic                   tx_c0_almostfull;
-    assign                  tx_c0_almostfull = ffs_vl_LP32ui_lp2sy_C0TxAlmFull;
-
-    logic                   tx_c1_almostfull;
-    assign                  tx_c1_almostfull = ffs_vl_LP32ui_lp2sy_C1TxAlmFull;
-
-    logic 		    lp_initdone;
-    assign                  lp_initdone = ffs_vl_LP32ui_lp2sy_InitDnForSys;
-
-    //
-    // Outputs are registered, as required by the CCI specification.
-    //
-    logic [TXHDR_WIDTH-1:0] tx_c0_header;
-    logic [TXHDR_WIDTH-1:0] tx_c0_header_reg;
-    assign                  ffs_vl61_LP32ui_sy2lp_C0TxHdr = tx_c0_header_reg;
-
-    logic                   tx_c0_rdvalid;
-    logic                   tx_c0_rdvalid_reg;
-    assign                  ffs_vl_LP32ui_sy2lp_C0TxRdValid = tx_c0_rdvalid_reg;
-
-    logic [TXHDR_WIDTH-1:0] tx_c1_header;
-    logic [TXHDR_WIDTH-1:0] tx_c1_header_reg;
-    assign                  ffs_vl61_LP32ui_sy2lp_C1TxHdr = tx_c1_header_reg;
-
-    logic [CACHE_WIDTH-1:0] tx_c1_data;
-    logic [CACHE_WIDTH-1:0] tx_c1_data_reg;
-    assign                  ffs_vl512_LP32ui_sy2lp_C1TxData = tx_c1_data_reg;
-
-    logic                   tx_c1_wrvalid;
-    logic                   tx_c1_wrvalid_reg;
-    assign                  ffs_vl_LP32ui_sy2lp_C1TxWrValid = tx_c1_wrvalid_reg;
-
-    assign                  ffs_vl_LP32ui_sy2lp_C1TxIrValid = 1'b0;
-
-    // Register requests to the host.
-    always_ff @(posedge vl_clk_LPdomain_32ui)
-    begin
-        if (! ffs_vl_LP32ui_lp2sy_SystemReset_n)
-        begin
-            tx_c0_rdvalid_reg <= 0;
-            tx_c1_wrvalid_reg <= 0;
-        end
-        else
-        begin
-            tx_c0_header_reg <= tx_c0_header;
-            tx_c0_rdvalid_reg <= tx_c0_rdvalid;
-
-            tx_c1_header_reg <= tx_c1_header;
-            tx_c1_data_reg <= tx_c1_data;
-            tx_c1_wrvalid_reg <= tx_c1_wrvalid;
-        end
-    end
-
-
-    // Internal module wiring.
-
-    t_CSR_AFU_STATE        csr;
-    
-    frame_arb_t            frame_writer;
-    frame_arb_t            frame_reader;
-    frame_arb_t            status_writer;
-    channel_grant_arb_t    write_grant;
-    channel_grant_arb_t    read_grant;
-    
-    tx_c0_t                tx0;
-    tx_c1_t                tx1;
-    rx_c0_t                rx0;
-    rx_c1_t                rx1;
-    logic                  tx0_almostfull;
-    logic                  tx1_almostfull;
-    
-    t_AFU_DEBUG_RSP        dbg_frame_reader;
-
-    // connect CCI pins to cci_bus
-    cci_adaptor            cci_adaptor_inst(.*);
-    
-    qa_drv_csr             qa_csr_inst(.*);
-
-    frame_reader           frame_reader_inst(.*);
-    frame_writer           frame_writer_inst(.*);
-    qa_drv_status_writer   status_writer_inst(.*);
-    cci_write_arbiter      write_arb(.*);
-    cci_read_arbiter       read_arb(.*);
-    
 endmodule
+

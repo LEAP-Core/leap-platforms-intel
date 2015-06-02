@@ -9,7 +9,6 @@
 %public qa-import.bsv
 
 %sources -t VERILOG -v PRIVATE cci_std_afu.sv
-%sources -t VERILOG -v PRIVATE qa_wrapper.sv
 
 %param CCI_CACHE_WIDTH  512    "Cache line width"
 %param CCI_TXHDR_WIDTH  61     "TX Header width"

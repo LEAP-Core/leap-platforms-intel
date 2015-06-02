@@ -97,86 +97,66 @@ module qa_driver
     );
 
     //
-    // The driver uses shorter names than the CCI AFU interface.
+    // The driver uses structures and shorter names to group the CCI.
     // Map names here.
     //
-    logic                   clk;
-    assign                  clk = vl_clk_LPdomain_32ui;
+    logic  clk;
+    assign clk = vl_clk_LPdomain_32ui;
 
-    logic                   resetb;
-    assign                  resetb = ffs_vl_LP32ui_lp2sy_SoftReset_n;
+    logic  resetb;
+    assign resetb = ffs_vl_LP32ui_lp2sy_SoftReset_n;
 
-    logic [RXHDR_WIDTH-1:0] rx_c0_header;
-    assign                  rx_c0_header = ffs_vl18_LP32ui_lp2sy_C0RxHdr;
+    rx_c0_t rx0;
+    assign rx0.header     = ffs_vl18_LP32ui_lp2sy_C0RxHdr;
+    assign rx0.data       = ffs_vl512_LP32ui_lp2sy_C0RxData;
+    assign rx0.wrvalid    = ffs_vl_LP32ui_lp2sy_C0RxWrValid;
+    assign rx0.rdvalid    = ffs_vl_LP32ui_lp2sy_C0RxRdValid;
+    assign rx0.cfgvalid   = ffs_vl_LP32ui_lp2sy_C0RxCgValid;
 
-    logic [CACHE_WIDTH-1:0] rx_c0_data;
-    assign                  rx_c0_data = ffs_vl512_LP32ui_lp2sy_C0RxData;
+    rx_c1_t rx1;
+    assign rx1.header     = ffs_vl18_LP32ui_lp2sy_C1RxHdr;
+    assign rx1.wrvalid    = ffs_vl_LP32ui_lp2sy_C1RxWrValid;
 
-    logic                   rx_c0_wrvalid;
-    assign                  rx_c0_wrvalid = ffs_vl_LP32ui_lp2sy_C0RxWrValid;
+    logic  tx0_almostfull;
+    assign tx0_almostfull = ffs_vl_LP32ui_lp2sy_C0TxAlmFull;
 
-    logic                   rx_c0_rdvalid;
-    assign                  rx_c0_rdvalid = ffs_vl_LP32ui_lp2sy_C0RxRdValid;
+    logic  tx1_almostfull;
+    assign tx1_almostfull = ffs_vl_LP32ui_lp2sy_C1TxAlmFull;
 
-    logic                   rx_c0_cfgvalid;
-    assign                  rx_c0_cfgvalid = ffs_vl_LP32ui_lp2sy_C0RxCgValid;
-
-    logic [RXHDR_WIDTH-1:0] rx_c1_header;
-    assign                  rx_c1_header = ffs_vl18_LP32ui_lp2sy_C1RxHdr;
-
-    logic                   rx_c1_wrvalid;
-    assign                  rx_c1_wrvalid = ffs_vl_LP32ui_lp2sy_C1RxWrValid;
-
-    logic                   tx_c0_almostfull;
-    assign                  tx_c0_almostfull = ffs_vl_LP32ui_lp2sy_C0TxAlmFull;
-
-    logic                   tx_c1_almostfull;
-    assign                  tx_c1_almostfull = ffs_vl_LP32ui_lp2sy_C1TxAlmFull;
-
-    logic 		    lp_initdone;
-    assign                  lp_initdone = ffs_vl_LP32ui_lp2sy_InitDnForSys;
+    logic  lp_initdone;
+    assign lp_initdone = ffs_vl_LP32ui_lp2sy_InitDnForSys;
 
     //
     // Outputs are registered, as required by the CCI specification.
     //
-    logic [TXHDR_WIDTH-1:0] tx_c0_header;
-    logic [TXHDR_WIDTH-1:0] tx_c0_header_reg;
-    assign                  ffs_vl61_LP32ui_sy2lp_C0TxHdr = tx_c0_header_reg;
+    tx_c0_t tx0;
+    tx_c0_t tx0_reg;
+    tx_c1_t tx1;
+    tx_c1_t tx1_reg;
 
-    logic                   tx_c0_rdvalid;
-    logic                   tx_c0_rdvalid_reg;
-    assign                  ffs_vl_LP32ui_sy2lp_C0TxRdValid = tx_c0_rdvalid_reg;
+    assign ffs_vl61_LP32ui_sy2lp_C0TxHdr = tx0_reg.header;
+    assign ffs_vl_LP32ui_sy2lp_C0TxRdValid = tx0_reg.rdvalid;
 
-    logic [TXHDR_WIDTH-1:0] tx_c1_header;
-    logic [TXHDR_WIDTH-1:0] tx_c1_header_reg;
-    assign                  ffs_vl61_LP32ui_sy2lp_C1TxHdr = tx_c1_header_reg;
+    assign ffs_vl61_LP32ui_sy2lp_C1TxHdr = tx1_reg.header;
+    assign ffs_vl512_LP32ui_sy2lp_C1TxData = tx1_reg.data;
+    assign ffs_vl_LP32ui_sy2lp_C1TxWrValid = tx1_reg.wrvalid;
 
-    logic [CACHE_WIDTH-1:0] tx_c1_data;
-    logic [CACHE_WIDTH-1:0] tx_c1_data_reg;
-    assign                  ffs_vl512_LP32ui_sy2lp_C1TxData = tx_c1_data_reg;
+    assign ffs_vl_LP32ui_sy2lp_C1TxIrValid = 1'b0;
 
-    logic                   tx_c1_wrvalid;
-    logic                   tx_c1_wrvalid_reg;
-    assign                  ffs_vl_LP32ui_sy2lp_C1TxWrValid = tx_c1_wrvalid_reg;
-
-    assign                  ffs_vl_LP32ui_sy2lp_C1TxIrValid = 1'b0;
-
-    // Register requests to the host.
+    //
+    // All signals to the host must come from registers.  Guarantee that here.
+    //
     always_ff @(posedge vl_clk_LPdomain_32ui)
     begin
         if (! ffs_vl_LP32ui_lp2sy_SystemReset_n)
         begin
-            tx_c0_rdvalid_reg <= 0;
-            tx_c1_wrvalid_reg <= 0;
+            tx0_reg.rdvalid <= 0;
+            tx1_reg.wrvalid <= 0;
         end
         else
         begin
-            tx_c0_header_reg <= tx_c0_header;
-            tx_c0_rdvalid_reg <= tx_c0_rdvalid;
-
-            tx_c1_header_reg <= tx_c1_header;
-            tx_c1_data_reg <= tx_c1_data;
-            tx_c1_wrvalid_reg <= tx_c1_wrvalid;
+            tx0_reg <= tx0;
+            tx1_reg <= tx1;
         end
     end
 
@@ -191,18 +171,9 @@ module qa_driver
     channel_grant_arb_t    write_grant;
     channel_grant_arb_t    read_grant;
     
-    tx_c0_t                tx0;
-    tx_c1_t                tx1;
-    rx_c0_t                rx0;
-    rx_c1_t                rx1;
-    logic                  tx0_almostfull;
-    logic                  tx1_almostfull;
-    
     t_AFU_DEBUG_RSP        dbg_frame_reader;
 
-    // connect CCI pins to cci_bus
-    cci_adaptor            cci_adaptor_inst(.*);
-    
+    // Consume CSR writes and export state to the driver.
     qa_drv_csr             qa_csr_inst(.*);
 
     frame_reader           frame_reader_inst(.*);

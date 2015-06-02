@@ -30,7 +30,6 @@
 %sources -t VERILOG    -v PRIVATE cci_read_arbiter.sv  
 %sources -t VERILOG    -v PRIVATE cci_write_arbiter.sv  
 %sources -t VERILOG    -v PRIVATE cci_can_issue.sv  
-%sources -t VERILOG    -v PRIVATE cci_adaptor.sv  
 
 %library libCCI.so
 %library libAAS.so

@@ -92,7 +92,7 @@ endinterface
 
 Integer umfChunkSize = valueOf(SizeOf#(UMF_CHUNK));
 
-import "BVI" qa_wrapper = 
+import "BVI" qa_driver = 
 module mkQADeviceImport#(Clock vl_clk_LPdomain_32ui,
                          Reset ffs_vl_LP32ui_lp2sy_SoftReset_n)
     // Interface:

@@ -77,7 +77,14 @@ package qa_drv_csr_types;
 
     // CSR_AFU_ENABLE_TEST passes a tag that may trigger a test in the
     // driver.
-    typedef logic [3:0] t_AFU_ENABLE_TEST;
+    typedef struct packed
+    {
+        // Count of messages to send for SOURCE mode test.
+        logic [30:0] count;
+        // Test -- must match t_STATE in qa_drv_tester.
+        logic [1:0]  test_state;
+    }
+    t_AFU_ENABLE_TEST;
 
     typedef struct
     {

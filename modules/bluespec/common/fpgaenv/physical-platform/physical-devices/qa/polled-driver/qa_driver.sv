@@ -49,14 +49,14 @@ module qa_driver
      // -------------------------------------------------------------------
 
      // To client FIFO
-     output [UMF_WIDTH-1:0] rx_data,   
-     output                 rx_rdy,
-     input                  rx_enable,
+     output logic [UMF_WIDTH-1:0] rx_fifo_data,   
+     output logic                 rx_fifo_rdy,
+     input  logic                 rx_fifo_enable,
     
      // From client FIFO
-     input [UMF_WIDTH-1:0]  tx_data,
-     output                 tx_rdy,
-     input                  tx_enable,
+     input  logic [UMF_WIDTH-1:0] tx_fifo_data,
+     output logic                 tx_fifo_rdy,
+     input  logic                 tx_fifo_enable,
 
      // -------------------------------------------------------------------
      //
@@ -161,7 +161,20 @@ module qa_driver
     end
 
 
+    // ====================================================================
+    //
     // Internal module wiring.
+    //
+    // ====================================================================
+
+    // FIFO wires inside the driver.  They will be mapped to the wires
+    // exported to the client in the qa_drv_tester module.
+    logic [UMF_WIDTH-1:0]  rx_data;
+    logic                  rx_rdy;
+    logic                  rx_enable;
+    logic [UMF_WIDTH-1:0]  tx_data;
+    logic                  tx_rdy;
+    logic                  tx_enable;
 
     t_CSR_AFU_STATE        csr;
     
@@ -172,6 +185,12 @@ module qa_driver
     channel_grant_arb_t    read_grant;
     
     t_AFU_DEBUG_RSP        dbg_frame_reader;
+
+    // Map FIFO wires exported by the driver to the driver's internal wiring.
+    // Normally the signals just pass through, but the tester can be
+    // configured by CSR writes into a variety of loopback and traffic generator
+    // modes.
+    qa_drv_tester          qa_tester_inst(.*);
 
     // Consume CSR writes and export state to the driver.
     qa_drv_csr             qa_csr_inst(.*);

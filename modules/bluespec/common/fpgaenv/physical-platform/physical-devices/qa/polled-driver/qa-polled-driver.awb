@@ -24,6 +24,7 @@
 %sources -t VERILOG    -v PRIVATE qa_drv_csr.sv
 %sources -t VERILOG    -v PRIVATE qa_drv_scoreboard.sv
 %sources -t VERILOG    -v PRIVATE qa_drv_status_writer.sv  
+%sources -t VERILOG    -v PRIVATE qa_drv_tester.sv  
 %sources -t VERILOG    -v PRIVATE frame_reader.sv  
 %sources -t VERILOG    -v PRIVATE frame_release.sv  
 %sources -t VERILOG    -v PRIVATE frame_writer.sv  

@@ -113,15 +113,20 @@ class QA_DEVICE_CLASS: public PLATFORMS_MODULE_CLASS
     static void * openWriteThread(void *argv);
 
     void Init();
-    void Cleanup();                    // cleanup
-    void Uninit();                     // uninit
-    bool Probe();                      // probe for data
-    void Read(unsigned char*, int);    // blocking read
-    void Write(unsigned char*, int);   // write
+    void Cleanup();                            // cleanup
+    void Uninit();                             // uninit
+    bool Probe();                              // probe for data
+    void Read(void* buf, size_t count);        // blocking read
+    void Write(const void* buf, size_t count); // write
     void RegisterLogicalDeviceName(string name);
     
     // Dump driver state by writing a CSR and waiting for a response in DSM.
     void DebugDump();
+
+    // Tests
+    void TestSend();                    // Test sending to FPGA
+    void TestRecv();                    // Test receiving from FPGA
+    void TestLoopback();                // Test send and receive
 
   private:
     // This function is going to be woefully inefficient.

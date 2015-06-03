@@ -58,6 +58,9 @@ using namespace std;
 
 extern GLOBAL_ARGS globalArgs;
 
+static void* LoopbackTestRecv(void *arg);
+
+
 // ============================================
 //           QA Physical Device
 // ============================================
@@ -143,7 +146,6 @@ QA_DEVICE_CLASS::Init()
 
     initReadComplete = true;
     initWriteComplete = true;
-
 }
 
 // override default chain-uninit method because
@@ -189,8 +191,8 @@ QA_DEVICE_CLASS::Probe()
 // blocking read
 void
 QA_DEVICE_CLASS::Read(
-    unsigned char* buf,
-    int bytes_requested)
+    void* buf,
+    size_t count)
 {
     while(!initReadComplete) 
     {
@@ -201,11 +203,11 @@ QA_DEVICE_CLASS::Read(
     UMF_CHUNK controlChunk = 0;
 
     // I really only want to deal in chunks for now.
-    assert(bytes_requested % UMF_CHUNK_BYTES == 0);
+    assert(count % UMF_CHUNK_BYTES == 0);
 
     if (QA_DRIVER_DEBUG)
     {
-        printf("READ needs %d bytes\n", bytes_requested);
+        printf("READ needs %d bytes\n", count);
     }
 
     if(readChunksTotal == 0)
@@ -229,7 +231,7 @@ QA_DEVICE_CLASS::Read(
         readChunkNumber = 0;
     }
 
-    for(;  (bytesRead < bytes_requested) && (readChunkNumber < readChunksTotal); bytesRead += UMF_CHUNK_BYTES)
+    for(;  (bytesRead < count) && (readChunkNumber < readChunksTotal); bytesRead += UMF_CHUNK_BYTES)
     {
         readChunkNumber++;
         *((UMF_CHUNK *)(buf+bytesRead)) = *getChunkAddress(readBuffer, readFrameNumber, readChunkNumber);
@@ -256,14 +258,14 @@ QA_DEVICE_CLASS::Read(
         readFrameNumber = (readFrameNumber + 1) % FRAME_NUMBER;
         readChunksTotal = 0; // No more data left.
         // Got any data remaining to read? if so tail recurse!
-        if(bytesRead < bytes_requested)
+        if(bytesRead < count)
         {
             if (QA_DRIVER_DEBUG)
             {
                 printf("Tail recurse for read needed\n");
             }
 
-            Read(buf+bytesRead, bytes_requested - bytesRead);
+            Read(buf+bytesRead, count - bytesRead);
         }
     }
 }
@@ -271,9 +273,11 @@ QA_DEVICE_CLASS::Read(
 // write
 void
 QA_DEVICE_CLASS::Write(
-    unsigned char* buf,
-    int bytes_requested)
+    const void* buf,
+    size_t count)
 {
+    if (count == 0) return;
+
     int chunkNumber = 0;
     volatile UMF_CHUNK *controlAddr = getChunkAddress(writeBuffer, writeFrameNumber, chunkNumber);
     UMF_CHUNK controlChunk;
@@ -287,7 +291,8 @@ QA_DEVICE_CLASS::Write(
         sleep(1);
     }
    
-    assert(bytes_requested < FRAME_CHUNKS * UMF_CHUNK_BYTES);
+    assert(count % UMF_CHUNK_BYTES == 0);
+    assert(count < FRAME_CHUNKS * UMF_CHUNK_BYTES);
 
     // Spin for next frame.
     do
@@ -300,7 +305,7 @@ QA_DEVICE_CLASS::Write(
     } while(controlChunk & 0x1);
 
 
-    for(int offset = 0;  offset < bytes_requested; offset += UMF_CHUNK_BYTES)
+    for(int offset = 0;  offset < count; offset += UMF_CHUNK_BYTES)
     {
         chunkNumber++;
         volatile UMF_CHUNK *chunkAddr = getChunkAddress(writeBuffer, writeFrameNumber, chunkNumber);
@@ -354,4 +359,174 @@ QA_DEVICE_CLASS::DebugDump()
                afu.read_dsm(base_offsets + i * 4),
                afu.read_dsm(base_values + i * 4));
     }
+}
+
+//
+// TestSend --
+//   Send a stream of data to the FPGA.  The FPGA will drop it.
+//
+void
+QA_DEVICE_CLASS::TestSend()
+{
+    printf("SEND Test...\n");
+    // The FPGA will write to DSM line 0.  Clear it first.
+    memset((void*)afu.dsm_address(0), 0, CL(1));
+
+    // Put the FPGA in SINK mode.
+    afu.write_csr(CSR_AFU_ENABLE_TEST, 1);
+
+    // Wait for mode change.
+    while (afu.read_dsm(0) == 0) ;
+
+    UMF_CHUNK *msg = new UMF_CHUNK[FRAME_CHUNKS];
+    const int msg_max_size = FRAME_CHUNKS * UMF_CHUNK_BYTES / 2;
+    memset((void*)msg, 0, msg_max_size);
+
+    // First test: write a series of messages, growing in size
+    for (int sz = UMF_CHUNK_BYTES; sz < msg_max_size; sz <<= 1)
+    {
+        Write(msg, sz);
+    }
+
+    //
+    // Measure performance
+    //
+    struct timeval start;
+    struct timeval finish;
+    gettimeofday(&start, NULL);
+
+    // Send 1GB
+    int x = 0;
+    for (uint64_t n = 0; n < (1LL << 20); n += msg_max_size)
+    {
+        Write(msg, msg_max_size);
+        printf("%lld\n", n);
+        x += msg_max_size;
+        if (x > 200000)
+        {
+            x = 0;
+            sleep(1);
+        }
+    }
+
+    gettimeofday(&finish, NULL);
+
+    struct timeval elapsed;
+    timersub(&finish, &start, &elapsed);
+    double t = (1.0 * elapsed.tv_sec) + (0.000001 * elapsed.tv_usec);
+    printf(" *** Sent 1MB of data in %.2f seconds (%.1f MB/s) \n",
+           t,
+           1.0 / (1000000.0 * t));
+
+    // End test
+    msg[0] = -1;
+    Write(msg, UMF_CHUNK_BYTES);
+
+    // End sends one loopback message
+    Read(msg, UMF_CHUNK_BYTES);
+
+    delete[] msg;
+}
+
+//
+// TestRecv --
+//   Receive an FPGA-generated stream of test data.
+//
+void
+QA_DEVICE_CLASS::TestRecv()
+{
+    printf("RECEIVE Test...\n");
+    // The FPGA will write to DSM line 0.  Clear it first.
+    memset((void*)afu.dsm_address(0), 0, CL(1));
+
+    // Put the FPGA in SINK mode, requesting 1MB of data.  The number of
+    // chunks is sent in bits [31:2].
+    uint32_t chunks = (1LL << 30) / UMF_CHUNK_BYTES;
+    afu.write_csr(CSR_AFU_ENABLE_TEST, (chunks << 2) | 2);
+
+    // Wait for mode change.
+    while (afu.read_dsm(0) == 0) ;
+
+    UMF_CHUNK *msg = new UMF_CHUNK[FRAME_CHUNKS];
+    const int msg_max_size = FRAME_CHUNKS * UMF_CHUNK_BYTES / 2;
+
+    //
+    // Measure performance
+    //
+    struct timeval start;
+    struct timeval finish;
+    gettimeofday(&start, NULL);
+
+    size_t bytes_left = chunks * UMF_CHUNK_BYTES;
+    do
+    {
+        int sz = (bytes_left > msg_max_size) ? msg_max_size : bytes_left;
+        bytes_left -= sz;
+
+        Read(msg, sz);
+    }
+    while (bytes_left > 0);
+
+    gettimeofday(&finish, NULL);
+
+    struct timeval elapsed;
+    timersub(&finish, &start, &elapsed);
+    double t = (1.0 * elapsed.tv_sec) + (0.000001 * elapsed.tv_usec);
+    printf(" *** Received 1 GB of data in %.8f seconds (%.8f MB/s) \n",
+           t,
+           1024.0 / t);
+
+    delete[] msg;
+}
+
+//
+// TestLoopback --
+//   Test in which all messages sent to the FPGA are reflected back.
+//
+void
+QA_DEVICE_CLASS::TestLoopback()
+{
+    printf("LOOPBACK Test...\n");
+    // The FPGA will write to DSM line 0.  Clear it first.
+    memset((void*)afu.dsm_address(0), 0, CL(1));
+
+    // Put the FPGA in SINK mode.
+    afu.write_csr(CSR_AFU_ENABLE_TEST, 3);
+
+    // Wait for mode change.
+    while (afu.read_dsm(0) == 0) ;
+
+    pthread_t thread;
+    pthread_create(&thread, NULL, LoopbackTestRecv, (void*)this);
+
+    unsigned char msg[UMF_CHUNK_BYTES];
+    msg[0] = 1;
+    for (int i = 0; i < 10; i++)
+    {
+        msg[0] <<= 1;
+        Write(msg, UMF_CHUNK_BYTES);
+    }
+
+    // End test
+    msg[0] = -1;
+    Write(msg, UMF_CHUNK_BYTES);
+
+    void *res;
+    pthread_join(thread, &res);
+}
+
+
+static void* LoopbackTestRecv(void *arg)
+{
+    QA_DEVICE dev = QA_DEVICE(arg);
+
+    unsigned char msg[UMF_CHUNK_BYTES];
+    do
+    {
+        dev->Read(msg, UMF_CHUNK_BYTES);
+        printf("  0x%016llx\n", *(UINT64*)msg);
+    }
+    while ((msg[0] & 1) == 0);
+
+    return NULL;
 }

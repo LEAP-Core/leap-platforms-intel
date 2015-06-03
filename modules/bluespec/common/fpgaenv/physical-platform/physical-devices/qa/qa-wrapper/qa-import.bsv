@@ -110,11 +110,11 @@ module mkQADeviceImport#(Clock vl_clk_LPdomain_32ui,
     default_reset ffs_vl_LP32ui_lp2sy_SoftReset_n;
 
     interface QA_DRIVER driver;
-        method deq() ready(rx_rdy) enable(rx_enable);
-        method rx_data first() ready(rx_rdy);
-        method rx_rdy notEmpty();
-        method write(tx_data) ready(tx_rdy) enable(tx_enable);
-        method tx_rdy notFull();
+        method deq() ready(rx_fifo_rdy) enable(rx_fifo_enable);
+        method rx_fifo_data first() ready(rx_fifo_rdy);
+        method rx_fifo_rdy notEmpty();
+        method write(tx_fifo_data) ready(tx_fifo_rdy) enable(tx_fifo_enable);
+        method tx_fifo_rdy notFull();
     endinterface
 
     interface QA_WIRES wires;

@@ -1,0 +1,45 @@
+The driver connects to the wires from the QuickAssist cache coherent interface
+CCI).  The driver exports a pair of FIFOs, one from the FPGA to the host and
+the other from the host to the FPGA.
+
+
+CSRs:
+
+The following CSRs control the driver:
+
+  DSM_BASE -
+    Base of the shared memory area used as to hold status written by the FPGA.
+    As required by the CCI specification, the FPGA-side driver writes the AFU
+    ID to DSM line0.
+
+  EN --
+    Writing one enables the driver.
+
+  READ_FRAME_BASE -
+    64 bit physical address of the host to FPGA FIFO data.
+
+  WRITE_FRAME_BASE --
+    64 bit physical address of the FPGA to host FIFO data.
+
+  TRIGGER_DEBUG --
+    FPGA-side driver modules may monitor the TRIGGER_DEBUG register.  They may
+    construct a memory-line worth of debugging state that is written by
+    qa_drv_status_writer to DSM address 0.  The value of TRIGGER_DEBUG
+    determines which line is written.  The mapping of TRIGGER_DEBUG values to
+    debugging state is in the code that sets debug_rsp in qa_drv_status_writer.
+
+  ENABLE_TEST --
+    Start read, write and loopback driver tests that are implemented in
+    qa_drv_tester.  Bits [1:0] of the ENABLE_TEST CSR write select the test:
+
+      1 - SINK:
+        Host sends a stream of data through the host to FPGA FIFO which is consumed but dropped by the
+        tester.  The test ends when the low bit of a data packet is 1.
+      2 - SOURCE:
+        FPGA sends a stream of data through the FPGA to host channel.  The number
+        of messages to send is controlled by bits [31:2] of the ENABLE_TEST
+        CSR message.  The low bit of the last message sent to the host is 1.
+      3 - LOOPBACK:
+        All messages arriving in the host to FPGA FIFO are reflected back through
+        the FPGA to host channel.  The test ends when the low bit of a message
+        is 1.

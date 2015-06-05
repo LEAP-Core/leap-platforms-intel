@@ -28,10 +28,12 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-`ifndef QA_VH
-`define QA_VH
+//
+// Some SystemVerilog parsers won't find packages on their own.  This file
+// loads all the packages so they are compiled.
+//
+// *** Include this file only once in the top-level build. ***
+//
 
-import qa_drv_csr_types::*;
-import qa_drv_types::*;
-
-`endif //  `ifndef QA_VH
+`include "qa_drv_csr_types.sv"
+`include "qa_drv_types.sv"

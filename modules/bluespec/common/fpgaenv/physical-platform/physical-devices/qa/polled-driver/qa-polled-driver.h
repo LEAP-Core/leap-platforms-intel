@@ -113,24 +113,51 @@ class QA_DEVICE_CLASS: public PLATFORMS_MODULE_CLASS
     static void * openWriteThread(void *argv);
 
     void Init();
-    void Cleanup();                    // cleanup
-    void Uninit();                     // uninit
-    bool Probe();                      // probe for data
-    void Read(unsigned char*, int);    // blocking read
-    void Write(unsigned char*, int);   // write
+    void Cleanup();                            // cleanup
+    void Uninit();                             // uninit
+    bool Probe();                              // probe for data
+    void Read(void* buf, size_t count);        // blocking read
+    void Write(const void* buf, size_t count); // write
     void RegisterLogicalDeviceName(string name);
     
     // Dump driver state by writing a CSR and waiting for a response in DSM.
     void DebugDump();
 
+    // Tests
+    void TestSend();                    // Test sending to FPGA
+    void TestRecv();                    // Test receiving from FPGA
+    void TestLoopback();                // Test send and receive
+
   private:
     // This function is going to be woefully inefficient.
-    volatile UMF_CHUNK * getChunkAddress(AFUBuffer* buffer, int frameNumber, int chunkNumber)
+    volatile UMF_CHUNK* getChunkAddress(AFUBuffer* buffer, int frameNumber, int chunkNumber)
     {
-        volatile UMF_CHUNK *chunkAddr = (volatile UMF_CHUNK *)(((volatile char *)(buffer->virtual_address)) + frameNumber * FRAME_SIZE + chunkNumber * CHUNK_SIZE); 
-        return chunkAddr;
+        volatile UMF_CHUNK *chunkAddr = (volatile UMF_CHUNK *)(((volatile char *)(buffer->virtual_address)) + frameNumber * FRAME_SIZE + chunkNumber * CHUNK_SIZE);         return chunkAddr;
     }
 
+    //
+    // This function is mostly for debugging.  It computes the offset in cache
+    // lines of a chunk from the base of a buffer.  It is not a pointer!
+    //
+    uint32_t getChunkOffset(uint32_t frameNumber, uint32_t chunkNumber)
+    {
+        return frameNumber * (FRAME_SIZE / CHUNK_SIZE) + chunkNumber;
+    }
+
+    //
+    // Another debugging function.  Convert a frame/chunk offset to an address.
+    //
+    UMF_CHUNK* getChunkAddressFromOffset(AFUBuffer* buffer, uint64_t offset)
+    {
+        // Mask just the offset
+        offset &= (FRAME_NUMBER * FRAME_CHUNKS) - 1;
+
+        // Convert cache line index to byte offset
+        offset *= CL(1);
+
+        // Add the base address
+        return (UMF_CHUNK*)(buffer->virtual_address + offset);
+    }
 };
 
 #endif

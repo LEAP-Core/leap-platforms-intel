@@ -29,25 +29,29 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 
+//
+// Consume control/status register writes from the host and broadcast
+// CSR state to all consumers through the t_CSR_AFU_STATE type.
+//
+
 `include "qa.vh"
 
-module qa_csr
-   (
-        input logic clk,
-        input logic resetb,
-        input rx_c0_t rx0,
- 
-        output  afu_csr_t           csr
+module qa_drv_csr
+    (input logic clk,
+     input logic resetb,
+     input rx_c0_t rx0,
+
+     output t_CSR_AFU_STATE csr
     );
 
     always_comb
     begin
         if (rx0.cfgvalid)
-            $display("SETTING CONFIG 0x%h 0x%h", {rx0.header[11:0], 2'b0}, rx0.data[31:0]);
+            $display("SETTING CONFIG 0x%h 0x%h", {rx0.header[13:0], 2'b0}, rx0.data[31:0]);
     end
 
     always_ff @(posedge clk) begin
-        if (rx0.cfgvalid && {rx0.header[11:0], 2'b0} == CSR_AFU_DSM_BASEL) begin
+        if (rx0.cfgvalid && csr_addr_matches(rx0.header, CSR_AFU_DSM_BASEL)) begin
             csr.afu_dsm_base[31:0] <= rx0.data[31:0];
         end
     end
@@ -56,19 +60,19 @@ module qa_csr
         if (~resetb) begin
             csr.afu_dsm_base_valid <= 0;
         end
-        else if (rx0.cfgvalid && {rx0.header[11:0], 2'b0} == CSR_AFU_DSM_BASEL) begin
+        else if (rx0.cfgvalid && csr_addr_matches(rx0.header, CSR_AFU_DSM_BASEL)) begin
             csr.afu_dsm_base_valid <= 1;
         end
     end
 
     always_ff @(posedge clk) begin
-        if (rx0.cfgvalid && {rx0.header[11:0], 2'b0} == CSR_AFU_DSM_BASEH) begin
+        if (rx0.cfgvalid && csr_addr_matches(rx0.header, CSR_AFU_DSM_BASEH)) begin
             csr.afu_dsm_base[63:32] <= rx0.data[31:0];
         end
     end
 
     always_ff @(posedge clk) begin
-        if (rx0.cfgvalid && {rx0.header[11:0], 2'b0} == CSR_AFU_CNTXT_BASEL) begin
+        if (rx0.cfgvalid && csr_addr_matches(rx0.header, CSR_AFU_CNTXT_BASEL)) begin
             csr.afu_cntxt_base[31:0] <= rx0.data[31:0];
         end
     end
@@ -77,13 +81,13 @@ module qa_csr
         if (~resetb) begin
            csr.afu_cntxt_base_valid <= 0;
         end
-        else if (rx0.cfgvalid && {rx0.header[11:0], 2'b0} == CSR_AFU_CNTXT_BASEL) begin
+        else if (rx0.cfgvalid && csr_addr_matches(rx0.header, CSR_AFU_CNTXT_BASEL)) begin
             csr.afu_cntxt_base_valid <= 1;
         end
     end
 
     always_ff @(posedge clk) begin
-        if (rx0.cfgvalid && {rx0.header[11:0], 2'b0} == CSR_AFU_CNTXT_BASEH) begin
+        if (rx0.cfgvalid && csr_addr_matches(rx0.header, CSR_AFU_CNTXT_BASEH)) begin
             csr.afu_cntxt_base[63:32] <= rx0.data[31:0];
         end
     end
@@ -92,7 +96,7 @@ module qa_csr
         if (~resetb) begin
             csr.afu_en <= 0;
         end
-        else if (rx0.cfgvalid && {rx0.header[11:0], 2'b0} == CSR_AFU_EN) begin
+        else if (rx0.cfgvalid && csr_addr_matches(rx0.header, CSR_AFU_EN)) begin
             csr.afu_en <= rx0.data[0];
         end
     end
@@ -101,7 +105,7 @@ module qa_csr
         if (~resetb) begin
             csr.afu_trigger_debug <= 0;
         end
-        else if (rx0.cfgvalid && {rx0.header[11:0], 2'b0} == CSR_AFU_TRIGGER_DEBUG) begin
+        else if (rx0.cfgvalid && csr_addr_matches(rx0.header, CSR_AFU_TRIGGER_DEBUG)) begin
             csr.afu_trigger_debug <= rx0.data[$bits(t_AFU_DEBUG_REQ)-1 : 0];
         end
         else begin
@@ -111,26 +115,39 @@ module qa_csr
     end
 
     always_ff @(posedge clk) begin
-        if (rx0.cfgvalid && {rx0.header[11:0], 2'b0} == CSR_AFU_READ_FRAME_BASEL) begin
+        if (~resetb) begin
+            csr.afu_enable_test <= 0;
+        end
+        else if (rx0.cfgvalid && csr_addr_matches(rx0.header, CSR_AFU_ENABLE_TEST)) begin
+            csr.afu_enable_test <= rx0.data[$bits(t_AFU_ENABLE_TEST)-1 : 0];
+        end
+        else begin
+            // Hold request for only one cycle
+            csr.afu_enable_test <= 0;
+        end
+    end
+
+    always_ff @(posedge clk) begin
+        if (rx0.cfgvalid && csr_addr_matches(rx0.header, CSR_AFU_READ_FRAME_BASEL)) begin
             csr.afu_read_frame[31:0] <= rx0.data[31:0];
         end
     end
 
     always_ff @(posedge clk) begin
-        if (rx0.cfgvalid && {rx0.header[11:0], 2'b0} == CSR_AFU_READ_FRAME_BASEH) begin
+        if (rx0.cfgvalid && csr_addr_matches(rx0.header, CSR_AFU_READ_FRAME_BASEH)) begin
            csr.afu_read_frame[63:32] <= rx0.data[31:0];
 
         end
     end
 
     always_ff @(posedge clk) begin
-        if (rx0.cfgvalid && {rx0.header[11:0], 2'b0} == CSR_AFU_WRITE_FRAME_BASEL) begin
+        if (rx0.cfgvalid && csr_addr_matches(rx0.header, CSR_AFU_WRITE_FRAME_BASEL)) begin
             csr.afu_write_frame[31:0] <= rx0.data[31:0];
         end
     end
 
     always_ff @(posedge clk) begin
-        if (rx0.cfgvalid && {rx0.header[11:0], 2'b0} == CSR_AFU_WRITE_FRAME_BASEH) begin
+        if (rx0.cfgvalid && csr_addr_matches(rx0.header, CSR_AFU_WRITE_FRAME_BASEH)) begin
             csr.afu_write_frame[63:32] <= rx0.data[31:0];
         end
     end

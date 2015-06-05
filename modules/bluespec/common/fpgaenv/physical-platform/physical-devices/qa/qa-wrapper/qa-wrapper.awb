@@ -9,7 +9,6 @@
 %public qa-import.bsv
 
 %sources -t VERILOG -v PRIVATE cci_std_afu.sv
-%sources -t VERILOG -v PRIVATE qa_wrapper.v
 
 %sources -t SDC -v PRIVATE qa.sdc
 

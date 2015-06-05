@@ -184,7 +184,9 @@ module qa_driver
     channel_grant_arb_t    write_grant;
     channel_grant_arb_t    read_grant;
     
-    t_AFU_DEBUG_RSP        dbg_frame_reader;
+    t_AFU_DEBUG_RSP        dbg_fifo_from_host;
+    t_AFU_DEBUG_RSP        dbg_frame_release;
+    t_AFU_DEBUG_RSP        dbg_tester;
 
     // Map FIFO wires exported by the driver to the driver's internal wiring.
     // Normally the signals just pass through, but the tester can be
@@ -195,8 +197,10 @@ module qa_driver
     // Consume CSR writes and export state to the driver.
     qa_drv_csr             qa_csr_inst(.*);
 
-    frame_reader           frame_reader_inst(.*);
-    frame_writer           frame_writer_inst(.*);
+    // Manage memory-mapped FIFOs in each direction.
+    qa_drv_fifo_from_host  fifo_from_host(.*);
+    qa_drv_fifo_to_host    fifo_to_host(.*);
+
     qa_drv_status_writer   status_writer_inst(.*);
     cci_write_arbiter      write_arb(.*);
     cci_read_arbiter       read_arb(.*);

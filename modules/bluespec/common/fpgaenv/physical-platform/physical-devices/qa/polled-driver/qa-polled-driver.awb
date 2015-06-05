@@ -13,7 +13,6 @@
 %sources -t CPP    -v PRIVATE AFU.cpp
 
 %sources -t VERILOG    -v PRIVATE mkSizedFIFOUMF.v
-%sources -t VERILOG    -v PRIVATE mkSizedFIFOQA.v
 
 %sources -t VERILOG_H  -v PRIVATE qa.vh
 %sources -t VERILOG_H  -v PRIVATE qa_drv_packages.vh
@@ -22,12 +21,12 @@
 %sources -t VERILOG    -v PRIVATE qa_drv_types.sv
 %sources -t VERILOG    -v PRIVATE qa_drv_csr_types.sv
 %sources -t VERILOG    -v PRIVATE qa_drv_csr.sv
+%sources -t VERILOG    -v PRIVATE qa_drv_fifo_from_host.sv
+%sources -t VERILOG    -v PRIVATE qa_drv_fifo_to_host.sv
 %sources -t VERILOG    -v PRIVATE qa_drv_scoreboard.sv
 %sources -t VERILOG    -v PRIVATE qa_drv_status_writer.sv  
 %sources -t VERILOG    -v PRIVATE qa_drv_tester.sv  
-%sources -t VERILOG    -v PRIVATE frame_reader.sv  
 %sources -t VERILOG    -v PRIVATE frame_release.sv  
-%sources -t VERILOG    -v PRIVATE frame_writer.sv  
 %sources -t VERILOG    -v PRIVATE cci_read_arbiter.sv  
 %sources -t VERILOG    -v PRIVATE cci_write_arbiter.sv  
 %sources -t VERILOG    -v PRIVATE cci_can_issue.sv  

@@ -39,7 +39,10 @@ module qa_drv_status_writer
      output frame_arb_t         status_writer,
      input  channel_grant_arb_t write_grant,
 
-     input t_AFU_DEBUG_RSP      dbg_frame_reader);
+     input  t_AFU_DEBUG_RSP     dbg_fifo_from_host,
+     input  t_AFU_DEBUG_RSP     dbg_frame_release,
+     input  t_AFU_DEBUG_RSP     dbg_tester
+    );
 
     typedef enum {STATE_INIT, STATE_IDLE, STATE_DEBUG} state_t;
     state_t state;
@@ -136,7 +139,7 @@ module qa_drv_status_writer
         data = (state == STATE_DEBUG) ? debug_rsp_line : afu_id;
 
         status_writer.write_header = 0;
-        status_writer.write_header.request_type = WrLine;
+        status_writer.write_header.request_type = WrThru;
         status_writer.write_header.address = dsm_offset2addr(offset, csr.afu_dsm_base);
         status_writer.data = data;
     end
@@ -164,9 +167,13 @@ module qa_drv_status_writer
     begin
         case (debug_req)
             1:
-              debug_rsp = dbg_frame_reader;
+              debug_rsp = dbg_fifo_from_host;
+            2:
+              debug_rsp = dbg_tester;
+            3:
+              debug_rsp = dbg_frame_release;
             default:
-              debug_rsp = dbg_frame_reader;
+              debug_rsp = dbg_fifo_from_host;
         endcase
     end
 

@@ -32,33 +32,41 @@
 // Scoreboard that behaves like a FIFO that allows out of order arrival of
 // the payload.
 //
+// The scoreboard holds combines two pieces of data with each entry:
+// meta-data that is supplied at the time an index is allocated and the
+// late-arriving data.  Both are returned together through first and first_meta.
+//
 
 module qa_drv_scoreboard
   #(parameter N_ENTRIES = 32,
-              N_DATA_BITS = 64)
+              N_DATA_BITS = 64,
+              N_META_BITS = 1)
     (input  logic clk,
      input  logic resetb,
 
      // Add a new entry to the scoreboard.  No payload, just control.
      // The scoreboard returns a handle -- the index where the payload should
      // be written.
-     input  logic enq_en,
-     output logic notFull,
-     output [$clog2(N_ENTRIES)-1 : 0] enqIdx,
+     input  logic enq_en,                            // Allocate an entry
+     input  logic [N_META_BITS-1 : 0] enqMeta,       // Save meta-data for new entry
+     output logic notFull,                           // Is scoreboard full?
+     output logic [$clog2(N_ENTRIES)-1 : 0] enqIdx,  // Index of new entry
 
      // Payload write.  No ready signal.  The scoreboard must always be ready
      // to receive data.
-     input  logic enqData_en,
-     input  [$clog2(N_ENTRIES)-1 : 0] enqDataIdx,
-     input  [N_DATA_BITS-1 : 0] enqData,
+     input  logic enqData_en,                        // Store data for existing entry
+     input  logic [$clog2(N_ENTRIES)-1 : 0] enqDataIdx,
+     input  logic [N_DATA_BITS-1 : 0] enqData,
 
      // Ordered output
-     input  logic deq_en,
-     output logic notEmpty,
-     output logic [N_DATA_BITS-1 : 0] first
+     input  logic deq_en,                            // Deq oldest entry
+     output logic notEmpty,                          // Is oldest entry ready?
+     output logic [N_DATA_BITS-1 : 0] first,         // Data for oldest entry
+     output logic [N_META_BITS-1 : 0] firstMeta      // Meta-data for oldest entry
      );
 
     typedef logic [N_DATA_BITS-1 : 0] t_DATA;
+    typedef logic [N_META_BITS-1 : 0] t_META_DATA;
     typedef logic [$clog2(N_ENTRIES)-1 : 0] t_IDX;
 
     // Scoreboard is empty when oldest == newest and full when
@@ -71,11 +79,7 @@ module qa_drv_scoreboard
     reg [N_ENTRIES-1 : 0] dataValid;
     logic [N_ENTRIES-1 : 0] dataValid_next;
 
-    assign notFull = (newest + 1 != oldest);
-
-    // Data storage
-    t_DATA data[0 : N_ENTRIES-1];
-
+    assign notFull = ((newest + t_IDX'(1)) != oldest);
 
     // enq allocates a slot and returns the index of the slot.
     assign enqIdx = newest;
@@ -113,14 +117,37 @@ module qa_drv_scoreboard
     end
 
 
-    // Manage the data storage as a memory
+    //
+    // Manage the data memory.
+    //
+    t_DATA data[0 : N_ENTRIES-1];
+
     always_ff @(posedge clk)
     begin
         first <= data[oldest_next];
 
+        // Data arrives separately, after a slot has already been allocated.
         if (enqData_en)
         begin
             data[enqDataIdx] <= enqData;
+        end
+    end
+
+
+    //
+    // Manage the meta-data memory.
+    //
+    t_META_DATA metaData[0 : N_ENTRIES-1];
+
+    always_ff @(posedge clk)
+    begin
+        firstMeta <= metaData[oldest_next];
+
+        // Meta-data is written along with the original request to allocate
+        // a slot.
+        if (enq_en)
+        begin
+            metaData[enqIdx] <= enqMeta;
         end
     end
 

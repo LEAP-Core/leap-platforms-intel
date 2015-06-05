@@ -53,7 +53,10 @@ module qa_drv_tester
      // Internal wires for from-client FIFO
      output logic [UMF_WIDTH-1:0] tx_data,
      input  logic                 tx_rdy,
-     output logic                 tx_enable);
+     output logic                 tx_enable,
+
+     output t_AFU_DEBUG_RSP       dbg_tester
+    );
 
     //
     // Test mode.
@@ -204,6 +207,22 @@ module qa_drv_tester
                 // End testing
                 state <= NORMAL;
             end
+        end
+    end
+
+
+    //
+    // Debugging state.
+    //
+    always_ff @(posedge clk)
+    begin
+        if (! resetb)
+        begin
+            dbg_tester <= 0;
+        end
+        else
+        begin
+            dbg_tester[5:0] <= { rx_rdy, rx_enable, tx_rdy, tx_enable, state };
         end
     end
 

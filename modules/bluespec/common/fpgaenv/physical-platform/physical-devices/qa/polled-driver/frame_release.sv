@@ -32,68 +32,139 @@
 
 `include "qa.vh"
 
-// The BUFFER_DEPTH and BUFFER_ADDR_WIDTH parameters are not actually
-// parameters, since we grabbed modules from bluespec. Probably this
-// should be fixed.
 module frame_release
-  #(parameter BUFFER_DEPTH=64, BUFFER_ADDR_WIDTH=6)
-  (
-    input logic clk,
-    input logic resetb,
+    (input logic clk,
+     input logic resetb,
 
-    input  t_CSR_AFU_STATE     csr,
-    output frame_arb_t         frame_reader,
-    input  channel_grant_arb_t write_grant,   
+     // Ready to release more frames?
+     output logic rdy,
 
-    input [LOG_FRAME_BASE_POINTER - 1:0] frame_base_pointer,
-    input release_frame
-   
-   );
+     input  t_CSR_AFU_STATE     csr,
+     output frame_arb_t         frame_reader,
+     input  channel_grant_arb_t write_grant,
 
-   logic [LOG_FRAME_NUMBER - 1:0]       frame_number_clear; // Used to write back the header for clearing the frame.
-   logic [LOG_FRAME_NUMBER - 1:0]       frame_number_clear_next;
-   logic [LOG_FRAME_NUMBER - 1:0]       frames_to_be_cleared;
-   logic [LOG_FRAME_NUMBER - 1:0]       frames_to_be_cleared_next;
-   logic [LOG_FRAME_CHUNKS - 1:0]       frame_chunks_zero;
+     input [LOG_FRAME_BASE_POINTER - 1:0] frame_base_pointer,
+     input release_frame,
+     output t_AFU_DEBUG_RSP     dbg_frame_release
+     );
 
-   tx_header_t write_header;
+    logic [LOG_FRAME_NUMBER - 1:0]   frame_number_clear; // Used to write back the header for clearing the frame.
+    logic [LOG_FRAME_NUMBER - 1:0]   frame_number_clear_next;
+    logic [LOG_FRAME_NUMBER - 1:0]   frames_to_be_cleared;
+    logic [LOG_FRAME_NUMBER - 1:0]   frames_to_be_cleared_next;
+    logic [LOG_FRAME_NUMBER - 1:0]   frame_number_zero;
+    logic [LOG_FRAME_CHUNKS - 1:0]   frame_chunks_zero;
 
-   assign frame_reader.write.request = ( frames_to_be_cleared > 0);
+    tx_header_t write_header;
 
-   assign frame_chunks_zero = 0;
-   
-   // FSM state
-   always_ff @(posedge clk) begin
-      if (!resetb) begin
-         frame_number_clear <= 0;
-      end else begin
-         // If we get a grant, proceed to the next frame.
-         frame_number_clear <= frame_number_clear + write_grant.reader_grant;
-      end
-   end
+    assign frame_reader.write.request = ( frames_to_be_cleared > 0);
+    assign frame_chunks_zero = LOG_FRAME_CHUNKS'(0);
+    assign frame_number_zero = LOG_FRAME_NUMBER'(0);
 
-   always_comb begin
-      frames_to_be_cleared_next = frames_to_be_cleared;      
-      if(release_frame)
-        frames_to_be_cleared_next = frames_to_be_cleared_next + 1;
-      if(write_grant.reader_grant)
-        frames_to_be_cleared_next = frames_to_be_cleared_next - 1;      
-   end
-   
-   always_ff @(posedge clk) begin
-      if (!resetb) begin
-         frames_to_be_cleared <= 0;
-      end else begin
-         frames_to_be_cleared <= frames_to_be_cleared_next;
-      end
-   end
- 
-   always_comb begin
-      frame_reader.write_header = 0;
-      frame_reader.write_header.request_type = WrLine;
-      frame_reader.write_header.address = {frame_base_pointer, frame_number_clear, frame_chunks_zero}; 
-      frame_reader.write_header.mdata = 0; // No metadata necessary
-      frame_reader.data = 1'b0; // only need to set bottom bit.
-   end
-   
+    // Can't request more frame releases if the counter would wrap
+    assign rdy = (frames_to_be_cleared != ~frame_number_zero);
+
+    // FSM state
+    always_ff @(posedge clk)
+    begin
+        if (!resetb)
+        begin
+            frame_number_clear <= 0;
+        end
+        else
+        begin
+            // If we get a grant, proceed to the next frame.
+            frame_number_clear <= frame_number_clear + write_grant.reader_grant;
+        end
+    end
+
+    always_comb
+    begin
+        frames_to_be_cleared_next = frames_to_be_cleared;
+        if (release_frame)
+            frames_to_be_cleared_next = frames_to_be_cleared_next + 1;
+        if (write_grant.reader_grant)
+            frames_to_be_cleared_next = frames_to_be_cleared_next - 1;
+    end
+
+    always_ff @(posedge clk)
+    begin
+        if (!resetb)
+        begin
+            frames_to_be_cleared <= 0;
+        end
+        else
+        begin
+            frames_to_be_cleared <= frames_to_be_cleared_next;
+        end
+    end
+
+    always_comb
+    begin
+        frame_reader.write_header = 0;
+        frame_reader.write_header.request_type = WrThru;
+        frame_reader.write_header.address = {frame_base_pointer, frame_number_clear, frame_chunks_zero};
+        frame_reader.write_header.mdata = 0; // No metadata necessary
+        frame_reader.data = 1'b0; // only need to set bottom bit.
+    end
+
+
+    //
+    // Assertions
+    //
+
+    // Write granted without asking for a write?
+    logic unexpected_write;
+
+    logic unexpected_write_next;
+    assign unexpected_write_next = write_grant.reader_grant &&
+                                   ! frame_reader.write.request;
+
+    always_ff @(posedge clk)
+    begin
+        if (! resetb)
+            unexpected_write <= 0;
+        else
+            unexpected_write <= unexpected_write_next;
+
+        assert (! unexpected_write_next) else
+            $fatal("frame_release: Write granted without request!");
+    end
+
+    //
+    // Debugging
+    //
+
+    // Last write grant
+    logic [31:0] dbg_data_write_addr_offset;
+    logic [15:0] dbg_num_frames_released;
+
+    assign dbg_frame_release = { dbg_data_write_addr_offset,
+                                 dbg_num_frames_released,
+                                 15'b0,                 // Unused
+                                 unexpected_write };
+
+    always_ff @(posedge clk)
+    begin
+        if (!resetb)
+        begin
+            dbg_data_write_addr_offset <= 0;
+            dbg_num_frames_released <= 0;
+        end
+        else
+        begin
+            // Record address of most recent accepted write
+            if (write_grant.reader_grant)
+            begin
+                dbg_data_write_addr_offset <= {frame_number_clear, frame_chunks_zero};
+            end
+
+            // Count the number of times a frame is released
+            if (release_frame)
+            begin
+                dbg_num_frames_released <= dbg_num_frames_released + 1;
+            end
+        end
+    end
+
 endmodule

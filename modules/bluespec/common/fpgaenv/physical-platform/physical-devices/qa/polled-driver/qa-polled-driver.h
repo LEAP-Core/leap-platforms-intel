@@ -130,12 +130,34 @@ class QA_DEVICE_CLASS: public PLATFORMS_MODULE_CLASS
 
   private:
     // This function is going to be woefully inefficient.
-    volatile UMF_CHUNK * getChunkAddress(AFUBuffer* buffer, int frameNumber, int chunkNumber)
+    volatile UMF_CHUNK* getChunkAddress(AFUBuffer* buffer, int frameNumber, int chunkNumber)
     {
-        volatile UMF_CHUNK *chunkAddr = (volatile UMF_CHUNK *)(((volatile char *)(buffer->virtual_address)) + frameNumber * FRAME_SIZE + chunkNumber * CHUNK_SIZE); 
-        return chunkAddr;
+        volatile UMF_CHUNK *chunkAddr = (volatile UMF_CHUNK *)(((volatile char *)(buffer->virtual_address)) + frameNumber * FRAME_SIZE + chunkNumber * CHUNK_SIZE);         return chunkAddr;
     }
 
+    //
+    // This function is mostly for debugging.  It computes the offset in cache
+    // lines of a chunk from the base of a buffer.  It is not a pointer!
+    //
+    uint32_t getChunkOffset(uint32_t frameNumber, uint32_t chunkNumber)
+    {
+        return frameNumber * (FRAME_SIZE / CHUNK_SIZE) + chunkNumber;
+    }
+
+    //
+    // Another debugging function.  Convert a frame/chunk offset to an address.
+    //
+    UMF_CHUNK* getChunkAddressFromOffset(AFUBuffer* buffer, uint64_t offset)
+    {
+        // Mask just the offset
+        offset &= (FRAME_NUMBER * FRAME_CHUNKS) - 1;
+
+        // Convert cache line index to byte offset
+        offset *= CL(1);
+
+        // Add the base address
+        return (UMF_CHUNK*)(buffer->virtual_address + offset);
+    }
 };
 
 #endif

@@ -192,10 +192,11 @@ module qa_driver
     // Normally the signals just pass through, but the tester can be
     // configured by CSR writes into a variety of loopback and traffic generator
     // modes.
-    qa_drv_tester          qa_tester_inst(.*);
+    qa_drv_tester#(.UMF_WIDTH(UMF_WIDTH))
+        qa_tester_inst(.*);
 
     // Consume CSR writes and export state to the driver.
-    qa_drv_csr             qa_csr_inst(.*);
+    qa_drv_csr qa_csr_inst(.*);
 
     // Manage memory-mapped FIFOs in each direction.
     qa_drv_fifo_from_host  fifo_from_host(.*);

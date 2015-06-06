@@ -28,6 +28,14 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
+
+//
+// Test node that is always inserted between the driver top and the FIFO
+// channels to the host.  In its normal state the tester simply lets messages
+// flow between the two.  By setting a CSR the tester can be configured
+// into source, sink and loopback modes.
+//
+
 module qa_drv_tester
   #(parameter UMF_WIDTH=128)
     (input logic clk,

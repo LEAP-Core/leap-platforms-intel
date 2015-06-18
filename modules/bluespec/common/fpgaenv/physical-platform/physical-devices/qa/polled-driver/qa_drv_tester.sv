@@ -63,7 +63,7 @@ module qa_drv_tester
      input  logic                 tx_rdy,
      output logic                 tx_enable,
 
-     output t_AFU_DEBUG_RSP       dbg_tester
+     output t_TO_STATUS_MGR_TESTER tester_to_status
     );
 
     //
@@ -226,11 +226,11 @@ module qa_drv_tester
     begin
         if (! resetb)
         begin
-            dbg_tester <= 0;
+            tester_to_status.dbg_tester <= 0;
         end
         else
         begin
-            dbg_tester[5:0] <= { rx_rdy, rx_enable, tx_rdy, tx_enable, state };
+            tester_to_status.dbg_tester[5:0] <= { rx_rdy, rx_enable, tx_rdy, tx_enable, state };
         end
     end
 

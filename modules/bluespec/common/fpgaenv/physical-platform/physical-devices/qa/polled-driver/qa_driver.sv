@@ -48,15 +48,35 @@ module qa_driver
      //
      // -------------------------------------------------------------------
 
+     //
      // To client FIFO
+     //
      output logic [UMF_WIDTH-1:0] rx_fifo_data,   
      output logic                 rx_fifo_rdy,
      input  logic                 rx_fifo_enable,
     
+     //
      // From client FIFO
+     //
      input  logic [UMF_WIDTH-1:0] tx_fifo_data,
      output logic                 tx_fifo_rdy,
      input  logic                 tx_fifo_enable,
+
+     //
+     // Client status registers.  Mostly useful for debugging.
+     //
+     // Only one status register read will be in flight at once.
+     // The FPGA-side client must respond to a request with exactly
+     // one response.  No specific timing is required.
+     //
+     // Clients are not required to implement this as long as the host
+     // ReadStatusReg() method is never called.  In this case just
+     // tie off sreg_rsp_enable.
+     //
+     output t_SREG_ADDR           sreg_req_addr,
+     output logic                 sreg_req_rdy,
+     input  t_SREG                sreg_rsp,
+     input  logic                 sreg_rsp_enable,
 
      // -------------------------------------------------------------------
      //
@@ -180,13 +200,19 @@ module qa_driver
     
     frame_arb_t            frame_writer;
     frame_arb_t            frame_reader;
-    frame_arb_t            status_writer;
+    frame_arb_t            status_mgr_req;
     channel_grant_arb_t    write_grant;
     channel_grant_arb_t    read_grant;
     
-    t_AFU_DEBUG_RSP        dbg_fifo_from_host;
-    t_AFU_DEBUG_RSP        dbg_frame_release;
-    t_AFU_DEBUG_RSP        dbg_tester;
+    // Modules communicating state to the status manager
+    t_TO_STATUS_MGR_FIFO_FROM_HOST   fifo_from_host_to_status;
+    t_FROM_STATUS_MGR_FIFO_FROM_HOST status_to_fifo_from_host;
+
+    t_TO_STATUS_MGR_FIFO_TO_HOST     fifo_to_host_to_status;
+    t_FROM_STATUS_MGR_FIFO_TO_HOST   status_to_fifo_to_host;
+
+    t_TO_STATUS_MGR_TESTER           tester_to_status;
+
 
     // Map FIFO wires exported by the driver to the driver's internal wiring.
     // Normally the signals just pass through, but the tester can be
@@ -202,7 +228,7 @@ module qa_driver
     qa_drv_fifo_from_host  fifo_from_host(.*);
     qa_drv_fifo_to_host    fifo_to_host(.*);
 
-    qa_drv_status_writer   status_writer_inst(.*);
+    qa_drv_status_manager  status_manager(.*);
     cci_write_arbiter      write_arb(.*);
     cci_read_arbiter       read_arb(.*);
     

@@ -54,7 +54,8 @@ package qa_drv_csr_types;
         CSR_AFU_WRITE_FRAME_BASEH  = 16'h1a24,
 
         CSR_AFU_TRIGGER_DEBUG      = 16'h1a28,
-        CSR_AFU_ENABLE_TEST        = 16'h1a2c
+        CSR_AFU_ENABLE_TEST        = 16'h1a2c,
+        CSR_AFU_SREG_READ          = 16'h1a30
     }
     t_CSR_AFU_MAP;
 
@@ -73,7 +74,17 @@ package qa_drv_csr_types;
 
     // CSR_AFU_TRIGGER_DEBUG passes a tag that may trigger writeback of
     // different debugging state.
-    typedef logic [7:0] t_AFU_DEBUG_REQ;
+    typedef struct packed
+    {
+        // subIdx has module-specific meaning and may be used within a
+        // debugged module to return different states.
+        logic [23:0] subIdx;
+
+        // idx determines the module that will respond.
+        // See qa_drv_status_maanger.
+        logic [7:0]  idx;
+    }
+    t_AFU_DEBUG_REQ;
 
     // CSR_AFU_ENABLE_TEST passes a tag that may trigger a test in the
     // driver.
@@ -86,6 +97,14 @@ package qa_drv_csr_types;
     }
     t_AFU_ENABLE_TEST;
 
+    // Enable FPGA-side client status register read.
+    typedef struct
+    {
+        logic enable;
+        logic [31:0] addr;
+    }
+    t_AFU_SREG_REQ;
+
     typedef struct
     {
         logic afu_dsm_base_valid;
@@ -97,13 +116,16 @@ package qa_drv_csr_types;
         logic [63:0] afu_write_frame;
         logic [63:0] afu_read_frame;
 
-        // Debug request.  The manager will hold this
+        // Debug request.  The manager will hold the idx field in this
         // register for one cycle after a request is received and
         // then reset it to 0.
         t_AFU_DEBUG_REQ afu_trigger_debug;
 
         // Test request.  Held for one cycle, similar to afu_trigger_debug.
         t_AFU_ENABLE_TEST afu_enable_test;
+
+        // Client status register read request.  Enable is held for one cycle.
+        t_AFU_SREG_REQ afu_sreg_req;
     }
     t_CSR_AFU_STATE;
 

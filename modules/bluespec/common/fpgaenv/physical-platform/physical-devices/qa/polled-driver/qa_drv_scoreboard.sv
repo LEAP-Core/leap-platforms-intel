@@ -110,9 +110,11 @@ module qa_drv_scoreboard
         if (! resetb)
             oldest <= 0;
         else
+        begin
             oldest <= oldest_next;
+        end
 
-        assert (!(deq_en && ! notEmpty)) else
+        assert ((notEmpty === 1'bX) || !(deq_en && ! notEmpty)) else
             $fatal("qa_drv_scoreboard: Can't DEQ when EMPTY!");
     end
 

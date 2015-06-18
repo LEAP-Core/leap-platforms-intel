@@ -13,3 +13,4 @@
 
 #define CSR_AFU_TRIGGER_DEBUG   0x1a28
 #define CSR_AFU_ENABLE_TEST     0x1a2c
+#define CSR_AFU_SREG_READ       0x1a30

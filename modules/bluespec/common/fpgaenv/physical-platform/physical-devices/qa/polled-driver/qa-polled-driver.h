@@ -67,8 +67,7 @@
 #define AFU_BUFFER_SIZE           CL(128)
 #define DSM_SIZE                  MB(4)
 
-
-#define AFU_BUFFER_SIZE           CL(128)
+#define UMF_CHUNKS_PER_CL       (CL(1) / sizeof(UMF_CHUNK))
 
 #define FRAME_NUMBER            128
 #define FRAME_CHUNKS            64
@@ -98,12 +97,23 @@ class QA_DEVICE_CLASS: public PLATFORMS_MODULE_CLASS
     class tbb::atomic<bool> initReadComplete;
     class tbb::atomic<bool> initWriteComplete;
 
-    AFUBuffer                 *readBuffer;
-    AFUBuffer                 *writeBuffer;
-    UINT32                    readFrameNumber;
-    UINT32                    writeFrameNumber;
-    UINT32                    readChunkNumber;
-    UINT32                    readChunksTotal;
+    AFUBuffer*  readBuffer;
+    uint64_t    readBufferBytes;
+    uint64_t    readBufferIdxMask;
+
+    // Start/end of the read buffer
+    const UMF_CHUNK*  readBufferStart;
+    const UMF_CHUNK*  readBufferEnd;    // First address after the buffer
+
+    // Number of chunks remaining in current group
+    uint64_t    readChunksAvail;
+    // Pointer to next chunk to be read
+    const UMF_CHUNK*  readChunksNext;
+
+    AFUBuffer*  writeBuffer;
+    uint64_t    writeBufferBytes;
+    uint64_t    writeBufferIdxMask;
+    uint64_t    writeNextLineIdx;
 
   public:
     QA_DEVICE_CLASS(PLATFORMS_MODULE);
@@ -120,8 +130,14 @@ class QA_DEVICE_CLASS: public PLATFORMS_MODULE_CLASS
     void Write(const void* buf, size_t count); // write
     void RegisterLogicalDeviceName(string name);
     
+    // The driver implements a status register space in the FPGA.
+    // The protocol is very slow -- the registers are intended for debugging.
+    uint64_t ReadSREG(uint32_t n);
+
     // Dump driver state by writing a CSR and waiting for a response in DSM.
     void DebugDump();
+    void DebugDumpCurrentReadMessage();
+    void DebugDumpReadHistory();
 
     // Tests
     void TestSend();                    // Test sending to FPGA

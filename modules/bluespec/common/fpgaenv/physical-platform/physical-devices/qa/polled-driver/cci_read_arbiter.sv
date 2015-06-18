@@ -39,6 +39,7 @@ module cci_read_arbiter
 
     input   t_CSR_AFU_STATE        csr,
    
+    input   frame_arb_t            status_mgr_req,
     input   frame_arb_t            frame_writer,
     input   frame_arb_t            frame_reader,
 
@@ -88,43 +89,40 @@ module cci_read_arbiter
    end // always_comb begin
 
    // Set outgoing write control packet.
-   always_comb begin
+   always_comb
+   begin
       rdvalid = 0;
       read_grant.reader_grant = 0;
       read_grant.writer_grant = 0;
-      read_grant.status_grant = 0; // status never reads...                                           
+      read_grant.status_grant = 0;
 
       // Set a default state for header to avoid needlessly muxing with 0
       header = frame_reader.read_header;
 
       if (frame_reader.read.request && (state == FAVOR_FRAME_READER || !frame_writer.read.request))
-         begin
-            // header is already set above
-            read_grant.reader_grant = can_issue;
-            rdvalid = can_issue;
-         end
+      begin
+          // header is already set above
+          read_grant.reader_grant = can_issue;
+          rdvalid = can_issue;
+      end
       else if (frame_writer.read.request)
-        begin
-            header = frame_writer.read_header;
-            read_grant.writer_grant = can_issue;
-            rdvalid = can_issue;
-        end
+      begin
+          header = frame_writer.read_header;
+          read_grant.writer_grant = can_issue;
+          rdvalid = can_issue;
+      end
+      else if (status_mgr_req.read.request)
+      begin
+          header = status_mgr_req.read_header;
+          read_grant.status_grant = can_issue;
+          rdvalid = can_issue;
+      end
    end
 
    // Register outgoing control packet.
    always_ff @(posedge clk) begin      
       tx0.header      <= header;
       tx0.rdvalid     <= rdvalid && resetb;
-   end
-   
- 
-   // Some assertions
-   always_comb begin
-      if(read_grant.reader_grant && read_grant.writer_grant && resetb && ~clk)
-        begin
-           $display("Double grant of reader %d %d.", read_grant.reader_grant, read_grant.writer_grant);        
-           $finish;           
-        end
    end
   
 endmodule // cci_write_arbiter

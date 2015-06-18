@@ -51,6 +51,36 @@ package qa_drv_types;
     localparam LOG_FRAME_CHUNKS       = 6;
     localparam LOG_FRAME_BASE_POINTER = QA_ADDR_SZ - LOG_FRAME_NUMBER - LOG_FRAME_CHUNKS;
 
+
+    //
+    // Cache line data types.
+    //
+    typedef logic [QA_ADDR_SZ-1 : 0] t_CACHE_LINE_ADDR;
+    typedef logic [CACHE_WIDTH-1 : 0] t_CACHE_LINE;
+
+    // Cache line as a vector of 8 bit objects
+    localparam N_BIT8_PER_CACHE_LINE = CACHE_WIDTH / 8;
+    typedef logic [N_BIT8_PER_CACHE_LINE-1 : 0][7:0] t_CACHE_LINE_VEC8;
+
+    // Cache line as a vector of 16 bit objects
+    localparam N_BIT16_PER_CACHE_LINE = CACHE_WIDTH / 16;
+    typedef logic [N_BIT16_PER_CACHE_LINE-1 : 0][15:0] t_CACHE_LINE_VEC16;
+
+    // Cache line as a vector of 32 bit objects
+    localparam N_BIT32_PER_CACHE_LINE = CACHE_WIDTH / 32;
+    typedef logic [N_BIT32_PER_CACHE_LINE-1 : 0][31:0] t_CACHE_LINE_VEC32;
+
+    // Cache line as a vector of 64 bit objects
+    localparam N_BIT64_PER_CACHE_LINE = CACHE_WIDTH / 64;
+    typedef logic [N_BIT64_PER_CACHE_LINE-1 : 0][31:0] t_CACHE_LINE_VEC64;
+
+
+    // FIFO ring buffer indices.  This is the only place the buffer sizes
+    // are defined.  The hardware will tell the software the sizes during
+    // initialization.
+    typedef logic [12:0] t_FIFO_TO_HOST_IDX;
+    typedef logic [12:0] t_FIFO_FROM_HOST_IDX;
+
     typedef enum logic [3:0]
     {
         WrThru=4'h1,
@@ -59,22 +89,6 @@ package qa_drv_types;
         WrFence=4'h5
     }
     tx_request_t;
-
-    typedef logic [CACHE_WIDTH-1 : 0] t_QA_CACHE_LINE;
-
-    // note: status_array is type bit so it doesn't hold Xs, which cause the status writer to write forever in simulation
-    typedef struct 
-    {
-        logic ready;                      // from writer : 1 = ready for data; 0 = busy, write is ignored
-        logic valid;                      // from accel  : data and offset are valid
-        logic [CACHE_WIDTH-1:0] data;     // from accel  : data to write
-        logic [9:0] offset;               // from accel  : offset into status region
-        logic [127:0] afu_id;             // from accel  : unique AFU identifier
-        bit   [31:0] status_array [15:0]; // from multiple : status registers
-        bit   [15:0] update;              // from multiple : status update request
-        logic [31:0] perf_counter;        // from status : common free running counter for reporting performance
-    }
-    status_t;
 
     typedef struct 
     {
@@ -217,10 +231,10 @@ package qa_drv_types;
     //
     //     Each module may declare one or more vectors of debugging state that
     //     are emitted by the status writer in response to CSR triggers.
-    //     See status_writer for the mapping of trigger IDs to modules.
+    //     See status_manager for the mapping of trigger IDs to modules.
     //
     //     Debug requests arrive in CSR_AFU_TRIGGER_DEBUG.  The request value
-    //     determines the state written back in status_writer to DSM line 0.
+    //     determines the state written back in status_manager to DSM line 0.
     //
     // ========================================================================
 
@@ -228,6 +242,75 @@ package qa_drv_types;
     localparam AFU_DEBUG_RSP_SZ = 512 - AFU_DEBUG_REQ_SZ;
 
     typedef logic [AFU_DEBUG_RSP_SZ - 1 : 0] t_AFU_DEBUG_RSP;
+
+
+    // ========================================================================
+    //
+    //   Status manager --
+    //
+    //     Modules may communicate with the status manager in order to write
+    //     state back to the host and consume updates from the host.
+    //     Both FIFOs connected to the host manage credits and ring buffer
+    //     pointer updates through the status manager.
+    //
+    // ========================================================================
+    
+    // Status registers, exposed as a debugging interface to read status
+    // from the FPGA-side client.
+    typedef logic [31:0] t_SREG_ADDR;
+    typedef logic [63:0] t_SREG;
+
+    //
+    // FIFO from host status.  All fields must be valid every cycle.
+    //
+    typedef struct
+    {
+        // Index of the next line the FPGA will read when data is present.
+        t_FIFO_FROM_HOST_IDX oldest_read_line_idx;
+
+        // Debugging state
+        t_AFU_DEBUG_RSP dbg_fifo_state;
+    }
+    t_TO_STATUS_MGR_FIFO_FROM_HOST;
+    
+    typedef struct
+    {
+        // Index of the most recent line written by the host.
+        t_FIFO_FROM_HOST_IDX newest_read_line_idx;
+    }
+    t_FROM_STATUS_MGR_FIFO_FROM_HOST;
+
+
+    //
+    // FIFO to host status.  All fields must be valid every cycle.
+    //
+    typedef struct
+    {
+        // Index of the next that will be written by the FPGA.
+        t_FIFO_TO_HOST_IDX next_write_line_idx;
+
+        // Debugging state
+        t_AFU_DEBUG_RSP dbg_fifo_state;
+    }
+    t_TO_STATUS_MGR_FIFO_TO_HOST;
+
+    typedef struct
+    {
+        // Index of the oldest line still unread by the host.
+        t_FIFO_TO_HOST_IDX oldest_write_line_idx;
+    }
+    t_FROM_STATUS_MGR_FIFO_TO_HOST;
+
+
+    //
+    // Tester status.  All fields must be valid every cycle.
+    //
+    typedef struct
+    {
+        // Debugging state
+        t_AFU_DEBUG_RSP dbg_tester;
+    }
+    t_TO_STATUS_MGR_TESTER;
 
 endpackage // qa_drv_types
 

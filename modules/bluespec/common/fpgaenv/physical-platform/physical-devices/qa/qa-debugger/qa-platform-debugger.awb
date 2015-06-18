@@ -1,0 +1,12 @@
+%name Intel QuickAssist Platform Debugger
+%desc Intel QuickAssist Platform Debugger
+
+%provides physical_platform_debugger
+
+%notes README
+
+%sources -t BSV -v PUBLIC   qa-platform-debugger.bsv
+%sources -t H   -v PUBLIC   qa-platform-debugger.h
+%sources -t CPP -v PRIVATE  qa-platform-debugger.cpp
+
+%param QA_ENABLE_PLATFORM_DEBUGGER 0  "Enable the QA physical platform debugger"

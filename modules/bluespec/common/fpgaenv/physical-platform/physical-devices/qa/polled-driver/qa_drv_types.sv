@@ -61,6 +61,7 @@ package qa_drv_types;
     // Cache line as a vector of 8 bit objects
     localparam N_BIT8_PER_CACHE_LINE = CACHE_WIDTH / 8;
     typedef logic [N_BIT8_PER_CACHE_LINE-1 : 0][7:0] t_CACHE_LINE_VEC8;
+    localparam N_BYTES_PER_CACHE_LINE = N_BIT8_PER_CACHE_LINE;
 
     // Cache line as a vector of 16 bit objects
     localparam N_BIT16_PER_CACHE_LINE = CACHE_WIDTH / 16;
@@ -182,14 +183,21 @@ package qa_drv_types;
     }
     rx_c1_t;
 
+
+    //
+    // DSM addressing.
+    //
+    typedef logic [3:0] t_DSM_LINE_OFFSET;
+
     // Function: Returns physical address for a DSM register
-    function automatic [31:0] dsm_offset2addr;
-        input    [9:0]  offset_b;
+    function automatic [31:0] dsm_line_offset_to_addr;
+        input    t_DSM_LINE_OFFSET offset_l;
         input    [63:0] base_b;
         begin
-            dsm_offset2addr = base_b[37:6] + offset_b[9:6];
+            dsm_line_offset_to_addr = base_b[37:6] + offset_l;
         end
     endfunction
+
 
     // Function: Packs read metadata 
     function automatic [12:0] pack_read_metadata;

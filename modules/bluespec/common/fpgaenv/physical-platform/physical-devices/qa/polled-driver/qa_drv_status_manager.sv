@@ -57,6 +57,17 @@ module qa_drv_status_manager
     );
 
     //
+    // Offsets in DSM used for communicating state with the host.
+    //
+    // THESE OFFSETS MUST MATCH THE HOST!
+    //
+    localparam DSM_OFFSET_AFU_ID     = t_DSM_LINE_OFFSET'(0);
+    localparam DSM_OFFSET_SREG_RSP   = t_DSM_LINE_OFFSET'(1);
+    localparam DSM_OFFSET_DEBUG_RSP  = t_DSM_LINE_OFFSET'(2);
+    localparam DSM_OFFSET_FIFO_STATE = t_DSM_LINE_OFFSET'(3);
+    localparam DSM_OFFSET_POLL_STATE = t_DSM_LINE_OFFSET'(4);
+
+    //
     // AFU ID is used at the beginning of a run to tell the host the FPGA
     // is alive.
     //
@@ -187,12 +198,12 @@ module qa_drv_status_manager
     always_comb
     begin
         //
-        // Poll address is constant: the 3rd line in the DSM.
+        // Poll the DSM line holding the read head pointer and write credits.
         //
         status_mgr_req.read_header = 0;
         status_mgr_req.read_header.request_type = RdLine;
         status_mgr_req.read_header.address =
-            dsm_offset2addr(10'(2 * N_BIT8_PER_CACHE_LINE), csr.afu_dsm_base);
+            dsm_line_offset_to_addr(DSM_OFFSET_POLL_STATE, csr.afu_dsm_base);
 
         reader_meta_req.is_read   = 1'b1;
         reader_meta_req.is_header = 1'b1;
@@ -356,7 +367,7 @@ module qa_drv_status_manager
     // create CCI Tx1 transaction (write to DSM)
     //=================================================================
 
-    logic [9:0] offset;
+    t_DSM_LINE_OFFSET offset;
     t_CACHE_LINE data;
 
     always_comb
@@ -365,16 +376,22 @@ module qa_drv_status_manager
 
         if (state_wr != STATE_WR_IDLE)
         begin
-            // DSM line 0 write -- either AFU ID at init or debugging
-            offset = 0;
-
             case (state_wr)
               STATE_WR_DEBUG:
-                data = debug_rsp_line;
+                begin
+                    offset = DSM_OFFSET_DEBUG_RSP;
+                    data = debug_rsp_line;
+                end
               STATE_WR_STATUS:
-                data = sreg_rsp_line;
+                begin
+                    offset = DSM_OFFSET_SREG_RSP;
+                    data = sreg_rsp_line;
+                end
               default:
-                data = afu_id;
+                begin
+                    offset = DSM_OFFSET_AFU_ID;
+                    data = afu_id;
+                end
             endcase
 
             // Wait until the DSM is valid!
@@ -383,7 +400,7 @@ module qa_drv_status_manager
         else
         begin
             // FIFO state update
-            offset = 10'(N_BIT8_PER_CACHE_LINE);
+            offset = DSM_OFFSET_FIFO_STATE;
             data = fifo_status;
             status_mgr_req.write.request = need_fifo_status_update;
             requested_fifo_status_update = need_fifo_status_update;
@@ -391,7 +408,8 @@ module qa_drv_status_manager
 
         status_mgr_req.write_header = 0;
         status_mgr_req.write_header.request_type = WrThru;
-        status_mgr_req.write_header.address = dsm_offset2addr(offset, csr.afu_dsm_base);
+        status_mgr_req.write_header.address =
+            dsm_line_offset_to_addr(offset, csr.afu_dsm_base);
         status_mgr_req.data = data;
     end
     

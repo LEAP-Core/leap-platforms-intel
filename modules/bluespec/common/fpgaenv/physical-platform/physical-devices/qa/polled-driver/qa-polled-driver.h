@@ -76,6 +76,21 @@
 // For now, one chunk/cache line
 #define CHUNK_SIZE              CL(1)
 
+//
+// DSM offsets for various state.  THESE MUST MATCH THE VALUES IN
+// qa_drv_status_manager.sv!
+//
+typedef enum
+{
+    DSM_OFFSET_AFU_ID     = CL(0),
+    DSM_OFFSET_SREG_RSP   = CL(1),
+    DSM_OFFSET_DEBUG_RSP  = CL(2),
+    DSM_OFFSET_FIFO_STATE = CL(3),
+    DSM_OFFSET_POLL_STATE = CL(4)
+}
+t_DSM_OFFSETS;
+
+
 // DSM byte offset:                          0           4           8           c                                                                                                                        
 const uint32_t EXPECTED_AFU_ID[] = {0xaced0000, 0xaced0001, 0xaced0002, 0xaced0003};
 
@@ -109,6 +124,8 @@ class QA_DEVICE_CLASS: public PLATFORMS_MODULE_CLASS
     uint64_t    readChunksAvail;
     // Pointer to next chunk to be read
     const UMF_CHUNK*  readChunksNext;
+    // Start of the current read chunk -- used only for debugging
+    const UMF_CHUNK*  readChunksCurHead;
 
     AFUBuffer*  writeBuffer;
     uint64_t    writeBufferBytes;

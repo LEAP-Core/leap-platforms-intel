@@ -315,7 +315,7 @@ module qa_drv_fifo_from_host
                                     scoreboard_slot_rdy;
 
         read_header = 0;
-        read_header.request_type = RdLine;
+        read_header.request_type = RdLine_I;
 
         // Read metadata
         data_read_metadata.is_read   = 1'b1;

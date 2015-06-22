@@ -34,3 +34,4 @@
 %library libOSAL.so
 %library libltdl.so
 %library libaalclp.so
+%library libASECCIAFU.so

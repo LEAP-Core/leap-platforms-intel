@@ -28,6 +28,14 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
+
+//
+// Test node that is always inserted between the driver top and the FIFO
+// channels to the host.  In its normal state the tester simply lets messages
+// flow between the two.  By setting a CSR the tester can be configured
+// into source, sink and loopback modes.
+//
+
 module qa_drv_tester
   #(parameter UMF_WIDTH=128)
     (input logic clk,
@@ -55,7 +63,7 @@ module qa_drv_tester
      input  logic                 tx_rdy,
      output logic                 tx_enable,
 
-     output t_AFU_DEBUG_RSP       dbg_tester
+     output t_TO_STATUS_MGR_TESTER tester_to_status
     );
 
     //
@@ -218,11 +226,11 @@ module qa_drv_tester
     begin
         if (! resetb)
         begin
-            dbg_tester <= 0;
+            tester_to_status.dbg_tester <= 0;
         end
         else
         begin
-            dbg_tester[5:0] <= { rx_rdy, rx_enable, tx_rdy, tx_enable, state };
+            tester_to_status.dbg_tester[5:0] <= { rx_rdy, rx_enable, tx_rdy, tx_enable, state };
         end
     end
 

@@ -48,9 +48,6 @@ Packagehint=leap
 [Basic Virtual Channel Multiplexer/Requires]
 physical_channel=Intel QuickAssist FPGA Physical Channel
 
-[Null Physical Platform Debugger]
-File=modules/bluespec/common/fpgaenv/physical-platform/debuggers/null/null-debugger.awb
-Packagehint=leap-platforms
 
 [Common Physical Platform Utilities]
 File=modules/bluespec/common/fpgaenv/physical-platform/utils/utils.awb
@@ -88,7 +85,7 @@ physical_platform=Intel QuickAssist Platform
 remote_memory=Null Remote Memory
 channelio=Basic Virtual Channel Multiplexer
 rrr=RRR Clients and Servers
-physical_platform_debugger=Null Physical Platform Debugger
+physical_platform_debugger=Intel QuickAssist Platform Debugger
 local_mem=NULL Local Memory Interface
 
 [Common Physical Platform Utilities/Requires]
@@ -176,3 +173,7 @@ Packagehint=leap-platforms-intel
 
 [Hardware FPGA Components for StratixIII/Params]
 BROKEN_REGFILE=0
+
+[Intel QuickAssist Platform Debugger]
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-debugger/qa-platform-debugger.awb
+Packagehint=leap-platforms-intel

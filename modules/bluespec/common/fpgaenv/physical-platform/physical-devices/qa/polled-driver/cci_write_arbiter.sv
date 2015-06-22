@@ -41,7 +41,7 @@ module cci_write_arbiter
    
     input   frame_arb_t            frame_writer,
     input   frame_arb_t            frame_reader,
-    input   frame_arb_t            status_writer,
+    input   frame_arb_t            status_mgr_req,
     output  channel_grant_arb_t    write_grant,
    
     output tx_c1_t                 tx1,
@@ -96,10 +96,10 @@ module cci_write_arbiter
       write_grant.writer_grant = 0;
       write_grant.status_grant = 0;                                           
 
-      header  = status_writer.write_header;
-      data    = status_writer.data;
+      header  = status_mgr_req.write_header;
+      data    = status_mgr_req.data;
       
-      if(status_writer.write.request)
+      if(status_mgr_req.write.request)
         begin
             write_grant.status_grant = can_issue;
         end                                           
@@ -117,7 +117,7 @@ module cci_write_arbiter
             write_grant.writer_grant = can_issue;                                           
         end
 
-      wrvalid = (frame_reader.write.request || frame_writer.write.request || status_writer.write.request) && can_issue;   
+      wrvalid = (frame_reader.write.request || frame_writer.write.request || status_mgr_req.write.request) && can_issue;   
    end
 
    // Register outgoing control packet.

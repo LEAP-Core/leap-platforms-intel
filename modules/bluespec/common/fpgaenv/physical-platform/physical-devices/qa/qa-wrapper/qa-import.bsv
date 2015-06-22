@@ -36,21 +36,34 @@ import Vector::*;
 import FIFO::*;
 import FIFOF::*;
 
+
 `include "awb/provides/umf.bsh"
 `include "awb/provides/physical_platform_utils.bsh"
+
+`include "awb/provides/librl_bsv_base.bsh"
+`include "awb/provides/librl_bsv_storage.bsh"
 
 `include "awb/provides/soft_connections.bsh"
 `include "awb/provides/soft_services.bsh"
 `include "awb/provides/soft_services_lib.bsh"
 `include "awb/provides/soft_services_deps.bsh"
 
+`include "awb/provides/clocks_device.bsh"
+
+typedef Bit#(32) QA_SREG_ADDR;
+typedef Bit#(64) QA_SREG;
 
 interface QA_DRIVER;
-    method Action                   deq();
-    method Bit#(SizeOf#(UMF_CHUNK)) first();
-    method Bool                     notEmpty();
-    method Action                   write(Bit#(SizeOf#(UMF_CHUNK)) chunk);
-    method Bool                     notFull();
+    method Action                     deq();
+    method Bit#(SizeOf#(UMF_CHUNK))   first();
+    method Bool                       notEmpty();
+    method Action                     write(Bit#(SizeOf#(UMF_CHUNK)) chunk);
+    method Bool                       notFull();
+
+    // Status register read request from the host.  Useful mostly for
+    // debugging.
+    method ActionValue#(QA_SREG_ADDR) sregReq();
+    method Action                     sregRsp(QA_SREG val);
 endinterface
 
 interface QA_WIRES;
@@ -115,6 +128,9 @@ module mkQADeviceImport#(Clock vl_clk_LPdomain_32ui,
         method rx_fifo_rdy notEmpty();
         method write(tx_fifo_data) ready(tx_fifo_rdy) enable(tx_fifo_enable);
         method tx_fifo_rdy notFull();
+
+        method sreg_req_addr sregReq() ready(sreg_req_rdy) enable((*inhigh*) en0);
+        method sregRsp(sreg_rsp) enable(sreg_rsp_enable);
     endinterface
 
     interface QA_WIRES wires;
@@ -144,11 +160,13 @@ module mkQADeviceImport#(Clock vl_clk_LPdomain_32ui,
     endinterface
 
     schedule (driver_deq) C (driver_deq);
-    schedule (driver_deq) CF (driver_first, driver_write, driver_notEmpty, driver_notFull);
-    schedule (driver_first) CF (driver_deq, driver_first, driver_write, driver_notEmpty, driver_notFull);
+    schedule (driver_deq) CF (driver_first, driver_write, driver_notEmpty, driver_notFull, driver_sregReq, driver_sregRsp);
+    schedule (driver_first) CF (driver_deq, driver_first, driver_write, driver_notEmpty, driver_notFull, driver_sregReq, driver_sregRsp);
     schedule (driver_write) C (driver_write);    
-    schedule (driver_write) CF (driver_deq, driver_first, driver_notEmpty, driver_notFull);
-    schedule (driver_notFull, driver_notEmpty) CF (driver_deq, driver_first, driver_write, driver_notEmpty, driver_notFull);
+    schedule (driver_write) CF (driver_deq, driver_first, driver_notEmpty, driver_notFull, driver_sregReq, driver_sregRsp);
+    schedule (driver_notFull, driver_notEmpty) CF (driver_deq, driver_first, driver_write, driver_notEmpty, driver_notFull, driver_sregReq, driver_sregRsp);
+    schedule (driver_sregReq, driver_sregRsp) CF (driver_deq, driver_first, driver_write, driver_notEmpty, driver_notFull, driver_sregReq, driver_sregRsp);
+
 
     schedule (wires_inputWires,
               wires_ffs_vl61_LP32ui_sy2lp_C0TxHdr,
@@ -187,6 +205,9 @@ module [CONNECTED_MODULE] mkQADevice#(Clock vl_clk_LPdomain_32ui,
     SyncFIFOIfc#(UMF_CHUNK) syncReadQ <- mkSyncFIFOToCC(16, qa_clock, qa_reset);
     SyncFIFOIfc#(UMF_CHUNK) syncWriteQ <- mkSyncFIFOFromCC(16, qa_clock);
 
+    SyncFIFOIfc#(QA_SREG_ADDR) syncSregReqQ <- mkSyncFIFOToCC(1, qa_clock, qa_reset);
+    SyncFIFOIfc#(QA_SREG) syncSregRspQ <- mkSyncFIFOFromCC(1, qa_clock);
+
     rule pullDataIn;
         syncReadQ.enq(qa_driver.first);
         qa_driver.deq;
@@ -197,12 +218,31 @@ module [CONNECTED_MODULE] mkQADevice#(Clock vl_clk_LPdomain_32ui,
         syncWriteQ.deq;
     endrule
 
+    (* fire_when_enabled *)
+    rule sregReqIn;
+        let r <- qa_driver.sregReq();
+        syncSregReqQ.enq(r);
+    endrule
+
+    rule sregRspOut;
+        qa_driver.sregRsp(syncSregRspQ.first);
+        syncSregRspQ.deq;
+    endrule
+
+
     interface QA_DRIVER driver;
         method deq = syncReadQ.deq;
         method first = syncReadQ.first;
         method notEmpty = syncReadQ.notEmpty;
         method write = syncWriteQ.enq;
         method notFull = syncWriteQ.notFull;
+
+        method ActionValue#(QA_SREG_ADDR) sregReq();
+            syncSregReqQ.deq();
+            return syncSregReqQ.first();
+        endmethod
+
+        method sregRsp = syncSregRspQ.enq;
     endinterface
 
     interface QA_WIRES wires = qaDevice.wires;

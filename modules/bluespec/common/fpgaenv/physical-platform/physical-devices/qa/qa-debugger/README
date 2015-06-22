@@ -1,0 +1,14 @@
+Intel QuickAssist Physical Platform debugger.
+
+A very slow debugging channel is available through the QA driver using the
+SREG interface defined in our driver.  SREG is implemented using a QA CSR
+to trigger a register read request.  Responses to read requests are written
+to shared memory and consumed by the ReadSREG() method in our host-side
+driver.  The mechanism is hidden to the user.  All the user sees are
+SREG read request and response methods.  There is no latency requirement
+between arrival of the request and generation of the response, though the
+host driver blocks until a response is received.
+
+The debugger here implements a history ring buffer.  SREG 0 is the most
+recently written entry.  An optional soft connection is exposed, allowing
+one module to connect and record state.

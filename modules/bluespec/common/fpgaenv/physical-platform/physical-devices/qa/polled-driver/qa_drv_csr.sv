@@ -103,14 +103,16 @@ module qa_drv_csr
 
     always_ff @(posedge clk) begin
         if (~resetb) begin
-            csr.afu_trigger_debug <= 0;
+            csr.afu_trigger_debug.idx <= 0;
         end
         else if (rx0.cfgvalid && csr_addr_matches(rx0.header, CSR_AFU_TRIGGER_DEBUG)) begin
             csr.afu_trigger_debug <= rx0.data[$bits(t_AFU_DEBUG_REQ)-1 : 0];
         end
         else begin
-            // Hold request for only one cycle
-            csr.afu_trigger_debug <= 0;
+            // Hold request for only one cycle.  Only the idx is cleared.
+            // subIdx is left alone so it can be used to index storage until
+            // the next request is received.
+            csr.afu_trigger_debug.idx <= 0;
         end
     end
 
@@ -124,6 +126,20 @@ module qa_drv_csr
         else begin
             // Hold request for only one cycle
             csr.afu_enable_test <= 0;
+        end
+    end
+
+    always_ff @(posedge clk) begin
+        if (~resetb) begin
+            csr.afu_sreg_req.enable <= 0;
+        end
+        else if (rx0.cfgvalid && csr_addr_matches(rx0.header, CSR_AFU_SREG_READ)) begin
+            csr.afu_sreg_req.enable <= 1;
+            csr.afu_sreg_req.addr <= rx0.data[$bits(t_SREG_ADDR)-1 : 0];
+        end
+        else begin
+            // Hold request for only one cycle
+            csr.afu_sreg_req.enable <= 0;
         end
     end
 

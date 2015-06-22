@@ -24,7 +24,7 @@
 %sources -t VERILOG    -v PRIVATE qa_drv_fifo_from_host.sv
 %sources -t VERILOG    -v PRIVATE qa_drv_fifo_to_host.sv
 %sources -t VERILOG    -v PRIVATE qa_drv_scoreboard.sv
-%sources -t VERILOG    -v PRIVATE qa_drv_status_writer.sv  
+%sources -t VERILOG    -v PRIVATE qa_drv_status_manager.sv  
 %sources -t VERILOG    -v PRIVATE qa_drv_tester.sv  
 %sources -t VERILOG    -v PRIVATE frame_release.sv  
 %sources -t VERILOG    -v PRIVATE cci_read_arbiter.sv  

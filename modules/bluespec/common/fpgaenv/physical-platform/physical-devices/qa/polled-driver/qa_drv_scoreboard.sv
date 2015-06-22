@@ -30,13 +30,18 @@
 
 //
 // Scoreboard that behaves like a FIFO that allows out of order arrival of
-// the payload.
+// the payload.  Since the intended use of the scoreboard is to reorder memory
+// read responses, there is little point in enabling full bandwidth read and
+// write from the scoreboard.  Instead, the internal memory is half the
+// width of the data and either both write ports or both read ports are
+// used to spread data over two entries.
 //
-// The scoreboard holds combines two pieces of data with each entry:
+// The scoreboard combines two pieces of data with each entry:
 // meta-data that is supplied at the time an index is allocated and the
 // late-arriving data.  Both are returned together through first and first_meta.
 //
-
+//
+//
 module qa_drv_scoreboard
   #(parameter N_ENTRIES = 32,
               N_DATA_BITS = 64,
@@ -65,7 +70,10 @@ module qa_drv_scoreboard
      output logic [N_META_BITS-1 : 0] firstMeta      // Meta-data for oldest entry
      );
 
+    localparam N_NARROW_DATA_BITS = N_DATA_BITS / 2;
+
     typedef logic [N_DATA_BITS-1 : 0] t_DATA;
+    typedef logic [N_NARROW_DATA_BITS-1 : 0] t_NARROW_DATA;
     typedef logic [N_META_BITS-1 : 0] t_META_DATA;
     typedef logic [$clog2(N_ENTRIES)-1 : 0] t_IDX;
 
@@ -122,19 +130,58 @@ module qa_drv_scoreboard
     //
     // Manage the data memory.
     //
-    t_DATA data[0 : N_ENTRIES-1];
+    // Writes have priority since the incoming data is latency sensitive
+    // and must be stored.  Because the memory is half the width of
+    // incoming data both memory ports are used to complete a write.
+    //
+    t_NARROW_DATA data[0 : (2*N_ENTRIES)-1];
 
-    always_ff @(posedge clk)
+    t_NARROW_DATA enqData_pair[0:1];
+    assign enqData_pair[0] = enqData[N_NARROW_DATA_BITS-1 : 0];
+    assign enqData_pair[1] = enqData[N_DATA_BITS-1 : N_NARROW_DATA_BITS];
+
+    t_NARROW_DATA first_pair[0:1];
+    assign first = {first_pair[1], first_pair[0]};
+
+    t_IDX ram_addr;
+    assign ram_addr = enqData_en ? enqDataIdx : oldest_next;
+
+    //
+    // True dual port Block RAM, based on Altera template.
+    //
+    //   Address of read and write must be identical within a port or it
+    //   won't be inferred as a block RAM.
+    //
+
+    // Port A
+    always @(posedge clk)
     begin
-        first <= data[oldest_next];
-
-        // Data arrives separately, after a slot has already been allocated.
         if (enqData_en)
         begin
-            data[enqDataIdx] <= enqData;
+            data[{ram_addr, 1'b0}] <= enqData_pair[0];
+            // Altera includes this bypass in the sample dual write port memory.
+            first_pair[0] <= enqData_pair[0];
+        end
+        else
+        begin
+            first_pair[0] <= data[{ram_addr, 1'b0}];
         end
     end
 
+    // Port B
+    always @(posedge clk)
+    begin
+        if (enqData_en)
+        begin
+            data[{ram_addr, 1'b1}] <= enqData_pair[1];
+            // Altera includes this bypass in the sample dual write port memory.
+            first_pair[1] <= enqData_pair[1];
+        end
+        else
+        begin
+            first_pair[1] <= data[{ram_addr, 1'b1}];
+        end
+    end
 
     //
     // Manage the meta-data memory.
@@ -197,7 +244,14 @@ module qa_drv_scoreboard
         end
         else
         begin
-            notEmpty <= dataValid[oldest_next];
+            //
+            // Assert notEmpty only on cycles where access to the memory's
+            // read port is available.  A write uses both ports since the
+            // memory is half the width of the incoming data.  Memory
+            // responses are latency sensitive and there is no other buffer
+            // available, so writes have priority over reads.
+            //
+            notEmpty <= dataValid[oldest_next] && ! enqData_en;
         end
     end
 

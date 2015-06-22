@@ -89,7 +89,6 @@ QA_DEVICE_CLASS::QA_DEVICE_CLASS(
     initWriteComplete = false;
 
     readChunksAvail = 0;
-    writeNextLineIdx = 0;
 
     deviceSwitch = new COMMAND_SWITCH_DICTIONARY_CLASS("DEVICE_DICTIONARY");
 
@@ -159,6 +158,10 @@ QA_DEVICE_CLASS::Init()
     readBufferStart = (UMF_CHUNK *)readBuffer->virtual_address;
     readBufferEnd = (UMF_CHUNK *)(readBuffer->virtual_address + readBufferBytes);
     readChunksNext = readBufferStart;
+
+    writeBufferStart = (UMF_CHUNK *)writeBuffer->virtual_address;
+    writeBufferEnd = (UMF_CHUNK *)(writeBuffer->virtual_address + writeBufferBytes);
+    writeChunksNext = writeBufferStart;
 
     // Notic that we swap the read/write frames. Our read buffer is
     // the FPGA write buffer. Our write buffer is the FPGA read
@@ -383,6 +386,11 @@ QA_DEVICE_CLASS::Write(
         sleep(1);
     }
    
+    if (QA_DRIVER_DEBUG)
+    {
+        printf("WRITE New %d byte write\n", nBytes);
+    }
+
     // The FPGA updates a pointer to the oldest active entry in the ring buffer
     // to indicate when it is safe to overwrite the previous value.
     volatile uint32_t *oldest_live_idx =
@@ -390,34 +398,106 @@ QA_DEVICE_CLASS::Write(
 
     const UMF_CHUNK* src = (const UMF_CHUNK*)buf;
 
+    size_t n_chunks = 0;
     while (nBytes)
     {
         // Spin until it is safe to write to the entry
-        while (*oldest_live_idx == ((writeNextLineIdx + 1) & writeBufferIdxMask))
+        UMF_CHUNK* max_write_bound;
+        do
         {
-            // Wait
+            // Index of the oldest live line.  Leave an empty spot before it
+            // to differentiate between an empty ring buffer and a full buffer.
+            size_t idx = (*oldest_live_idx - 1) & writeBufferIdxMask;
+
+            // max_write_bound points to the first line to which writes are
+            // not allowed due to unconsumed previous writes.
+            max_write_bound = &writeBufferStart[idx * UMF_CHUNKS_PER_CL];
+        }
+        while (writeChunksNext == max_write_bound);
+
+        if (QA_DRIVER_DEBUG)
+        {
+            size_t idx = uint64_t(max_write_bound - writeBufferStart) / UMF_CHUNKS_PER_CL;
+            printf("  WRITE Bound is (at %p) is 0x%08lx\n", max_write_bound, idx);
         }
 
-        volatile UMF_CHUNK *dst = (volatile UMF_CHUNK *)&(writeBuffer->virtual_address[writeNextLineIdx * CL(1)]);
-        *dst = *src;
-        src += 1;
-        writeNextLineIdx = (writeNextLineIdx + 1) & writeBufferIdxMask;
+        // Start of a new message?
+        if (n_chunks == 0)
+        {
+            // How many chunks in the next message?  The hardware chunk counter
+            // is limited to 16 bits.
+            n_chunks = nBytes / UMF_CHUNK_BYTES;
+            if (n_chunks >= 0xffff)
+            {
+                n_chunks = 0xffff;
+            }
 
-        nBytes -= UMF_CHUNK_BYTES;
-    }
+            if (QA_DRIVER_DEBUG)
+            {
+                printf("  WRITE Start new message (at %p) with %d chunks\n", writeChunksNext, n_chunks);
+            }
 
-    // Update control word.  Need fence here...
-    atomic_thread_fence(std::memory_order_release);
+            *writeChunksNext++ = n_chunks;
+        }
 
-    // Indicate that a new message is available by updating the first uint32_t
-    // of DSM POLL_STATE with a pointer to the head of the ring buffer.
-    volatile uint32_t *newest_live_idx =
-        (volatile uint32_t*)afu.dsm_address(DSM_OFFSET_POLL_STATE);
-    *newest_live_idx = writeNextLineIdx;
+        // How much can be copied from the source buffer?
+        size_t write_max_chunks;
+        if (max_write_bound > writeChunksNext)
+        {
+            write_max_chunks = max_write_bound - writeChunksNext;
+        }
+        else
+        {
+            write_max_chunks = writeBufferEnd - writeChunksNext;
+        }
 
-    if (QA_DRIVER_DEBUG)
-    {
-        printf("WRITE Control newest idx (at %p) is 0x%08lx \n", newest_live_idx, writeNextLineIdx);
+        // Write the lesser of the number of chunks in the message and
+        // the space available.
+        size_t write_chunks = (n_chunks < write_max_chunks ? n_chunks :
+                                                             write_max_chunks);
+        size_t write_bytes = write_chunks * UMF_CHUNK_BYTES;
+
+        memcpy(writeChunksNext, buf, write_bytes);
+
+        buf = (const void*)((const uint8_t*)buf + write_bytes);
+        nBytes -= write_bytes;
+        n_chunks -= write_chunks;
+
+        if (QA_DRIVER_DEBUG)
+        {
+            printf("    WRITE Copied %d chunks to %p, %d remain (%d bytes)\n", write_chunks, writeChunksNext, n_chunks, nBytes);
+        }
+
+        writeChunksNext += write_chunks;
+
+        // Align writeChunksNext to a cache line.  This should only be needed
+        // at the end of a message (n_chunks == 0).  The math is simpler than
+        // branch prediction, so we just do it every time.
+        uint64_t cl_mask = CL(1) - 1;
+        writeChunksNext =
+            (UMF_CHUNK*)((uint64_t(writeChunksNext) + CL(1) - 1) & ~cl_mask);
+
+        // End of ring buffer?
+        if (writeChunksNext == writeBufferEnd)
+        {
+            writeChunksNext = writeBufferStart;
+        }
+
+        // Update control word.  Need fence here...
+        atomic_thread_fence(std::memory_order_release);
+
+        // Indicate that new lines are available by updating the first uint32_t
+        // of DSM POLL_STATE with a pointer to the head of the ring buffer.
+        volatile uint32_t *newest_live_idx =
+            (volatile uint32_t*)afu.dsm_address(DSM_OFFSET_POLL_STATE);
+        uint32_t next_line_idx = (writeChunksNext - writeBufferStart) /
+                                 UMF_CHUNKS_PER_CL;
+        *newest_live_idx = next_line_idx;
+
+        if (QA_DRIVER_DEBUG)
+        {
+            printf("    WRITE Control newest idx (at %p) is 0x%08lx\n", newest_live_idx, next_line_idx);
+        }
     }
 }
 
@@ -573,11 +653,14 @@ QA_DEVICE_CLASS::TestSend()
     while (afu.read_dsm(0) == 0) ;
 
     UMF_CHUNK *msg = new UMF_CHUNK[FRAME_CHUNKS];
-    const int msg_max_size = FRAME_CHUNKS * UMF_CHUNK_BYTES / 2;
-    memset((void*)msg, 0, msg_max_size);
+    for (int32_t i = 0; i < FRAME_CHUNKS; i += 1)
+    {
+        msg[i] = i << 1;
+    }
+    const int msg_max_size = FRAME_CHUNKS * UMF_CHUNK_BYTES;
 
     // First test: write a series of messages, growing in size
-    for (int sz = UMF_CHUNK_BYTES; sz < msg_max_size; sz <<= 1)
+    for (int sz = UMF_CHUNK_BYTES; sz < msg_max_size; sz += UMF_CHUNK_BYTES)
     {
         Write(msg, sz);
     }

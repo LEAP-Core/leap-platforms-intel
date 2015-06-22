@@ -35,8 +35,10 @@
 module qa_drv_fifo_from_host
   #(// Match N_SCOREBOARD_ENTRIES to the size of the scoreboard block RAM for
     // greatest efficiency.  Altera M20K memory is 512 x 32 bits. (32 is the
-    // widest configuration.)
-    N_SCOREBOARD_ENTRIES=512,
+    // widest configuration.  The scoreboard memory is half the input width,
+    // using both write ports to store a full input in adjacent entries.
+    // Hence 512 / 2 entries.
+    N_SCOREBOARD_ENTRIES=256,
     CACHE_WIDTH=512,
     UMF_WIDTH=128)
     (input logic clk,
@@ -77,6 +79,155 @@ module qa_drv_fifo_from_host
 
     // ====================================================================
     //
+    //   Convert a stream of cache lines into a stream of UMF_CHUNKs.
+    //
+    // ====================================================================
+
+    typedef enum
+    {
+        STATE_NEW_MESSAGE,
+        STATE_READ_HEADER,
+        STATE_NEW_LINE,
+        STATE_VALID_CHUNK
+    }
+    t_STATE;
+
+    t_STATE state;
+
+    localparam UMF_CHUNKS_PER_LINE = CACHE_WIDTH / UMF_WIDTH;
+    typedef logic [UMF_WIDTH-1:0] t_UMF_CHUNK;
+
+    // Cache line as a vector of UMF_CHUNKs
+    typedef t_UMF_CHUNK [UMF_CHUNKS_PER_LINE-1 : 0] t_CACHE_LINE_UMF_CHUNK_VEC;
+
+    // Index of a UMF_CHUNK within a line
+    typedef logic [$clog2(UMF_CHUNKS_PER_LINE)-1 : 0] t_UMF_CHUNK_IDX;
+
+    // Count of UMF_CHUNKs in a message group.  The size of this counter
+    // limits the maximum message size.
+    typedef logic [15:0] t_NUM_UMF_CHUNKS;
+
+    // Number of chunks remaining in the current message
+    t_NUM_UMF_CHUNKS num_chunks;
+
+    // Index of the chunk within the current line
+    t_UMF_CHUNK_IDX chunk_in_line;
+
+    // Cache line currently being processed
+    t_CACHE_LINE_UMF_CHUNK_VEC cur_line;
+
+    // Commands and wires to the scoreboard
+    logic sc_not_empty;
+    t_CACHE_LINE_UMF_CHUNK_VEC sc_next_line;
+
+    logic sc_req_next_line;
+    assign sc_req_next_line = sc_not_empty && ((state == STATE_NEW_MESSAGE) ||
+                                               (state == STATE_NEW_LINE));
+
+    // Data is ready when it is sitting in the outbound buffer
+    assign rx_rdy = (state == STATE_VALID_CHUNK);
+    assign rx_data = cur_line[0];
+
+    always_ff @(posedge clk)
+    begin
+        // Signal error if user code requests the next chunk when
+        // it isn't ready.
+        if (!resetb && rx_enable)
+        begin
+            assert (rx_rdy) else
+                $fatal("qa_drv_fifo_from_host: rx_enable while no data valid!");
+        end
+    end
+
+
+    //
+    // State machine.
+    //
+    always_ff @(posedge clk)
+    begin
+        if (!resetb)
+        begin
+            state <= STATE_NEW_MESSAGE;
+        end
+        else
+        begin
+            case (state)
+              STATE_NEW_MESSAGE:
+                begin
+                    if (sc_not_empty)
+                    begin
+                        state <= STATE_READ_HEADER;
+                    end
+                end
+
+              STATE_READ_HEADER:
+                begin
+                    // The number of chunks is the first entry in the message
+                    num_chunks <= t_NUM_UMF_CHUNKS'(cur_line[0]);
+                    chunk_in_line <= 1;
+
+                    state <= STATE_VALID_CHUNK;
+                end
+
+              STATE_NEW_LINE:
+                begin
+                    chunk_in_line <= 0;
+
+                    if (sc_not_empty)
+                    begin
+                        state <= STATE_VALID_CHUNK;
+                    end
+                end
+
+              STATE_VALID_CHUNK:
+                begin
+                    // If the client consumed a chunk then advance the poniters
+                    if (rx_enable)
+                    begin
+                        if (num_chunks == t_NUM_UMF_CHUNKS'(1))
+                        begin
+                            // End of message
+                            state <= STATE_NEW_MESSAGE;
+                        end
+                        else if (chunk_in_line == t_UMF_CHUNK_IDX'(UMF_CHUNKS_PER_LINE-1))
+                        begin
+                            // End of line
+                            state <= STATE_NEW_LINE;
+                        end
+
+                        num_chunks <= num_chunks - t_NUM_UMF_CHUNKS'(1);
+                        chunk_in_line <= chunk_in_line + t_UMF_CHUNK_IDX'(1);
+                    end
+                end
+            endcase
+        end
+    end
+
+
+    //
+    // Manage cur_line.
+    //
+    always_ff @(posedge clk)
+    begin
+        if ((state == STATE_NEW_MESSAGE) || (state == STATE_NEW_LINE))
+        begin
+            cur_line <= sc_next_line;
+        end
+
+        // Rotate if reading the header or sending a chunk to the client.
+        if ((state == STATE_READ_HEADER) ||
+            (rx_enable && (state == STATE_VALID_CHUNK)))
+        begin
+            for (int i = 0; i < UMF_CHUNKS_PER_LINE-1; i++)
+            begin
+                cur_line[i] <= cur_line[i + 1];
+            end
+        end
+    end
+
+
+    // ====================================================================
+    //
     //   Reads are not returned in order.  The scoreboard sorts read
     //   responses.
     //
@@ -95,9 +246,6 @@ module qa_drv_fifo_from_host
                                  response_read_metadata.is_read &&
                                  ! response_read_metadata.is_header;
 
-    // FIFO stream to the host
-    t_CACHE_LINE read_line;
-    assign rx_data = read_line[UMF_WIDTH-1:0];
 
     //
     // Track the oldest read line.  This pointer will be forwarded to the
@@ -114,13 +262,10 @@ module qa_drv_fifo_from_host
         begin
             oldest_read_line_idx <= 0;
         end
-        else if (rx_enable)
+        else if (sc_req_next_line)
         begin
             // Read respose.  Update the oldest pointer.
             oldest_read_line_idx <= oldest_read_line_idx + 1;
-
-            assert (rx_rdy) else
-                $fatal("qa_drv_fifo_from_host: rx_enable while no data valid!");
         end
     end
 
@@ -140,9 +285,9 @@ module qa_drv_fifo_from_host
                    .enqDataIdx(response_read_metadata.rob_addr[N_SCOREBOARD_IDX_BITS-1 : 0]),
                    .enqData(rx0.data),
 
-                   .deq_en(rx_enable),
-                   .notEmpty(rx_rdy),
-                   .first(read_line),
+                   .deq_en(sc_req_next_line),
+                   .notEmpty(sc_not_empty),
+                   .first(sc_next_line),
                    .firstMeta());
 
 

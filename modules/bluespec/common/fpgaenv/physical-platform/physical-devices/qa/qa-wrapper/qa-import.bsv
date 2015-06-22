@@ -36,6 +36,11 @@ import Vector::*;
 import FIFO::*;
 import FIFOF::*;
 
+`ifndef CCI_LOOPBACK_HACK_Z
+import GetPut::*;
+import Connectable::*;
+`endif
+
 
 `include "awb/provides/umf.bsh"
 `include "awb/provides/physical_platform_utils.bsh"
@@ -230,6 +235,8 @@ module [CONNECTED_MODULE] mkQADevice#(Clock vl_clk_LPdomain_32ui,
     endrule
 
 
+`ifdef CCI_LOOPBACK_HACK_Z
+
     interface QA_DRIVER driver;
         method deq = syncReadQ.deq;
         method first = syncReadQ.first;
@@ -244,6 +251,28 @@ module [CONNECTED_MODULE] mkQADevice#(Clock vl_clk_LPdomain_32ui,
 
         method sregRsp = syncSregRspQ.enq;
     endinterface
+
+`else
+    //
+    // A hack to make timing closure on the platform and driver code before
+    // including the design.  This will be replaced with logic constraints.
+    // For now, use incremental compilation to first place and route a design
+    // that doesn't include any user code, then disable CCI_LOOPBACK_HACK and
+    // do normal compilation in the same build directory.  The Altera tools
+    // will use the original placement as a hint.
+    //
+
+    mkConnection(toGet(syncReadQ), toPut(syncWriteQ));
+
+    rule sregLoop;
+        let r = syncSregReqQ.first();
+        syncSregReqQ.deq();
+
+        syncSregRspQ.enq(zeroExtend(r));
+    endrule
+
+    interface QA_DRIVER driver = ?;
+`endif
 
     interface QA_WIRES wires = qaDevice.wires;
 endmodule

@@ -12,8 +12,6 @@
 %sources -t H      -v PUBLIC  AFU_csr.h
 %sources -t CPP    -v PRIVATE AFU.cpp
 
-%sources -t VERILOG    -v PRIVATE mkSizedFIFOUMF.v
-
 %sources -t VERILOG_H  -v PRIVATE qa.vh
 %sources -t VERILOG_H  -v PRIVATE qa_drv_packages.vh
 

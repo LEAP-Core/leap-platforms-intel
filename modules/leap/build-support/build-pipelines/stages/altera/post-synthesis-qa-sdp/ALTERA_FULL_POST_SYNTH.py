@@ -11,7 +11,14 @@ class PostSynthesize():
         altera_apm_name = moduleList.compileDirectory + '/' + moduleList.apmName
         qsf_src_dir = moduleList.env['DEFS']['ROOT_DIR_HW_MODEL']
 
+        # If the compilation directory doesn't exist, create it. 
+        if(not os.path.exists(moduleList.compileDirectory)):
+            os.mkdir(moduleList.compileDirectory)
+
         rel_qsf_src_dir = model.rel_if_not_abspath(qsf_src_dir, moduleList.compileDirectory)
+
+        # pick up awb parameters.
+        paramTclFile = moduleList.topModule.moduleDependency['PARAM_TCL'][0]
 
         ## QA build expects to build sys_cfg_pkg.svh in the build directory
         if (os.path.exists(qsf_src_dir + '/sys_cfg_pkg.svh') and
@@ -19,18 +26,30 @@ class PostSynthesize():
             os.symlink(rel_qsf_src_dir + '/sys_cfg_pkg.svh',
                        moduleList.compileDirectory + '/sys_cfg_pkg.svh')
 
-        altera_qsf = altera_apm_name + '.qsf'
+        altera_qsf = altera_apm_name + '.tcl'
         altera_qpf = altera_apm_name + '.qpf'
 
         prjFile = open(altera_qsf, 'w')
+
+        prjFile.write('package require ::quartus::project\n')
+        prjFile.write('package require ::quartus::flow\n')
+        prjFile.write('package require ::quartus::incremental_compilation\n')
+
+        # do we want to check for the existence of a project here?
+        prjFile.write('project_new ' + moduleList.apmName +' -overwrite\n')
 
         prjFile.write('source ' + rel_qsf_src_dir + '/qa_canoe_pass_config.qsf\n\n')
 
         prjFile.write('source ' + rel_qsf_src_dir + '/qsf_env_settings.qsf\n')
         prjFile.write('source ' + rel_qsf_src_dir + '/qsf_qph_PAR_files.qsf\n')
         prjFile.write('source ' + rel_qsf_src_dir + '/qsf_qlp_PAR_files.qsf\n')
-        prjFile.write('set_global_assignment -name SDC_FILE ' + rel_qsf_src_dir + '/sdc_qph.sdc\n')
-        prjFile.write('set_global_assignment -name SDC_FILE ' + rel_qsf_src_dir + '/sdc_qlp.sdc\n\n')
+
+
+        # Include SDC (Tcl) files. These must be included in a specific order to honor dependencies among them.
+        sdcs = map(model.modify_path_hw, moduleList.getAllDependenciesWithPaths('GIVEN_TCL_HEADERS')) + map(model.modify_path_hw, moduleList.getAllDependenciesWithPaths('GIVEN_SDCS')) + map(model.modify_path_hw, moduleList.getAllDependenciesWithPaths('GIVEN_SDC_ALGEBRAS'))      
+
+        for tcl_header in [paramTclFile] + sdcs:
+            prjFile.write('set_global_assignment -name SDC_FILE ' + model.rel_if_not_abspath(tcl_header, moduleList.compileDirectory)+ '\n')
 
         # Add in all the verilog here. 
         [globalVerilogs, globalVHDs] = synthesis_library.globalRTLs(moduleList, moduleList.moduleList)
@@ -55,14 +74,36 @@ class PostSynthesize():
             v = model.rel_if_not_abspath(v, moduleList.compileDirectory)
             prjFile.write('set_global_assignment -name VERILOG_FILE ' + v + '\n'); 
 
+
+        fullCompilePath = os.path.abspath(moduleList.compileDirectory)
+
+        #elaborate the design. 
+        prjFile.write('execute_module  -tool map -args "--verilog_macro=\\"QUARTUS_COMPILATION=1\\" --lib_path ' + fullCompilePath + ' --analysis_and_elaboration " \n')
+        #create a partition for leap. 
+        prjFile.write('create_partition -contents cci_std_afu:cci_std_afu|mk_model_Wrapper:model_wrapper -partition leap_part \n')
+
+
+        prjFile.write('execute_module  -tool map -args "--verilog_macro=\\"QUARTUS_COMPILATION=1\\" --lib_path ' + fullCompilePath + ' " \n')
+        prjFile.write('execute_module  -tool cdb -args "--merge"  \n')
+
+      
+        prjFile.write('execute_module  -tool fit \n')
+        prjFile.write('execute_module  -tool sta \n')
+        prjFile.write('execute_module  -tool sta -args "--do_report_timing"\n')
+        prjFile.write('execute_module  -tool asm  \n')
+
+        prjFile.write('project_close \n')
+
+
         prjFile.close()
 
-        # generate sof
+
         altera_sof = moduleList.env.Command(altera_apm_name + '.sof',
-                                            globalVerilogs + globalVHDs + [altera_qsf],
-                                            ['quartus_sh --flow compile ' + altera_qpf,
-                                             'quartus_sta --do_report_timing ' + altera_qpf,
-                                             'quartus_sh --archive ' + altera_apm_name])
+                                            globalVerilogs + globalVHDs + [altera_apm_name + '.tcl'] + [paramTclFile] + sdcs,
+                                            ['cd ' + moduleList.compileDirectory + '; quartus_sh -t ' + moduleList.apmName + '.tcl' ])
+
+
+      
 
         moduleList.topModule.moduleDependency['BIT'] = [altera_sof]
 
@@ -85,7 +126,7 @@ class PostSynthesize():
              SCons.Script.Delete(moduleList.apmName + '_hw.exe'),
              SCons.Script.Delete(moduleList.apmName + '_hw.vexe'),
              '@echo "++++++++++++ Post-Place & Route ++++++++"',
-             'touch ' + moduleList.apmName + '_hw.errinfo'])
+             synthesis_library.leap_physical_summary(altera_apm_name + '.sta.rpt', moduleList.apmName + '_hw.errinfo', 'Timing Analyzer was successful', 'Timing requirements not met')])
 
         moduleList.topModule.moduleDependency['LOADER'] = [altera_loader]
         moduleList.topDependency = moduleList.topDependency + [altera_loader]

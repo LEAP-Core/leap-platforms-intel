@@ -17,3 +17,4 @@
 
 %sources -t SDC -v PRIVATE sdc_qlp.sdc
 %sources -t SDC -v PRIVATE sdc_qph.sdc
+%sources -t TCL_HEADER -v PRIVATE altera-timing.sdc

@@ -1,11 +1,11 @@
 
 [Global]
 SaveParameters=0
-Description=Intel QuickAssist FPGA Canoe Pass SDP
-File=fpgaenv-hybrid-qa-sdp
+Description=Intel QuickAssist FPGA Canoe Pass SDP (no memory)
+File=fpgaenv-hybrid-qa-sdp-no-mem
 Version=2.2
 Type=Leap
-Name=Intel QuickAssist FPGA Canoe Pass SDP
+Name=Intel QuickAssist FPGA Canoe Pass SDP (no memory)
 Class=Asim::Model
 DefaultBenchmark=
 DefaultRunOpts=
@@ -48,6 +48,10 @@ Packagehint=leap
 [Basic Virtual Channel Multiplexer/Requires]
 physical_channel=Intel QuickAssist FPGA Physical Channel
 
+[Null Physical Platform Debugger]
+File=modules/bluespec/common/fpgaenv/physical-platform/debuggers/null/null-debugger.awb
+Packagehint=leap-platforms
+
 [Common Physical Platform Utilities]
 File=modules/bluespec/common/fpgaenv/physical-platform/utils/utils.awb
 Packagehint=leap-platforms
@@ -84,7 +88,7 @@ physical_platform=Intel QuickAssist Platform
 remote_memory=Null Remote Memory
 channelio=Basic Virtual Channel Multiplexer
 rrr=RRR Clients and Servers
-physical_platform_debugger=Intel QuickAssist Platform Debugger
+physical_platform_debugger=Null Physical Platform Debugger
 local_mem=NULL Local Memory Interface
 
 [Common Physical Platform Utilities/Requires]
@@ -96,7 +100,6 @@ Packagehint=leap-platforms
 
 [Little-Endian Unified Message Format/Params]
 UMF_CHUNK_BYTES=16
-
 
 [NULL Local Memory Interface]
 File=modules/leap/virtual-platform/low-level-platform-interface/local-mem/local-mem-null.awb
@@ -169,10 +172,6 @@ Packagehint=leap-platforms-intel
 
 [Hardware FPGA Components for StratixIII/Params]
 BROKEN_REGFILE=0
-
-[Intel QuickAssist Platform Debugger]
-File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-debugger/qa-platform-debugger.awb
-Packagehint=leap-platforms-intel
 
 [Standard Platform Services (Local Memory Scratchpad) Submodel]
 File=config/pm/leap/submodels/platform-services/standard-platform-local-mem.apm

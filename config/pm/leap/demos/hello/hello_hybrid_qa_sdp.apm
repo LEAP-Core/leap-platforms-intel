@@ -40,7 +40,9 @@ Packagehint=leap
 [Soft Services Hybrid Application Environment/Requires]
 connected_application=Hello World
 
-
 [Intel QuickAssist FPGA Canoe Pass SDP]
 File=config/pm/leap/submodels/fpgaenv/intel/qa/fpgaenv-hybrid-qa-sdp.apm
 Packagehint=leap-platforms-intel
+
+[Intel QuickAssist FPGA Canoe Pass SDP/Params]
+MODEL_CLOCK_FREQ=80

@@ -113,6 +113,9 @@ module qa_drv_fifo_from_host
     // Index of the chunk within the current line
     t_UMF_CHUNK_IDX chunk_in_line;
 
+    logic is_last_chunk_in_line;
+    assign is_last_chunk_in_line = (chunk_in_line == t_UMF_CHUNK_IDX'(UMF_CHUNKS_PER_LINE-1));
+
     // Cache line currently being processed
     t_CACHE_LINE_UMF_CHUNK_VEC cur_line;
 
@@ -120,9 +123,24 @@ module qa_drv_fifo_from_host
     logic sc_not_empty;
     t_CACHE_LINE_UMF_CHUNK_VEC sc_next_line;
 
+    // Continue to next line if the current chunk is ending and valid data
+    // exists in the scoreboard.
+    logic continue_to_next_line;
+    assign continue_to_next_line =
+        ((state == STATE_VALID_CHUNK) &&
+         rx_enable &&
+         is_last_chunk_in_line &&
+         (num_chunks != t_NUM_UMF_CHUNKS'(1)));
+
+    // Is the current line completely drained?
+    logic need_next_line;
+    assign need_next_line = ((state == STATE_NEW_MESSAGE) ||
+                             (state == STATE_NEW_LINE) ||
+                             continue_to_next_line);
+
+    // Time to request a new line from the scoreboard?
     logic sc_req_next_line;
-    assign sc_req_next_line = sc_not_empty && ((state == STATE_NEW_MESSAGE) ||
-                                               (state == STATE_NEW_LINE));
+    assign sc_req_next_line = sc_not_empty && need_next_line;
 
     // Data is ready when it is sitting in the outbound buffer
     assign rx_rdy = (state == STATE_VALID_CHUNK);
@@ -189,10 +207,15 @@ module qa_drv_fifo_from_host
                             // End of message
                             state <= STATE_NEW_MESSAGE;
                         end
-                        else if (chunk_in_line == t_UMF_CHUNK_IDX'(UMF_CHUNKS_PER_LINE-1))
+                        else if (is_last_chunk_in_line)
                         begin
-                            // End of line
-                            state <= STATE_NEW_LINE;
+                            // End of line.  If the scoreboard has another line
+                            // just keep going.  Otherwise, wait for the next
+                            // line.
+                            if (! sc_not_empty)
+                            begin
+                                state <= STATE_NEW_LINE;
+                            end
                         end
 
                         num_chunks <= num_chunks - t_NUM_UMF_CHUNKS'(1);
@@ -209,14 +232,14 @@ module qa_drv_fifo_from_host
     //
     always_ff @(posedge clk)
     begin
-        if ((state == STATE_NEW_MESSAGE) || (state == STATE_NEW_LINE))
+        if (need_next_line)
         begin
             cur_line <= sc_next_line;
         end
 
         // Rotate if reading the header or sending a chunk to the client.
-        if ((state == STATE_READ_HEADER) ||
-            (rx_enable && (state == STATE_VALID_CHUNK)))
+        else if ((state == STATE_READ_HEADER) ||
+                 (rx_enable && (state == STATE_VALID_CHUNK)))
         begin
             for (int i = 0; i < UMF_CHUNKS_PER_LINE-1; i++)
             begin

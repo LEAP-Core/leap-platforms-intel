@@ -715,7 +715,7 @@ QA_DEVICE_CLASS::TestRecv()
     while (afu.read_dsm(0) == 0) ;
 
     UMF_CHUNK *msg = new UMF_CHUNK[FRAME_CHUNKS];
-    const int msg_max_size = FRAME_CHUNKS * UMF_CHUNK_BYTES / 2;
+    const int msg_max_size = FRAME_CHUNKS * UMF_CHUNK_BYTES;
 
     //
     // Measure performance

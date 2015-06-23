@@ -131,6 +131,12 @@ class QA_DEVICE_CLASS: public PLATFORMS_MODULE_CLASS
     uint64_t    writeBufferBytes;
     uint64_t    writeBufferIdxMask;
     uint64_t    writeNextLineIdx;
+    // Pointer to next chunk to be written
+    UMF_CHUNK*  writeChunksNext;
+
+    // Start/end of the write buffer
+    UMF_CHUNK*  writeBufferStart;
+    UMF_CHUNK*  writeBufferEnd;    // First address after the buffer
 
   public:
     QA_DEVICE_CLASS(PLATFORMS_MODULE);

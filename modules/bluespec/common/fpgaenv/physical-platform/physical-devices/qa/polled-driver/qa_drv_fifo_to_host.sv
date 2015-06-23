@@ -509,13 +509,13 @@ module qa_drv_fifo_to_host
           STATE_EMIT_DATA:
             begin
                 frame_writer.data = cur_data_line;
-                frame_writer.write_header.request_type = WrLine;
+                frame_writer.write_header.request_type = WrThru;
                 frame_writer.write_header.address = buffer_base_addr + cur_data_idx;
             end
           STATE_EMIT_HEADER:
             begin
                 frame_writer.data = header_line;
-                frame_writer.write_header.request_type = WrLine;
+                frame_writer.write_header.request_type = WrThru;
                 frame_writer.write_header.address = buffer_base_addr + cur_header_idx;
             end
           default:

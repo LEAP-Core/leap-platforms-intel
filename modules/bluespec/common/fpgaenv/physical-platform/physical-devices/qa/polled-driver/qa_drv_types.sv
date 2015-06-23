@@ -84,12 +84,13 @@ package qa_drv_types;
 
     typedef enum logic [3:0]
     {
-        WrThru=4'h1,
-        WrLine=4'h2,
-        RdLine=4'h4,
-        WrFence=4'h5
+        WrThru   = 4'h1,
+        WrLine   = 4'h2,
+        WrFence  = 4'h5,
+        RdLine   = 4'h4,
+        RdLine_I = 4'h6
     }
-    tx_request_t;
+    t_TX_REQUEST;
 
     typedef struct 
     {
@@ -119,7 +120,7 @@ package qa_drv_types;
     typedef struct packed
     {
         logic [60:56] byte_enable;
-        tx_request_t request_type;
+        t_TX_REQUEST  request_type;
         logic [51:46] rsvd;
         logic [45:14] address;
         logic [13:0]  mdata;

@@ -127,15 +127,22 @@ module qa_driver
     assign resetb = ffs_vl_LP32ui_lp2sy_SoftReset_n;
 
     rx_c0_t rx0;
-    assign rx0.header     = ffs_vl18_LP32ui_lp2sy_C0RxHdr;
-    assign rx0.data       = ffs_vl512_LP32ui_lp2sy_C0RxData;
-    assign rx0.wrvalid    = ffs_vl_LP32ui_lp2sy_C0RxWrValid;
-    assign rx0.rdvalid    = ffs_vl_LP32ui_lp2sy_C0RxRdValid;
-    assign rx0.cfgvalid   = ffs_vl_LP32ui_lp2sy_C0RxCgValid;
+    // Buffer incoming read responses for timing
+    always_ff @(posedge vl_clk_LPdomain_32ui)
+    begin
+        rx0.header     <= ffs_vl18_LP32ui_lp2sy_C0RxHdr;
+        rx0.data       <= ffs_vl512_LP32ui_lp2sy_C0RxData;
+        rx0.wrvalid    <= ffs_vl_LP32ui_lp2sy_C0RxWrValid;
+        rx0.rdvalid    <= ffs_vl_LP32ui_lp2sy_C0RxRdValid;
+        rx0.cfgvalid   <= ffs_vl_LP32ui_lp2sy_C0RxCgValid;
+    end
 
     rx_c1_t rx1;
-    assign rx1.header     = ffs_vl18_LP32ui_lp2sy_C1RxHdr;
-    assign rx1.wrvalid    = ffs_vl_LP32ui_lp2sy_C1RxWrValid;
+    always_ff @(posedge vl_clk_LPdomain_32ui)
+    begin
+        rx1.header     <= ffs_vl18_LP32ui_lp2sy_C1RxHdr;
+        rx1.wrvalid    <= ffs_vl_LP32ui_lp2sy_C1RxWrValid;
+    end
 
     logic  tx0_almostfull;
     assign tx0_almostfull = ffs_vl_LP32ui_lp2sy_C0TxAlmFull;

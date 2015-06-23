@@ -17,3 +17,5 @@
 %param CCI_RXHDR_WIDTH  18     "RX Header width"
 %param CCI_SIMULATION   0      "Is the CCI implementation actually a simulator?"
 
+%param CCI_LOOPBACK_HACK 0     "Hack to disable design in order to meet initial platform and driver timing"
+

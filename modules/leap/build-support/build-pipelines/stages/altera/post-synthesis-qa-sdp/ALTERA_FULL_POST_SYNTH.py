@@ -80,7 +80,7 @@ class PostSynthesize():
         #elaborate the design. 
         prjFile.write('execute_module  -tool map -args "--verilog_macro=\\"QUARTUS_COMPILATION=1\\" --lib_path ' + fullCompilePath + ' --analysis_and_elaboration " \n')
         #create a partition for leap. 
-        prjFile.write('create_partition -contents cci_std_afu:cci_std_afu|mk_model_Wrapper:model_wrapper -partition leap_part \n')
+        #prjFile.write('create_partition -contents cci_std_afu:cci_std_afu|mk_model_Wrapper:model_wrapper -partition leap_part \n')
 
 
         prjFile.write('execute_module  -tool map -args "--verilog_macro=\\"QUARTUS_COMPILATION=1\\" --lib_path ' + fullCompilePath + ' " \n')

@@ -1,0 +1,4 @@
+hello_qa_sdp                        config/pm/leap/demos/hello/hello_hybrid_qa_sdp.apm   --fakestats
+hello_qa_vexe                       config/pm/leap/demos/hello/hello_hybrid_qa_vexe.apm
+
+

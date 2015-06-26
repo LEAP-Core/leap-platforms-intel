@@ -1,0 +1,12 @@
+# ***************
+#
+# Null Input Models
+#
+# ***************
+
+experiments = hello_qa_sdp hello_qa_vexe
+
+#
+# A simple configuration
+#
+config/bm/leap/demos.cfx/benchmarks/null.cfg

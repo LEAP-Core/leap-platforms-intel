@@ -37,14 +37,14 @@ module cci_write_arbiter
     input logic resetb,
     input logic lp_initdone,
 
-    input   t_CSR_AFU_STATE        csr,
+    input  t_CSR_AFU_STATE        csr,
    
-    input   frame_arb_t            frame_writer,
-    input   frame_arb_t            frame_reader,
-    input   frame_arb_t            status_mgr_req,
-    output  channel_grant_arb_t    write_grant,
+    input  t_FRAME_ARB            frame_writer,
+    input  t_FRAME_ARB            frame_reader,
+    input  t_FRAME_ARB            status_mgr_req,
+    output t_CHANNEL_GRANT_ARB    write_grant,
    
-    output tx_c1_t                 tx1,
+    output t_TX_C1                 tx1,
     input  logic                   tx1_almostfull
 
    );
@@ -54,7 +54,7 @@ module cci_write_arbiter
    // since the FPGA must write the AFU ID to DSM[0].
    logic         can_issue;
 
-   tx_header_t   header;
+   t_TX_HEADER   header;
    logic [511:0] data;   
    logic         wrvalid;
       

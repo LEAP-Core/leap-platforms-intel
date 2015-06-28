@@ -32,19 +32,15 @@
 `include "qa.vh"
 
 module qa_drv_fifo_to_host
-  #(parameter BUFFER_DEPTH=64,
-    BUFFER_ADDR_WIDTH=6,
-    CACHE_WIDTH=512,
-    UMF_WIDTH=128)
+  #(UMF_WIDTH=128)
     (input logic clk,
      input logic resetb,
 
-     input rx_c0_t rx0,
+     input  t_RX_C0 rx0,
 
      input  t_CSR_AFU_STATE     csr,
-     output frame_arb_t         frame_writer,
-     input  channel_grant_arb_t write_grant,
-     input  channel_grant_arb_t read_grant,
+     output t_FRAME_ARB         frame_writer,
+     input  t_CHANNEL_GRANT_ARB write_grant,
 
      input  t_FROM_STATUS_MGR_FIFO_TO_HOST   status_to_fifo_to_host,
      output t_TO_STATUS_MGR_FIFO_TO_HOST     fifo_to_host_to_status,
@@ -61,7 +57,7 @@ module qa_drv_fifo_to_host
     //
     //=====================================================================
 
-    localparam N_UMF_CHUNKS_PER_CACHE_LINE = CACHE_WIDTH / UMF_WIDTH;
+    localparam N_UMF_CHUNKS_PER_CACHE_LINE = QA_CACHE_LINE_SZ / UMF_WIDTH;
     typedef logic [UMF_WIDTH-1 : 0] t_UMF_CHUNK;
     typedef logic [N_UMF_CHUNKS_PER_CACHE_LINE-1 : 0][UMF_WIDTH-1 : 0] t_CACHE_LINE_VEC_UMF_CHUNK;
 

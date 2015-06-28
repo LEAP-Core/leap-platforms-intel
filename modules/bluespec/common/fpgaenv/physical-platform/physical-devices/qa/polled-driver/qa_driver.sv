@@ -37,7 +37,6 @@
 module qa_driver
   #(parameter TXHDR_WIDTH=61,
               RXHDR_WIDTH=18,
-              CACHE_WIDTH=512,
               UMF_WIDTH=128)
     (input logic vl_clk_LPdomain_32ui,                      // CCI Inteface Clock. 32ui link/protocol clock domain.
      input logic ffs_vl_LP32ui_lp2sy_SoftReset_n,           // CCI-S soft reset
@@ -90,7 +89,7 @@ module qa_driver
      // Native CCI Interface (cache line interface for back end)
      /* Channel 0 can receive READ, WRITE, WRITE CSR responses.*/
      input  logic [RXHDR_WIDTH-1:0] ffs_vl18_LP32ui_lp2sy_C0RxHdr,       // System to LP header
-     input  logic [CACHE_WIDTH-1:0] ffs_vl512_LP32ui_lp2sy_C0RxData,     // System to LP data 
+     input  logic [QA_CACHE_LINE_SZ-1:0] ffs_vl512_LP32ui_lp2sy_C0RxData, // System to LP data 
      input  logic                   ffs_vl_LP32ui_lp2sy_C0RxWrValid,     // RxWrHdr valid signal 
      input  logic                   ffs_vl_LP32ui_lp2sy_C0RxRdValid,     // RxRdHdr valid signal
      input  logic                   ffs_vl_LP32ui_lp2sy_C0RxCgValid,     // RxCgHdr valid signal
@@ -106,7 +105,7 @@ module qa_driver
      output logic                   ffs_vl_LP32ui_sy2lp_C0TxRdValid,     // TxRdHdr valid signals 
      /*Channel 1 reserved for WRITE REQUESTS ONLY */       
      output logic [TXHDR_WIDTH-1:0] ffs_vl61_LP32ui_sy2lp_C1TxHdr,       // System to LP header
-     output logic [CACHE_WIDTH-1:0] ffs_vl512_LP32ui_sy2lp_C1TxData,     // System to LP data 
+     output logic [QA_CACHE_LINE_SZ-1:0] ffs_vl512_LP32ui_sy2lp_C1TxData, // System to LP data 
      output logic                   ffs_vl_LP32ui_sy2lp_C1TxWrValid,     // TxWrHdr valid signal
      output logic                   ffs_vl_LP32ui_sy2lp_C1TxIrValid,     // Tx Interrupt valid signal
      /* Tx push flow control */
@@ -126,7 +125,7 @@ module qa_driver
     logic  resetb;
     assign resetb = ffs_vl_LP32ui_lp2sy_SoftReset_n;
 
-    rx_c0_t rx0;
+    t_RX_C0 rx0;
     // Buffer incoming read responses for timing
     always_ff @(posedge vl_clk_LPdomain_32ui)
     begin
@@ -137,7 +136,7 @@ module qa_driver
         rx0.cfgvalid   <= ffs_vl_LP32ui_lp2sy_C0RxCgValid;
     end
 
-    rx_c1_t rx1;
+    t_RX_C1 rx1;
     always_ff @(posedge vl_clk_LPdomain_32ui)
     begin
         rx1.header     <= ffs_vl18_LP32ui_lp2sy_C1RxHdr;
@@ -145,21 +144,22 @@ module qa_driver
     end
 
     logic  tx0_almostfull;
-    assign tx0_almostfull = ffs_vl_LP32ui_lp2sy_C0TxAlmFull;
-
     logic  tx1_almostfull;
-    assign tx1_almostfull = ffs_vl_LP32ui_lp2sy_C1TxAlmFull;
-
     logic  lp_initdone;
-    assign lp_initdone = ffs_vl_LP32ui_lp2sy_InitDnForSys;
+    always_ff @(posedge vl_clk_LPdomain_32ui)
+    begin
+        tx0_almostfull <= ffs_vl_LP32ui_lp2sy_C0TxAlmFull;
+        tx1_almostfull <= ffs_vl_LP32ui_lp2sy_C1TxAlmFull;
+        lp_initdone    <= ffs_vl_LP32ui_lp2sy_InitDnForSys;
+    end
 
     //
     // Outputs are registered, as required by the CCI specification.
     //
-    tx_c0_t tx0;
-    tx_c0_t tx0_reg;
-    tx_c1_t tx1;
-    tx_c1_t tx1_reg;
+    t_TX_C0 tx0;
+    t_TX_C0 tx0_reg;
+    t_TX_C1 tx1;
+    t_TX_C1 tx1_reg;
 
     assign ffs_vl61_LP32ui_sy2lp_C0TxHdr = tx0_reg.header;
     assign ffs_vl_LP32ui_sy2lp_C0TxRdValid = tx0_reg.rdvalid;
@@ -205,11 +205,11 @@ module qa_driver
 
     t_CSR_AFU_STATE        csr;
     
-    frame_arb_t            frame_writer;
-    frame_arb_t            frame_reader;
-    frame_arb_t            status_mgr_req;
-    channel_grant_arb_t    write_grant;
-    channel_grant_arb_t    read_grant;
+    t_FRAME_ARB            frame_writer;
+    t_FRAME_ARB            frame_reader;
+    t_FRAME_ARB            status_mgr_req;
+    t_CHANNEL_GRANT_ARB    write_grant;
+    t_CHANNEL_GRANT_ARB    read_grant;
     
     // Modules communicating state to the status manager
     t_TO_STATUS_MGR_FIFO_FROM_HOST   fifo_from_host_to_status;
@@ -225,18 +225,17 @@ module qa_driver
     // Normally the signals just pass through, but the tester can be
     // configured by CSR writes into a variety of loopback and traffic generator
     // modes.
-    qa_drv_tester#(.UMF_WIDTH(UMF_WIDTH))
-        qa_tester_inst(.*);
+    qa_drv_tester#(.UMF_WIDTH(UMF_WIDTH))          qa_tester_inst(.*);
 
     // Consume CSR writes and export state to the driver.
-    qa_drv_csr qa_csr_inst(.*);
+    qa_drv_csr                                     qa_csr_inst(.*);
 
     // Manage memory-mapped FIFOs in each direction.
-    qa_drv_fifo_from_host  fifo_from_host(.*);
-    qa_drv_fifo_to_host    fifo_to_host(.*);
+    qa_drv_fifo_from_host#(.UMF_WIDTH(UMF_WIDTH))  fifo_from_host(.*);
+    qa_drv_fifo_to_host#(.UMF_WIDTH(UMF_WIDTH))    fifo_to_host(.*);
 
-    qa_drv_status_manager  status_manager(.*);
-    cci_write_arbiter      write_arb(.*);
-    cci_read_arbiter       read_arb(.*);
+    qa_drv_status_manager                          status_manager(.*);
+    cci_write_arbiter                              write_arb(.*);
+    cci_read_arbiter                               read_arb(.*);
     
 endmodule

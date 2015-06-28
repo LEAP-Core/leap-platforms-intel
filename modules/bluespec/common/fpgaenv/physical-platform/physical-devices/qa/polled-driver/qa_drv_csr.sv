@@ -39,7 +39,7 @@
 module qa_drv_csr
     (input logic clk,
      input logic resetb,
-     input rx_c0_t rx0,
+     input t_RX_C0 rx0,
 
      output t_CSR_AFU_STATE csr
     );

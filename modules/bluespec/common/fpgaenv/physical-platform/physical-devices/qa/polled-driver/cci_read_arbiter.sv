@@ -39,13 +39,13 @@ module cci_read_arbiter
 
     input   t_CSR_AFU_STATE        csr,
    
-    input   frame_arb_t            status_mgr_req,
-    input   frame_arb_t            frame_writer,
-    input   frame_arb_t            frame_reader,
+    input   t_FRAME_ARB            status_mgr_req,
+    input   t_FRAME_ARB            frame_writer,
+    input   t_FRAME_ARB            frame_reader,
 
-    output  channel_grant_arb_t    read_grant,
+    output  t_CHANNEL_GRANT_ARB    read_grant,
    
-    output tx_c0_t                 tx0,
+    output t_TX_C0                 tx0,
     input  logic                   tx0_almostfull
    );
 
@@ -55,7 +55,7 @@ module cci_read_arbiter
    logic         can_issue;
    assign        can_issue = cci_can_issue && csr.afu_en;
 
-   tx_header_t   header;
+   t_TX_HEADER   header;
    logic         rdvalid;
 
    typedef enum logic {FAVOR_FRAME_READER, FAVOR_FRAME_WRITER} state_t;

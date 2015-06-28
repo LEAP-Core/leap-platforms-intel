@@ -40,8 +40,9 @@ class PostSynthesize():
         prjFile.write('if [project_exists ' + moduleList.apmName +'] { \n')           
         prjFile.write('\tproject_open ' + moduleList.apmName +' \n')
         prjFile.write('} else  { \n')           
-        prjFile.write('\tproject_new ' + moduleList.apmName +' -overwrite\n')
+        prjFile.write('\tproject_new ' + moduleList.apmName +'\n')
         prjFile.write('} \n')           
+
 
         prjFile.write('source ' + rel_qsf_src_dir + '/qa_canoe_pass_config.qsf\n\n')
 

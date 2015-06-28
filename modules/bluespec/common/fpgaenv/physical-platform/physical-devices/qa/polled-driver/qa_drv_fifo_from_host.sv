@@ -39,17 +39,15 @@ module qa_drv_fifo_from_host
     // using both write ports to store a full input in adjacent entries.
     // Hence 512 / 2 entries.
     N_SCOREBOARD_ENTRIES=256,
-    CACHE_WIDTH=512,
     UMF_WIDTH=128)
     (input logic clk,
      input logic resetb,
 
-     input rx_c0_t rx0,
+     input t_RX_C0 rx0,
 
      input  t_CSR_AFU_STATE     csr,
-     output frame_arb_t         frame_reader,
-     input  channel_grant_arb_t read_grant,
-     input  channel_grant_arb_t write_grant,
+     output t_FRAME_ARB         frame_reader,
+     input  t_CHANNEL_GRANT_ARB read_grant,
 
      output [UMF_WIDTH-1:0]     rx_data,
      output                     rx_rdy,
@@ -94,7 +92,7 @@ module qa_drv_fifo_from_host
 
     t_STATE state;
 
-    localparam UMF_CHUNKS_PER_LINE = CACHE_WIDTH / UMF_WIDTH;
+    localparam UMF_CHUNKS_PER_LINE = QA_CACHE_LINE_SZ / UMF_WIDTH;
     typedef logic [UMF_WIDTH-1:0] t_UMF_CHUNK;
 
     // Cache line as a vector of UMF_CHUNKs
@@ -261,7 +259,7 @@ module qa_drv_fifo_from_host
     logic            scoreboard_slot_en;
 
     // Is the incoming read a FIFO read response?
-    read_metadata_t response_read_metadata;
+    t_READ_METADATA response_read_metadata;
     assign response_read_metadata = unpack_read_metadata(rx0.header);
 
     logic incoming_read_valid;
@@ -324,8 +322,8 @@ module qa_drv_fifo_from_host
     t_CACHE_LINE_ADDR buffer_base_addr;
     assign buffer_base_addr = t_CACHE_LINE_ADDR'(csr.afu_read_frame);
 
-    tx_header_t read_header;
-    read_metadata_t data_read_metadata;
+    t_TX_HEADER read_header;
+    t_READ_METADATA data_read_metadata;
 
     always_comb
     begin

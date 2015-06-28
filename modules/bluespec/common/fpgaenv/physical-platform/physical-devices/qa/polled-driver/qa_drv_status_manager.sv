@@ -35,12 +35,12 @@ module qa_drv_status_manager
     (input logic clk,
      input logic resetb,
 
-     input  rx_c0_t              rx0,
+     input  t_RX_C0              rx0,
 
      input  t_CSR_AFU_STATE      csr,
-     output frame_arb_t          status_mgr_req,
-     input  channel_grant_arb_t  read_grant,
-     input  channel_grant_arb_t  write_grant,
+     output t_FRAME_ARB          status_mgr_req,
+     input  t_CHANNEL_GRANT_ARB  read_grant,
+     input  t_CHANNEL_GRANT_ARB  write_grant,
 
      input  t_TO_STATUS_MGR_FIFO_FROM_HOST   fifo_from_host_to_status,
      output t_FROM_STATUS_MGR_FIFO_FROM_HOST status_to_fifo_from_host,
@@ -141,10 +141,10 @@ module qa_drv_status_manager
     t_STATE_READER state_rd;
     t_STATE_READER next_state_rd;
 
-    read_metadata_t reader_meta_req;
+    t_READ_METADATA reader_meta_req;
 
     // Unpack read response metadata
-    read_metadata_t reader_meta_rsp;
+    t_READ_METADATA reader_meta_rsp;
     assign reader_meta_rsp = unpack_read_metadata(rx0.header);
 
     // Compute when a read response is available

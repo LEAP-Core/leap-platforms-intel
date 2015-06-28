@@ -40,39 +40,30 @@ package qa_drv_types;
 
     localparam QA_DRIVER_DEBUG = 0;
 
-    localparam CACHE_WIDTH = 512;
-
-    // Parameters related to frame buffer sizing.
-    localparam QA_ADDR_SZ             = 32;
-    localparam QA_ADDR_OFFSET         = 6;
-    localparam FRAME_NUMBER           = 128;
-    localparam LOG_FRAME_NUMBER       = 7;
-    localparam FRAME_CHUNKS           = 64;
-    localparam LOG_FRAME_CHUNKS       = 6;
-    localparam LOG_FRAME_BASE_POINTER = QA_ADDR_SZ - LOG_FRAME_NUMBER - LOG_FRAME_CHUNKS;
-
-
     //
     // Cache line data types.
     //
+    localparam QA_ADDR_SZ = 32;
+    localparam QA_CACHE_LINE_SZ = 512;
+
     typedef logic [QA_ADDR_SZ-1 : 0] t_CACHE_LINE_ADDR;
-    typedef logic [CACHE_WIDTH-1 : 0] t_CACHE_LINE;
+    typedef logic [QA_CACHE_LINE_SZ-1 : 0] t_CACHE_LINE;
 
     // Cache line as a vector of 8 bit objects
-    localparam N_BIT8_PER_CACHE_LINE = CACHE_WIDTH / 8;
+    localparam N_BIT8_PER_CACHE_LINE = QA_CACHE_LINE_SZ / 8;
     typedef logic [N_BIT8_PER_CACHE_LINE-1 : 0][7:0] t_CACHE_LINE_VEC8;
     localparam N_BYTES_PER_CACHE_LINE = N_BIT8_PER_CACHE_LINE;
 
     // Cache line as a vector of 16 bit objects
-    localparam N_BIT16_PER_CACHE_LINE = CACHE_WIDTH / 16;
+    localparam N_BIT16_PER_CACHE_LINE = QA_CACHE_LINE_SZ / 16;
     typedef logic [N_BIT16_PER_CACHE_LINE-1 : 0][15:0] t_CACHE_LINE_VEC16;
 
     // Cache line as a vector of 32 bit objects
-    localparam N_BIT32_PER_CACHE_LINE = CACHE_WIDTH / 32;
+    localparam N_BIT32_PER_CACHE_LINE = QA_CACHE_LINE_SZ / 32;
     typedef logic [N_BIT32_PER_CACHE_LINE-1 : 0][31:0] t_CACHE_LINE_VEC32;
 
     // Cache line as a vector of 64 bit objects
-    localparam N_BIT64_PER_CACHE_LINE = CACHE_WIDTH / 64;
+    localparam N_BIT64_PER_CACHE_LINE = QA_CACHE_LINE_SZ / 64;
     typedef logic [N_BIT64_PER_CACHE_LINE-1 : 0][31:0] t_CACHE_LINE_VEC64;
 
 
@@ -98,24 +89,7 @@ package qa_drv_types;
         logic is_header;                    // denotes a read for header, used by read streamer.
         logic [10:0] rob_addr;              // denotes rob address (data reads)
     }
-    read_metadata_t;
-
-    typedef struct
-    {
-        logic ready;                     // from accel  : ready for data
-        logic valid;                     // from reader : data is valid
-        logic [CACHE_WIDTH-1:0] data;    // from reader : data read from memeory
-    }
-    reader_bus_t;
-
-    typedef struct
-    {
-        logic ready;                     // from writer : 1 = ready for data; 0 = busy, write is ignored
-        logic valid;                     // from accel  : data is valid
-        logic [9:0]             offset;  // from accel  : data to write
-        logic [CACHE_WIDTH-1:0] data;    // from accel  : data to write
-    }
-    writer_bus_t;
+    t_READ_METADATA;
 
     typedef struct packed
     {
@@ -125,14 +99,14 @@ package qa_drv_types;
         logic [45:14] address;
         logic [13:0]  mdata;
     }
-    tx_header_t;
+    t_TX_HEADER;
 
 
     typedef struct
     {
         logic request;  
     }
-    channel_req_arb_t;
+    t_CHANNEL_REQ_ARB;
 
     typedef struct
     {
@@ -140,32 +114,32 @@ package qa_drv_types;
         logic writer_grant;
         logic status_grant;  
     }
-    channel_grant_arb_t;
+    t_CHANNEL_GRANT_ARB;
 
     typedef struct
     {
-        channel_req_arb_t read;
-        tx_header_t   read_header;  
-        channel_req_arb_t write;
-        tx_header_t   write_header;
+        t_CHANNEL_REQ_ARB read;
+        t_TX_HEADER   read_header;  
+        t_CHANNEL_REQ_ARB write;
+        t_TX_HEADER   write_header;
         logic [511:0] data;
     }
-    frame_arb_t;
+    t_FRAME_ARB;
 
     typedef struct
     {
-        tx_header_t  header;
+        t_TX_HEADER  header;
         logic         rdvalid;
     }
-    tx_c0_t;
+    t_TX_C0;
 
     typedef struct
     {
-        tx_header_t   header;
+        t_TX_HEADER   header;
         logic [511:0] data;
         logic         wrvalid;
     }
-    tx_c1_t;
+    t_TX_C1;
 
     typedef struct
     {
@@ -175,14 +149,14 @@ package qa_drv_types;
         logic         rdvalid;
         logic         cfgvalid;
     }
-    rx_c0_t;
+    t_RX_C0;
 
     typedef struct
     {
         logic [17:0]  header;
         logic         wrvalid;
     }
-    rx_c1_t;
+    t_RX_C1;
 
 
     //
@@ -202,34 +176,19 @@ package qa_drv_types;
 
     // Function: Packs read metadata 
     function automatic [12:0] pack_read_metadata;
-        input    read_metadata_t metadata;
+        input    t_READ_METADATA metadata;
         begin
             pack_read_metadata = {metadata.is_read, metadata.is_header, metadata.rob_addr};
         end
     endfunction
 
     // Function: Packs read metadata 
-    function automatic read_metadata_t unpack_read_metadata;
+    function automatic t_READ_METADATA unpack_read_metadata;
         input    [17:0] metadata;
         begin
             unpack_read_metadata.is_read = metadata[12];
             unpack_read_metadata.is_header = metadata[11];
             unpack_read_metadata.rob_addr = metadata[10:0];
-        end
-    endfunction
-
-
-    function automatic header_in_use;
-        input    [CACHE_WIDTH-1:0]  header;
-        begin
-            header_in_use = header[0];
-        end
-    endfunction
-
-    function automatic [LOG_FRAME_CHUNKS - 1:0] header_chunks;
-        input    [CACHE_WIDTH-1:0]  header;
-        begin
-            header_chunks = header[LOG_FRAME_CHUNKS:1];
         end
     endfunction
 

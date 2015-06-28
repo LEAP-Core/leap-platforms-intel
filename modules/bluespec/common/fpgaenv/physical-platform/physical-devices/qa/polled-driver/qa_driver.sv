@@ -37,6 +37,7 @@
 module qa_driver
   #(parameter TXHDR_WIDTH=61,
               RXHDR_WIDTH=18,
+              CACHE_WIDTH=512,
               UMF_WIDTH=128)
     (input logic vl_clk_LPdomain_32ui,                      // CCI Inteface Clock. 32ui link/protocol clock domain.
      input logic ffs_vl_LP32ui_lp2sy_SoftReset_n,           // CCI-S soft reset

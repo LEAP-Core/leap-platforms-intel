@@ -77,6 +77,42 @@ module qa_drv_scoreboard
     typedef logic [N_META_BITS-1 : 0] t_META_DATA;
     typedef logic [$clog2(N_ENTRIES)-1 : 0] t_IDX;
 
+    //
+    // Output is routed through a FIFO to relax timing paths to the internal
+    // block RAM.  A FIFO1 is sufficient since the internal logic already
+    // prevents read and write in the same cycle.
+    //
+
+    typedef struct packed
+    {
+        t_DATA data;
+        t_META_DATA meta;
+    }
+    t_OUTPUT_DATA;
+
+    // Container for data entering the output FIFO
+    t_OUTPUT_DATA out_fifo_enq_data;
+
+    // Container for data leaving the output FIFO, bound for the client
+    t_OUTPUT_DATA out_fifo_deq_data;
+    assign first = out_fifo_deq_data.data;
+    assign firstMeta = out_fifo_deq_data.meta;
+
+    logic out_fifo_enq_req;
+    logic out_fifo_notFull;
+    logic out_fifo_enq_en;
+    assign out_fifo_enq_en = out_fifo_enq_req && out_fifo_notFull;
+
+    qa_drv_fifo1#(.N_DATA_BITS($bits(t_OUTPUT_DATA)))
+        fifo_out(.clk, .resetb,
+                 .enq_data(out_fifo_enq_data),
+                 .enq_en(out_fifo_enq_en),
+                 .notFull(out_fifo_notFull),
+                 .first(out_fifo_deq_data),
+                 .deq_en,
+                 .notEmpty);
+
+
     // Scoreboard is empty when oldest == newest and full when
     // newest + 1 == oldest.
     t_IDX newest;
@@ -109,9 +145,9 @@ module qa_drv_scoreboard
 
 
     // notEmpty is true if the data has arrived for the oldest entry.
-    // Client consumes the entry by asserting deq.  Bump the oldest
-    // pointer when deq is enabled.
-    assign oldest_next = oldest + deq_en;
+    // Bump the oldest pointer when the oldest entry is moved to the
+    // output FIFO.
+    assign oldest_next = oldest + out_fifo_enq_en;
 
     always_ff @(posedge clk)
     begin
@@ -121,9 +157,6 @@ module qa_drv_scoreboard
         begin
             oldest <= oldest_next;
         end
-
-        assert ((notEmpty === 1'bX) || !(deq_en && ! notEmpty)) else
-            $fatal("qa_drv_scoreboard: Can't DEQ when EMPTY!");
     end
 
 
@@ -141,7 +174,7 @@ module qa_drv_scoreboard
     assign enqData_pair[1] = enqData[N_DATA_BITS-1 : N_NARROW_DATA_BITS];
 
     t_NARROW_DATA first_pair[0:1];
-    assign first = {first_pair[1], first_pair[0]};
+    assign out_fifo_enq_data.data = {first_pair[1], first_pair[0]};
 
     t_IDX ram_addr;
     assign ram_addr = enqData_en ? enqDataIdx : oldest_next;
@@ -188,9 +221,12 @@ module qa_drv_scoreboard
     //
     t_META_DATA metaData[0 : N_ENTRIES-1];
 
+    t_META_DATA meta_oldest;
+    assign out_fifo_enq_data.meta = meta_oldest;
+
     always_ff @(posedge clk)
     begin
-        firstMeta <= metaData[oldest_next];
+        meta_oldest <= metaData[oldest_next];
 
         // Meta-data is written along with the original request to allocate
         // a slot.
@@ -206,7 +242,7 @@ module qa_drv_scoreboard
     begin
         if (! resetb)
         begin
-            dataValid <= 0;
+            dataValid <= 1'b0;
         end
         else
         begin
@@ -218,40 +254,42 @@ module qa_drv_scoreboard
     begin
         dataValid_next = dataValid;
 
-        // Clear on deq
-        if (deq_en)
+        // Clear on move to output FIFO
+        if (out_fifo_enq_en)
         begin
-            dataValid_next[oldest] = 0;
+            dataValid_next[oldest] = 1'b0;
         end
 
         // Set when data arrives
         if (enqData_en)
         begin
-            dataValid_next[enqDataIdx] = 1;
+            dataValid_next[enqDataIdx] = 1'b1;
         end
     end
 
 
-    // Track whether the oldest entry's data is valid.  We read from a register
-    // to correspond with the lack of bypass on the memory.  notEmpty
-    // will thus go high in the first cycle a data read would return the
-    // correct value.
+    // Track whether the oldest entry's data is valid and should be moved
+    // to the output FIFO.
     always_ff @(posedge clk)
     begin
         if (! resetb)
         begin
-            notEmpty <= 0;
+            out_fifo_enq_req <= 1'b0;
         end
         else
         begin
             //
-            // Assert notEmpty only on cycles where access to the memory's
-            // read port is available.  A write uses both ports since the
+            // Collect data only on cycles where access to the memory's
+            // read port is available.
+            //
+            // A scoreboard BRAM write uses both ports since the
             // memory is half the width of the incoming data.  Memory
             // responses are latency sensitive and there is no other buffer
             // available, so writes have priority over reads.
             //
-            notEmpty <= dataValid[oldest_next] && ! enqData_en;
+            out_fifo_enq_req <= dataValid[oldest_next] &&
+                                // Block RAM is available
+                                ! enqData_en;
         end
     end
 

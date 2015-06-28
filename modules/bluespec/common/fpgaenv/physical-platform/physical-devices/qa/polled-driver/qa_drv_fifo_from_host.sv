@@ -57,6 +57,8 @@ module qa_drv_fifo_from_host
      input  t_FROM_STATUS_MGR_FIFO_FROM_HOST status_to_fifo_from_host
     );
 
+    typedef logic [UMF_WIDTH-1:0] t_UMF_CHUNK;
+
     // Index of the next line to read in the ring buffer
     t_FIFO_FROM_HOST_IDX next_read_req_idx;
 
@@ -77,6 +79,26 @@ module qa_drv_fifo_from_host
 
     // ====================================================================
     //
+    //   Buffer the outgoing stream to control timing.
+    //
+    // ====================================================================
+
+    t_UMF_CHUNK out_fifo_enq_data;
+    logic out_fifo_enq_en;
+    logic out_fifo_notFull;
+
+    qa_drv_fifo2#(.N_DATA_BITS($bits(t_UMF_CHUNK)))
+        fifo_out(.clk, .resetb,
+                 .enq_data(out_fifo_enq_data),
+                 .enq_en(out_fifo_enq_en),
+                 .notFull(out_fifo_notFull),
+                 .first(rx_data),
+                 .deq_en(rx_enable),
+                 .notEmpty(rx_rdy));
+
+
+    // ====================================================================
+    //
     //   Convert a stream of cache lines into a stream of UMF_CHUNKs.
     //
     // ====================================================================
@@ -93,7 +115,6 @@ module qa_drv_fifo_from_host
     t_STATE state;
 
     localparam UMF_CHUNKS_PER_LINE = QA_CACHE_LINE_SZ / UMF_WIDTH;
-    typedef logic [UMF_WIDTH-1:0] t_UMF_CHUNK;
 
     // Cache line as a vector of UMF_CHUNKs
     typedef t_UMF_CHUNK [UMF_CHUNKS_PER_LINE-1 : 0] t_CACHE_LINE_UMF_CHUNK_VEC;
@@ -126,7 +147,7 @@ module qa_drv_fifo_from_host
     logic continue_to_next_line;
     assign continue_to_next_line =
         ((state == STATE_VALID_CHUNK) &&
-         rx_enable &&
+         out_fifo_enq_en &&
          is_last_chunk_in_line &&
          (num_chunks != t_NUM_UMF_CHUNKS'(1)));
 
@@ -141,20 +162,8 @@ module qa_drv_fifo_from_host
     assign sc_req_next_line = sc_not_empty && need_next_line;
 
     // Data is ready when it is sitting in the outbound buffer
-    assign rx_rdy = (state == STATE_VALID_CHUNK);
-    assign rx_data = cur_line[0];
-
-    always_ff @(posedge clk)
-    begin
-        // Signal error if user code requests the next chunk when
-        // it isn't ready.
-        if (!resetb && rx_enable)
-        begin
-            assert (rx_rdy) else
-                $fatal("qa_drv_fifo_from_host: rx_enable while no data valid!");
-        end
-    end
-
+    assign out_fifo_enq_en = (state == STATE_VALID_CHUNK) && out_fifo_notFull;
+    assign out_fifo_enq_data = cur_line[0];
 
     //
     // State machine.
@@ -198,7 +207,7 @@ module qa_drv_fifo_from_host
               STATE_VALID_CHUNK:
                 begin
                     // If the client consumed a chunk then advance the poniters
-                    if (rx_enable)
+                    if (out_fifo_enq_en)
                     begin
                         if (num_chunks == t_NUM_UMF_CHUNKS'(1))
                         begin
@@ -237,7 +246,7 @@ module qa_drv_fifo_from_host
 
         // Rotate if reading the header or sending a chunk to the client.
         else if ((state == STATE_READ_HEADER) ||
-                 (rx_enable && (state == STATE_VALID_CHUNK)))
+                 (out_fifo_enq_en && (state == STATE_VALID_CHUNK)))
         begin
             for (int i = 0; i < UMF_CHUNKS_PER_LINE-1; i++)
             begin
@@ -393,7 +402,7 @@ module qa_drv_fifo_from_host
     // A collection of flags
     logic [31:0] dbg_flags;
     assign dbg_flags[0] = scoreboard_slot_rdy;
-    assign dbg_flags[1] = rx_rdy;
+    assign dbg_flags[1] = (state == STATE_VALID_CHUNK);
 
     assign fifo_from_host_to_status.dbg_fifo_state =
         { dbg_data_read_data,

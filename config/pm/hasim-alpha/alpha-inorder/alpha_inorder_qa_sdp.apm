@@ -1,0 +1,51 @@
+
+[Global]
+SaveParameters=0
+Description=Inorder Alpha with Magic Memory (0008 cores) Simulation
+File=alpha_inorder_qa_sdp
+Version=2.2
+Name=Inorder Alpha with Magic Memory (0008 cores) Simulation
+Type=HAsim
+Class=Asim::Model
+DefaultBenchmark=
+DefaultRunOpts=
+RootName=HW/SW Hybrid Pipeline Build
+RootProvides=model
+
+[Model]
+DefaultAttributes=hasim inorder alpha simulation
+model=HW/SW Hybrid Pipeline Build
+
+[Inorder Alpha with Magic Memory (0008 cores)]
+File=config/pm/hasim-alpha/alpha-inorder/submodels/app_alpha_inorder_0008.apm
+Packagehint=hasim-alpha
+
+[Default Hybrid Project Common Utilities]
+File=config/pm/leap/submodels/common/project-common-default.apm
+Packagehint=leap
+
+[Soft Services Hybrid Application Environment]
+File=modules/leap/build-support/project/application-env/soft-services/application-env-hybrid-soft-service.awb
+Packagehint=leap
+
+[HW/SW Hybrid Pipeline Build/Requires]
+project_common=Default Hybrid Project Common Utilities
+fpgaenv=Intel QuickAssist FPGA Canoe Pass SDP
+application_env=Soft Services Hybrid Application Environment
+
+[Soft Services Hybrid Application Environment/Requires]
+connected_application=Inorder Alpha with Magic Memory (0008 cores)
+
+[HW/SW Hybrid Pipeline Build]
+File=modules/leap/build-support/project/project-pipeline.awb
+Packagehint=leap
+
+[Intel QuickAssist FPGA Canoe Pass SDP]
+File=config/pm/leap/submodels/fpgaenv/intel/qa/fpgaenv-hybrid-qa-sdp.apm
+Packagehint=leap-platforms-intel
+
+[Intel QuickAssist FPGA Canoe Pass SDP/Params]
+MODEL_CLOCK_FREQ=50
+
+[Inorder Alpha with Magic Memory (0008 cores)/Params]
+ISA_NATIVE_FPGA_FP=0

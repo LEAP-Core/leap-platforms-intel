@@ -39,9 +39,9 @@ class PostSynthesize():
         # make use of incremental compilation.
         prjFile.write('set created_project [project_exists ' + moduleList.apmName +'] \n')           
         prjFile.write('if $created_project { \n')           
-        prjFile.write('\tproject_open ' + moduleList.apmName +' \n')
+        prjFile.write('    project_open ' + moduleList.apmName +' \n')
         prjFile.write('} else  { \n')           
-        prjFile.write('\tproject_new ' + moduleList.apmName +'\n')
+        prjFile.write('    project_new ' + moduleList.apmName +'\n')
         prjFile.write('} \n')           
 
 
@@ -85,15 +85,16 @@ class PostSynthesize():
 
         fullCompilePath = os.path.abspath(moduleList.compileDirectory)
 
-        #elaborate the design. 
+        # elaborate the design. 
         prjFile.write('execute_module  -tool map -args "--verilog_macro=\\"QUARTUS_COMPILATION=1\\" --lib_path ' + fullCompilePath + '--incremental_compilation=full_incremental_compilation --analysis_and_elaboration " \n')
 
-        prjFile.write('puts "Elaboration Complete\n " \n')
-        #create a partition for leap, if it doesn't exist already.
+        prjFile.write('puts "Elaboration Complete"\n')
+        # create a partition for leap and the QA driver if they don't exist already.
         prjFile.write('if $created_project { \n')           
-        prjFile.write('    puts "LEAP partition found!\n " \n')
+        prjFile.write('    puts "Reusing existing LEAP partitions"\n')
         prjFile.write('} else  { \n')           
-        prjFile.write('    create_partition -contents cci_std_afu:cci_std_afu|mk_model_Wrapper:model_wrapper -partition leap_part \n')
+        prjFile.write('    create_partition -contents cci_std_afu:cci_std_afu|mk_model_Wrapper:model_wrapper|mk_platform_platform_Wrapper:m_sys_sys_vp_m_mod|qa_driver:llpi_phys_plat_qa_qaDevice -partition qa_cci_part \n')
+        prjFile.write('    create_partition -contents cci_std_afu:cci_std_afu -partition leap_part \n')
         prjFile.write('} \n')           
 
 

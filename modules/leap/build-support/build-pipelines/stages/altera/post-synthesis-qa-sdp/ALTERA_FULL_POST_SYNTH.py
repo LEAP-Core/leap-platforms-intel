@@ -37,7 +37,8 @@ class PostSynthesize():
 
         # Check for the existence of a project here, so that we can
         # make use of incremental compilation.
-        prjFile.write('if [project_exists ' + moduleList.apmName +'] { \n')           
+        prjFile.write('set created_project [project_exists ' + moduleList.apmName +'] \n')           
+        prjFile.write('if $created_project { \n')           
         prjFile.write('\tproject_open ' + moduleList.apmName +' \n')
         prjFile.write('} else  { \n')           
         prjFile.write('\tproject_new ' + moduleList.apmName +'\n')
@@ -81,32 +82,29 @@ class PostSynthesize():
             prjFile.write('set_global_assignment -name VERILOG_FILE ' + v + '\n'); 
 
 
+
         fullCompilePath = os.path.abspath(moduleList.compileDirectory)
 
         #elaborate the design. 
-        prjFile.write('execute_module  -tool map -args "--verilog_macro=\\"QUARTUS_COMPILATION=1\\" --lib_path ' + fullCompilePath + ' --analysis_and_elaboration " \n')
+        prjFile.write('execute_module  -tool map -args "--verilog_macro=\\"QUARTUS_COMPILATION=1\\" --lib_path ' + fullCompilePath + '--incremental_compilation=full_incremental_compilation --analysis_and_elaboration " \n')
 
+        prjFile.write('puts "Elaboration Complete\n " \n')
         #create a partition for leap, if it doesn't exist already.
-        prjFile.write('if [llength [get_partition -partition leap_part -preservation_level]] { \n')           
+        prjFile.write('if $created_project { \n')           
         prjFile.write('    puts "LEAP partition found!\n " \n')
         prjFile.write('} else  { \n')           
         prjFile.write('    create_partition -contents cci_std_afu:cci_std_afu|mk_model_Wrapper:model_wrapper -partition leap_part \n')
         prjFile.write('} \n')           
 
-        #prjFile.write('if [llength [get_partition -partition quick_assist -preservation_level]] { \n')           
-        #prjFile.write('    puts "QA partition found!\n " \n')
-        #prjFile.write('} else  { \n')           
-        #prjFile.write('    create_partition -contents cci_std_afu:cci_std_afu|mk_model_Wrapper:model_wrapper -partition leap_part \n')
-        #prjFile.write('} \n')           
 
         prjFile.write('execute_module  -tool map -args "--verilog_macro=\\"QUARTUS_COMPILATION=1\\" --incremental_compilation=full_incremental_compilation --lib_path ' + fullCompilePath + ' " \n')
         prjFile.write('execute_module  -tool cdb -args "--merge"  \n')
-
-      
         prjFile.write('execute_module  -tool fit \n')
         prjFile.write('execute_module  -tool sta \n')
         prjFile.write('execute_module  -tool sta -args "--do_report_timing"\n')
         prjFile.write('execute_module  -tool asm  \n')
+
+
 
         prjFile.write('project_close \n')
 

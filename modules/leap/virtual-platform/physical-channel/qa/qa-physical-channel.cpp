@@ -72,9 +72,9 @@ QA_PHYSICAL_CHANNEL_CLASS::QA_PHYSICAL_CHANNEL_CLASS(
     writerArgs[0] = &qaDevice;
     writerArgs[1] = this;
     if (pthread_create(&writerThread,
-		       NULL,
-		       WriterThread,
-		       writerArgs))
+               NULL,
+               WriterThread,
+               writerArgs))
     {
         perror("pthread_create, outToFPGA0Thread:");
         exit(1);
@@ -178,10 +178,10 @@ QA_PHYSICAL_CHANNEL_CLASS::readPipe()
     else
     {
         // read in some more bytes for the current message
-        unsigned char buf[BLOCK_SIZE];
-        int bytes_requested = BLOCK_SIZE;
+        unsigned char buf[QA_BLOCK_SIZE];
+        int bytes_requested = QA_BLOCK_SIZE;
 
-        if (incomingMessage->BytesUnwritten() < BLOCK_SIZE)
+        if (incomingMessage->BytesUnwritten() < QA_BLOCK_SIZE)
         {
             bytes_requested = incomingMessage->BytesUnwritten();
         }

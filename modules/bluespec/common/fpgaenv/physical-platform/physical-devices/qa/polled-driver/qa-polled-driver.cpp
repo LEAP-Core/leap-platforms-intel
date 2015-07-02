@@ -46,9 +46,6 @@
 #include <iostream>
 #include <atomic>
 
-#include "platforms-module.h"
-#include "default-switches.h"
-
 #include "awb/provides/qa_driver.h"
 #include "awb/provides/physical_platform_defs.h"
 #include "awb/provides/qa_device.h"
@@ -56,11 +53,11 @@
 
 using namespace std;
 
-extern GLOBAL_ARGS globalArgs;
-
-static void* LoopbackTestRecv(void *arg);
-
+// Handle to the QA device.  Useful when debugging.
 static QA_DEVICE_CLASS *debugQADev;
+
+// Receiver thread in loopback test
+static void* LoopbackTestRecv(void *arg);
 
 
 // ============================================
@@ -70,7 +67,7 @@ static QA_DEVICE_CLASS *debugQADev;
 // ============================================
 //           Class static functions
 // These functions are necessary to ensure that the
-// class constructor is non-blocking. 
+// class constructor is non-blocking.
 // ============================================
 
 // ============================================
@@ -104,6 +101,7 @@ QA_DEVICE_CLASS::QA_DEVICE_CLASS(
     debugQADev = this;
 }
 
+
 // destructor
 QA_DEVICE_CLASS::~QA_DEVICE_CLASS()
 {
@@ -111,25 +109,21 @@ QA_DEVICE_CLASS::~QA_DEVICE_CLASS()
     Cleanup();
 }
 
+
 void
 QA_DEVICE_CLASS::Init()
 {
-
-    string executionDirectory = "";
-    char * leapExecutionDirectory = getenv("LEAP_EXECUTION_DIRECTORY");
-
-    // disable AFU
-    cout << "Attempting to disable afu" << endl;
-    afu.write_csr(CSR_AFU_EN, 0);
+    // Disable AFU during configuration
+    afu.WriteCSR(CSR_AFU_EN, 0);
 
     // How big are the FIFO buffers supposed to be?  Sizes are determined
     // in the hardware configuration and communicated in the DSM.  The hardware
     // fills the index of each buffer with ones.  Add one to get the size.
-    writeBufferIdxMask = afu.read_dsm(4 * sizeof(uint32_t));
+    writeBufferIdxMask = afu.ReadDSM(4 * sizeof(uint32_t));
     assert((writeBufferIdxMask & (writeBufferIdxMask + 1)) == 0);
     writeBufferBytes = (writeBufferIdxMask + 1) * CL(1);
 
-    readBufferIdxMask = afu.read_dsm(5 * sizeof(uint32_t));
+    readBufferIdxMask = afu.ReadDSM(5 * sizeof(uint32_t));
     assert((readBufferIdxMask & (readBufferIdxMask + 1)) == 0);
     readBufferBytes = (readBufferIdxMask + 1) * CL(1);
 
@@ -139,73 +133,69 @@ QA_DEVICE_CLASS::Init()
         printf("FIFO to host cache lines:    %d\n", readBufferBytes);
     }
 
-    // create buffers                                                                                                                                                                                       
-    readBuffer = afu.create_buffer(readBufferBytes);
-    writeBuffer = afu.create_buffer(writeBufferBytes);
+    // create buffers
+    readBuffer = afu.CreateSharedBuffer(readBufferBytes);
+    writeBuffer = afu.CreateSharedBuffer(writeBufferBytes);
 
-    if (readBuffer == NULL) 
+    if (readBuffer == NULL)
     {
         printf("Failed to create AFU readBuffer\n");
         exit(1);
     }
 
-    if (writeBuffer == NULL) 
+    if (writeBuffer == NULL)
     {
         printf("Failed to create AFU writeBuffer\n");
         exit(1);
     }
 
-    readBufferStart = (UMF_CHUNK *)readBuffer->virtual_address;
-    readBufferEnd = (UMF_CHUNK *)(readBuffer->virtual_address + readBufferBytes);
+    readBufferStart = (UMF_CHUNK *)readBuffer->virtualAddress;
+    readBufferEnd = (UMF_CHUNK *)(readBuffer->virtualAddress + readBufferBytes);
     readChunksNext = readBufferStart;
 
-    writeBufferStart = (UMF_CHUNK *)writeBuffer->virtual_address;
-    writeBufferEnd = (UMF_CHUNK *)(writeBuffer->virtual_address + writeBufferBytes);
+    writeBufferStart = (UMF_CHUNK *)writeBuffer->virtualAddress;
+    writeBufferEnd = (UMF_CHUNK *)(writeBuffer->virtualAddress + writeBufferBytes);
     writeChunksNext = writeBufferStart;
 
-    // Notic that we swap the read/write frames. Our read buffer is
+    // Notice that we swap the read/write frames. Our read buffer is
     // the FPGA write buffer. Our write buffer is the FPGA read
     // buffer.
-    afu.write_csr_64(CSR_WRITE_FRAME, readBuffer->physical_address / CL(1));
+    afu.WriteCSR64(CSR_WRITE_FRAME, readBuffer->physicalAddress / CL(1));
     if (QA_DRIVER_DEBUG)
     {
-        printf("Writing Host READ_FRAME base %p (line %p) ...\n", readBuffer->physical_address, CACHELINE_ALIGNED_ADDR(readBuffer->physical_address));
+        printf("Writing Host READ_FRAME base %p (line %p) ...\n", readBuffer->physicalAddress, readBuffer->physicalAddress);
     }
 
-    afu.write_csr_64(CSR_READ_FRAME, writeBuffer->physical_address / CL(1));
+    afu.WriteCSR64(CSR_READ_FRAME, writeBuffer->physicalAddress / CL(1));
     if (QA_DRIVER_DEBUG)
     {
-        printf("Writing Host WRITE_FRAME base %p (line %p) ...\n", writeBuffer->physical_address, CACHELINE_ALIGNED_ADDR(writeBuffer->physical_address));
+        printf("Writing Host WRITE_FRAME base %p (line %p) ...\n", writeBuffer->physicalAddress, writeBuffer->physicalAddress);
     }
 
-    // enable AFU                                                                                                                                                                                           
-    afu.write_csr(CSR_AFU_EN, 1);
+    // Enable AFU
+    afu.WriteCSR(CSR_AFU_EN, 1);
 
     initReadComplete = true;
     initWriteComplete = true;
 
-    sleep(1);
 //    TestSend();
 //    TestRecv();
 //    TestLoopback();
 }
 
-// override default chain-uninit method because
-// we need to do something special
 void
 QA_DEVICE_CLASS::Uninit()
 {
-
 }
 
-// cleanup: close the pipe.  The other side will exit.
 void
 QA_DEVICE_CLASS::Cleanup()
 {
-
 }
 
-// probe channel to look for fresh data
+//
+// Probe channel to determine whether fresh data exists.
+//
 bool
 QA_DEVICE_CLASS::Probe()
 {
@@ -221,8 +211,8 @@ QA_DEVICE_CLASS::Probe()
     // written to the second 32 bit integer in DSM FIFO_STATE.
     //
     volatile uint32_t *newest_live_idx =
-        (volatile uint32_t*)afu.dsm_address(DSM_OFFSET_FIFO_STATE +
-                                            sizeof(uint32_t));
+        (volatile uint32_t*)afu.DSMAddress(DSM_OFFSET_FIFO_STATE +
+                                           sizeof(uint32_t));
 
     uint32_t idx = *newest_live_idx;
 
@@ -237,7 +227,10 @@ QA_DEVICE_CLASS::Probe()
     return true;
 }
 
-// blocking read
+
+//
+// Blocking read
+//
 void
 QA_DEVICE_CLASS::Read(
     void* buf,
@@ -246,7 +239,7 @@ QA_DEVICE_CLASS::Read(
     // nBytes must be a multiple of the UMF_CHUNK size
     assert((nBytes & (UMF_CHUNK_BYTES-1)) == 0);
 
-    while (!initReadComplete) 
+    while (!initReadComplete)
     {
         sleep(1);
     }
@@ -345,8 +338,8 @@ QA_DEVICE_CLASS::Read(
             // the 2nd uint32_t of DSM POLL_STATE with the index of the
             // message currently being processed.
             volatile uint32_t *cur_read_idx =
-                (volatile uint32_t*)afu.dsm_address(DSM_OFFSET_POLL_STATE +
-                                                    sizeof(uint32_t));
+                (volatile uint32_t*)afu.DSMAddress(DSM_OFFSET_POLL_STATE +
+                                                   sizeof(uint32_t));
             *cur_read_idx = (readChunksNext - readBufferStart) / UMF_CHUNKS_PER_CL;
 
             if (QA_DRIVER_DEBUG)
@@ -365,7 +358,10 @@ QA_DEVICE_CLASS::Read(
     atomic_thread_fence(std::memory_order_release);
 }
 
-// write
+
+//
+// Write a message to the FPGA.
+//
 void
 QA_DEVICE_CLASS::Write(
     const void* buf,
@@ -376,16 +372,16 @@ QA_DEVICE_CLASS::Write(
 
     if (nBytes == 0) return;
 
-    while (!initWriteComplete) 
-    {  
+    while (!initWriteComplete)
+    {
         if (QA_DRIVER_DEBUG)
         {
             printf("WRITE: waiting for init complete\n");
         }
- 
+
         sleep(1);
     }
-   
+
     if (QA_DRIVER_DEBUG)
     {
         printf("WRITE New %d byte write\n", nBytes);
@@ -394,7 +390,7 @@ QA_DEVICE_CLASS::Write(
     // The FPGA updates a pointer to the oldest active entry in the ring buffer
     // to indicate when it is safe to overwrite the previous value.
     volatile uint32_t *oldest_live_idx =
-        (volatile uint32_t*)afu.dsm_address(DSM_OFFSET_FIFO_STATE);
+        (volatile uint32_t*)afu.DSMAddress(DSM_OFFSET_FIFO_STATE);
 
     const UMF_CHUNK* src = (const UMF_CHUNK*)buf;
 
@@ -489,7 +485,7 @@ QA_DEVICE_CLASS::Write(
         // Indicate that new lines are available by updating the first uint32_t
         // of DSM POLL_STATE with a pointer to the head of the ring buffer.
         volatile uint32_t *newest_live_idx =
-            (volatile uint32_t*)afu.dsm_address(DSM_OFFSET_POLL_STATE);
+            (volatile uint32_t*)afu.DSMAddress(DSM_OFFSET_POLL_STATE);
         uint32_t next_line_idx = (writeChunksNext - writeBufferStart) /
                                  UMF_CHUNKS_PER_CL;
         *newest_live_idx = next_line_idx;
@@ -501,10 +497,11 @@ QA_DEVICE_CLASS::Write(
     }
 }
 
+
 void QA_DEVICE_CLASS::RegisterLogicalDeviceName(string name)
 {
-
 }
+
 
 //
 // Read from status register space.  Status registers are implemented in
@@ -514,16 +511,17 @@ uint64_t
 QA_DEVICE_CLASS::ReadSREG(uint32_t n)
 {
     // The FPGA will write to DSM line 0.  Clear it first.
-    memset((void*)afu.dsm_address(DSM_OFFSET_SREG_RSP), 0, CL(1));
+    memset((void*)afu.DSMAddress(DSM_OFFSET_SREG_RSP), 0, CL(1));
 
     // Write CSR to trigger a register read
-    afu.write_csr(CSR_AFU_SREG_READ, n);
+    afu.WriteCSR(CSR_AFU_SREG_READ, n);
 
     // Wait for the response, signalled by the high bit in the line being set.
-    while (afu.read_dsm(DSM_OFFSET_SREG_RSP + CL(1) - sizeof(uint32_t)) == 0) ;
+    while (afu.ReadDSM(DSM_OFFSET_SREG_RSP + CL(1) - sizeof(uint32_t)) == 0) ;
 
-    return afu.read_dsm_64(DSM_OFFSET_SREG_RSP);
+    return afu.ReadDSM64(DSM_OFFSET_SREG_RSP);
 }
+
 
 void
 QA_DEVICE_CLASS::DebugDump()
@@ -531,24 +529,24 @@ QA_DEVICE_CLASS::DebugDump()
     const uint32_t base = DSM_OFFSET_DEBUG_RSP;
 
     // The FPGA will write to DSM line 0.  Clear it first.
-    memset((void*)afu.dsm_address(base), 0, CL(1));
+    memset((void*)afu.DSMAddress(base), 0, CL(1));
 
     // Write CSR to trigger a state dump.
-    afu.write_csr(CSR_AFU_TRIGGER_DEBUG, 1);
+    afu.WriteCSR(CSR_AFU_TRIGGER_DEBUG, 1);
 
     // Wait for the response, signalled by the high bit in the line being set.
-    while (afu.read_dsm(base + CL(1) - sizeof(uint32_t)) == 0) ;
+    while (afu.ReadDSM(base + CL(1) - sizeof(uint32_t)) == 0) ;
 
     printf("Debug READ DATA:\n");
 
-    uint32_t flags = afu.read_dsm(base);
+    uint32_t flags = afu.ReadDSM(base);
     printf("\tScoreboard not full:       %d\n", flags & 1);
     flags >>= 1;
     printf("\tScoreboard not empty:      %d\n", flags & 1);
     flags >>= 1;
 
-    printf("\tRead data requests:        %ld\n", afu.read_dsm(base + 4));
-    printf("\tRead data responses:       %ld\n", afu.read_dsm(base + 8));
+    printf("\tRead data requests:        %ld\n", afu.ReadDSM(base + 4));
+    printf("\tRead data responses:       %ld\n", afu.ReadDSM(base + 8));
     printf("\tRecent reads [VA, value] (newest first):\n");
     for (int32_t i = 0; i < 4; i++)
     {
@@ -556,20 +554,20 @@ QA_DEVICE_CLASS::DebugDump()
         const uint32_t base_values = base_offsets + 4 * sizeof(uint32_t);
 
         printf("\t\t%p  0x%08lx (may not correspond)\n",
-               getChunkAddressFromOffset(writeBuffer, afu.read_dsm(base_offsets + i * sizeof(uint32_t))),
-               afu.read_dsm(base_values + i * sizeof(uint32_t)));
+               getChunkAddressFromOffset(writeBuffer, afu.ReadDSM(base_offsets + i * sizeof(uint32_t))),
+               afu.ReadDSM(base_values + i * sizeof(uint32_t)));
     }
 
     //
     // Tester module debug state
     //
 
-    memset((void*)afu.dsm_address(base), 0, CL(1));
-    afu.write_csr(CSR_AFU_TRIGGER_DEBUG, 3);
-    while (afu.read_dsm(base + CL(1) - sizeof(uint32_t)) == 0) ;
+    memset((void*)afu.DSMAddress(base), 0, CL(1));
+    afu.WriteCSR(CSR_AFU_TRIGGER_DEBUG, 3);
+    while (afu.ReadDSM(base + CL(1) - sizeof(uint32_t)) == 0) ;
 
     printf("\nDebug TESTER:\n");
-    flags = afu.read_dsm(base);
+    flags = afu.ReadDSM(base);
     printf("\tState:                     %d\n", flags & 3);
     flags >>= 2;
     printf("\ttx_enable:                 %d\n", flags & 1);
@@ -582,6 +580,11 @@ QA_DEVICE_CLASS::DebugDump()
     flags >>= 1;
 }
 
+
+//
+// Dump the current message being read from the FPGA by looking for the
+// header, computing the length, and reading each UMF_CHUNK.
+//
 void
 QA_DEVICE_CLASS::DebugDumpCurrentReadMessage()
 {
@@ -598,9 +601,12 @@ QA_DEVICE_CLASS::DebugDumpCurrentReadMessage()
     }
 }
 
+
 //
 // Dump a history of messages seen in the FPGA on their way to the host.
 // This may be useful when messages are corrupted.
+//
+// These are available only when debugging is enabled in the FPGA-side driver.
 //
 void
 QA_DEVICE_CLASS::DebugDumpReadHistory()
@@ -612,15 +618,15 @@ QA_DEVICE_CLASS::DebugDumpReadHistory()
     // How many chunks in the current message?
     uint32_t n_chunks = *p;
 
-    p = (const UMF_CHUNK*)afu.dsm_address(DSM_OFFSET_DEBUG_RSP);
+    p = (const UMF_CHUNK*)afu.DSMAddress(DSM_OFFSET_DEBUG_RSP);
 
     // Dump chunks
     for (uint32_t i = 0; i < n_chunks; i += 1)
     {
         memset((void*)p, 0, CL(1));
         // The chunk index is sent in bits 8 and above
-        afu.write_csr(CSR_AFU_TRIGGER_DEBUG, ((n_chunks - i) << 8) | 2);
-        while (afu.read_dsm(DSM_OFFSET_DEBUG_RSP + CL(1) - sizeof(uint32_t)) == 0) ;
+        afu.WriteCSR(CSR_AFU_TRIGGER_DEBUG, ((n_chunks - i) << 8) | 2);
+        while (afu.ReadDSM(DSM_OFFSET_DEBUG_RSP + CL(1) - sizeof(uint32_t)) == 0) ;
 
         printf("  0x%016llx 0x%016llx  (%d)\n", uint64_t(*p >> 64), uint64_t(*p), i);
     }
@@ -635,6 +641,8 @@ QA_DEVICE_CLASS::DebugDumpReadHistory()
 }
 
 
+#define TEST_MSG_CHUNKS 64
+
 //
 // TestSend --
 //   Send a stream of data to the FPGA.  The FPGA will drop it.
@@ -644,20 +652,20 @@ QA_DEVICE_CLASS::TestSend()
 {
     printf("SEND Test...\n");
     // The FPGA will write to DSM line 0.  Clear it first.
-    memset((void*)afu.dsm_address(0), 0, CL(1));
+    memset((void*)afu.DSMAddress(0), 0, CL(1));
 
     // Put the FPGA in SINK mode.
-    afu.write_csr(CSR_AFU_ENABLE_TEST, 1);
+    afu.WriteCSR(CSR_AFU_ENABLE_TEST, 1);
 
     // Wait for mode change.
-    while (afu.read_dsm(0) == 0) ;
+    while (afu.ReadDSM(0) == 0) ;
 
-    UMF_CHUNK *msg = new UMF_CHUNK[FRAME_CHUNKS];
-    for (int32_t i = 0; i < FRAME_CHUNKS; i += 1)
+    UMF_CHUNK *msg = new UMF_CHUNK[TEST_MSG_CHUNKS];
+    for (int32_t i = 0; i < TEST_MSG_CHUNKS; i += 1)
     {
         msg[i] = i << 1;
     }
-    const int msg_max_size = FRAME_CHUNKS * UMF_CHUNK_BYTES;
+    const int msg_max_size = TEST_MSG_CHUNKS * UMF_CHUNK_BYTES;
 
     // First test: write a series of messages, growing in size
     for (int sz = UMF_CHUNK_BYTES; sz < msg_max_size; sz += UMF_CHUNK_BYTES)
@@ -704,18 +712,18 @@ QA_DEVICE_CLASS::TestRecv()
 {
     printf("RECEIVE Test...\n");
     // The FPGA will write to DSM line 0.  Clear it first.
-    memset((void*)afu.dsm_address(0), 0, CL(1));
+    memset((void*)afu.DSMAddress(0), 0, CL(1));
 
     // Put the FPGA in SINK mode, requesting 1 GB of data.  The number of
     // chunks is sent in bits [31:2].
     uint32_t chunks = (1LL << 30) / UMF_CHUNK_BYTES;
-    afu.write_csr(CSR_AFU_ENABLE_TEST, (chunks << 2) | 2);
+    afu.WriteCSR(CSR_AFU_ENABLE_TEST, (chunks << 2) | 2);
 
     // Wait for mode change.
-    while (afu.read_dsm(0) == 0) ;
+    while (afu.ReadDSM(0) == 0) ;
 
-    UMF_CHUNK *msg = new UMF_CHUNK[FRAME_CHUNKS];
-    const int msg_max_size = FRAME_CHUNKS * UMF_CHUNK_BYTES;
+    UMF_CHUNK *msg = new UMF_CHUNK[TEST_MSG_CHUNKS];
+    const int msg_max_size = TEST_MSG_CHUNKS * UMF_CHUNK_BYTES;
 
     //
     // Measure performance
@@ -753,13 +761,13 @@ QA_DEVICE_CLASS::TestLoopback()
 {
     printf("LOOPBACK Test...\n");
     // The FPGA will write to DSM line 0.  Clear it first.
-    memset((void*)afu.dsm_address(0), 0, CL(1));
+    memset((void*)afu.DSMAddress(0), 0, CL(1));
 
     // Put the FPGA in SINK mode.
-    afu.write_csr(CSR_AFU_ENABLE_TEST, 3);
+    afu.WriteCSR(CSR_AFU_ENABLE_TEST, 3);
 
     // Wait for mode change.
-    while (afu.read_dsm(0) == 0) ;
+    while (afu.ReadDSM(0) == 0) ;
 
     pthread_t thread;
     pthread_create(&thread, NULL, LoopbackTestRecv, (void*)this);

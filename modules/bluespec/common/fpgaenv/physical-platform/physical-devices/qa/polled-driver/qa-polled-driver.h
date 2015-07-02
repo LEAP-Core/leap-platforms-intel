@@ -32,49 +32,31 @@
 #ifndef __QA_SOFTWARE_DRIVER__
 #define __QA_SOFTWARE_DRIVER__
 
-#include "platforms-module.h"
-#include "command-switches.h"
-#include "asim/provides/umf.h"
+#include "awb/provides/command_switches.h"
+#include "awb/provides/umf.h"
+
 #include "tbb/atomic.h"
+
+// AAL redefines TRACE
+#undef TRACE
 #include <aalsdk/ccilib/CCILib.h>
 #include <aalsdk/aalclp/aalclp.h>
 
 // Local includes
 #include "AFU.h"
 
-
-#define STDIN             0
-#define STDOUT            1
-#define DESC_HOST_2_FPGA  100
-#define DESC_FPGA_2_HOST  101
-#define BLOCK_SIZE        UMF_CHUNK_BYTES 
-#define SELECT_TIMEOUT    1000
-
-// BUFFER SIZE and some macros for calculating it. These came from
-// gspowley's smithwaterman code. 
-
 #ifndef CL
 # define CL(x)                     ((x) * 64)
-#endif // CL                                                                                                                                                                       
+#endif // CL
 #ifndef LOG2_CL
 # define LOG2_CL                   6
-#endif // LOG2_CL                                                                                                                                                                  
+#endif // LOG2_CL
 #ifndef MB
 # define MB(x)                     ((x) * 1024 * 1024)
-#endif // MB                                                                                                                                                                       
-
-#define CACHELINE_ALIGNED_ADDR(p)  (((UINT64)p) >> LOG2_CL)
-#define AFU_BUFFER_SIZE           CL(128)
-#define DSM_SIZE                  MB(4)
+#endif // MB
 
 #define UMF_CHUNKS_PER_CL       (CL(1) / sizeof(UMF_CHUNK))
-
-#define FRAME_NUMBER            128
-#define FRAME_CHUNKS            64
-#define BUFFER_SIZE             CL(FRAME_NUMBER * FRAME_CHUNKS)
-#define FRAME_SIZE              CL(FRAME_CHUNKS)
-// For now, one chunk/cache line
-#define CHUNK_SIZE              CL(1)
+#define QA_BLOCK_SIZE           UMF_CHUNK_BYTES
 
 //
 // DSM offsets for various state.  THESE MUST MATCH THE VALUES IN
@@ -91,7 +73,7 @@ typedef enum
 t_DSM_OFFSETS;
 
 
-// DSM byte offset:                          0           4           8           c                                                                                                                        
+// DSM byte offset:                          0           4           8           c
 const uint32_t EXPECTED_AFU_ID[] = {0xaced0000, 0xaced0001, 0xaced0002, 0xaced0003};
 
 // ==============================================
@@ -105,14 +87,13 @@ class QA_DEVICE_CLASS: public PLATFORMS_MODULE_CLASS
     COMMAND_SWITCH_DICTIONARY deviceSwitch;
 
     // Handles to AFU context.
-    CCIDeviceImplementation cci_imp; 
     AFU afu;
 
     // process/pipe state (physical channel)
     class tbb::atomic<bool> initReadComplete;
     class tbb::atomic<bool> initWriteComplete;
 
-    AFUBuffer*  readBuffer;
+    AFU_BUFFER  readBuffer;
     uint64_t    readBufferBytes;
     uint64_t    readBufferIdxMask;
 
@@ -127,7 +108,7 @@ class QA_DEVICE_CLASS: public PLATFORMS_MODULE_CLASS
     // Start of the current read chunk -- used only for debugging
     const UMF_CHUNK*  readChunksCurHead;
 
-    AFUBuffer*  writeBuffer;
+    AFU_BUFFER  writeBuffer;
     uint64_t    writeBufferBytes;
     uint64_t    writeBufferIdxMask;
     uint64_t    writeNextLineIdx;
@@ -142,9 +123,6 @@ class QA_DEVICE_CLASS: public PLATFORMS_MODULE_CLASS
     QA_DEVICE_CLASS(PLATFORMS_MODULE);
     ~QA_DEVICE_CLASS();
 
-    static void * openReadThread(void *argv);
-    static void * openWriteThread(void *argv);
-
     void Init();
     void Cleanup();                            // cleanup
     void Uninit();                             // uninit
@@ -152,7 +130,7 @@ class QA_DEVICE_CLASS: public PLATFORMS_MODULE_CLASS
     void Read(void* buf, size_t count);        // blocking read
     void Write(const void* buf, size_t count); // write
     void RegisterLogicalDeviceName(string name);
-    
+
     // The driver implements a status register space in the FPGA.
     // The protocol is very slow -- the registers are intended for debugging.
     uint64_t ReadSREG(uint32_t n);
@@ -168,34 +146,16 @@ class QA_DEVICE_CLASS: public PLATFORMS_MODULE_CLASS
     void TestLoopback();                // Test send and receive
 
   private:
-    // This function is going to be woefully inefficient.
-    volatile UMF_CHUNK* getChunkAddress(AFUBuffer* buffer, int frameNumber, int chunkNumber)
+    //
+    // Convert a line offset to an address.
+    //
+    UMF_CHUNK* getChunkAddressFromOffset(AFU_BUFFER buffer, uint64_t offset)
     {
-        volatile UMF_CHUNK *chunkAddr = (volatile UMF_CHUNK *)(((volatile char *)(buffer->virtual_address)) + frameNumber * FRAME_SIZE + chunkNumber * CHUNK_SIZE);         return chunkAddr;
-    }
-
-    //
-    // This function is mostly for debugging.  It computes the offset in cache
-    // lines of a chunk from the base of a buffer.  It is not a pointer!
-    //
-    uint32_t getChunkOffset(uint32_t frameNumber, uint32_t chunkNumber)
-    {
-        return frameNumber * (FRAME_SIZE / CHUNK_SIZE) + chunkNumber;
-    }
-
-    //
-    // Another debugging function.  Convert a frame/chunk offset to an address.
-    //
-    UMF_CHUNK* getChunkAddressFromOffset(AFUBuffer* buffer, uint64_t offset)
-    {
-        // Mask just the offset
-        offset &= (FRAME_NUMBER * FRAME_CHUNKS) - 1;
-
         // Convert cache line index to byte offset
         offset *= CL(1);
 
         // Add the base address
-        return (UMF_CHUNK*)(buffer->virtual_address + offset);
+        return (UMF_CHUNK*)(buffer->virtualAddress + offset);
     }
 };
 

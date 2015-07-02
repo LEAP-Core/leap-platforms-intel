@@ -61,8 +61,119 @@ module qa_drv_fifo_to_host
     typedef logic [UMF_WIDTH-1 : 0] t_UMF_CHUNK;
     typedef logic [N_UMF_CHUNKS_PER_CACHE_LINE-1 : 0][UMF_WIDTH-1 : 0] t_CACHE_LINE_VEC_UMF_CHUNK;
 
-    // Index of a UMF_CHUNK within a cache line
-    typedef logic [$clog2(N_UMF_CHUNKS_PER_CACHE_LINE)-1 : 0] t_UMF_CHUNK_IDX;
+    // Count of UMF_CHUNKs within a cache line
+    typedef logic [$clog2(N_UMF_CHUNKS_PER_CACHE_LINE) : 0] t_UMF_CHUNK_CNT;
+
+
+    //=====================================================================
+    //
+    //  Functions and simple logic
+    //
+    //=====================================================================
+
+    //
+    // Shift a new chunk into an existing line of data.
+    //
+    function automatic t_CACHE_LINE_VEC_UMF_CHUNK pushChunk;
+        input t_CACHE_LINE_VEC_UMF_CHUNK line;
+        input t_UMF_CHUNK chunk;
+        begin
+            for (int i = 0; i < N_UMF_CHUNKS_PER_CACHE_LINE - 1; i++)
+            begin
+                line[i] = line[i + 1];
+            end
+            line[N_UMF_CHUNKS_PER_CACHE_LINE-1] = chunk;
+
+            pushChunk = line;
+        end
+    endfunction
+
+    //
+    // Last chunk in a line?
+    //
+    function automatic logic isLastChunk;
+        input t_UMF_CHUNK_CNT cnt;
+        begin
+            // Number of chunks per line is a power of 2
+            isLastChunk = cnt[$high(cnt)];
+        end
+    endfunction
+
+
+    //=====================================================================
+    //
+    // Collect incoming chunks in a line-sized buffer.
+    //
+    //=====================================================================
+
+    t_CACHE_LINE_VEC_UMF_CHUNK lineIn_data;
+
+    // Number of chunks held in lineIn_data
+    t_UMF_CHUNK_CNT lineIn_busy_chunks;
+
+    // Number of real chunks in lineIn_data excluding flushes (see below)
+    t_UMF_CHUNK_CNT lineIn_num_chunks;
+
+    // Properties of the buffer
+    logic lineIn_notFull;
+    assign lineIn_notFull = ! isLastChunk(lineIn_busy_chunks);
+    logic lineIn_notEmpty;
+    assign lineIn_notEmpty = (lineIn_busy_chunks != t_UMF_CHUNK_CNT'(0));
+
+    // Buffer has been drained by code below
+    logic lineIn_deq;
+    // The consumer may take either the entire buffer or leave one entry
+    // in the most recent chunk.  The latter case hapens on the first line
+    // in a message, where the first chunk is the message length.
+    logic lineIn_deq_chunk_remainder;
+
+    // The state machine can enforce a timeout on short messages sitting
+    // here in the buffer by asserting lineIn_force_flush.  A flush request
+    // rotates the partial line into proper position, thus sharing the
+    // relatively expensive line shift hardware.
+    logic lineIn_force_flush;
+
+    //
+    // Rotate new chunks into lineIn_data buffer.
+    //
+    assign tx_rdy = (lineIn_notFull || lineIn_deq) && ! lineIn_force_flush;
+    
+    always_ff @(posedge clk)
+    begin
+        if (tx_enable || (lineIn_force_flush && lineIn_notFull))
+        begin
+            lineIn_data <= pushChunk(lineIn_data, tx_data);
+        end
+    end
+
+    //
+    // Update chunk counter.
+    //
+    always_ff @(posedge clk)
+    begin
+        if (!resetb)
+        begin
+            lineIn_busy_chunks <= 0;
+            lineIn_num_chunks  <= 0;
+        end
+        else if (lineIn_deq)
+        begin
+            // Buffer was consumed.  It now contains what was not consumed
+            // (at most one chunk) plus possible new data.
+            lineIn_busy_chunks <= t_UMF_CHUNK_CNT'(lineIn_deq_chunk_remainder) +
+                                  t_UMF_CHUNK_CNT'(tx_enable);
+            lineIn_num_chunks  <= t_UMF_CHUNK_CNT'(lineIn_deq_chunk_remainder) +
+                                  t_UMF_CHUNK_CNT'(tx_enable);
+        end
+        else
+        begin
+            // A chunk becomes busy even on forced rotation, but the number of
+            // real chunks increments only on tx_enable.
+            lineIn_busy_chunks <= lineIn_busy_chunks +
+                                  t_UMF_CHUNK_CNT'(tx_enable || lineIn_force_flush);
+            lineIn_num_chunks  <= lineIn_num_chunks + t_UMF_CHUNK_CNT'(tx_enable);
+        end
+    end
 
 
     //=====================================================================
@@ -88,11 +199,6 @@ module qa_drv_fifo_to_host
 
     // Index of the line currently collecting new data
     t_FIFO_TO_HOST_IDX cur_data_idx;
-    t_FIFO_TO_HOST_IDX cur_data_idx_next;
-
-    // Index of the UMF_CHUNK within the current line
-    t_UMF_CHUNK_IDX cur_chunk_idx;
-    t_UMF_CHUNK_IDX cur_chunk_idx_next;
 
     assign fifo_to_host_to_status.next_write_line_idx = cur_header_idx;
 
@@ -113,53 +219,14 @@ module qa_drv_fifo_to_host
 
     //=====================================================================
     //
-    //  Functions and simple logic
-    //
-    //=====================================================================
-
-    //
-    // Shift a new chunk into an existing line of data.
-    //
-    function automatic t_CACHE_LINE_VEC_UMF_CHUNK push_chunk;
-        input t_CACHE_LINE_VEC_UMF_CHUNK line;
-        input t_UMF_CHUNK chunk;
-        begin
-            for (int i = 0; i < N_UMF_CHUNKS_PER_CACHE_LINE - 1; i++)
-            begin
-                line[i] = line[i + 1];
-            end
-            line[N_UMF_CHUNKS_PER_CACHE_LINE-1] = chunk;
-
-            push_chunk = line;
-        end
-    endfunction
-
-    //
-    // Last chunk in a line?
-    //
-    function automatic logic is_last_chunk;
-        input t_UMF_CHUNK_IDX idx;
-        begin
-            is_last_chunk =
-                (idx == t_UMF_CHUNK_IDX'(N_UMF_CHUNKS_PER_CACHE_LINE-1));
-        end
-    endfunction
-
-
-    logic header_line_active;
-    assign header_line_active = (cur_header_idx == cur_data_idx);
-
-
-    //=====================================================================
-    //
     //  Main logic
     //
     //=====================================================================
 
     typedef enum logic [2:0]
     {
-        STATE_NORMAL,
-        STATE_ROTATE,
+        STATE_WAIT_HEADER,
+        STATE_WAIT_DATA,
         STATE_EMIT_DATA,
         STATE_EMIT_HEADER,
         STATE_EMIT_FENCE
@@ -167,310 +234,194 @@ module qa_drv_fifo_to_host
     t_STATE;
 
     t_STATE state;
-    t_STATE state_next;
-
-    logic [4:0] idle_cycles;
-    logic [4:0] idle_cycles_next;
-
-    logic [10:0] active_lines;
-    logic [10:0] active_lines_next;
-
-    logic force_buffer_flush;
-    logic force_buffer_flush_next;
 
     // Number of chunks in current message.  The counter is sized to
     // the total chunks the buffer can hold.
     logic [$clog2(N_UMF_CHUNKS_PER_CACHE_LINE) + $bits(t_FIFO_TO_HOST_IDX) - 1 : 0] num_chunks;
 
-    // Are new messages allowed?  This will go low if the write path
-    // is blocked either because no credit is available or because the
-    // write pipeline is busy.
+    //
+    // Flush write buffer after a run of idle cycles or when the maximum
+    // message size has been written.
+    //
+    logic [4:0] idle_cycles;
+    logic flush_for_idle;
+    logic flush_for_idle_hold;
+    assign flush_for_idle = idle_cycles[$high(idle_cycles)] || flush_for_idle_hold;
+
+    logic [10:0] active_lines;
+    logic flush_full_message;
+    logic flush_full_message_hold;
+    assign flush_full_message = active_lines[$high(active_lines)] || flush_full_message_hold;
+
+    //
+    // Hold flush until message sent out
+    //
     always_ff @(posedge clk)
     begin
         if (!resetb)
         begin
-            tx_rdy <= 0;
+            flush_for_idle_hold     <= 1'b0;
+            flush_full_message_hold <= 1'b0;
         end
         else
         begin
-            tx_rdy <= (state_next == STATE_NORMAL) &&
-                      ! force_buffer_flush_next &&
-                      (cur_data_idx_next + t_FIFO_TO_HOST_IDX'(1) != oldest_write_line_idx);
+            flush_for_idle_hold     <= flush_for_idle &&
+                                       (state != STATE_EMIT_FENCE);
+
+            flush_full_message_hold <= flush_full_message &&
+                                       (state != STATE_EMIT_FENCE);
         end
     end
 
     //
-    // Flush write buffer after a run of idle cycles or when 1K lines have
-    // been written.
+    // Count idle cycles and message lengths in order to decide when to
+    // complete a message.
     //
-    // The primary product of this logic is "force_buffer_flush".
-    //
-    always_comb
-    begin
-        // Idle cycles resets on activity and increments on inactivity
-        if (state == STATE_NORMAL)
-        begin
-            idle_cycles_next = (tx_enable ? 0 : idle_cycles + 5'd1);
-        end
-        else
-        begin
-            idle_cycles_next = 0;
-        end
-
-        // Active lines increments on successful data writes and resets
-        // when a group is committed.
-        if (state == STATE_EMIT_HEADER)
-        begin
-            active_lines_next = 0;
-        end
-        else if ((state == STATE_EMIT_DATA) && write_grant.writer_grant)
-        begin
-            active_lines_next = active_lines + 1;
-        end
-        else
-        begin
-            active_lines_next = active_lines;
-        end
-
-        if (state == STATE_EMIT_HEADER)
-        begin
-            force_buffer_flush_next = 0;
-        end
-        else if (! header_line_active || (cur_chunk_idx != 1))
-        begin
-            // Some data has been written to the local buffer.  (Either
-            // the header is full or at least one chunk has been written
-            // to the header.)
-            //
-            // Is the cycle counter or the number of active lines too high?
-            force_buffer_flush_next = force_buffer_flush ||
-                                      idle_cycles_next[$high(idle_cycles)] ||
-                                      active_lines_next[$high(active_lines)];
-        end
-        else
-        begin
-            force_buffer_flush_next = force_buffer_flush;
-        end
-    end
-
     always_ff @(posedge clk)
     begin
         if (!resetb)
         begin
-            force_buffer_flush <= 0;
             idle_cycles <= 0;
             active_lines <= 0;
         end
         else
         begin
-            force_buffer_flush <= force_buffer_flush_next;
-            idle_cycles <= idle_cycles_next;
-            active_lines <= active_lines_next;
+            if (state == STATE_WAIT_HEADER)
+            begin
+                if (lineIn_notEmpty)
+                begin
+                    idle_cycles <= idle_cycles + 1;
+                end
+                else
+                begin
+                    // Message is completely empty
+                    idle_cycles <= 0;
+                end
+            end
+            else if ((state != STATE_WAIT_DATA) || lineIn_deq)
+            begin
+                // Not waiting for data or data just arrived
+                idle_cycles <= 0;
+            end
+            else
+            begin
+                idle_cycles <= idle_cycles + 1;
+            end
+
+            // Active lines increments on successful data writes and resets
+            // when a group is committed.
+            if (state == STATE_EMIT_HEADER)
+            begin
+                active_lines <= 0;
+            end
+            else if ((state == STATE_EMIT_DATA) && write_grant.writer_grant)
+            begin
+                active_lines <= active_lines + 1;
+            end
         end
     end
 
+    // After some timeout for the incoming queue to produce what it has.
+    assign lineIn_force_flush = (state == STATE_WAIT_HEADER) && flush_for_idle;
+
+    // Consume incoming data based on state.
+    assign lineIn_deq = (! lineIn_notFull && ! flush_full_message &&
+                         ((state == STATE_WAIT_HEADER) || (state == STATE_WAIT_DATA)));
+
+    // The header will never consume a full incoming line, since one chunk
+    // is reserved for the message length.
+    assign lineIn_deq_chunk_remainder = ((state == STATE_WAIT_HEADER) &&
+                                         isLastChunk(lineIn_num_chunks));
 
     //
     // State transitions.
     //
-    always_comb
-    begin
-        state_next = state;
-
-        case (state)
-          STATE_NORMAL:
-            begin
-                if (! header_line_active && tx_enable && is_last_chunk(cur_chunk_idx))
-                begin
-                    // Data line is full.  Write to memory.
-                    state_next = STATE_EMIT_DATA;
-                end
-                else if (force_buffer_flush)
-                begin
-                    // Time to close the current buffer
-                    if (cur_chunk_idx == t_UMF_CHUNK_IDX'(0))
-                    begin
-                        // Most recent data line is empty.  Ready to emit
-                        // header.
-                        state_next = STATE_EMIT_HEADER;
-                    end
-                    else
-                    begin
-                        // Need to rotate the most recent data line into
-                        // position.
-                        state_next = STATE_ROTATE;
-                    end
-                end
-
-                assert(!(tx_enable && force_buffer_flush)) else
-                    $fatal("qa_drv_fifo_to_host: tx_enable same cycle as force_buffer_flush!");
-            end
-
-          STATE_ROTATE:
-            begin
-                if (is_last_chunk(cur_chunk_idx))
-                begin
-                    // Done rotating
-                    if (header_line_active)
-                    begin
-                        // Short message -- just the header line
-                        state_next = STATE_EMIT_HEADER;
-                    end
-                    else
-                    begin
-                        // Emit the last data line and then the header
-                        state_next = STATE_EMIT_DATA;
-                    end
-                end
-            end
-
-          STATE_EMIT_DATA:
-            begin
-                if (write_grant.writer_grant)
-                begin
-                    state_next = (force_buffer_flush ? STATE_EMIT_HEADER :
-                                                       STATE_NORMAL);
-                end
-            end
-
-          STATE_EMIT_HEADER:
-            begin
-                if (write_grant.writer_grant)
-                begin
-                    state_next = STATE_EMIT_FENCE;
-                end
-            end
-
-
-          STATE_EMIT_FENCE:
-            begin
-                if (write_grant.writer_grant)
-                begin
-                    state_next = STATE_NORMAL;
-                end
-            end
-
-        endcase
-    end
-
-    always_ff @(posedge clk)
-    begin
-        if (!resetb)
-            state <= STATE_NORMAL;
-        else
-            state <= state_next;
-    end
-
-
-    //
-    // Track the pointer to the header line.  It moves only as the header
-    // is being emitted.
-    //
     always_ff @(posedge clk)
     begin
         if (!resetb)
         begin
+            state <= STATE_WAIT_HEADER;
             cur_header_idx <= 0;
-        end
-        else if ((state == STATE_EMIT_FENCE) && write_grant.writer_grant)
-        begin
-            cur_header_idx <= cur_data_idx;
-        end
-    end
-
-
-    //
-    // Count chunks in a message.
-    //
-    always_ff @(posedge clk)
-    begin
-        if (!resetb)
-        begin
-            num_chunks <= 0;
-        end
-        else if (tx_enable)
-        begin
-            num_chunks <= num_chunks + 1;
-        end
-        else if (state == STATE_EMIT_FENCE)
-        begin
-            num_chunks <= 0;
-        end
-    end
-
-
-    //
-    // Consume new messages and update local buffers.
-    //
-    always_ff @(posedge clk)
-    begin
-        if (tx_enable || (state == STATE_ROTATE))
-        begin
-            // Push tx_data even for the STATE_ROTATE case to simplify the
-            // hardware.  The location will be ignored by the host.
-            cur_data_line <= push_chunk(cur_data_line, tx_data);
-
-            if (is_last_chunk(cur_chunk_idx) && header_line_active)
-            begin
-                // Store the header line in a separate buffer.  It must
-                // be emitted last since it holds a count of the number
-                // of chunks in the message.
-                cur_header_line <= push_chunk(cur_data_line, tx_data);
-            end
-        end
-    end
-
-    always_comb
-    begin
-        cur_chunk_idx_next = cur_chunk_idx;
-        cur_data_idx_next = cur_data_idx;
-
-        if (tx_enable || (state == STATE_ROTATE))
-        begin
-            // Update pointers
-            if (! is_last_chunk(cur_chunk_idx))
-            begin
-                // Current line still has space
-                cur_chunk_idx_next = cur_chunk_idx + 1;
-            end
-            else
-            begin
-                // End of current line
-                if (header_line_active)
-                begin
-                    // Move on to the next line
-                    cur_data_idx_next = cur_data_idx + 1;
-                end
-
-                // Update pointers
-                cur_chunk_idx_next = 0;
-            end
-        end
-        else if ((state == STATE_EMIT_DATA) && write_grant.writer_grant)
-        begin
-            cur_data_idx_next = cur_data_idx + 1;
-        end
-        else if (state == STATE_EMIT_HEADER)
-        begin
-            // Prepare for next message.  Leave an open position for the
-            // chunk count in the next message header.
-            cur_chunk_idx_next = 1;
-        end
-    end
-
-    always_ff @(posedge clk)
-    begin
-        if (!resetb)
-        begin
-            // cur_chunk_idx set to 1 in headers because the first slot will
-            // hold a count of chunks.
-            cur_chunk_idx <= 1;
             cur_data_idx <= 0;
         end
         else
         begin
-            cur_chunk_idx <= cur_chunk_idx_next;
-            cur_data_idx <= cur_data_idx_next;
+            case (state)
+              STATE_WAIT_HEADER:
+                begin
+                    // Wait for chunks to fill the available slots in the header
+                    if (! lineIn_notFull)
+                    begin
+                        cur_header_line <= lineIn_data;
+
+                        // Might be a partial line if flush_for_idle is set
+                        if (isLastChunk(lineIn_num_chunks))
+                        begin
+                            // Left one chunk in the input buffer to make room
+                            // for sending the message length.
+                            num_chunks <= N_UMF_CHUNKS_PER_CACHE_LINE - 1;
+                        end
+                        else
+                        begin
+                            num_chunks <= lineIn_num_chunks;
+                        end
+
+                        state <= (flush_for_idle ? STATE_EMIT_HEADER :
+                                                   STATE_WAIT_DATA);
+                        cur_data_idx <= cur_data_idx + 1;
+                    end
+                end
+
+              STATE_WAIT_DATA:
+                begin
+                    if (flush_full_message)
+                    begin
+                        state <= STATE_EMIT_HEADER;
+                    end
+                    else if (! lineIn_notFull)
+                    begin
+                        cur_data_line <= lineIn_data;
+                        state <= STATE_EMIT_DATA;
+                        num_chunks <= num_chunks + N_UMF_CHUNKS_PER_CACHE_LINE;
+                    end
+                    // Must test for idle last since lineIn_deq is allowed
+                    // to fire in this state, allowing the existence of new
+                    // data to take precedence over the timeout.
+                    else if (flush_for_idle)
+                    begin
+                        state <= STATE_EMIT_HEADER;
+                    end
+                end
+
+              STATE_EMIT_DATA:
+                begin
+                    if (write_grant.writer_grant)
+                    begin
+                        state <= (flush_full_message ? STATE_EMIT_HEADER :
+                                                       STATE_WAIT_DATA);
+                        cur_data_idx <= cur_data_idx + 1;
+                    end
+                end
+
+              STATE_EMIT_HEADER:
+                begin
+                    if (write_grant.writer_grant)
+                    begin
+                        state <= STATE_EMIT_FENCE;
+                    end
+                end
+
+              STATE_EMIT_FENCE:
+                begin
+                    if (write_grant.writer_grant)
+                    begin
+                        state <= STATE_WAIT_HEADER;
+
+                        // Start position of next message
+                        cur_header_idx <= cur_data_idx;
+                    end
+                end
+            endcase
         end
     end
 
@@ -484,9 +435,14 @@ module qa_drv_fifo_to_host
     // No reads.
     assign frame_writer.read.request = 1'b0;
 
-    assign frame_writer.write.request = (state == STATE_EMIT_DATA) ||
-                                        (state == STATE_EMIT_HEADER) ||
-                                        (state == STATE_EMIT_FENCE);
+    // Write only allowed if space is available in the shared memory buffer
+    logic allow_write;
+    assign allow_write = (cur_data_idx + t_FIFO_TO_HOST_IDX'(1) != oldest_write_line_idx);
+
+    assign frame_writer.write.request = allow_write &&
+                                        ((state == STATE_EMIT_DATA) ||
+                                         (state == STATE_EMIT_HEADER) ||
+                                         (state == STATE_EMIT_FENCE));
 
     t_CACHE_LINE_VEC_UMF_CHUNK header_line;
 
@@ -498,8 +454,9 @@ module qa_drv_fifo_to_host
         frame_writer.write_header = 0;
         frame_writer.write_header.mdata = 0;
 
-        header_line = cur_header_line;
-        header_line[0] = t_UMF_CHUNK'(num_chunks);
+        // First chunk in the header is the message length
+        header_line = t_CACHE_LINE_VEC_UMF_CHUNK'({ cur_header_line,
+                                                    t_UMF_CHUNK'(num_chunks) });
 
         case (state)
           STATE_EMIT_DATA:

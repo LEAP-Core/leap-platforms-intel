@@ -66,6 +66,8 @@ module qa_drv_tester
      output t_TO_STATUS_MGR_TESTER tester_to_status
     );
 
+    typedef logic [UMF_WIDTH-1:0] t_DATA;
+
     //
     // Test mode.
     //
@@ -81,8 +83,8 @@ module qa_drv_tester
     t_STATE state;
 
     // SOURCE state
-    logic [UMF_WIDTH-1:0] source_data;
-    logic [30:0]          source_count;
+    t_DATA source_data;
+    logic [30:0] source_count;
 
     // Signal completed operation
     logic test_done;
@@ -128,7 +130,7 @@ module qa_drv_tester
                 // Done if count of messages to send is 0
                 test_done = (tx_rdy && (source_count == 1));
 
-                tx_data = source_data;
+                tx_data = t_DATA'({ source_count, 1'b0 });
 
                 // Signal the last message by setting bit 0 to 1 iff last
                 tx_data[0] = (source_count == 1);

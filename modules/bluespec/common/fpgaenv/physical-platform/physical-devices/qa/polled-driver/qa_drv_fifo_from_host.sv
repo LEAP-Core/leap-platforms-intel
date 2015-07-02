@@ -83,18 +83,18 @@ module qa_drv_fifo_from_host
     //
     // ====================================================================
 
-    t_UMF_CHUNK out_fifo_enq_data;
-    logic out_fifo_enq_en;
-    logic out_fifo_notFull;
+    t_UMF_CHUNK outQ_enq_data;
+    logic outQ_enq_en;
+    logic outQ_notFull;
 
     qa_drv_fifo2#(.N_DATA_BITS($bits(t_UMF_CHUNK)))
-        fifo_out(.clk, .resetb,
-                 .enq_data(out_fifo_enq_data),
-                 .enq_en(out_fifo_enq_en),
-                 .notFull(out_fifo_notFull),
-                 .first(rx_data),
-                 .deq_en(rx_enable),
-                 .notEmpty(rx_rdy));
+        outQ(.clk, .resetb,
+             .enq_data(outQ_enq_data),
+             .enq_en(outQ_enq_en),
+             .notFull(outQ_notFull),
+             .first(rx_data),
+             .deq_en(rx_enable),
+             .notEmpty(rx_rdy));
 
 
     // ====================================================================
@@ -147,7 +147,7 @@ module qa_drv_fifo_from_host
     logic continue_to_next_line;
     assign continue_to_next_line =
         ((state == STATE_VALID_CHUNK) &&
-         out_fifo_enq_en &&
+         outQ_enq_en &&
          is_last_chunk_in_line &&
          (num_chunks != t_NUM_UMF_CHUNKS'(1)));
 
@@ -162,8 +162,8 @@ module qa_drv_fifo_from_host
     assign sc_req_next_line = sc_not_empty && need_next_line;
 
     // Data is ready when it is sitting in the outbound buffer
-    assign out_fifo_enq_en = (state == STATE_VALID_CHUNK) && out_fifo_notFull;
-    assign out_fifo_enq_data = cur_line[0];
+    assign outQ_enq_en = (state == STATE_VALID_CHUNK) && outQ_notFull;
+    assign outQ_enq_data = cur_line[0];
 
     //
     // State machine.
@@ -207,7 +207,7 @@ module qa_drv_fifo_from_host
               STATE_VALID_CHUNK:
                 begin
                     // If the client consumed a chunk then advance the poniters
-                    if (out_fifo_enq_en)
+                    if (outQ_enq_en)
                     begin
                         if (num_chunks == t_NUM_UMF_CHUNKS'(1))
                         begin
@@ -246,7 +246,7 @@ module qa_drv_fifo_from_host
 
         // Rotate if reading the header or sending a chunk to the client.
         else if ((state == STATE_READ_HEADER) ||
-                 (out_fifo_enq_en && (state == STATE_VALID_CHUNK)))
+                 (outQ_enq_en && (state == STATE_VALID_CHUNK)))
         begin
             for (int i = 0; i < UMF_CHUNKS_PER_LINE-1; i++)
             begin

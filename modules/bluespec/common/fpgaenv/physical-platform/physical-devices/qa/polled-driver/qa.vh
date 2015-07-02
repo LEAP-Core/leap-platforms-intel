@@ -31,6 +31,15 @@
 `ifndef QA_VH
 `define QA_VH
 
+//
+// Included to load AWB parameters as preprocessor variables.  For building
+// this driver outside AWB, replace the include with definitions of required
+// variables, such as QA_DRIVER_DEBUG.  Note that AWB automatically defines
+// FOO_Z when variable FOO is 0 to work around the limited preprocessor,
+// so define QA_DRIVER_DEBUG_Z when QA_DRIVER_DEBUG is 0.
+//
+`include "awb/provides/qa_driver_params.bsh"
+
 import qa_drv_csr_types::*;
 import qa_drv_types::*;
 

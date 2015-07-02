@@ -389,6 +389,13 @@ module qa_drv_fifo_from_host
     //
     // ====================================================================
 
+`ifdef QA_DRIVER_DEBUG_Z
+
+    // Debugger disabled
+    assign fifo_from_host_to_status.dbg_fifo_state = t_AFU_DEBUG_RSP'(0);
+
+`else
+
     // Low 32 bits of the most recent four read data responses
     logic [3:0][31:0] dbg_data_read_data;
 
@@ -450,5 +457,7 @@ module qa_drv_fifo_from_host
             end
         end
     end
+
+`endif // QA_DRIVER_DEBUG_Z
 
 endmodule

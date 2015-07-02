@@ -34,6 +34,9 @@ class Verilog():
     vinc_path = ALL_DIRS_FROM_ROOT
     vinc_path += ':' + ase_hw_dir
 
+    # Parameter includes
+    vinc_path += ':hw/include'
+
     ALL_INC_DIRS_FROM_ROOT   = '-Xv +incdir+' + vinc_path.replace(':','+') 
 
     # Due to the bluespec linker, for LI second pass builds, the final

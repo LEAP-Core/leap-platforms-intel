@@ -52,6 +52,13 @@ class PostSynthesize():
         prjFile.write('source ' + rel_qsf_src_dir + '/qsf_qlp_PAR_files.qsf\n')
 
 
+        # Include file path
+        inc_dirs = ['hw/include']
+        for inc in inc_dirs:
+            inc = model.rel_if_not_abspath(inc, moduleList.compileDirectory)
+            prjFile.write('set_global_assignment -name SEARCH_PATH ' + inc + '\n'); 
+
+
         # Include SDC (Tcl) files. These must be included in a specific order to honor dependencies among them.
         sdcs = map(model.modify_path_hw, moduleList.getAllDependenciesWithPaths('GIVEN_TCL_HEADERS')) + map(model.modify_path_hw, moduleList.getAllDependenciesWithPaths('GIVEN_SDCS')) + map(model.modify_path_hw, moduleList.getAllDependenciesWithPaths('GIVEN_SDC_ALGEBRAS'))      
 

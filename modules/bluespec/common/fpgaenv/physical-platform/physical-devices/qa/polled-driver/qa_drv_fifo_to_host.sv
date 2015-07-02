@@ -487,6 +487,13 @@ module qa_drv_fifo_to_host
     //
     // ====================================================================
 
+`ifdef QA_DRIVER_DEBUG_Z
+
+    // Debugger disabled
+    assign fifo_to_host_to_status.dbg_fifo_state = t_AFU_DEBUG_RSP'(0);
+
+`else
+
     t_UMF_CHUNK dbg_chunk_log[0 : 511];
     logic [8:0] dbg_chunk_next_idx;
 
@@ -514,4 +521,7 @@ module qa_drv_fifo_to_host
             dbg_chunk_log[dbg_chunk_next_idx] <= tx_data;
         end
     end
+
+`endif // QA_DRIVER_DEBUG_Z
+
 endmodule

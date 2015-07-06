@@ -85,7 +85,7 @@ remote_memory=Null Remote Memory
 channelio=Basic Virtual Channel Multiplexer
 rrr=RRR Clients and Servers
 physical_platform_debugger=Intel QuickAssist Platform Debugger
-local_mem=NULL Local Memory Interface
+local_mem=Local Memory Interface using BRAM
 
 [Common Physical Platform Utilities/Requires]
 physical_platform_defs=Common Physical Platform Definitions
@@ -96,11 +96,6 @@ Packagehint=leap-platforms
 
 [Little-Endian Unified Message Format/Params]
 UMF_CHUNK_BYTES=16
-
-
-[NULL Local Memory Interface]
-File=modules/leap/virtual-platform/low-level-platform-interface/local-mem/local-mem-null.awb
-Packagehint=leap
 
 [Standard Virtual Devices Submodel]
 File=config/pm/leap/submodels/virtual-devices/std-virtual-devices.apm
@@ -176,4 +171,12 @@ Packagehint=leap-platforms-intel
 
 [Standard Platform Services (Local Memory Scratchpad) Submodel]
 File=config/pm/leap/submodels/platform-services/standard-platform-local-mem.apm
+Packagehint=leap
+
+[Local Memory Interface using BRAM/Params]
+LOCAL_MEM_WORDS_PER_LINE=8
+LOCAL_MEM_ADDR_BITS=15
+
+[Local Memory Interface using BRAM]
+File=modules/leap/virtual-platform/low-level-platform-interface/local-mem/local-mem-bram.awb
 Packagehint=leap

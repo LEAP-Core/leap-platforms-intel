@@ -215,7 +215,7 @@ module qa_drv_status_manager
             //
             // IDLE: Request a read
             //
-            status_mgr_req.read.request = 1;
+            status_mgr_req.read.request = csr.afu_dsm_base_valid;
 
             // Wait for the read response if read was granted.
             next_state_rd = read_grant.status_grant ? STATE_RD_WAIT : STATE_RD_POLL;

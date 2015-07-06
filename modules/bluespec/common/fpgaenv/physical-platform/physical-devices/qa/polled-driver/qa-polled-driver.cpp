@@ -178,6 +178,7 @@ QA_DEVICE_CLASS::Init()
     initReadComplete = true;
     initWriteComplete = true;
 
+    sleep(1);
 //    TestSend();
 //    TestRecv();
 //    TestLoopback();

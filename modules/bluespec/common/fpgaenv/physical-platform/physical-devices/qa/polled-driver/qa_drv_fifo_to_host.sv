@@ -136,7 +136,9 @@ module qa_drv_fifo_to_host
     //
     // Rotate new chunks into lineIn_data buffer.
     //
-    assign tx_rdy = (lineIn_notFull || lineIn_deq) && ! lineIn_force_flush;
+    assign tx_rdy = csr.afu_en &&
+                    (lineIn_notFull || lineIn_deq) &&
+                    ! lineIn_force_flush;
     
     always_ff @(posedge clk)
     begin

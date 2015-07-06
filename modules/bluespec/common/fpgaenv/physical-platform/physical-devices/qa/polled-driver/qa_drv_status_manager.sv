@@ -126,10 +126,10 @@ module qa_drv_status_manager
     //       overwriting unread messages.
     //
     t_FIFO_FROM_HOST_IDX newest_read_line_idx;
-    assign status_to_fifo_from_host.newest_read_line_idx = newest_read_line_idx;
+    assign status_to_fifo_from_host.newestReadLineIdx = newest_read_line_idx;
 
     t_FIFO_TO_HOST_IDX oldest_write_line_idx;
-    assign status_to_fifo_to_host.oldest_write_line_idx = oldest_write_line_idx;
+    assign status_to_fifo_to_host.oldestWriteLineIdx = oldest_write_line_idx;
 
 
     typedef enum
@@ -150,8 +150,9 @@ module qa_drv_status_manager
     // Compute when a read response is available
     logic reader_data_rdy;
     assign reader_data_rdy = rx0.rdvalid &&
-                             reader_meta_rsp.is_read &&
-                             reader_meta_rsp.is_header;
+                             reader_meta_rsp.isRead &&
+                             reader_meta_rsp.isForDriver &&
+                             reader_meta_rsp.isHeader;
 
     // View incoming read data as a vector of 32 bit objects
     t_CACHE_LINE_VEC32 read_data_vec32;
@@ -200,15 +201,16 @@ module qa_drv_status_manager
         //
         // Poll the DSM line holding the read head pointer and write credits.
         //
-        status_mgr_req.read_header = 0;
-        status_mgr_req.read_header.request_type = RdLine;
-        status_mgr_req.read_header.address =
+        status_mgr_req.readHeader = 0;
+        status_mgr_req.readHeader.requestType = RdLine;
+        status_mgr_req.readHeader.address =
             dsm_line_offset_to_addr(DSM_OFFSET_POLL_STATE, csr.afu_dsm_base);
 
-        reader_meta_req.is_read   = 1'b1;
-        reader_meta_req.is_header = 1'b1;
-        reader_meta_req.rob_addr  = 0;
-        status_mgr_req.read_header.mdata = pack_read_metadata(reader_meta_req);
+        reader_meta_req.isForDriver = 1'b1;
+        reader_meta_req.isRead      = 1'b1;
+        reader_meta_req.isHeader    = 1'b1;
+        reader_meta_req.robAddr     = 0;
+        status_mgr_req.readHeader.mdata = pack_read_metadata(reader_meta_req);
 
         if (state_rd == STATE_RD_POLL)
         begin
@@ -218,7 +220,7 @@ module qa_drv_status_manager
             status_mgr_req.read.request = csr.afu_dsm_base_valid;
 
             // Wait for the read response if read was granted.
-            next_state_rd = read_grant.status_grant ? STATE_RD_WAIT : STATE_RD_POLL;
+            next_state_rd = read_grant.statusGrant ? STATE_RD_WAIT : STATE_RD_POLL;
         end
         else
         begin
@@ -266,7 +268,7 @@ module qa_drv_status_manager
         // Very simple protocol.  Only one thing may be active at a time.
         // No other requests may be processed while in STATE_WR_INIT.  No new
         // DEBUG requests will be noticed until the current one completes.
-        if (write_grant.status_grant)
+        if (write_grant.statusGrant)
         begin
             next_state_wr = STATE_WR_IDLE;
         end
@@ -327,7 +329,7 @@ module qa_drv_status_manager
             if (need_fifo_status_update)
             begin
                 // Already need a write to DSM.  Did it happen?
-                if (requested_fifo_status_update && write_grant.status_grant)
+                if (requested_fifo_status_update && write_grant.statusGrant)
                 begin
                     // Yes.  Record the value written.
                     need_fifo_status_update <= 0;
@@ -351,10 +353,10 @@ module qa_drv_status_manager
     always_ff @(posedge clk)
     begin
         fifo_from_host_oldest_read_idx <=
-            fifo_from_host_to_status.oldest_read_line_idx;
+            fifo_from_host_to_status.oldestReadLineIdx;
 
         fifo_to_host_next_write_idx <=
-            fifo_to_host_to_status.next_write_line_idx;
+            fifo_to_host_to_status.nextWriteLineIdx;
     end
 
     // The FIFO status to write to DSM
@@ -406,9 +408,9 @@ module qa_drv_status_manager
             requested_fifo_status_update = need_fifo_status_update;
         end
 
-        status_mgr_req.write_header = 0;
-        status_mgr_req.write_header.request_type = WrThru;
-        status_mgr_req.write_header.address =
+        status_mgr_req.writeHeader = 0;
+        status_mgr_req.writeHeader.requestType = WrThru;
+        status_mgr_req.writeHeader.address =
             dsm_line_offset_to_addr(offset, csr.afu_dsm_base);
         status_mgr_req.data = data;
     end
@@ -418,8 +420,8 @@ module qa_drv_status_manager
         if (QA_DRIVER_DEBUG)
         begin  
             if (status_mgr_req.write.request)
-              $display("Status writer attempts to write 0x%h to CL 0x%h", status_mgr_req.data, status_mgr_req.write_header.address);
-            if (write_grant.status_grant)
+              $display("Status writer attempts to write 0x%h to CL 0x%h", status_mgr_req.data, status_mgr_req.writeHeader.address);
+            if (write_grant.statusGrant)
               $display("Status writer write request granted");        
         end
     end
@@ -460,13 +462,13 @@ module qa_drv_status_manager
     begin
         case (debug_req.idx)
             1:
-              debug_rsp = fifo_from_host_to_status.dbg_fifo_state;
+              debug_rsp = fifo_from_host_to_status.dbgFIFOState;
             2:
-              debug_rsp = fifo_to_host_to_status.dbg_fifo_state;
+              debug_rsp = fifo_to_host_to_status.dbgFIFOState;
             3:
-              debug_rsp = tester_to_status.dbg_tester;
+              debug_rsp = tester_to_status.dbgTester;
             default:
-              debug_rsp = fifo_from_host_to_status.dbg_fifo_state;
+              debug_rsp = fifo_from_host_to_status.dbgFIFOState;
         endcase
     end
 

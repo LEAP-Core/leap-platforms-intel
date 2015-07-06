@@ -194,7 +194,7 @@ module qa_drv_fifo_to_host
     // as messages are consumed and updated in the FPGA by the status
     // manager.
     t_FIFO_TO_HOST_IDX oldest_write_line_idx;
-    assign oldest_write_line_idx = status_to_fifo_to_host.oldest_write_line_idx;
+    assign oldest_write_line_idx = status_to_fifo_to_host.oldestWriteLineIdx;
 
     // Index of the line with the control word for the current group
     t_FIFO_TO_HOST_IDX cur_header_idx;
@@ -202,7 +202,7 @@ module qa_drv_fifo_to_host
     // Index of the line currently collecting new data
     t_FIFO_TO_HOST_IDX cur_data_idx;
 
-    assign fifo_to_host_to_status.next_write_line_idx = cur_header_idx;
+    assign fifo_to_host_to_status.nextWriteLineIdx = cur_header_idx;
 
 
     //=====================================================================
@@ -316,7 +316,7 @@ module qa_drv_fifo_to_host
             begin
                 active_lines <= 0;
             end
-            else if ((state == STATE_EMIT_DATA) && write_grant.writer_grant)
+            else if ((state == STATE_EMIT_DATA) && write_grant.writerGrant)
             begin
                 active_lines <= active_lines + 1;
             end
@@ -397,7 +397,7 @@ module qa_drv_fifo_to_host
 
               STATE_EMIT_DATA:
                 begin
-                    if (write_grant.writer_grant)
+                    if (write_grant.writerGrant)
                     begin
                         state <= (flush_full_message ? STATE_EMIT_HEADER :
                                                        STATE_WAIT_DATA);
@@ -407,7 +407,7 @@ module qa_drv_fifo_to_host
 
               STATE_EMIT_HEADER:
                 begin
-                    if (write_grant.writer_grant)
+                    if (write_grant.writerGrant)
                     begin
                         state <= STATE_EMIT_FENCE;
                     end
@@ -415,7 +415,7 @@ module qa_drv_fifo_to_host
 
               STATE_EMIT_FENCE:
                 begin
-                    if (write_grant.writer_grant)
+                    if (write_grant.writerGrant)
                     begin
                         state <= STATE_WAIT_HEADER;
 
@@ -453,8 +453,8 @@ module qa_drv_fifo_to_host
     //
     always_comb
     begin
-        frame_writer.write_header = 0;
-        frame_writer.write_header.mdata = 0;
+        frame_writer.writeHeader = 0;
+        frame_writer.writeHeader.mdata = 0;
 
         // First chunk in the header is the message length
         header_line = t_CACHE_LINE_VEC_UMF_CHUNK'({ cur_header_line,
@@ -464,20 +464,20 @@ module qa_drv_fifo_to_host
           STATE_EMIT_DATA:
             begin
                 frame_writer.data = cur_data_line;
-                frame_writer.write_header.request_type = WrThru;
-                frame_writer.write_header.address = buffer_base_addr + cur_data_idx;
+                frame_writer.writeHeader.requestType = WrThru;
+                frame_writer.writeHeader.address = buffer_base_addr + cur_data_idx;
             end
           STATE_EMIT_HEADER:
             begin
                 frame_writer.data = header_line;
-                frame_writer.write_header.request_type = WrThru;
-                frame_writer.write_header.address = buffer_base_addr + cur_header_idx;
+                frame_writer.writeHeader.requestType = WrThru;
+                frame_writer.writeHeader.address = buffer_base_addr + cur_header_idx;
             end
           default:
             begin
                 frame_writer.data = header_line;
-                frame_writer.write_header.request_type = WrFence;
-                frame_writer.write_header.address = 0;
+                frame_writer.writeHeader.requestType = WrFence;
+                frame_writer.writeHeader.address = 0;
             end
         endcase
     end
@@ -492,7 +492,7 @@ module qa_drv_fifo_to_host
 `ifdef QA_DRIVER_DEBUG_Z
 
     // Debugger disabled
-    assign fifo_to_host_to_status.dbg_fifo_state = t_AFU_DEBUG_RSP'(0);
+    assign fifo_to_host_to_status.dbgFIFOState = t_AFU_DEBUG_RSP'(0);
 
 `else
 
@@ -515,7 +515,7 @@ module qa_drv_fifo_to_host
     always_ff @(posedge clk)
     begin
         // Read a host-requested history register.
-        fifo_to_host_to_status.dbg_fifo_state <= dbg_chunk_log[dbg_chunk_read_idx];
+        fifo_to_host_to_status.dbgFIFOState <= dbg_chunk_log[dbg_chunk_read_idx];
 
         // Log arriving UMF_CHUNKs
         if (tx_enable)

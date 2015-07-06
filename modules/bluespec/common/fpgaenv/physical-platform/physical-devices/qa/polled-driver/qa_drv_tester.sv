@@ -228,11 +228,11 @@ module qa_drv_tester
     begin
         if (! resetb)
         begin
-            tester_to_status.dbg_tester <= 0;
+            tester_to_status.dbgTester <= 0;
         end
         else
         begin
-            tester_to_status.dbg_tester[5:0] <= { rx_rdy, rx_enable, tx_rdy, tx_enable, state };
+            tester_to_status.dbgTester[5:0] <= { rx_rdy, rx_enable, tx_rdy, tx_enable, state };
         end
     end
 

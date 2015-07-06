@@ -83,21 +83,28 @@ package qa_drv_types;
     }
     t_TX_REQUEST;
 
+    //
+    // Read metadata is passed in the mdata field of each read request in
+    // order to reorder and route the response.
+    //
     typedef struct 
     {
-        logic is_read;                      // denotes target of read response: 1 for frame_reader, 0 for frame_writer
-        logic is_header;                    // denotes a read for header, used by read streamer.
-        logic [10:0] rob_addr;              // denotes rob address (data reads)
+        logic isForDriver;          // 1: driver generated (e.g. FIFOs)
+                                    // 0: request from FPGA user code
+        logic isHeader;             // Read header, used to manage FIFO credits
+        logic isRead;               // Target of read response
+        logic [9:0] robAddr;        // ROB address (data reads)
     }
     t_READ_METADATA;
 
     typedef struct packed
     {
-        logic [60:56] byte_enable;
-        t_TX_REQUEST  request_type;
-        logic [51:46] rsvd;
+        logic [60:56] rsvd2;
+        t_TX_REQUEST  requestType;
+        logic [51:46] rsvd1;
         logic [45:14] address;
-        logic [13:0]  mdata;
+        logic         rsvd0;
+        logic [12:0]  mdata;
     }
     t_TX_HEADER;
 
@@ -110,18 +117,18 @@ package qa_drv_types;
 
     typedef struct
     {
-        logic reader_grant;
-        logic writer_grant;
-        logic status_grant;  
+        logic readerGrant;
+        logic writerGrant;
+        logic statusGrant;  
     }
     t_CHANNEL_GRANT_ARB;
 
     typedef struct
     {
         t_CHANNEL_REQ_ARB read;
-        t_TX_HEADER   read_header;  
+        t_TX_HEADER   readHeader;  
         t_CHANNEL_REQ_ARB write;
-        t_TX_HEADER   write_header;
+        t_TX_HEADER   writeHeader;
         logic [511:0] data;
     }
     t_FRAME_ARB;
@@ -129,7 +136,7 @@ package qa_drv_types;
     typedef struct
     {
         t_TX_HEADER  header;
-        logic         rdvalid;
+        logic        rdvalid;
     }
     t_TX_C0;
 
@@ -178,7 +185,10 @@ package qa_drv_types;
     function automatic [12:0] pack_read_metadata;
         input    t_READ_METADATA metadata;
         begin
-            pack_read_metadata = {metadata.is_read, metadata.is_header, metadata.rob_addr};
+            pack_read_metadata = { metadata.isForDriver,
+                                   metadata.isHeader,
+                                   metadata.isRead,
+                                   metadata.robAddr };
         end
     endfunction
 
@@ -186,9 +196,10 @@ package qa_drv_types;
     function automatic t_READ_METADATA unpack_read_metadata;
         input    [17:0] metadata;
         begin
-            unpack_read_metadata.is_read = metadata[12];
-            unpack_read_metadata.is_header = metadata[11];
-            unpack_read_metadata.rob_addr = metadata[10:0];
+            unpack_read_metadata.isForDriver = metadata[12];
+            unpack_read_metadata.isHeader = metadata[11];
+            unpack_read_metadata.isRead = metadata[10];
+            unpack_read_metadata.robAddr = metadata[9:0];
         end
     endfunction
 
@@ -234,17 +245,17 @@ package qa_drv_types;
     typedef struct
     {
         // Index of the next line the FPGA will read when data is present.
-        t_FIFO_FROM_HOST_IDX oldest_read_line_idx;
+        t_FIFO_FROM_HOST_IDX oldestReadLineIdx;
 
         // Debugging state
-        t_AFU_DEBUG_RSP dbg_fifo_state;
+        t_AFU_DEBUG_RSP dbgFIFOState;
     }
     t_TO_STATUS_MGR_FIFO_FROM_HOST;
     
     typedef struct
     {
         // Index of the most recent line written by the host.
-        t_FIFO_FROM_HOST_IDX newest_read_line_idx;
+        t_FIFO_FROM_HOST_IDX newestReadLineIdx;
     }
     t_FROM_STATUS_MGR_FIFO_FROM_HOST;
 
@@ -255,17 +266,17 @@ package qa_drv_types;
     typedef struct
     {
         // Index of the next that will be written by the FPGA.
-        t_FIFO_TO_HOST_IDX next_write_line_idx;
+        t_FIFO_TO_HOST_IDX nextWriteLineIdx;
 
         // Debugging state
-        t_AFU_DEBUG_RSP dbg_fifo_state;
+        t_AFU_DEBUG_RSP dbgFIFOState;
     }
     t_TO_STATUS_MGR_FIFO_TO_HOST;
 
     typedef struct
     {
         // Index of the oldest line still unread by the host.
-        t_FIFO_TO_HOST_IDX oldest_write_line_idx;
+        t_FIFO_TO_HOST_IDX oldestWriteLineIdx;
     }
     t_FROM_STATUS_MGR_FIFO_TO_HOST;
 
@@ -276,7 +287,7 @@ package qa_drv_types;
     typedef struct
     {
         // Debugging state
-        t_AFU_DEBUG_RSP dbg_tester;
+        t_AFU_DEBUG_RSP dbgTester;
     }
     t_TO_STATUS_MGR_TESTER;
 

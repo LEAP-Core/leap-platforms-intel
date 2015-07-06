@@ -69,7 +69,7 @@ module cci_write_arbiter
                                 .lp_initdone(lp_initdone),
                                 .almostfull(tx1_almostfull),
                                 .can_issue(can_issue),
-                                .issue(write_grant.reader_grant | write_grant.writer_grant)
+                                .issue(write_grant.readerGrant | write_grant.writerGrant)
                               );
 
 
@@ -83,7 +83,7 @@ module cci_write_arbiter
    end
 
    always_comb begin
-      if(write_grant.writer_grant)
+      if(write_grant.writerGrant)
           next_state = FAVOR_FRAME_WRITER;
       else
           next_state = FAVOR_FRAME_READER;
@@ -92,29 +92,29 @@ module cci_write_arbiter
 
    // Set outgoing write control packet.
    always_comb begin
-      write_grant.reader_grant = 0;
-      write_grant.writer_grant = 0;
-      write_grant.status_grant = 0;                                           
+      write_grant.readerGrant = 0;
+      write_grant.writerGrant = 0;
+      write_grant.statusGrant = 0;                                           
 
-      header  = status_mgr_req.write_header;
+      header  = status_mgr_req.writeHeader;
       data    = status_mgr_req.data;
       
       if(status_mgr_req.write.request)
         begin
-            write_grant.status_grant = can_issue;
+            write_grant.statusGrant = can_issue;
         end                                           
       else if(frame_reader.write.request && (state == FAVOR_FRAME_READER || !frame_writer.write.request))
          begin
-            header  = frame_reader.write_header;
+            header  = frame_reader.writeHeader;
             data    = frame_reader.data;
             
-            write_grant.reader_grant = can_issue;                                           
+            write_grant.readerGrant = can_issue;                                           
          end
       else if(frame_writer.write.request)
         begin
-            header  = frame_writer.write_header;
+            header  = frame_writer.writeHeader;
             data    = frame_writer.data;
-            write_grant.writer_grant = can_issue;                                           
+            write_grant.writerGrant = can_issue;                                           
         end
 
       wrvalid = (frame_reader.write.request || frame_writer.write.request || status_mgr_req.write.request) && can_issue;   
@@ -130,9 +130,9 @@ module cci_write_arbiter
 
    // Some assertions
    always_comb begin
-      if(write_grant.writer_grant && write_grant.reader_grant && resetb && ~clk)
+      if(write_grant.writerGrant && write_grant.readerGrant && resetb && ~clk)
         begin
-           $display("Double grant of reader %d %d.", write_grant.reader_grant, write_grant.writer_grant);        
+           $display("Double grant of reader %d %d.", write_grant.readerGrant, write_grant.writerGrant);        
            $finish;           
         end
    end

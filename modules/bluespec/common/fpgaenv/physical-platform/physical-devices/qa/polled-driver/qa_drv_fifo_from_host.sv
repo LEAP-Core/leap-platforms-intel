@@ -66,12 +66,12 @@ module qa_drv_fifo_from_host
     // will be sent to the host every once in a while by qa_drv_status_manager
     // in order to regulate host writes to the ring buffer.
     t_FIFO_FROM_HOST_IDX oldest_read_line_idx;
-    assign fifo_from_host_to_status.oldest_read_line_idx = oldest_read_line_idx;
+    assign fifo_from_host_to_status.oldestReadLineIdx = oldest_read_line_idx;
 
     // The status manager updates the pointer to new data in the incoming
     // ring buffer and forwards it here.
     t_FIFO_FROM_HOST_IDX newest_read_line_idx;
-    assign newest_read_line_idx = status_to_fifo_from_host.newest_read_line_idx;
+    assign newest_read_line_idx = status_to_fifo_from_host.newestReadLineIdx;
 
     // Index of a scoreboard entry
     localparam N_SCOREBOARD_IDX_BITS = $clog2(N_SCOREBOARD_ENTRIES);
@@ -273,8 +273,9 @@ module qa_drv_fifo_from_host
 
     logic incoming_read_valid;
     assign incoming_read_valid = rx0.rdvalid &&
-                                 response_read_metadata.is_read &&
-                                 ! response_read_metadata.is_header;
+                                 response_read_metadata.isRead &&
+                                 response_read_metadata.isForDriver &&
+                                 ! response_read_metadata.isHeader;
 
 
     //
@@ -306,13 +307,13 @@ module qa_drv_fifo_from_host
         scoreboard(.clk,
                    .resetb,
 
-                   .enq_en(read_grant.reader_grant),
+                   .enq_en(read_grant.readerGrant),
                    .enqMeta(2'b0),
                    .notFull(scoreboard_slot_rdy),
                    .enqIdx(scoreboard_slot_idx),
 
                    .enqData_en(incoming_read_valid),
-                   .enqDataIdx(response_read_metadata.rob_addr[N_SCOREBOARD_IDX_BITS-1 : 0]),
+                   .enqDataIdx(response_read_metadata.robAddr[N_SCOREBOARD_IDX_BITS-1 : 0]),
                    .enqData(rx0.data),
 
                    .deq_en(sc_req_next_line),
@@ -345,12 +346,13 @@ module qa_drv_fifo_from_host
                                     scoreboard_slot_rdy;
 
         read_header = 0;
-        read_header.request_type = RdLine_I;
+        read_header.requestType = RdLine_I;
 
         // Read metadata
-        data_read_metadata.is_read   = 1'b1;
-        data_read_metadata.is_header = 1'b0;
-        data_read_metadata.rob_addr  = scoreboard_slot_idx;
+        data_read_metadata.isForDriver = 1'b1;
+        data_read_metadata.isRead      = 1'b1;
+        data_read_metadata.isHeader    = 1'b0;
+        data_read_metadata.robAddr     = scoreboard_slot_idx;
         read_header.mdata = pack_read_metadata(data_read_metadata);
 
         // By adding to form the address instead of replacing low bits we avoid
@@ -359,7 +361,7 @@ module qa_drv_fifo_from_host
         // pointers wrapping from the last to the first entry.
         read_header.address = buffer_base_addr + next_read_req_idx;
 
-        frame_reader.read_header = read_header;
+        frame_reader.readHeader = read_header;
     end
 
 
@@ -372,7 +374,7 @@ module qa_drv_fifo_from_host
         begin
             next_read_req_idx <= 0;
         end
-        else if (read_grant.reader_grant)
+        else if (read_grant.readerGrant)
         begin
             // Read request successful.  Move to next line.
             next_read_req_idx <= next_read_req_idx + 1;
@@ -392,7 +394,7 @@ module qa_drv_fifo_from_host
 `ifdef QA_DRIVER_DEBUG_Z
 
     // Debugger disabled
-    assign fifo_from_host_to_status.dbg_fifo_state = t_AFU_DEBUG_RSP'(0);
+    assign fifo_from_host_to_status.dbgFIFOState = t_AFU_DEBUG_RSP'(0);
 
 `else
 
@@ -411,7 +413,7 @@ module qa_drv_fifo_from_host
     assign dbg_flags[0] = scoreboard_slot_rdy;
     assign dbg_flags[1] = (state == STATE_VALID_CHUNK);
 
-    assign fifo_from_host_to_status.dbg_fifo_state =
+    assign fifo_from_host_to_status.dbgFIFOState =
         { dbg_data_read_data,
           dbg_data_read_addr_offsets,
           dbg_n_data_read_rsp,
@@ -433,7 +435,7 @@ module qa_drv_fifo_from_host
         else
         begin
             // Read data request accepted
-            if (read_grant.reader_grant)
+            if (read_grant.readerGrant)
             begin
                 dbg_n_data_read_req <= dbg_n_data_read_req + 1;
                 // Shift in request offset

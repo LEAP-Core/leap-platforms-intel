@@ -69,7 +69,7 @@ module cci_read_arbiter
                                 .lp_initdone(lp_initdone),
                                 .almostfull(tx0_almostfull),
                                 .can_issue(cci_can_issue),
-                                .issue(read_grant.reader_grant | read_grant.writer_grant)
+                                .issue(read_grant.readerGrant | read_grant.writerGrant)
                               );
        
    // FSM state
@@ -82,7 +82,7 @@ module cci_read_arbiter
    end
 
    always_comb begin
-      if(read_grant.reader_grant)
+      if(read_grant.readerGrant)
           next_state = FAVOR_FRAME_WRITER;
       else
           next_state = FAVOR_FRAME_READER;
@@ -92,29 +92,29 @@ module cci_read_arbiter
    always_comb
    begin
       rdvalid = 0;
-      read_grant.reader_grant = 0;
-      read_grant.writer_grant = 0;
-      read_grant.status_grant = 0;
+      read_grant.readerGrant = 0;
+      read_grant.writerGrant = 0;
+      read_grant.statusGrant = 0;
 
       // Set a default state for header to avoid needlessly muxing with 0
-      header = frame_reader.read_header;
+      header = frame_reader.readHeader;
 
       if (frame_reader.read.request && (state == FAVOR_FRAME_READER || !frame_writer.read.request))
       begin
           // header is already set above
-          read_grant.reader_grant = can_issue;
+          read_grant.readerGrant = can_issue;
           rdvalid = can_issue;
       end
       else if (frame_writer.read.request)
       begin
-          header = frame_writer.read_header;
-          read_grant.writer_grant = can_issue;
+          header = frame_writer.readHeader;
+          read_grant.writerGrant = can_issue;
           rdvalid = can_issue;
       end
       else if (status_mgr_req.read.request)
       begin
-          header = status_mgr_req.read_header;
-          read_grant.status_grant = can_issue;
+          header = status_mgr_req.readHeader;
+          read_grant.statusGrant = can_issue;
           rdvalid = can_issue;
       end
    end

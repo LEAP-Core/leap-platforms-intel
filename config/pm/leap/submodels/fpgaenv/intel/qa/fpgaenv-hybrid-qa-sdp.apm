@@ -180,3 +180,10 @@ LOCAL_MEM_ADDR_BITS=15
 [Local Memory Interface using BRAM]
 File=modules/leap/virtual-platform/low-level-platform-interface/local-mem/local-mem-bram.awb
 Packagehint=leap
+
+[Local Memory Interface using BRAM/Requires]
+local_mem_interface=Local Memory Interface
+
+[Local Memory Interface]
+File=modules/leap/virtual-platform/low-level-platform-interface/local-mem/local-mem-interface/local-mem-interface.awb
+Packagehint=leap

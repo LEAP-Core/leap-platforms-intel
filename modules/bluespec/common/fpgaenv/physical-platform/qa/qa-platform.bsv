@@ -72,6 +72,11 @@ interface TOP_LEVEL_WIRES;
     (* prefix = "" *)
     interface CLOCKS_WIRES    qaClockWires;
 
+    // Expose the QA device interface clock at the top level because it keeps
+    // Bluespec happy, since the QA interface methods pass wires that Bluespec
+    // thinks are tied to the clock.
+    interface Clock           qaDevClock;
+
     // wires from devices
     (* prefix = "" *)
     interface QA_WIRES        qaWires;
@@ -126,7 +131,6 @@ module [CONNECTED_MODULE] mkPhysicalPlatform
     // interface to the trigger module that the clocks device has given us.
     let qaRst <- mkResetFanout(clocks.driver.baseReset, clocked_by clk);
     QA_DEVICE qa <- mkQADevice(qa_driver_clock, qa_driver_reset,
-                               clocks.softResetTrigger,
                                clocked_by clk,
                                reset_by qaRst);
 
@@ -168,6 +172,8 @@ module [CONNECTED_MODULE] mkPhysicalPlatform
     //
     interface TOP_LEVEL_WIRES topLevelWires;
         interface qaClockWires = clocks.wires;
+        interface qaDevClock   = qa_driver_clock;
+
         interface qaWires      = qa.wires;
         interface ddrWires     = sdram.wires;
     endinterface

@@ -105,6 +105,7 @@ endinterface
 
 interface QA_DEVICE;
     interface QA_DRIVER driver; 
+    (* prefix = "" *)
     interface QA_WIRES  wires;
 endinterface
 
@@ -154,7 +155,7 @@ module mkQADeviceImport#(Clock vl_clk_LPdomain_32ui,
                           ffs_vl_LP32ui_lp2sy_C0TxAlmFull,
                           ffs_vl_LP32ui_lp2sy_C1TxAlmFull,
                           ffs_vl_LP32ui_lp2sy_InitDnForSys)
-            enable((*inhigh*) EN) clocked_by(no_clock);
+            enable((*inhigh*) EN);
 
         method ffs_vl61_LP32ui_sy2lp_C0TxHdr ffs_vl61_LP32ui_sy2lp_C0TxHdr() clocked_by(no_clock);
         method ffs_vl_LP32ui_sy2lp_C0TxRdValid ffs_vl_LP32ui_sy2lp_C0TxRdValid() clocked_by(no_clock);
@@ -188,13 +189,27 @@ module mkQADeviceImport#(Clock vl_clk_LPdomain_32ui,
               wires_ffs_vl512_LP32ui_sy2lp_C1TxData,
               wires_ffs_vl_LP32ui_sy2lp_C1TxWrValid,
               wires_ffs_vl_LP32ui_sy2lp_C1TxIrValid,
-              driver_deq, driver_first, driver_write, driver_notFull);
+              driver_deq, driver_first, driver_write,
+              driver_notFull, driver_notEmpty,
+              driver_sregReq, driver_sregRsp);
 endmodule
 
 
+
 module [CONNECTED_MODULE] mkQADevice#(Clock vl_clk_LPdomain_32ui,
-                                      Reset ffs_vl_LP32ui_lp2sy_SoftReset_n,
-                                      SOFT_RESET_TRIGGER softResetTrigger)
+                                      Reset ffs_vl_LP32ui_lp2sy_SoftReset_n)
+    // Interface:
+    (QA_DEVICE);
+
+    QA_DEVICE device <- mkQADeviceSynth(vl_clk_LPdomain_32ui,
+                                        ffs_vl_LP32ui_lp2sy_SoftReset_n);
+    return device;
+endmodule
+
+
+(* synthesize *)
+module mkQADeviceSynth#(Clock vl_clk_LPdomain_32ui,
+                        Reset ffs_vl_LP32ui_lp2sy_SoftReset_n)
     // Interface:
     (QA_DEVICE);
 
@@ -253,6 +268,7 @@ module [CONNECTED_MODULE] mkQADevice#(Clock vl_clk_LPdomain_32ui,
     endinterface
 
 `else
+
     //
     // A hack to make timing closure on the platform and driver code before
     // including the design.  This will be replaced with logic constraints.
@@ -271,7 +287,20 @@ module [CONNECTED_MODULE] mkQADevice#(Clock vl_clk_LPdomain_32ui,
         syncSregRspQ.enq(zeroExtend(r));
     endrule
 
-    interface QA_DRIVER driver = ?;
+    FIFOF#(UMF_CHUNK) dummyReadQ <- mkFIFOF();
+    FIFOF#(UMF_CHUNK) dummyWriteQ <- mkFIFOF();
+
+    interface QA_DRIVER driver;
+        method deq = dummyReadQ.deq;
+        method first = dummyReadQ.first;
+        method notEmpty = dummyReadQ.notEmpty;
+        method write = dummyWriteQ.enq;
+        method notFull = dummyWriteQ.notFull;
+
+        method sregReq = ?;
+        method sregRsp = ?;
+    endinterface
+
 `endif
 
     interface QA_WIRES wires = qaDevice.wires;

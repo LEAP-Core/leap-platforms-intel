@@ -65,6 +65,8 @@ module cci_std_afu
         // Unconnected wires exposed by Bluespec that we can't turn off...
         .CLK(1'b0),
         .RST_N(1'b1),
+        .CLK_qaDevClock(),
+        .CLK_GATE_qaDevClock(),
         .RDY_clock_wire(),
         .RDY_reset_n_wire(),
         .EN_inputWires(1'b1),

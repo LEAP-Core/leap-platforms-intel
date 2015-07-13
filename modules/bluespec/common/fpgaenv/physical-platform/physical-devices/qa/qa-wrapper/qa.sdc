@@ -5,24 +5,30 @@
 ## two sides of one of the syncFIFOs.
 ##
 
-puts "Analyzing LEAP model clock..."
+set pin_col [get_pins -compatibility_mode {cci_std_afu|*|*|llpi_phys_plat_qa_device|syncReadQ|sNotFullReg|clk}]
 
-set clk_sys_name   [get_clocks_feeding_pin {cci_std_afu|*|*|llpi_phys_plat_qa_syncReadQ|sNotFullReg|clk}]
-set clk_sys        [get_clocks $clk_sys_name]
+if {0 == [get_collection_size $pin_col]} {
+    puts "WARNING: LEAP model clock not found!"
+} else {
+    puts "Analyzing LEAP model clock..."
 
-foreach_in_collection clk $clk_sys {
-    set clk_sys_period [get_clock_info -period $clk]
-    puts "SYS Clock $clk_sys_name: $clk_sys_period"
-}
+    set clk_sys_name   [get_clocks_feeding_pin {cci_std_afu|*|*|llpi_phys_plat_qa_device|syncReadQ|sNotFullReg|clk}]
+    set clk_sys        [get_clocks $clk_sys_name]
 
-set clk_model_name [get_clocks_feeding_pin {cci_std_afu|*|*|llpi_phys_plat_qa_syncReadQ|dNotEmptyReg|clk}]
-set clk_model      [get_clocks $clk_model_name]
+    foreach_in_collection clk $clk_sys {
+        set clk_sys_period [get_clock_info -period $clk]
+        puts "SYS Clock $clk_sys_name: $clk_sys_period"
+    }
 
-foreach_in_collection clk $clk_model {
-    set clk_model_period [get_clock_info -period $clk]
-    puts "MODEL Clock $clk_model_name: $clk_model_period"
-}
+    set clk_model_name [get_clocks_feeding_pin {cci_std_afu|*|*|llpi_phys_plat_qa_device|syncReadQ|dNotEmptyReg|clk}]
+    set clk_model      [get_clocks $clk_model_name]
 
-if { $clk_sys_name != $clk_model_name } {
-    annotateSafeClockCrossing $clk_sys $clk_model
+    foreach_in_collection clk $clk_model {
+        set clk_model_period [get_clock_info -period $clk]
+        puts "MODEL Clock $clk_model_name: $clk_model_period"
+    }
+
+    if { $clk_sys_name != $clk_model_name } {
+        annotateSafeClockCrossing $clk_sys $clk_model
+    }
 }

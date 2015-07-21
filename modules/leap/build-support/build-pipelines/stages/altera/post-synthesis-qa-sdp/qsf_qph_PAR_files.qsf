@@ -470,69 +470,9 @@ set_instance_assignment -name XCVR_RX_DC_GAIN                    3 -to pin_qpi_b
 set_instance_assignment -name XCVR_RX_LINEAR_EQUALIZER_CONTROL  14 -to pin_qpi_bid_vl3_QPI0_RsvdRX_DP[1]
 set_instance_assignment -name XCVR_RX_DC_GAIN                    3 -to pin_qpi_bid_vl3_QPI0_RsvdRX_DP[2]
 set_instance_assignment -name XCVR_RX_LINEAR_EQUALIZER_CONTROL  14 -to pin_qpi_bid_vl3_QPI0_RsvdRX_DP[2]
-# Copyright Intel Corporation $RTL_SRC/qph/par/2012,2013.
-# txt_qph_PAR_files.txt: Files for QPH for $RTL_SRC/qph/par/OME
-# Arthur.Sheiman@Intel.com: Created $RTL_SRC/qph/par/04-09-12
-# Revised 10-04-13  $RTL_SRC/qph/par/17:34
-#
-# NOTE: No path information is provided in this file. It is just a $RTL_SRC/qph/par/template.
-#
-set_global_assignment -name SOURCE_FILE $RTL_SRC/qph/par/qph_ssm_pkg.svh
-set_global_assignment -name QIP_FILE $RTL_SRC/qph/par/qph_hssi_reconfig.qip
-set_global_assignment -name QIP_FILE $RTL_SRC/qph/par/aes_qph_hssi_pma_direct.qip
-#set_global_assignment -name QIP_FILE $RTL_SRC/qph/par/aes_qph_hssi_patch_low_latency.qip
-set_global_assignment -name QIP_FILE $RTL_SRC/qph/par/pma_direct_pll_refclk.qip
-set_global_assignment -name VERILOG_FILE $RTL_SRC/qph/par/pma_direct_phase_align.v
-set_global_assignment -name VERILOG_FILE $RTL_SRC/qph/par/pma_direct_fifo.v
-set_global_assignment -name QIP_FILE $RTL_SRC/qph/par/qph_reset_s45_LMK_ROM.qip
-set_global_assignment -name SOURCE_FILE $RTL_SRC/qph/par/qph_reset_s45_LMK_ROM.mif
-set_global_assignment -name QIP_FILE $RTL_SRC/qph/par/qph_reset_s45_MRST.qip
-set_global_assignment -name QIP_FILE $RTL_SRC/qph/par/qph_xcvr_s45_ctl_XDAC.qip
-set_global_assignment -name QIP_FILE $RTL_SRC/qph/par/qph_xcvr_s45_ctl_XTRG.qip
-set_global_assignment -name QIP_FILE $RTL_SRC/qph/par/qph_reset_pll_fab_s45.qip
-set_global_assignment -name QIP_FILE $RTL_SRC/qph/par/qph_reset_pll_sys_s45.qip
-set_global_assignment -name QIP_FILE $RTL_SRC/qph/par/qph_reset_pll_rsv_s45.qip
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_reset_s45_LMK.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_reset_s45.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_xtmr_TmrTwo.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_xtmr_TmrOne.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_xcvr_s45_ctl_reconfig_mach_csr.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_xcvr_s45_ctl.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_xcvr_s45_xdbg.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_xcvr_s45_xcvr_utest.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_xcvr_s45_xcvr.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_xcvr_s45.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_csr_rw1c_s.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_csr_rw1c_x.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_csr_rwdl.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_csr_rwxx.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_csr.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_debug_leds.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/ahm_debug_ssm_mach.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/ahm_debug_tracking.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/ahm_debug_xcvr.sv
-set_global_assignment -name QIP_FILE $RTL_SRC/qph/par/pushbutton_txlane.qip
-set_global_assignment -name QIP_FILE $RTL_SRC/qph/par/pushbutton_source.qip
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_pushbutton.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_ldc.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_mach_deskew.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_mach_param.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_mach_rx.sv
-set_global_assignment -name SOURCE_FILE $RTL_SRC/qph/par/qph_mach_rx_full.inc
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_mach_tx.sv
-set_global_assignment -name SOURCE_FILE $RTL_SRC/qph/par/qph_mach_tx_full.inc
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_prbs23_32.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_timer_debounce.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_timer_duration.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_timer_interval.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_timer_ssm.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_timer_lfsr28.sv
-set_global_assignment -name QIP_FILE $RTL_SRC/qph/par/mux_16x1.qip
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_debug_mach_master.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_mach_master.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_muxdat.sv
-set_global_assignment -name QIP_FILE $RTL_SRC/qph/par/qph_top_STAT.qip
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qph_top.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/qlp_topph.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/ome_bot.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qph/par/ome_top.sv
+
+# QXP files
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/ome_top.sv
+set_global_assignment -name QXP_FILE $RTL_SRC/qpi/ome_bot-CCIS.qxp
+set_global_assignment -name PARTITION_IMPORT_FILE $RTL_SRC/qpi/ome_bot-CCIS.qxp -section_id "ome_bot:bot_ome"
+set_global_assignment -name PARTITION_LAST_IMPORTED_FILE $RTL_SRC/qpi/ome_bot-CCIS.qxp -section_id "ome_bot:bot_ome"

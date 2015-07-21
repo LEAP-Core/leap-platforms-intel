@@ -40,7 +40,7 @@ create_clock -name {sysclk}                      -period  10.000 -waveform {0.00
 create_clock -name {hseclk}                      -period   8.888 -waveform {0.000  4.444}  [get_ports {pin_cmos25_inp_vl_HSECLK_112}]
 create_clock -name {fabclk}                      -period   5.000 -waveform {0.000  2.500}  [get_ports {pin_lvds_inp_vl_FABCLK_200_DP}]
 create_clock -name {rsvclk}                      -period   5.000 -waveform {0.000  2.500}  [get_ports {pin_lvds_inp_vl_RSVCLK_200_DP}]
-create_clock -name {atxck0}                      -period   2.500 -waveform {0.000  1.250}  [get_ports {pin_lvds_inp_vl_ATXCK0_x00_DP}]
+create_clock -name {atxck0}                      -period   5.000 -waveform {0.000  2.500}  [get_ports {pin_lvds_inp_vl_ATXCK0_x00_DP}]
 
 derive_pll_clocks
 
@@ -139,8 +139,8 @@ for {set i 0} {$i<24} {incr i} {
 	if { [ lsearch {4 12 19} $i ] < 0 } {
 		set_max_skew -from_clock [list *rx_pmas[ $i ]*rx_pma_deser|clk90b] -to_clock {*s45_reset_qph*qph_reset_pll_fab_s45_inst*divclk} -exclude { ccpp odv } 2.25
 	}
-	set_max_delay -from [get_registers [list *qph_xcvr_s45_xcvr*rx_pmas[ $i ]*BURIED_SYNC_DATA* *qph_xcvr_s45_xcvr*phase_align_gen[ $i ]*tff ]] -to [get_registers [list *qph_xcvr_s45_xcvr*phase_align_gen*tff_d[0] *deskew_mach_qph|ffs_vl20x32_xcvr_rx_dat_holding_reg* *deskew_mach_qph|ffs_vl20x319_SSM_rx_sr* *s45_xcvr_qph|ffs_32ui_vl20_rx_lane_invert* *qph_mach_deskew*ffs_vl_Rx_FastInbandReset*] ] 5
-	set_min_delay -from [get_registers [list *qph_xcvr_s45_xcvr*rx_pmas[ $i ]*BURIED_SYNC_DATA* *qph_xcvr_s45_xcvr*phase_align_gen[ $i ]*tff ]] -to [get_registers [list *qph_xcvr_s45_xcvr*phase_align_gen*tff_d[0] *deskew_mach_qph|ffs_vl20x32_xcvr_rx_dat_holding_reg* *deskew_mach_qph|ffs_vl20x319_SSM_rx_sr* *s45_xcvr_qph|ffs_32ui_vl20_rx_lane_invert* *qph_mach_deskew*ffs_vl_Rx_FastInbandReset*] ] -5
+	set_max_delay -from [get_registers [list *qph_xcvr_s45_xcvr*rx_pmas[ $i ]*BURIED_SYNC_DATA* *qph_xcvr_s45_xcvr*phase_align_gen[ $i ]*tff* ]] -to [get_registers [list *qph_xcvr_s45_xcvr*phase_align_gen*tff_d[0]* *deskew_mach_qph|ffs_vl20x32_xcvr_rx_dat_holding_reg* *deskew_mach_qph|ffs_vl20x319_SSM_rx_sr* *s45_xcvr_qph|ffs_32ui_vl20_rx_lane_invert* *qph_mach_deskew*ffs_vl_Rx_FastInbandReset*] ] 5
+	set_min_delay -from [get_registers [list *qph_xcvr_s45_xcvr*rx_pmas[ $i ]*BURIED_SYNC_DATA* *qph_xcvr_s45_xcvr*phase_align_gen[ $i ]*tff* ]] -to [get_registers [list *qph_xcvr_s45_xcvr*phase_align_gen*tff_d[0]* *deskew_mach_qph|ffs_vl20x32_xcvr_rx_dat_holding_reg* *deskew_mach_qph|ffs_vl20x319_SSM_rx_sr* *s45_xcvr_qph|ffs_32ui_vl20_rx_lane_invert* *qph_mach_deskew*ffs_vl_Rx_FastInbandReset*] ] -5
 }
 
 #**************************************************************

@@ -39,8 +39,6 @@
 
 // AAL redefines TRACE
 #undef TRACE
-#include <aalsdk/ccilib/CCILib.h>
-#include <aalsdk/aalclp/aalclp.h>
 
 // Local includes
 #include "AFU.h"
@@ -74,7 +72,7 @@ t_DSM_OFFSETS;
 
 
 // DSM byte offset:                          0           4           8           c
-const uint32_t EXPECTED_AFU_ID[] = {0xaced0000, 0xaced0001, 0xaced0002, 0xaced0003};
+const uint32_t EXPECTED_AFU_ID[] = {0x84570612, 0x9aeffe5f, 0x0d824272, 0xc000c966};
 
 // ==============================================
 //          QA Physical Device, software driver

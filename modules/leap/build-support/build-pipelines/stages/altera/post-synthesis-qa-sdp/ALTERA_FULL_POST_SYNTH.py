@@ -44,10 +44,9 @@ class PostSynthesize():
         prjFile.write('    project_new ' + moduleList.apmName +'\n')
         prjFile.write('}\n\n')
 
-        prjFile.write('source ' + rel_qsf_src_dir + '/qa_canoe_pass_config.qsf\n')
+        prjFile.write('source ' + rel_qsf_src_dir + '/ome2_ivt.qsf\n')
         prjFile.write('source ' + rel_qsf_src_dir + '/qsf_env_settings.qsf\n')
         prjFile.write('source ' + rel_qsf_src_dir + '/qsf_qph_PAR_files.qsf\n')
-        prjFile.write('source ' + rel_qsf_src_dir + '/qsf_qlp_PAR_files.qsf\n\n')
 
         # Include file path
         inc_dirs = ['hw/include']
@@ -95,7 +94,6 @@ class PostSynthesize():
         prjFile.write('    puts "Reusing existing LEAP partitions"\n')
         prjFile.write('} else  { \n')
         prjFile.write('    create_partition -contents cci_std_afu:cci_std_afu|mk_model_Wrapper:model_wrapper|mk_platform_platform_Wrapper:m_sys_sys_vp_m_mod|mkQADeviceSynth:llpi_phys_plat_qa_device -partition qa_cci_part \n')
-        prjFile.write('    create_partition -contents cci_std_afu:cci_std_afu -partition leap_part \n')
         prjFile.write('} \n')
 
         ## Hack to meet timing -- turning off LEAP partition
@@ -105,10 +103,10 @@ class PostSynthesize():
         else:
             prjFile.write('set_partition -partition qa_cci_part -netlist_type "Empty"\n')
 
-        if (partition_mode < 1):
-            prjFile.write('set_partition -partition leap_part -netlist_type "Post-Fit"\n')
-        else:
-            prjFile.write('set_partition -partition leap_part -netlist_type "Empty"\n')
+#        if (partition_mode < 1):
+#            prjFile.write('set_partition -partition leap_part -netlist_type "Post-Fit"\n')
+#        else:
+#            prjFile.write('set_partition -partition leap_part -netlist_type "Empty"\n')
 
         prjFile.write('execute_module  -tool map -args "--verilog_macro=\\"QUARTUS_COMPILATION=1\\" --incremental_compilation=full_incremental_compilation --lib_path ' + fullCompilePath + ' " \n')
         prjFile.write('execute_module  -tool cdb -args "--merge"  \n')

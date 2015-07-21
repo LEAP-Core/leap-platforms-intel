@@ -8,12 +8,9 @@
 
 %scons %library ALTERA_FULL_POST_SYNTH.py
 
-%sources -t QSF -v PRIVATE qa_canoe_pass_config.qsf
+%sources -t QSF -v PRIVATE ome2_ivt.qsf
 %sources -t QSF -v PRIVATE qsf_env_settings.qsf
 %sources -t QSF -v PRIVATE qsf_qph_PAR_files.qsf
-%sources -t QSF -v PRIVATE qsf_qlp_PAR_files.qsf
-
-%sources -t SVH -v PRIVATE sys_cfg_pkg.svh
 
 %sources -t SDC -v PRIVATE sdc_qlp.sdc
 %sources -t SDC -v PRIVATE sdc_qph.sdc

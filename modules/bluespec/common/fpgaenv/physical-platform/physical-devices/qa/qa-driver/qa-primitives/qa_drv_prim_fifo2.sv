@@ -33,7 +33,7 @@
 //   A FIFO with two storage elements supporting full pipelining.
 //
 
-module qa_drv_fifo2
+module qa_drv_prim_fifo2
   #(parameter N_DATA_BITS = 32)
     (input  logic clk,
      input  logic resetb,

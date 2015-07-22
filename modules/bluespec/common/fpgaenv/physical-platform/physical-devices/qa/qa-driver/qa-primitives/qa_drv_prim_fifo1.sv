@@ -34,7 +34,7 @@
 //   but not both.
 //
 
-module qa_drv_fifo1
+module qa_drv_prim_fifo1
   #(parameter N_DATA_BITS = 32)
     (input  logic clk,
      input  logic resetb,

@@ -1,7 +1,7 @@
-%name Intel QuickAssist Polled Driver
-%desc Intel QuickAssist Polled Driver
+%name Intel QuickAssist Host/FPGA Channels
+%desc Intel QuickAssist Host/FPGA Channels
 
-%provides qa_driver
+%provides qa_driver_host_channels
 
 %param QA_DRIVER_DEBUG   0      "Enable QA driver debugging messages?"
 
@@ -21,9 +21,6 @@
 %sources -t VERILOG    -v PRIVATE qa_drv_csr.sv
 %sources -t VERILOG    -v PRIVATE qa_drv_fifo_from_host.sv
 %sources -t VERILOG    -v PRIVATE qa_drv_fifo_to_host.sv
-%sources -t VERILOG    -v PRIVATE qa_drv_fifo1.sv
-%sources -t VERILOG    -v PRIVATE qa_drv_fifo2.sv
-%sources -t VERILOG    -v PRIVATE qa_drv_scoreboard.sv
 %sources -t VERILOG    -v PRIVATE qa_drv_status_manager.sv  
 %sources -t VERILOG    -v PRIVATE qa_drv_tester.sv  
 %sources -t VERILOG    -v PRIVATE cci_read_arbiter.sv  

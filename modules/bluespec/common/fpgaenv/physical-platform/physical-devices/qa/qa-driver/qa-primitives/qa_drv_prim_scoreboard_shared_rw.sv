@@ -30,19 +30,17 @@
 
 //
 // Scoreboard that behaves like a FIFO that allows out of order arrival of
-// the payload.  Since the intended use of the scoreboard is to reorder memory
-// read responses, there is little point in enabling full bandwidth read and
-// write from the scoreboard.  Instead, the internal memory is half the
-// width of the data and either both write ports or both read ports are
-// used to spread data over two entries.
+// the payload.  THIS IMPLEMENTATION SACRIFICES BANDWIDTH FOR BLOCK RAM
+// AREA.  The internal memory is half the width of the data and either both
+// write ports or both read ports are used to spread data over two entries.
 //
 // The scoreboard combines two pieces of data with each entry:
 // meta-data that is supplied at the time an index is allocated and the
 // late-arriving data.  Both are returned together through first and first_meta.
 //
 //
-//
-module qa_drv_scoreboard
+
+module qa_drv_prim_scoreboard_shared_rw
   #(parameter N_ENTRIES = 32,
               N_DATA_BITS = 64,
               N_META_BITS = 1)
@@ -103,7 +101,7 @@ module qa_drv_scoreboard
     logic out_fifo_enq_en;
     assign out_fifo_enq_en = out_fifo_enq_req && out_fifo_notFull;
 
-    qa_drv_fifo1#(.N_DATA_BITS($bits(t_OUTPUT_DATA)))
+    qa_drv_prim_fifo1#(.N_DATA_BITS($bits(t_OUTPUT_DATA)))
         fifo_out(.clk, .resetb,
                  .enq_data(out_fifo_enq_data),
                  .enq_en(out_fifo_enq_en),

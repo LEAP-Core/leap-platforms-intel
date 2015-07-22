@@ -1,0 +1,4 @@
+%name Intel QuickAssist Driver Shims
+%desc Intel QuickAssist Driver Shims
+
+%provides qa_driver_shims

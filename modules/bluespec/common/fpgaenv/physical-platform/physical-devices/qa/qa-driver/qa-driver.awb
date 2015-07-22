@@ -1,0 +1,7 @@
+%name Intel QuickAssist Driver
+%desc Intel QuickAssist Driver
+
+%provides qa_driver
+%requires qa_driver_host_channels
+%requires qa_driver_shims
+%requires qa_driver_primitives

@@ -124,9 +124,6 @@ Packagehint=leap-platforms-intel
 File=config/pm/leap/submodels/pipelines/build-pipeline-qa-ase.apm
 Packagehint=leap-platforms-intel
 
-[Intel QuickAssist Polled Driver]
-File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/polled-driver/qa-polled-driver.awb
-Packagehint=leap-platforms-intel
 
 [Intel QuickAssist Platform]
 File=modules/bluespec/common/fpgaenv/physical-platform/qa/qa-platform.awb
@@ -149,7 +146,7 @@ SINGLE_ENDED_CLOCKS_CLK="vl_clk_LPdomain_32ui"
 SINGLE_ENDED_CLOCKS_RST_N="ffs_vl_LP32ui_lp2sy_SoftReset_n"
 
 [Intel QuickAssist Device/Requires]
-qa_driver=Intel QuickAssist Polled Driver
+qa_driver=Intel QuickAssist Driver
 
 [RRR Debug Module]
 File=modules/leap/virtual-platform/rrr/rrr-common/rrr-debug.awb
@@ -187,3 +184,24 @@ local_mem_interface=Local Memory Interface
 [Local Memory Interface]
 File=modules/leap/virtual-platform/low-level-platform-interface/local-mem/local-mem-interface/local-mem-interface.awb
 Packagehint=leap
+
+[Intel QuickAssist Driver/Requires]
+qa_driver_shims=Intel QuickAssist Driver Shims
+qa_driver_primitives=Intel QuickAssist Primitive Modules
+qa_driver_host_channels=Intel QuickAssist Host/FPGA Channels
+
+[Intel QuickAssist Driver]
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/qa-driver.awb
+Packagehint=leap-platforms-intel
+
+[Intel QuickAssist Primitive Modules]
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/qa-primitives/qa-primitives.awb
+Packagehint=leap-platforms-intel
+
+[Intel QuickAssist Driver Shims]
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/qa-shims/qa-shims.awb
+Packagehint=leap-platforms-intel
+
+[Intel QuickAssist Host/FPGA Channels]
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/qa-host-channels/qa-host-channels.awb
+Packagehint=leap-platforms-intel

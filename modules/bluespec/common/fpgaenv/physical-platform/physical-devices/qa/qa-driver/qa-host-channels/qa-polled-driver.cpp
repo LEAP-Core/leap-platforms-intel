@@ -47,6 +47,7 @@
 #include <atomic>
 
 #include "awb/provides/qa_driver.h"
+#include "awb/provides/qa_driver_host_channels.h"
 #include "awb/provides/physical_platform_defs.h"
 #include "awb/provides/qa_device.h"
 

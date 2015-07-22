@@ -87,7 +87,7 @@ module qa_drv_fifo_from_host
     logic outQ_enq_en;
     logic outQ_notFull;
 
-    qa_drv_fifo2#(.N_DATA_BITS($bits(t_UMF_CHUNK)))
+    qa_drv_prim_fifo2#(.N_DATA_BITS($bits(t_UMF_CHUNK)))
         outQ(.clk, .resetb,
              .enq_data(outQ_enq_data),
              .enq_en(outQ_enq_en),
@@ -301,9 +301,9 @@ module qa_drv_fifo_from_host
     end
 
 
-    qa_drv_scoreboard#(.N_ENTRIES(N_SCOREBOARD_ENTRIES),
-                       .N_DATA_BITS($bits(t_CACHE_LINE)),
-                       .N_META_BITS(0))
+    qa_drv_prim_scoreboard_shared_rw#(.N_ENTRIES(N_SCOREBOARD_ENTRIES),
+                                      .N_DATA_BITS($bits(t_CACHE_LINE)),
+                                      .N_META_BITS(0))
         scoreboard(.clk,
                    .resetb,
 

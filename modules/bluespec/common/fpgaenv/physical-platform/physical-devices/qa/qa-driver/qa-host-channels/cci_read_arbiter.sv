@@ -35,7 +35,6 @@ module cci_read_arbiter
   (
     input logic clk,
     input logic resetb,
-    input logic lp_initdone,
 
     input   t_CSR_AFU_STATE        csr,
    
@@ -66,7 +65,6 @@ module cci_read_arbiter
    // Issue control FSM
    cci_can_issue issue_control( .clk(clk),
                                 .resetb(resetb),
-                                .lp_initdone(lp_initdone),
                                 .almostfull(tx0_almostfull),
                                 .can_issue(cci_can_issue),
                                 .issue(read_grant.readerGrant | read_grant.writerGrant)

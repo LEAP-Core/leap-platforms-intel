@@ -117,10 +117,10 @@ module mkQADeviceImport#(Clock vl_clk_LPdomain_32ui,
     // Interface:
     (QA_DEVICE);
 
-    parameter TXHDR_WIDTH = `CCI_TXHDR_WIDTH;
-    parameter RXHDR_WIDTH = `CCI_RXHDR_WIDTH;
-    parameter CACHE_WIDTH = `CCI_CACHE_WIDTH;
-    parameter UMF_WIDTH   = umfChunkSize;
+    parameter CCI_DATA_WIDTH   = `CCI_CACHE_WIDTH;
+    parameter CCI_RX_HDR_WIDTH = `CCI_RXHDR_WIDTH;
+    parameter CCI_TX_HDR_WIDTH = `CCI_TXHDR_WIDTH;
+    parameter UMF_WIDTH        = umfChunkSize;
 
     input_clock (vl_clk_LPdomain_32ui) = vl_clk_LPdomain_32ui;
     default_clock vl_clk_LPdomain_32ui;

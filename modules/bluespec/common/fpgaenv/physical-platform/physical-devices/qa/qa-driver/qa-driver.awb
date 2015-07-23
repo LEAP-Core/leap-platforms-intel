@@ -5,3 +5,5 @@
 %requires qa_driver_host_channels
 %requires qa_driver_shims
 %requires qa_driver_primitives
+
+%sources -t VERILOG    -v PRIVATE qa_driver.sv  

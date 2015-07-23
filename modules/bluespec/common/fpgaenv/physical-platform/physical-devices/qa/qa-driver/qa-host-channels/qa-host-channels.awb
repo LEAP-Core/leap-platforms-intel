@@ -15,7 +15,7 @@
 %sources -t VERILOG_H  -v PRIVATE qa.vh
 %sources -t VERILOG_H  -v PRIVATE qa_drv_packages.vh
 
-%sources -t VERILOG    -v PRIVATE qa_driver.sv  
+%sources -t VERILOG    -v PRIVATE qa_drv_host_channel.sv  
 %sources -t VERILOG    -v PRIVATE qa_drv_types.sv
 %sources -t VERILOG    -v PRIVATE qa_drv_csr_types.sv
 %sources -t VERILOG    -v PRIVATE qa_drv_csr.sv

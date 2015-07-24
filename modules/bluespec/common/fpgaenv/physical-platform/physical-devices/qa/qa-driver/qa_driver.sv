@@ -29,6 +29,8 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
+`include "qa_driver_types.vh"
+
 module qa_driver
   #(
     parameter CCI_DATA_WIDTH = 512,
@@ -122,65 +124,50 @@ module qa_driver
     logic  clk;
     assign clk = vl_clk_LPdomain_32ui;
 
-    logic  qlp_resetb;
-    assign qlp_resetb = ffs_vl_LP32ui_lp2sy_SoftReset_n &&
+    qlp_interface
+      #(
+        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
+        .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
+        .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
+        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
+        )
+      qlp(.clk);
+
+    assign qlp.resetb = ffs_vl_LP32ui_lp2sy_SoftReset_n &&
                         ffs_vl_LP32ui_lp2sy_InitDnForSys;
 
     //
     // Buffer outgoing write requests for timing
     //
-    logic [CCI_TX_HDR_WIDTH-1:0] qlp_C0TxHdr;
-    logic                        qlp_C0TxRdValid;
-    logic                        qlp_C0TxAlmFull;
-
-    logic [CCI_TX_HDR_WIDTH-1:0] qlp_C1TxHdr;
-    logic [CCI_DATA_WIDTH-1:0]   qlp_C1TxData;
-    logic                        qlp_C1TxWrValid;
-    logic                        qlp_C1TxIrValid;
-    logic                        qlp_C1TxAlmFull;
-
     always_ff @(posedge clk)
     begin
-        ffs_vl61_LP32ui_sy2lp_C0TxHdr <= qlp_C0TxHdr;
-        ffs_vl_LP32ui_sy2lp_C0TxRdValid <= qlp_C0TxRdValid;
-        qlp_C0TxAlmFull <= ffs_vl_LP32ui_lp2sy_C0TxAlmFull;
+        ffs_vl61_LP32ui_sy2lp_C0TxHdr <= qlp.C0TxHdr;
+        ffs_vl_LP32ui_sy2lp_C0TxRdValid <= qlp.C0TxRdValid;
+        qlp.C0TxAlmFull <= ffs_vl_LP32ui_lp2sy_C0TxAlmFull;
 
-        ffs_vl61_LP32ui_sy2lp_C1TxHdr <= qlp_C1TxHdr;
-        ffs_vl512_LP32ui_sy2lp_C1TxData <= qlp_C1TxData;
-        ffs_vl_LP32ui_sy2lp_C1TxWrValid <= qlp_C1TxWrValid;
-        ffs_vl_LP32ui_sy2lp_C1TxIrValid <= qlp_C1TxIrValid;
-        qlp_C1TxAlmFull <= ffs_vl_LP32ui_lp2sy_C1TxAlmFull;
+        ffs_vl61_LP32ui_sy2lp_C1TxHdr <= qlp.C1TxHdr;
+        ffs_vl512_LP32ui_sy2lp_C1TxData <= qlp.C1TxData;
+        ffs_vl_LP32ui_sy2lp_C1TxWrValid <= qlp.C1TxWrValid;
+        ffs_vl_LP32ui_sy2lp_C1TxIrValid <= qlp.C1TxIrValid;
+        qlp.C1TxAlmFull <= ffs_vl_LP32ui_lp2sy_C1TxAlmFull;
     end
-
 
     //
     // Buffer incoming read responses for timing
     //
-    logic [CCI_RX_HDR_WIDTH-1:0] qlp_C0RxHdr;
-    logic [CCI_DATA_WIDTH-1:0]   qlp_C0RxData;
-    logic                        qlp_C0RxWrValid;
-    logic                        qlp_C0RxRdValid;
-    logic                        qlp_C0RxCgValid;
-    logic                        qlp_C0RxUgValid;
-    logic                        qlp_C0RxIrValid;
-
-    logic [CCI_RX_HDR_WIDTH-1:0] qlp_C1RxHdr;
-    logic                        qlp_C1RxWrValid;
-    logic                        qlp_C1RxIrValid;
-
     always_ff @(posedge clk)
     begin
-        qlp_C0RxHdr     <= ffs_vl18_LP32ui_lp2sy_C0RxHdr;
-        qlp_C0RxData    <= ffs_vl512_LP32ui_lp2sy_C0RxData;
-        qlp_C0RxWrValid <= ffs_vl_LP32ui_lp2sy_C0RxWrValid;
-        qlp_C0RxRdValid <= ffs_vl_LP32ui_lp2sy_C0RxRdValid;
-        qlp_C0RxCgValid <= ffs_vl_LP32ui_lp2sy_C0RxCgValid;
-        qlp_C0RxUgValid <= ffs_vl_LP32ui_lp2sy_C0RxUgValid;
-        qlp_C0RxIrValid <= ffs_vl_LP32ui_lp2sy_C0RxIrValid;
+        qlp.C0RxHdr     <= ffs_vl18_LP32ui_lp2sy_C0RxHdr;
+        qlp.C0RxData    <= ffs_vl512_LP32ui_lp2sy_C0RxData;
+        qlp.C0RxWrValid <= ffs_vl_LP32ui_lp2sy_C0RxWrValid;
+        qlp.C0RxRdValid <= ffs_vl_LP32ui_lp2sy_C0RxRdValid;
+        qlp.C0RxCgValid <= ffs_vl_LP32ui_lp2sy_C0RxCgValid;
+        qlp.C0RxUgValid <= ffs_vl_LP32ui_lp2sy_C0RxUgValid;
+        qlp.C0RxIrValid <= ffs_vl_LP32ui_lp2sy_C0RxIrValid;
 
-        qlp_C1RxHdr     <= ffs_vl18_LP32ui_lp2sy_C1RxHdr;
-        qlp_C1RxWrValid <= ffs_vl_LP32ui_lp2sy_C1RxWrValid;
-        qlp_C1RxIrValid <= ffs_vl_LP32ui_lp2sy_C1RxIrValid;
+        qlp.C1RxHdr     <= ffs_vl18_LP32ui_lp2sy_C1RxHdr;
+        qlp.C1RxWrValid <= ffs_vl_LP32ui_lp2sy_C1RxWrValid;
+        qlp.C1RxIrValid <= ffs_vl_LP32ui_lp2sy_C1RxIrValid;
     end
 
 
@@ -189,46 +176,29 @@ module qa_driver
     //  Construct the driver.
     //
     // ====================================================================    
-    qa_drv_host_channel #(
-         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-         .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
-         .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
-         .CCI_TAG_WIDTH(CCI_TAG_WIDTH),
-         .UMF_WIDTH(UMF_WIDTH)
-        )
-    host_channel
-      (
-       .clk,
-       .qlp_resetb,
-       .qlp_C0TxHdr,
-       .qlp_C0TxRdValid,
-       .qlp_C0TxAlmFull,
-       .qlp_C1TxHdr,
-       .qlp_C1TxData,
-       .qlp_C1TxWrValid,
-       .qlp_C1TxIrValid,
-       .qlp_C1TxAlmFull,
-       .qlp_C0RxHdr,
-       .qlp_C0RxData,
-       .qlp_C0RxWrValid,
-       .qlp_C0RxRdValid,
-       .qlp_C0RxCgValid,
-       .qlp_C0RxUgValid,
-       .qlp_C0RxIrValid,
-       .qlp_C1RxHdr,
-       .qlp_C1RxWrValid,
-       .qlp_C1RxIrValid,
-       .rx_fifo_data,   
-       .rx_fifo_rdy,
-       .rx_fifo_enable,
-       .tx_fifo_data,
-       .tx_fifo_rdy,
-       .tx_fifo_enable,
-       .sreg_req_addr,
-       .sreg_req_rdy,
-       .sreg_rsp,
-       .sreg_rsp_enable
-      );
 
+    qa_drv_host_channel
+      #(
+        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
+        .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
+        .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
+        .CCI_TAG_WIDTH(CCI_TAG_WIDTH),
+        .UMF_WIDTH(UMF_WIDTH)
+        )
+      host_channel
+       (
+        .clk,
+        .qlp,
+        .rx_fifo_data,
+        .rx_fifo_rdy,
+        .rx_fifo_enable,
+        .tx_fifo_data,
+        .tx_fifo_rdy,
+        .tx_fifo_enable,
+        .sreg_req_addr,
+        .sreg_req_rdy,
+        .sreg_rsp,
+        .sreg_rsp_enable
+        );
 
 endmodule

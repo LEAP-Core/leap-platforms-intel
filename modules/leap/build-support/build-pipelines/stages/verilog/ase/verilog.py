@@ -57,7 +57,7 @@ class Verilog():
         inc_paths += [LI_LINK_DIR]
         ALL_LIB_DIRS_FROM_ROOT = LI_LINK_DIR + ':' +  ALL_LIB_DIRS_FROM_ROOT
 
-    liCodeType = ['VERILOG', 'GIVEN_VERILOG_HS', 'GEN_VPI_CS', 'GEN_VPI_HS']
+    liCodeType = ['VERILOG_PKG', 'VERILOG', 'GIVEN_VERILOG_HS', 'GEN_VPI_CS', 'GEN_VPI_HS']
 
     # This can be refactored as a function.
     if (not self.firstPassLIGraph is None):
@@ -105,8 +105,7 @@ class Verilog():
 
     vexe_gen_command = \
         BSC + ' ' + BSC_FLAGS_VERILOG + ' -vdir ' + vexe_vdir + ' -simdir ' + vexe_vdir + ' -bdir ' + vexe_vdir +' -p +:' +  ALL_LIB_DIRS_FROM_ROOT + ' -vsearch +:' + vsearch_path + ' ' + \
-        ' -o $TARGET' 
-
+        ' -o $TARGET'
 
     if (bsc_version >= 13013):
         # 2008.01.A compiler allows us to pass C++ arguments.
@@ -147,6 +146,7 @@ class Verilog():
 
     if (moduleList.getAWBParam('verilog_tool', 'VCS_ENABLE_LINT') != 0):
         vexe_gen_command += ' -Xv +lint=all,noVCDE'
+
     vexe_gen_command += ' -Xv -full64 '
     vexe_gen_command += ' -Xv -sverilog '
     vexe_gen_command += ' -Xv +librescan '
@@ -167,16 +167,22 @@ class Verilog():
     vexe_gen_command += ' -verilog -e qa_sim_top_level ' +\
                         moduleList.env['DEFS']['BDPI_CS']
 
+    vexe_gen_command += ' ' + ' '.join(moduleList.getAllDependencies('VERILOG_PKG'))
+    vexe_gen_command += ' ' + ' '.join(moduleList.getAllDependencies('VERILOG'))
+    vexe_gen_command += ' ' + ' '.join(moduleList.getAllDependencies('VHDL'))
+
     if (model.getBuildPipelineDebug(moduleList) != 0):
         for m in moduleList.getAllDependencies('BA'):
             print 'BA dep: ' + str(m)
+        for m in moduleList.getAllDependencies('VERILOG_PKG'):
+            print 'VPKG dep: ' + str(m)
         for m in moduleList.getAllDependencies('VERILOG'):
             print 'VL dep: ' + str(m)
         for m in moduleList.getAllDependencies('VHDL'):
             print 'BA dep: ' + str(m)
         for m in moduleList.getAllDependencies('GIVEN_BDPI_CS'):
             print 'GIVEN_BDPI_CS: ' + str(m)
-        
+
     # Generate a thin wrapper around the verilog executable.  This
     # wrapper is used to address a problem in iverilog in which the
     # simulator does not support shared library search paths.  The
@@ -207,10 +213,21 @@ class Verilog():
         # These were annotated in the top module above. Really, this seems unclean.
         # we should build a graph during the second pass and just use it.
         if(not self.firstPassLIGraph is None):
-            vbinDeps += moduleList.getDependencies(moduleList.topModule, 'VERILOG') + moduleList.getDependencies(moduleList.topModule, 'GIVEN_VERILOG_HS') + moduleList.getDependencies(moduleList.topModule, 'GEN_VPI_HS') + moduleList.getDependencies(moduleList.topModule, 'GEN_VPI_CS') +moduleList.getDependencies(moduleList.topModule, 'VHDL') + moduleList.getDependencies(moduleList.topModule, 'BA') + map(modify_path_ba_local, moduleList.getModuleDependenciesWithPaths(moduleList.topModule, 'GEN_BAS'))
+            vbinDeps += moduleList.getDependencies(moduleList.topModule, 'VERILOG_PKG') + \
+                        moduleList.getDependencies(moduleList.topModule, 'VERILOG') + \
+                        moduleList.getDependencies(moduleList.topModule, 'GIVEN_VERILOG_HS') + \
+                        moduleList.getDependencies(moduleList.topModule, 'GEN_VPI_HS') + \
+                        moduleList.getDependencies(moduleList.topModule, 'GEN_VPI_CS') + \
+                        moduleList.getDependencies(moduleList.topModule, 'VHDL') + \
+                        moduleList.getDependencies(moduleList.topModule, 'BA') + \
+                        map(modify_path_ba_local, moduleList.getModuleDependenciesWithPaths(moduleList.topModule, 'GEN_BAS'))
         # collect dependencies from all awb modules
         else:
-            vbinDeps += moduleList.getAllDependencies('VERILOG') + moduleList.getAllDependencies('VHDL') + moduleList.getAllDependencies('BA') + map(modify_path_ba_local, moduleList.getAllDependenciesWithPaths('GEN_BAS'))
+            vbinDeps += moduleList.getAllDependencies('VERILOG_PKG') + \
+                        moduleList.getAllDependencies('VERILOG') + \
+                        moduleList.getAllDependencies('VHDL') + \
+                        moduleList.getAllDependencies('BA') + \
+                        map(modify_path_ba_local, moduleList.getAllDependenciesWithPaths('GEN_BAS'))
           
         vbin = moduleList.env.Command(
             TMP_BSC_DIR + '/' + APM_NAME + '_hw.exe',
@@ -232,6 +249,7 @@ class Verilog():
     else:
         vbin = moduleList.env.Command(
             TMP_BSC_DIR + '/' + APM_NAME + '_hw.vexe',
+            moduleList.getAllDependencies('VERILOG_PKG') +
             moduleList.getAllDependencies('VERILOG') +
             moduleList.getAllDependencies('VHDL') +
             moduleList.getAllDependencies('BA') +

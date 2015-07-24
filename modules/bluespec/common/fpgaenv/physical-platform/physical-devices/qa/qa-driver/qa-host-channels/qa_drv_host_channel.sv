@@ -29,10 +29,8 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-// Compile all the packages.
-`include "qa_drv_packages.vh"
-
 `include "qa.vh"
+`include "qa_driver_types.vh"
 
 module qa_drv_host_channel
   #(
@@ -43,37 +41,12 @@ module qa_drv_host_channel
     parameter UMF_WIDTH=128
     )
    (
-    input  logic                        clk,
+    input  logic                 clk,
 
     //
     // Signals connecting to QA Platform
     //
-
-    input  logic                        qlp_resetb,
-
-    // Requests to QLP
-    output logic [CCI_TX_HDR_WIDTH-1:0] qlp_C0TxHdr,
-    output logic                        qlp_C0TxRdValid,
-    input  logic                        qlp_C0TxAlmFull,
-
-    output logic [CCI_TX_HDR_WIDTH-1:0] qlp_C1TxHdr,
-    output logic [CCI_DATA_WIDTH-1:0]   qlp_C1TxData,
-    output logic                        qlp_C1TxWrValid,
-    output logic                        qlp_C1TxIrValid,
-    input  logic                        qlp_C1TxAlmFull,
-
-    // Responses from QLP
-    input  logic [CCI_RX_HDR_WIDTH-1:0] qlp_C0RxHdr,
-    input  logic [CCI_DATA_WIDTH-1:0]   qlp_C0RxData,
-    input  logic                        qlp_C0RxWrValid,
-    input  logic                        qlp_C0RxRdValid,
-    input  logic                        qlp_C0RxCgValid,
-    input  logic                        qlp_C0RxUgValid,
-    input  logic                        qlp_C0RxIrValid,
-
-    input  logic [CCI_RX_HDR_WIDTH-1:0] qlp_C1RxHdr,
-    input  logic                        qlp_C1RxWrValid,
-    input  logic                        qlp_C1RxIrValid,
+    qlp_interface                qlp,
 
     // -------------------------------------------------------------------
     //
@@ -117,32 +90,32 @@ module qa_drv_host_channel
     // Map names here.
     //
     logic  resetb;
-    assign resetb = qlp_resetb;
+    assign resetb = qlp.resetb;
 
     t_RX_C0 rx0;
     // Buffer incoming read responses for timing
     always_ff @(posedge clk)
     begin
-        rx0.header     <= qlp_C0RxHdr;
-        rx0.data       <= qlp_C0RxData;
-        rx0.wrvalid    <= qlp_C0RxWrValid;
-        rx0.rdvalid    <= qlp_C0RxRdValid;
-        rx0.cfgvalid   <= qlp_C0RxCgValid;
+        rx0.header     <= qlp.C0RxHdr;
+        rx0.data       <= qlp.C0RxData;
+        rx0.wrvalid    <= qlp.C0RxWrValid;
+        rx0.rdvalid    <= qlp.C0RxRdValid;
+        rx0.cfgvalid   <= qlp.C0RxCgValid;
     end
 
     t_RX_C1 rx1;
     always_ff @(posedge clk)
     begin
-        rx1.header     <= qlp_C1RxHdr;
-        rx1.wrvalid    <= qlp_C1RxWrValid;
+        rx1.header     <= qlp.C1RxHdr;
+        rx1.wrvalid    <= qlp.C1RxWrValid;
     end
 
     logic  tx0_almostfull;
     logic  tx1_almostfull;
     always_ff @(posedge clk)
     begin
-        tx0_almostfull <= qlp_C0TxAlmFull;
-        tx1_almostfull <= qlp_C1TxAlmFull;
+        tx0_almostfull <= qlp.C0TxAlmFull;
+        tx1_almostfull <= qlp.C1TxAlmFull;
     end
 
     //
@@ -153,14 +126,14 @@ module qa_drv_host_channel
     t_TX_C1 tx1;
     t_TX_C1 tx1_reg;
 
-    assign qlp_C0TxHdr = tx0_reg.header;
-    assign qlp_C0TxRdValid = tx0_reg.rdvalid;
+    assign qlp.C0TxHdr = tx0_reg.header;
+    assign qlp.C0TxRdValid = tx0_reg.rdvalid;
 
-    assign qlp_C1TxHdr = tx1_reg.header;
-    assign qlp_C1TxData = tx1_reg.data;
-    assign qlp_C1TxWrValid = tx1_reg.wrvalid;
+    assign qlp.C1TxHdr = tx1_reg.header;
+    assign qlp.C1TxData = tx1_reg.data;
+    assign qlp.C1TxWrValid = tx1_reg.wrvalid;
 
-    assign qlp_C1TxIrValid = 1'b0;
+    assign qlp.C1TxIrValid = 1'b0;
 
     //
     // All signals to the host must come from registers.  Guarantee that here.

@@ -12,20 +12,20 @@
 %sources -t H      -v PUBLIC  AFU_csr.h
 %sources -t CPP    -v PRIVATE AFU.cpp
 
-%sources -t VERILOG_H  -v PRIVATE qa.vh
-%sources -t VERILOG_H  -v PRIVATE qa_drv_packages.vh
+%sources -t VERILOG_H -v PRIVATE qa.vh
 
-%sources -t VERILOG    -v PRIVATE qa_drv_host_channel.sv  
-%sources -t VERILOG    -v PRIVATE qa_drv_types.sv
-%sources -t VERILOG    -v PRIVATE qa_drv_csr_types.sv
-%sources -t VERILOG    -v PRIVATE qa_drv_csr.sv
-%sources -t VERILOG    -v PRIVATE qa_drv_fifo_from_host.sv
-%sources -t VERILOG    -v PRIVATE qa_drv_fifo_to_host.sv
-%sources -t VERILOG    -v PRIVATE qa_drv_status_manager.sv  
-%sources -t VERILOG    -v PRIVATE qa_drv_tester.sv  
-%sources -t VERILOG    -v PRIVATE cci_read_arbiter.sv  
-%sources -t VERILOG    -v PRIVATE cci_write_arbiter.sv  
-%sources -t VERILOG    -v PRIVATE cci_can_issue.sv  
+%sources -t VERILOG_PKG -v PRIVATE qa_drv_types.sv
+%sources -t VERILOG_PKG -v PRIVATE qa_drv_csr_types.sv
+
+%sources -t VERILOG -v PRIVATE qa_drv_host_channel.sv  
+%sources -t VERILOG -v PRIVATE qa_drv_csr.sv
+%sources -t VERILOG -v PRIVATE qa_drv_fifo_from_host.sv
+%sources -t VERILOG -v PRIVATE qa_drv_fifo_to_host.sv
+%sources -t VERILOG -v PRIVATE qa_drv_status_manager.sv  
+%sources -t VERILOG -v PRIVATE qa_drv_tester.sv  
+%sources -t VERILOG -v PRIVATE cci_read_arbiter.sv  
+%sources -t VERILOG -v PRIVATE cci_write_arbiter.sv  
+%sources -t VERILOG -v PRIVATE cci_can_issue.sv  
 
 %library libCCI.so
 %library libAAS.so

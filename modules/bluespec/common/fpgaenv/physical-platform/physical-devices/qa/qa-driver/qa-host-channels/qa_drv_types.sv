@@ -89,8 +89,8 @@ package qa_drv_types;
     //
     typedef struct 
     {
-        logic isForDriver;          // 1: driver generated (e.g. FIFOs)
-                                    // 0: request from FPGA user code
+        logic reserved;             // Used by MUX that merges the channels
+                                    // and the direct memory reader.
         logic isHeader;             // Read header, used to manage FIFO credits
         logic isRead;               // Target of read response
         logic [9:0] robAddr;        // ROB address (data reads)
@@ -185,7 +185,7 @@ package qa_drv_types;
     function automatic [12:0] pack_read_metadata;
         input    t_READ_METADATA metadata;
         begin
-            pack_read_metadata = { metadata.isForDriver,
+            pack_read_metadata = { metadata.reserved,
                                    metadata.isHeader,
                                    metadata.isRead,
                                    metadata.robAddr };
@@ -196,7 +196,7 @@ package qa_drv_types;
     function automatic t_READ_METADATA unpack_read_metadata;
         input    [17:0] metadata;
         begin
-            unpack_read_metadata.isForDriver = metadata[12];
+            unpack_read_metadata.reserved = metadata[12];
             unpack_read_metadata.isHeader = metadata[11];
             unpack_read_metadata.isRead = metadata[10];
             unpack_read_metadata.robAddr = metadata[9:0];

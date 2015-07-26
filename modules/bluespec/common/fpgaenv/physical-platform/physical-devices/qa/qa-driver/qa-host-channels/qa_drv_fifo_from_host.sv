@@ -274,7 +274,6 @@ module qa_drv_fifo_from_host
     logic incoming_read_valid;
     assign incoming_read_valid = rx0.rdvalid &&
                                  response_read_metadata.isRead &&
-                                 response_read_metadata.isForDriver &&
                                  ! response_read_metadata.isHeader;
 
 
@@ -349,10 +348,10 @@ module qa_drv_fifo_from_host
         read_header.requestType = RdLine_I;
 
         // Read metadata
-        data_read_metadata.isForDriver = 1'b1;
-        data_read_metadata.isRead      = 1'b1;
-        data_read_metadata.isHeader    = 1'b0;
-        data_read_metadata.robAddr     = scoreboard_slot_idx;
+        data_read_metadata.reserved = 1'b0;
+        data_read_metadata.isRead   = 1'b1;
+        data_read_metadata.isHeader = 1'b0;
+        data_read_metadata.robAddr  = scoreboard_slot_idx;
         read_header.mdata = pack_read_metadata(data_read_metadata);
 
         // By adding to form the address instead of replacing low bits we avoid

@@ -37,7 +37,7 @@ module qa_drv_host_channel
     parameter CCI_DATA_WIDTH = 512,
     parameter CCI_RX_HDR_WIDTH = 18,
     parameter CCI_TX_HDR_WIDTH = 61,
-    parameter CCI_TAG_WIDTH = 14,
+    parameter CCI_TAG_WIDTH = 13,
     parameter UMF_WIDTH=128
     )
    (
@@ -46,7 +46,7 @@ module qa_drv_host_channel
     //
     // Signals connecting to QA Platform
     //
-    qlp_interface                qlp,
+    qlp_interface.to_qlp         qlp,
 
     // -------------------------------------------------------------------
     //

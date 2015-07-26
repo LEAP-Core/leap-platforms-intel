@@ -36,7 +36,7 @@ module qa_driver
     parameter CCI_DATA_WIDTH = 512,
     parameter CCI_RX_HDR_WIDTH = 18,
     parameter CCI_TX_HDR_WIDTH = 61,
-    parameter CCI_TAG_WIDTH = 14,
+    parameter CCI_TAG_WIDTH = 13,
     parameter UMF_WIDTH=128
     )
    (
@@ -117,12 +117,16 @@ module qa_driver
     input  logic                   ffs_vl_LP32ui_lp2sy_InitDnForSys     // System layer is aok to run
     );
 
-    //
-    // The driver uses structures and shorter names to group the CCI.
-    // Map names here.
-    //
     logic  clk;
     assign clk = vl_clk_LPdomain_32ui;
+
+    // ====================================================================
+    //
+    //   Map the CCI driver interface to the qlp_interface used by the
+    //   composable components in the driver.  All I/O ports are
+    //   registered here for timing.
+    //
+    // ====================================================================
 
     qlp_interface
       #(
@@ -173,7 +177,48 @@ module qa_driver
 
     // ====================================================================    
     //
-    //  Construct the driver.
+    //  Split the connection into a pair of interfaces that will be
+    //  routed to separate clients.  One client will be used for
+    //  a direct memory interface.  The other will implement a pair
+    //  of memory mapped channels: one from the host and one from the
+    //  FPGA.
+    //
+    // ====================================================================    
+
+    localparam MUX_IDX_MEMORY   = 0;
+    localparam MUX_IDX_CHANNELS = 1;
+
+    qlp_interface
+      #(
+        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
+        .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
+        .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
+        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
+        )
+      qlp_mux[0:1] (.clk);
+
+    qa_shim_mux
+      #(
+        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
+        .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
+        .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
+        .CCI_TAG_WIDTH(CCI_TAG_WIDTH),
+        .MUX_MDATA_IDX(CCI_TAG_WIDTH-1)
+        )
+      mux
+       (
+        .clk,
+        .qlp,
+        .afu(qlp_mux)
+        );
+
+    assign qlp_mux[MUX_IDX_MEMORY].C0TxRdValid = 0;
+    assign qlp_mux[MUX_IDX_MEMORY].C1TxWrValid = 0;
+    assign qlp_mux[MUX_IDX_MEMORY].C1TxIrValid = 0;
+
+    // ====================================================================    
+    //
+    //  Connect the channel driver.
     //
     // ====================================================================    
 
@@ -188,7 +233,7 @@ module qa_driver
       host_channel
        (
         .clk,
-        .qlp,
+        .qlp(qlp_mux[MUX_IDX_CHANNELS]),
         .rx_fifo_data,
         .rx_fifo_rdy,
         .rx_fifo_enable,

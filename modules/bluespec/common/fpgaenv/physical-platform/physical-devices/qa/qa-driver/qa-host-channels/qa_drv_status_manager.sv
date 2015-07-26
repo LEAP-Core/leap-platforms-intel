@@ -153,7 +153,6 @@ module qa_drv_status_manager
     logic reader_data_rdy;
     assign reader_data_rdy = rx0.rdvalid &&
                              reader_meta_rsp.isRead &&
-                             reader_meta_rsp.isForDriver &&
                              reader_meta_rsp.isHeader;
 
     // View incoming read data as a vector of 32 bit objects
@@ -208,10 +207,10 @@ module qa_drv_status_manager
         status_mgr_req.readHeader.address =
             dsm_line_offset_to_addr(DSM_OFFSET_POLL_STATE, csr.afu_dsm_base);
 
-        reader_meta_req.isForDriver = 1'b1;
-        reader_meta_req.isRead      = 1'b1;
-        reader_meta_req.isHeader    = 1'b1;
-        reader_meta_req.robAddr     = 0;
+        reader_meta_req.reserved = 1'b0;
+        reader_meta_req.isRead   = 1'b1;
+        reader_meta_req.isHeader = 1'b1;
+        reader_meta_req.robAddr  = 0;
         status_mgr_req.readHeader.mdata = pack_read_metadata(reader_meta_req);
 
         if (state_rd == STATE_RD_POLL)

@@ -87,6 +87,58 @@ interface qlp_interface
     logic [CCI_RX_HDR_WIDTH-1:0] C1RxHdr;
     logic                        C1RxWrValid;
     logic                        C1RxIrValid;
+
+    // Port directions for connections in the direction of the QLP (platform)
+    modport to_qlp(input  resetb,
+
+                   output C0TxHdr,
+                   output C0TxRdValid,
+                   input  C0TxAlmFull,
+
+                   output C1TxHdr,
+                   output C1TxData,
+                   output C1TxWrValid,
+                   output C1TxIrValid,
+                   input  C1TxAlmFull,
+
+                   input  C0RxHdr,
+                   input  C0RxData,
+                   input  C0RxWrValid,
+                   input  C0RxRdValid,
+                   input  C0RxCgValid,
+                   input  C0RxUgValid,
+                   input  C0RxIrValid,
+
+                   input  C1RxHdr,
+                   input  C1RxWrValid,
+                   input  C1RxIrValid
+                   );
+
+    // Port directions for connections in the direction of the AFU (user code)
+    modport to_afu(output resetb,
+
+                   input  C0TxHdr,
+                   input  C0TxRdValid,
+                   output C0TxAlmFull,
+
+                   input  C1TxHdr,
+                   input  C1TxData,
+                   input  C1TxWrValid,
+                   input  C1TxIrValid,
+                   output C1TxAlmFull,
+
+                   output C0RxHdr,
+                   output C0RxData,
+                   output C0RxWrValid,
+                   output C0RxRdValid,
+                   output C0RxCgValid,
+                   output C0RxUgValid,
+                   output C0RxIrValid,
+
+                   output C1RxHdr,
+                   output C1RxWrValid,
+                   output C1RxIrValid
+                   );
 endinterface
 
 `endif //  `ifndef QA_DRIVER_TYPES_VH

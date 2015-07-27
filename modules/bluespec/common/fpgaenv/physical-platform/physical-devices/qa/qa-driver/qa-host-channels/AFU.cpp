@@ -34,13 +34,20 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <assert.h>
 
 #include "AFU.h"
 
-AFU::AFU(const uint32_t* expected_afu_id,
-         CCIDeviceImplementation imp,
-         uint32_t dsm_size_bytes)
+AFU AFU_CLASS::instance = NULL;
+
+AFU_CLASS::AFU_CLASS(const uint32_t* expected_afu_id,
+                     CCIDeviceImplementation imp,
+                     uint32_t dsm_size_bytes)
 {
+    // There should be one global instance of the AFU
+    assert(instance == NULL);
+    instance = this;
+
     // create the CCI device factory and device
     pCCIDevFactory = GetCCIDeviceFactory(imp);
     pCCIDevice = pCCIDevFactory->CreateCCIDevice();
@@ -80,7 +87,7 @@ AFU::AFU(const uint32_t* expected_afu_id,
 }
 
 
-AFU::~AFU() {
+AFU_CLASS::~AFU_CLASS() {
     // release all workspace buffers
     for (int i = 0; i < buffers.size(); i++)
     {
@@ -96,7 +103,7 @@ AFU::~AFU() {
 
 
 AFU_BUFFER 
-AFU::CreateSharedBuffer(uint64_t size_bytes) {
+AFU_CLASS::CreateSharedBuffer(uint64_t size_bytes) {
     // create a buffer struct instance
     AFU_BUFFER_CLASS* buffer = new AFU_BUFFER_CLASS();
 
@@ -118,7 +125,7 @@ AFU::CreateSharedBuffer(uint64_t size_bytes) {
 
 
 void
-AFU::ResetAFU() {
+AFU_CLASS::ResetAFU() {
     bt32bitCSR csr;
 
     const uint32_t CIPUCTL_RESET_BIT = 0x01000000;

@@ -85,7 +85,7 @@ remote_memory=Null Remote Memory
 channelio=Basic Virtual Channel Multiplexer
 rrr=RRR Clients and Servers
 physical_platform_debugger=Intel QuickAssist Platform Debugger
-local_mem=Local Memory Interface using BRAM
+local_mem=Local Memory interface using QA host memory
 
 [Common Physical Platform Utilities/Requires]
 physical_platform_defs=Common Physical Platform Definitions
@@ -115,7 +115,6 @@ Packagehint=leap-platforms
 [Intel QuickAssist FPGA Physical Channel]
 File=modules/leap/virtual-platform/physical-channel/qa/qa-physical-channel.awb
 Packagehint=leap-platforms-intel
-
 
 [Intel QuickAssist Platform]
 File=modules/bluespec/common/fpgaenv/physical-platform/qa/qa-platform.awb
@@ -170,16 +169,8 @@ Packagehint=leap-platforms-intel
 File=config/pm/leap/submodels/platform-services/standard-platform-local-mem.apm
 Packagehint=leap
 
-[Local Memory Interface using BRAM/Params]
-LOCAL_MEM_WORDS_PER_LINE=8
-LOCAL_MEM_ADDR_BITS=15
 
-[Local Memory Interface using BRAM]
-File=modules/leap/virtual-platform/low-level-platform-interface/local-mem/local-mem-bram.awb
-Packagehint=leap
 
-[Local Memory Interface using BRAM/Requires]
-local_mem_interface=Local Memory Interface
 
 [Local Memory Interface]
 File=modules/leap/virtual-platform/low-level-platform-interface/local-mem/local-mem-interface/local-mem-interface.awb
@@ -205,3 +196,10 @@ Packagehint=leap-platforms-intel
 [Intel QuickAssist Host/FPGA Channels]
 File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/qa-host-channels/qa-host-channels.awb
 Packagehint=leap-platforms-intel
+
+[Local Memory interface using QA host memory]
+File=modules/leap/virtual-platform/low-level-platform-interface/local-mem/local-mem-qa-host.awb
+Packagehint=leap-platforms-intel
+
+[Local Memory interface using QA host memory/Requires]
+local_mem_interface=Local Memory Interface

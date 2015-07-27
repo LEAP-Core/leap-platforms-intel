@@ -56,20 +56,27 @@ AFU_BUFFER_CLASS;
 // Fields describing a typical AFU buffer may not be modified after allocation.
 typedef const AFU_BUFFER_CLASS *AFU_BUFFER;
 
+typedef class AFU_CLASS *AFU;
 
-class AFU {
+class AFU_CLASS
+{
+  private:
+    static AFU instance;
 
   public:
-
     // CCI_AAL     = AAL AFU implementation.
     // CCI_ASE     = AFU Simulation Environment implementation.
     // CCI_DIRECT  = Direct CCI driver implementation.
 
-    AFU(const uint32_t *expected_afu_id,
-        CCIDeviceImplementation imp = CCI_ASE,
-        uint32_t dsm_size_bytes = 4096);
+    AFU_CLASS(const uint32_t *expected_afu_id,
+              CCIDeviceImplementation imp = CCI_ASE,
+              uint32_t dsm_size_bytes = 4096);
 
-    ~AFU();
+    ~AFU_CLASS();
+
+    // There is a single instance of the AFU allocated.  This allows any
+    // code to find it.
+    static AFU GetInstance() { return instance; }
 
     void ResetAFU();
 

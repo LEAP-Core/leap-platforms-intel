@@ -1,0 +1,7 @@
+service LOCAL_MEM_QA
+{
+    server sw (cpp, method) <- hw (bsv, connection)
+    {
+        method Alloc (in UINT64[64] size, out UINT64[64] baseAddr);
+    };
+};

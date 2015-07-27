@@ -85,7 +85,7 @@ class QA_DEVICE_CLASS: public PLATFORMS_MODULE_CLASS
     COMMAND_SWITCH_DICTIONARY deviceSwitch;
 
     // Handles to AFU context.
-    AFU afu;
+    AFU_CLASS afu;
 
     // process/pipe state (physical channel)
     class tbb::atomic<bool> initReadComplete;

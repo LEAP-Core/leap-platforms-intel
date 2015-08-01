@@ -29,8 +29,8 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
+`include "qa_driver.vh"
 `include "qa.vh"
-`include "qa_driver_types.vh"
 
 module qa_drv_host_channel
   #(

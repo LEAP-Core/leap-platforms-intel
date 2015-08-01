@@ -47,7 +47,7 @@ module [CONNECTED_MODULE] mkPhysicalPlatformDebugger#(PHYSICAL_DRIVERS drivers)
     // interface
     (PHYSICAL_DRIVERS);
     
-    let qa = drivers.qaDriver;
+    let qa = drivers.qaSRegDriver;
 
 `ifndef QA_ENABLE_PLATFORM_DEBUGGER_Z
 

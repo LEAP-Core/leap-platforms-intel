@@ -29,10 +29,11 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-`include "qa_driver_types.vh"
+`include "qa_driver.vh"
 
 module qa_driver
   #(
+    parameter CCI_ADDR_WIDTH = 32,
     parameter CCI_DATA_WIDTH = 512,
     parameter CCI_RX_HDR_WIDTH = 18,
     parameter CCI_TX_HDR_WIDTH = 61,
@@ -62,6 +63,26 @@ module qa_driver
     input  logic [UMF_WIDTH-1:0] tx_fifo_data,
     output logic                 tx_fifo_rdy,
     input  logic                 tx_fifo_enable,
+
+    //
+    // Memory read
+    //
+    input  logic [CCI_ADDR_WIDTH-1:0] mem_read_req_addr,
+    output logic                      mem_read_req_rdy,
+    input  logic                      mem_read_req_enable,
+
+    output logic [CCI_DATA_WIDTH-1:0] mem_read_rsp_data,
+    output logic                      mem_read_rsp_rdy,
+
+    //
+    // Memory write request
+    //
+    input  logic [CCI_ADDR_WIDTH-1:0] mem_write_addr,
+    input  logic [CCI_DATA_WIDTH-1:0] mem_write_data,
+    output logic                      mem_write_rdy,
+    input  logic                      mem_write_enable,
+    // True if a write is still in flight
+    output logic                      mem_writes_active,
 
     //
     // Client status registers.  Mostly useful for debugging.
@@ -209,12 +230,40 @@ module qa_driver
        (
         .clk,
         .qlp,
-        .afu(qlp_mux)
+        .afus(qlp_mux)
         );
 
-    assign qlp_mux[MUX_IDX_MEMORY].C0TxRdValid = 0;
-    assign qlp_mux[MUX_IDX_MEMORY].C1TxWrValid = 0;
-    assign qlp_mux[MUX_IDX_MEMORY].C1TxIrValid = 0;
+
+    // ====================================================================    
+    //
+    //  Connect the memory driver.
+    //
+    // ====================================================================    
+
+    qa_drv_memory
+      #(
+        .CCI_ADDR_WIDTH(CCI_ADDR_WIDTH),
+        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
+        .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
+        .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
+        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
+        )
+      host_memory
+       (
+        .clk,
+        .qlp(qlp_mux[MUX_IDX_MEMORY]),
+        .mem_read_req_addr,
+        .mem_read_req_rdy,
+        .mem_read_req_enable,
+        .mem_read_rsp_data,
+        .mem_read_rsp_rdy,
+        .mem_write_addr,
+        .mem_write_data,
+        .mem_write_rdy,
+        .mem_write_enable,
+        .mem_writes_active
+        );
+
 
     // ====================================================================    
     //

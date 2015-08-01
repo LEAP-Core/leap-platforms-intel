@@ -95,9 +95,11 @@ module qa_drv_csr
     always_ff @(posedge clk) begin
         if (~resetb) begin
             csr.afu_en <= 0;
+            csr.afu_en_user_channel <= 0;
         end
         else if (rx0.cfgvalid && csr_addr_matches(rx0.header, CSR_AFU_EN)) begin
             csr.afu_en <= rx0.data[0];
+            csr.afu_en_user_channel <= rx0.data[1];
         end
     end
 

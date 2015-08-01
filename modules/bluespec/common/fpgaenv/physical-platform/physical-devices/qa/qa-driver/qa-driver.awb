@@ -6,6 +6,8 @@
 %requires qa_driver_shims
 %requires qa_driver_primitives
 
-%sources -t VERILOG_H  -v PRIVATE qa_driver_types.vh
+%sources -t VERILOG_H   -v PRIVATE qa_driver.vh
+%sources -t VERILOG_PKG -v PRIVATE qa_driver_types.sv
 
-%sources -t VERILOG    -v PRIVATE qa_driver.sv
+%sources -t VERILOG     -v PRIVATE qa_driver.sv
+%sources -t VERILOG     -v PRIVATE qa_drv_memory.sv

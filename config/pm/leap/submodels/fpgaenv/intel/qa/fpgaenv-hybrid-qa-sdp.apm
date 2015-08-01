@@ -169,9 +169,6 @@ Packagehint=leap-platforms-intel
 File=config/pm/leap/submodels/platform-services/standard-platform-local-mem.apm
 Packagehint=leap
 
-
-
-
 [Local Memory Interface]
 File=modules/leap/virtual-platform/low-level-platform-interface/local-mem/local-mem-interface/local-mem-interface.awb
 Packagehint=leap
@@ -203,3 +200,6 @@ Packagehint=leap-platforms-intel
 
 [Local Memory interface using QA host memory/Requires]
 local_mem_interface=Local Memory Interface
+
+[Standard Platform Services (Local Memory Scratchpad) Submodel/Params]
+SCRATCHPAD_MEMORY_USE_LINES=1

@@ -56,9 +56,10 @@ import DefaultValue::*;
 // We use other modules to actually do the work.
 
 interface PHYSICAL_DRIVERS;
-    interface CLOCKS_DRIVER   clocksDriver;
-    interface QA_DRIVER       qaDriver;
-    interface DDR_DRIVER      ddrDriver;
+    interface CLOCKS_DRIVER     clocksDriver;
+    interface QA_CHANNEL_DRIVER qaChannelDriver;
+    interface QA_SREG_DRIVER    qaSRegDriver;
+    interface DDR_DRIVER        ddrDriver;
 endinterface
 
 // TOP_LEVEL_WIRES
@@ -158,13 +159,64 @@ module [CONNECTED_MODULE] mkPhysicalPlatform
         clocks.softResetTrigger.reset();
     endrule
 
+
+    // ====================================================================
+    //
+    // Export host memory as soft connections.
+    //
+    // ====================================================================
+
+    String platformName <- getSynthesisBoundaryPlatform();
+    String hostMemoryName = "hostMemory_" + platformName + "_";
+
+    CONNECTION_RECV#(QA_CCI_ADDR) memReadLineReq <-
+        mkConnectionRecvOptional(hostMemoryName + "readLineReq",
+                                 clocked_by clk, reset_by rst);
+
+    CONNECTION_SEND#(QA_CCI_DATA) memReadLineRsp <-
+        mkConnectionSendOptional(hostMemoryName + "readLineRsp",
+                                 clocked_by clk, reset_by rst);
+
+    CONNECTION_RECV#(Tuple2#(QA_CCI_ADDR, QA_CCI_DATA)) memWriteLine <-
+        mkConnectionRecvOptional(hostMemoryName + "writeLine",
+                                 clocked_by clk, reset_by rst);
+
+    CONNECTION_SEND#(Bool) memWritesInFlight <-
+        mkConnectionSendOptional(hostMemoryName + "writesInFlight",
+                                 clocked_by clk, reset_by rst);
+
+    rule fwdHostMemReadReq (True);
+        qa.memoryDriver.readLineReq(memReadLineReq.receive);
+        memReadLineReq.deq();
+    endrule
+
+    rule fwdHostMemReadRsp (True);
+        let data <- qa.memoryDriver.readLineRsp();
+        memReadLineRsp.send(data);
+    endrule
+
+    rule fwdHostMemWrite (True);
+        match {.addr, .data} = memWriteLine.receive();
+        qa.memoryDriver.writeLine(addr, data);
+        memWriteLine.deq();
+    endrule
+
+    rule fwdHostMemWritesInFlight (True);
+        memWritesInFlight.send(qa.memoryDriver.writesInFlight);
+    endrule
+
+
+    // ====================================================================
     //
     // Aggregate the drivers
     //
+    // ====================================================================
+
     interface PHYSICAL_DRIVERS physicalDrivers;
-        interface clocksDriver = clocks.driver;
-        interface qaDriver     = qa.driver;
-        interface ddrDriver    = sdram.driver;
+        interface clocksDriver    = clocks.driver;
+        interface qaChannelDriver = qa.channelDriver;
+        interface qaSRegDriver    = qa.sregDriver;
+        interface ddrDriver       = sdram.driver;
     endinterface
     
     //

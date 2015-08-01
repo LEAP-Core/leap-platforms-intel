@@ -5,4 +5,5 @@
 
 %sources -t VERILOG    -v PRIVATE qa_drv_prim_fifo1.sv
 %sources -t VERILOG    -v PRIVATE qa_drv_prim_fifo2.sv
+%sources -t VERILOG    -v PRIVATE qa_drv_prim_fifo_lutram.sv
 %sources -t VERILOG    -v PRIVATE qa_drv_prim_scoreboard_shared_rw.sv

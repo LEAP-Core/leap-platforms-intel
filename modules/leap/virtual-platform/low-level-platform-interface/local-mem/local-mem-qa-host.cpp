@@ -30,6 +30,7 @@
 
 #include "awb/rrr/service_ids.h"
 #include "awb/provides/local_mem.h"
+#include "awb/provides/qa_device.h"
 #include "awb/provides/qa_driver_host_channels.h"
 
 // ===== service instantiation =====
@@ -73,10 +74,12 @@ LOCAL_MEM_QA_SERVER_CLASS::Alloc(uint64_t size)
 
     // The incoming "size" is the index of the last word in the buffer.
     // Convert to bytes.
-    uint64_t size_bytes = (size + 1) * LOCAL_MEM_WORD_BITS / 8;
+    uint64_t size_bytes = (size + 1) * CCI_DATA_WIDTH / 8;
     AFU_BUFFER buf = afu->CreateSharedBuffer(size_bytes);
 
     printf("ALLOC 0x%016llx, p_addr %p, bytes 0x%016llx\n",
            size, buf->physicalAddress, buf->numBytes);
-    return buf->physicalAddress;
+
+    // Return physical address indexed by lines
+    return (buf->physicalAddress * 8) / CCI_DATA_WIDTH;
 }

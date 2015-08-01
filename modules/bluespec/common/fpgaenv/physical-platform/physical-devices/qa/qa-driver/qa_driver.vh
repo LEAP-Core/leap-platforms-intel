@@ -31,9 +31,8 @@
 `ifndef QA_DRIVER_TYPES_VH
 `define QA_DRIVER_TYPES_VH
 
-//
-// Main type definitions for the QA composable driver.
-//
+import qa_driver_types::*;
+
 
 //
 // QA driver shims are composable because they conform to the same basic
@@ -139,6 +138,7 @@ interface qlp_interface
                    output C1RxWrValid,
                    output C1RxIrValid
                    );
+
 endinterface
 
 `endif //  `ifndef QA_DRIVER_TYPES_VH

@@ -49,21 +49,22 @@ interface PHYSICAL_CHANNEL;
 
 endinterface
 
+
 // physical channel module
 module mkPhysicalChannel#(PHYSICAL_DRIVERS drivers)
     // interface
-                  (PHYSICAL_CHANNEL);
+    (PHYSICAL_CHANNEL);
     
+    let qa = drivers.qaChannelDriver;
+
     method ActionValue#(UMF_CHUNK) read();
-        
-        drivers.qaDriver.deq();
-        return drivers.qaDriver.first;
-        
+        qa.deq();
+        return qa.first;
     endmethod
 
 
-    method deq = drivers.qaDriver.deq;
-    method first = drivers.qaDriver.first;
-    method write = drivers.qaDriver.write;
-    method write_ready = drivers.qaDriver.notFull;
+    method deq = qa.deq;
+    method first = qa.first;
+    method write = qa.write;
+    method write_ready = qa.notFull;
 endmodule

@@ -173,7 +173,7 @@ QA_DEVICE_CLASS::Init()
         printf("Writing Host WRITE_FRAME base %p (line %p) ...\n", writeBuffer->physicalAddress, writeBuffer->physicalAddress);
     }
 
-    // Enable AFU
+    // Enable AFU (driver and test only)
     afu.WriteCSR(CSR_AFU_EN, 1);
 
     initReadComplete = true;
@@ -183,6 +183,9 @@ QA_DEVICE_CLASS::Init()
 //    TestSend();
 //    TestRecv();
 //    TestLoopback();
+
+    // Enable AFU (including user connection)
+    afu.WriteCSR(CSR_AFU_EN, 3);
 }
 
 void
@@ -645,6 +648,15 @@ QA_DEVICE_CLASS::DebugDumpReadHistory()
 
 #define TEST_MSG_CHUNKS 64
 
+#if (CCI_SIMULATION != 0)
+  // Don't send the full test length in simulation.  Note that messages about
+  // throughput don't adjust and will be wrong.
+  #define QA_TEST_LEN 20
+#else
+  // 1 GB tests
+  #define QA_TEST_LEN 30
+#endif
+
 //
 // TestSend --
 //   Send a stream of data to the FPGA.  The FPGA will drop it.
@@ -683,7 +695,7 @@ QA_DEVICE_CLASS::TestSend()
     gettimeofday(&start, NULL);
 
     // Send 1GB
-    for (uint64_t n = 0; n < (1LL << 30); n += msg_max_size)
+    for (uint64_t n = 0; n < (1LL << QA_TEST_LEN); n += msg_max_size)
     {
         Write(msg, msg_max_size);
     }
@@ -718,7 +730,7 @@ QA_DEVICE_CLASS::TestRecv()
 
     // Put the FPGA in SINK mode, requesting 1 GB of data.  The number of
     // chunks is sent in bits [31:2].
-    uint32_t chunks = (1LL << 30) / UMF_CHUNK_BYTES;
+    uint32_t chunks = (1LL << QA_TEST_LEN) / UMF_CHUNK_BYTES;
     afu.WriteCSR(CSR_AFU_ENABLE_TEST, (chunks << 2) | 2);
 
     // Wait for mode change.
@@ -792,7 +804,7 @@ QA_DEVICE_CLASS::TestLoopback()
     gettimeofday(&start, NULL);
 
     // Send 1GB
-    for (uint64_t n = 0; n < (1LL << 30); n += msg_max_size)
+    for (uint64_t n = 0; n < (1LL << QA_TEST_LEN); n += msg_max_size)
     {
         Write(msg, msg_max_size);
     }

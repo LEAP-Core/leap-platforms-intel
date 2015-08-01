@@ -5,14 +5,14 @@
 ## two sides of one of the syncFIFOs.
 ##
 
-set pin_col [get_pins -compatibility_mode {cci_std_afu|*|*|llpi_phys_plat_qa_device|syncReadQ|sNotFullReg|clk}]
+set pin_col [get_pins -compatibility_mode {cci_std_afu|*|*|llpi_phys_plat_qa_device|syncChannelReadQ|sNotFullReg|clk}]
 
 if {0 == [get_collection_size $pin_col]} {
     puts "WARNING: LEAP model clock not found!"
 } else {
     puts "Analyzing LEAP model clock..."
 
-    set clk_sys_name   [get_clocks_feeding_pin {cci_std_afu|*|*|llpi_phys_plat_qa_device|syncReadQ|sNotFullReg|clk}]
+    set clk_sys_name   [get_clocks_feeding_pin {cci_std_afu|*|*|llpi_phys_plat_qa_device|syncChannelReadQ|sNotFullReg|clk}]
     set clk_sys        [get_clocks $clk_sys_name]
 
     foreach_in_collection clk $clk_sys {
@@ -20,7 +20,7 @@ if {0 == [get_collection_size $pin_col]} {
         puts "SYS Clock $clk_sys_name: $clk_sys_period"
     }
 
-    set clk_model_name [get_clocks_feeding_pin {cci_std_afu|*|*|llpi_phys_plat_qa_device|syncReadQ|dNotEmptyReg|clk}]
+    set clk_model_name [get_clocks_feeding_pin {cci_std_afu|*|*|llpi_phys_plat_qa_device|syncChannelReadQ|dNotEmptyReg|clk}]
     set clk_model      [get_clocks $clk_model_name]
 
     foreach_in_collection clk $clk_model {

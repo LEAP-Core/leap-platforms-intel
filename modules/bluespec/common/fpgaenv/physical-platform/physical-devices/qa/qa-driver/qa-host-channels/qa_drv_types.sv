@@ -31,14 +31,23 @@
 `ifndef QA_DRV_TYPES
 `define QA_DRV_TYPES
 
+`include "qa_driver.vh"
+
+// Included because VCS fails to detect packages correctly.
+`include "qa_drv_csr_types.sv"
+
+
 //
 // Main type definitions for the QA driver.
 //
 
 package qa_drv_types;
+    localparam QA_DRIVER_DEBUG = 0;
+
+    import qa_driver_types::*;
     import qa_drv_csr_types::*;
 
-    localparam QA_DRIVER_DEBUG = 0;
+    typedef t_TX_HEADER_CCI_S t_TX_HEADER;
 
     //
     // Cache line data types.
@@ -73,16 +82,6 @@ package qa_drv_types;
     typedef logic [12:0] t_FIFO_TO_HOST_IDX;
     typedef logic [12:0] t_FIFO_FROM_HOST_IDX;
 
-    typedef enum logic [3:0]
-    {
-        WrThru   = 4'h1,
-        WrLine   = 4'h2,
-        WrFence  = 4'h5,
-        RdLine   = 4'h4,
-        RdLine_I = 4'h6
-    }
-    t_TX_REQUEST;
-
     //
     // Read metadata is passed in the mdata field of each read request in
     // order to reorder and route the response.
@@ -96,18 +95,6 @@ package qa_drv_types;
         logic [9:0] robAddr;        // ROB address (data reads)
     }
     t_READ_METADATA;
-
-    typedef struct packed
-    {
-        logic [60:56] rsvd2;
-        t_TX_REQUEST  requestType;
-        logic [51:46] rsvd1;
-        logic [45:14] address;
-        logic         rsvd0;
-        logic [12:0]  mdata;
-    }
-    t_TX_HEADER;
-
 
     typedef struct
     {

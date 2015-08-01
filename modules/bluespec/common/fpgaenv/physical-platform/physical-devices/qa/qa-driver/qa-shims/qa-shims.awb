@@ -3,4 +3,5 @@
 
 %provides qa_driver_shims
 
+%sources -t VERILOG    -v PRIVATE qa_shim_buffer_afu.sv
 %sources -t VERILOG    -v PRIVATE qa_shim_mux.sv

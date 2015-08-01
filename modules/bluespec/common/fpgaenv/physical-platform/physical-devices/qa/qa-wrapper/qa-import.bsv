@@ -55,18 +55,37 @@ import Connectable::*;
 
 `include "awb/provides/clocks_device.bsh"
 
+// Maximum outstanding memory read requests
+typedef 64 QA_MAX_MEM_READS;
+
 typedef Bit#(32) QA_SREG_ADDR;
 typedef Bit#(64) QA_SREG;
 
-interface QA_DRIVER;
+typedef Bit#(`CCI_ADDR_WIDTH) QA_CCI_ADDR;
+typedef Bit#(`CCI_DATA_WIDTH) QA_CCI_DATA;
+
+interface QA_CHANNEL_DRIVER;
     method Action                     deq();
     method Bit#(SizeOf#(UMF_CHUNK))   first();
     method Bool                       notEmpty();
     method Action                     write(Bit#(SizeOf#(UMF_CHUNK)) chunk);
     method Bool                       notFull();
+endinterface
 
-    // Status register read request from the host.  Useful mostly for
-    // debugging.
+interface QA_MEMORY_DRIVER;
+    method Action readLineReq(QA_CCI_ADDR addr);
+    method ActionValue#(QA_CCI_DATA) readLineRsp();
+
+    method Action writeLine(QA_CCI_ADDR addr,
+                            QA_CCI_DATA data);
+
+    // True if any writes are still in flight
+    method Bool writesInFlight();
+endinterface
+
+// Status register read request from the host.  Useful mostly for
+// debugging.
+interface QA_SREG_DRIVER;
     method ActionValue#(QA_SREG_ADDR) sregReq();
     method Action                     sregRsp(QA_SREG val);
 endinterface
@@ -104,7 +123,9 @@ interface QA_WIRES;
 endinterface
 
 interface QA_DEVICE;
-    interface QA_DRIVER driver; 
+    interface QA_CHANNEL_DRIVER channelDriver; 
+    interface QA_MEMORY_DRIVER  memoryDriver;
+    interface QA_SREG_DRIVER    sregDriver; 
     (* prefix = "" *)
     interface QA_WIRES  wires;
 endinterface
@@ -117,7 +138,8 @@ module mkQADeviceImport#(Clock vl_clk_LPdomain_32ui,
     // Interface:
     (QA_DEVICE);
 
-    parameter CCI_DATA_WIDTH   = `CCI_CACHE_WIDTH;
+    parameter CCI_ADDR_WIDTH   = `CCI_ADDR_WIDTH;
+    parameter CCI_DATA_WIDTH   = `CCI_DATA_WIDTH;
     parameter CCI_RX_HDR_WIDTH = `CCI_RXHDR_WIDTH;
     parameter CCI_TX_HDR_WIDTH = `CCI_TXHDR_WIDTH;
     parameter UMF_WIDTH        = umfChunkSize;
@@ -128,14 +150,24 @@ module mkQADeviceImport#(Clock vl_clk_LPdomain_32ui,
     input_reset (ffs_vl_LP32ui_lp2sy_SoftReset_n) = ffs_vl_LP32ui_lp2sy_SoftReset_n;
     default_reset ffs_vl_LP32ui_lp2sy_SoftReset_n;
 
-    interface QA_DRIVER driver;
+    interface QA_CHANNEL_DRIVER channelDriver;
         method deq() ready(rx_fifo_rdy) enable(rx_fifo_enable);
         method rx_fifo_data first() ready(rx_fifo_rdy);
         method rx_fifo_rdy notEmpty();
         method write(tx_fifo_data) ready(tx_fifo_rdy) enable(tx_fifo_enable);
         method tx_fifo_rdy notFull();
+    endinterface
 
-        method sreg_req_addr sregReq() ready(sreg_req_rdy) enable((*inhigh*) en0);
+    interface QA_MEMORY_DRIVER memoryDriver;
+        method readLineReq(mem_read_req_addr) ready(mem_read_req_rdy) enable(mem_read_req_enable);
+        method mem_read_rsp_data readLineRsp() ready(mem_read_rsp_rdy) enable((*inhigh*) en0);
+
+        method writeLine(mem_write_addr, mem_write_data) ready(mem_write_rdy) enable(mem_write_enable);
+        method mem_writes_active writesInFlight();
+    endinterface
+
+    interface QA_SREG_DRIVER sregDriver; 
+        method sreg_req_addr sregReq() ready(sreg_req_rdy) enable((*inhigh*) en1);
         method sregRsp(sreg_rsp) enable(sreg_rsp_enable);
     endinterface
 
@@ -165,14 +197,28 @@ module mkQADeviceImport#(Clock vl_clk_LPdomain_32ui,
         method ffs_vl_LP32ui_sy2lp_C1TxIrValid ffs_vl_LP32ui_sy2lp_C1TxIrValid() clocked_by(no_clock);
     endinterface
 
-    schedule (driver_deq) C (driver_deq);
-    schedule (driver_deq) CF (driver_first, driver_write, driver_notEmpty, driver_notFull, driver_sregReq, driver_sregRsp);
-    schedule (driver_first) CF (driver_deq, driver_first, driver_write, driver_notEmpty, driver_notFull, driver_sregReq, driver_sregRsp);
-    schedule (driver_write) C (driver_write);    
-    schedule (driver_write) CF (driver_deq, driver_first, driver_notEmpty, driver_notFull, driver_sregReq, driver_sregRsp);
-    schedule (driver_notFull, driver_notEmpty) CF (driver_deq, driver_first, driver_write, driver_notEmpty, driver_notFull, driver_sregReq, driver_sregRsp);
-    schedule (driver_sregReq, driver_sregRsp) CF (driver_deq, driver_first, driver_write, driver_notEmpty, driver_notFull, driver_sregReq, driver_sregRsp);
+    schedule (channelDriver_deq) C (channelDriver_deq);
+    schedule (channelDriver_deq) CF (channelDriver_first, channelDriver_write, channelDriver_notEmpty, channelDriver_notFull, sregDriver_sregReq, sregDriver_sregRsp);
+    schedule (channelDriver_first) CF (channelDriver_deq, channelDriver_first, channelDriver_write, channelDriver_notEmpty, channelDriver_notFull, memoryDriver_writesInFlight, sregDriver_sregReq, sregDriver_sregRsp);
+    schedule (channelDriver_write) C (channelDriver_write);    
+    schedule (channelDriver_write) CF (channelDriver_deq, channelDriver_first, channelDriver_notEmpty, channelDriver_notFull, sregDriver_sregReq, sregDriver_sregRsp);
+    schedule (channelDriver_notFull, channelDriver_notEmpty) CF (channelDriver_deq, channelDriver_first, channelDriver_write, channelDriver_notEmpty, channelDriver_notFull, memoryDriver_writesInFlight, sregDriver_sregReq, sregDriver_sregRsp);
 
+    schedule (memoryDriver_readLineReq) C (memoryDriver_readLineReq);
+    schedule (memoryDriver_readLineReq) CF (memoryDriver_readLineRsp, memoryDriver_writeLine, memoryDriver_writesInFlight);
+    schedule (memoryDriver_readLineRsp) C (memoryDriver_readLineRsp);
+    schedule (memoryDriver_readLineRsp) CF (memoryDriver_readLineReq, memoryDriver_writeLine, memoryDriver_writesInFlight);
+    schedule (memoryDriver_writeLine) C (memoryDriver_writeLine);
+    schedule (memoryDriver_writeLine) CF (memoryDriver_readLineReq, memoryDriver_readLineRsp, memoryDriver_writesInFlight);
+    schedule (memoryDriver_writesInFlight) CF (memoryDriver_readLineReq, memoryDriver_readLineRsp, memoryDriver_writeLine, memoryDriver_writesInFlight);
+
+    schedule (memoryDriver_readLineReq, memoryDriver_readLineRsp, memoryDriver_writeLine, memoryDriver_writesInFlight) CF
+             (channelDriver_deq, channelDriver_write, channelDriver_notEmpty, channelDriver_notFull, channelDriver_first);
+
+    schedule (sregDriver_sregReq, sregDriver_sregRsp) CF
+             (channelDriver_deq, channelDriver_first, channelDriver_write, channelDriver_notEmpty, channelDriver_notFull,
+              memoryDriver_readLineReq, memoryDriver_readLineRsp, memoryDriver_writeLine, memoryDriver_writesInFlight,
+              sregDriver_sregReq, sregDriver_sregRsp);
 
     schedule (wires_inputWires,
               wires_ffs_vl61_LP32ui_sy2lp_C0TxHdr,
@@ -189,9 +235,11 @@ module mkQADeviceImport#(Clock vl_clk_LPdomain_32ui,
               wires_ffs_vl512_LP32ui_sy2lp_C1TxData,
               wires_ffs_vl_LP32ui_sy2lp_C1TxWrValid,
               wires_ffs_vl_LP32ui_sy2lp_C1TxIrValid,
-              driver_deq, driver_first, driver_write,
-              driver_notFull, driver_notEmpty,
-              driver_sregReq, driver_sregRsp);
+              channelDriver_deq, channelDriver_first, channelDriver_write,
+              channelDriver_notFull, channelDriver_notEmpty,
+              memoryDriver_readLineReq, memoryDriver_readLineRsp,
+              memoryDriver_writeLine, memoryDriver_writesInFlight,
+              sregDriver_sregReq, sregDriver_sregRsp);
 endmodule
 
 
@@ -220,45 +268,123 @@ module mkQADeviceSynth#(Clock vl_clk_LPdomain_32ui,
 
     let qaDevice <- mkQADeviceImport(vl_clk_LPdomain_32ui,
                                      ffs_vl_LP32ui_lp2sy_SoftReset_n);
-    let qa_driver = qaDevice.driver;
+    let qaChannelDriver = qaDevice.channelDriver;
+    let qaMemoryDriver = qaDevice.memoryDriver;
+    let qaSRegDriver = qaDevice.sregDriver;
 
-    SyncFIFOIfc#(UMF_CHUNK) syncReadQ <- mkSyncFIFOToCC(16, qa_clock, qa_reset);
-    SyncFIFOIfc#(UMF_CHUNK) syncWriteQ <- mkSyncFIFOFromCC(16, qa_clock);
+
+    //
+    // Host/FPGA Channels
+    //
+
+    SyncFIFOIfc#(UMF_CHUNK) syncChannelReadQ <- mkSyncFIFOToCC(16, qa_clock, qa_reset);
+    SyncFIFOIfc#(UMF_CHUNK) syncChannelWriteQ <- mkSyncFIFOFromCC(16, qa_clock);
+
+    rule pullDataIn;
+        syncChannelReadQ.enq(qaChannelDriver.first);
+        qaChannelDriver.deq;
+    endrule
+
+    rule pushDataOut;
+        qaChannelDriver.write(syncChannelWriteQ.first);
+        syncChannelWriteQ.deq;
+    endrule
+
+
+    //
+    // Memory
+    //
+
+    SyncFIFOIfc#(QA_CCI_ADDR) syncMemoryReadReqQ <-
+        mkSyncFIFOFromCC(16, qa_clock);
+    SyncFIFOIfc#(QA_CCI_DATA) syncMemoryReadRspQ <-
+        mkSyncFIFOToCC(valueOf(QA_MAX_MEM_READS), qa_clock, qa_reset);
+    SyncFIFOIfc#(Tuple2#(QA_CCI_ADDR, QA_CCI_DATA)) syncMemoryWriteQ <-
+        mkSyncFIFOFromCC(16, qa_clock);
+    Reg#(Bool) syncMemoryWritesInFlight <- mkSyncRegToCC(False, qa_clock, qa_reset);
+
+    COUNTER#(TLog#(TAdd#(QA_MAX_MEM_READS, 1))) activeMemReads <- mkLCounter(0);
+
+    rule fwdMemoryReadReq;
+        qaMemoryDriver.readLineReq(syncMemoryReadReqQ.first);
+        syncMemoryReadReqQ.deq;
+    endrule
+
+    (* fire_when_enabled *)
+    rule fwdMemoryReadRsp;
+        let d <- qaMemoryDriver.readLineRsp();
+        syncMemoryReadRspQ.enq(d);
+    endrule
+
+    rule fwdMemoryWriteReq;
+        match {.addr, .data} = syncMemoryWriteQ.first;
+        syncMemoryWriteQ.deq;
+
+        qaMemoryDriver.writeLine(addr, data);
+    endrule
+
+    (* fire_when_enabled *)
+    rule fwdMemoryWritesInFlight;
+        syncMemoryWritesInFlight <= qaMemoryDriver.writesInFlight();
+    endrule
+
+
+    //
+    // Status registers
+    //
 
     SyncFIFOIfc#(QA_SREG_ADDR) syncSregReqQ <- mkSyncFIFOToCC(1, qa_clock, qa_reset);
     SyncFIFOIfc#(QA_SREG) syncSregRspQ <- mkSyncFIFOFromCC(1, qa_clock);
 
-    rule pullDataIn;
-        syncReadQ.enq(qa_driver.first);
-        qa_driver.deq;
-    endrule
-
-    rule pushDataOut;
-        qa_driver.write(syncWriteQ.first);
-        syncWriteQ.deq;
-    endrule
-
     (* fire_when_enabled *)
     rule sregReqIn;
-        let r <- qa_driver.sregReq();
+        let r <- qaSRegDriver.sregReq();
         syncSregReqQ.enq(r);
     endrule
 
     rule sregRspOut;
-        qa_driver.sregRsp(syncSregRspQ.first);
+        qaSRegDriver.sregRsp(syncSregRspQ.first);
         syncSregRspQ.deq;
     endrule
 
 
-`ifdef CCI_LOOPBACK_HACK_Z
+    interface QA_CHANNEL_DRIVER channelDriver;
+        method deq = syncChannelReadQ.deq;
+        method first = syncChannelReadQ.first;
+        method notEmpty = syncChannelReadQ.notEmpty;
+        method write = syncChannelWriteQ.enq;
+        method notFull = syncChannelWriteQ.notFull;
+    endinterface
 
-    interface QA_DRIVER driver;
-        method deq = syncReadQ.deq;
-        method first = syncReadQ.first;
-        method notEmpty = syncReadQ.notEmpty;
-        method write = syncWriteQ.enq;
-        method notFull = syncWriteQ.notFull;
+    interface QA_MEMORY_DRIVER memoryDriver;
+        // Read line request tracks the number of outstanding read requests
+        // since there is no flow control in the Verilog driver.  The incoming
+        // syncMemoryReadRspQ must be large enough to hold all outstanding
+        // responses.
+        method Action readLineReq(QA_CCI_ADDR addr) if (activeMemReads.value() < fromInteger(valueOf(QA_MAX_MEM_READS)));
+            syncMemoryReadReqQ.enq(addr);
+            activeMemReads.up();
+        endmethod
 
+        method ActionValue#(QA_CCI_DATA) readLineRsp();
+            let d = syncMemoryReadRspQ.first();
+            syncMemoryReadRspQ.deq();
+            activeMemReads.down();
+
+            return d;
+        endmethod
+
+        method Action writeLine(QA_CCI_ADDR addr, QA_CCI_DATA data);
+            syncMemoryWriteQ.enq(tuple2(addr, data));
+        endmethod
+
+        // True if any writes are still in flight
+        method Bool writesInFlight();
+            return syncMemoryWritesInFlight;
+        endmethod
+    endinterface
+
+    interface QA_SREG_DRIVER sregDriver; 
         method ActionValue#(QA_SREG_ADDR) sregReq();
             syncSregReqQ.deq();
             return syncSregReqQ.first();
@@ -266,42 +392,6 @@ module mkQADeviceSynth#(Clock vl_clk_LPdomain_32ui,
 
         method sregRsp = syncSregRspQ.enq;
     endinterface
-
-`else
-
-    //
-    // A hack to make timing closure on the platform and driver code before
-    // including the design.  This will be replaced with logic constraints.
-    // For now, use incremental compilation to first place and route a design
-    // that doesn't include any user code, then disable CCI_LOOPBACK_HACK and
-    // do normal compilation in the same build directory.  The Altera tools
-    // will use the original placement as a hint.
-    //
-
-    mkConnection(toGet(syncReadQ), toPut(syncWriteQ));
-
-    rule sregLoop;
-        let r = syncSregReqQ.first();
-        syncSregReqQ.deq();
-
-        syncSregRspQ.enq(zeroExtend(r));
-    endrule
-
-    FIFOF#(UMF_CHUNK) dummyReadQ <- mkFIFOF();
-    FIFOF#(UMF_CHUNK) dummyWriteQ <- mkFIFOF();
-
-    interface QA_DRIVER driver;
-        method deq = dummyReadQ.deq;
-        method first = dummyReadQ.first;
-        method notEmpty = dummyReadQ.notEmpty;
-        method write = dummyWriteQ.enq;
-        method notFull = dummyWriteQ.notFull;
-
-        method sregReq = ?;
-        method sregRsp = ?;
-    endinterface
-
-`endif
 
     interface QA_WIRES wires = qaDevice.wires;
 endmodule

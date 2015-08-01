@@ -111,7 +111,11 @@ package qa_drv_csr_types;
         logic [63:0] afu_dsm_base;
         logic        afu_cntxt_base_valid;
         logic [63:0] afu_cntxt_base;
+
+        // Enable driver
         logic        afu_en;
+        // Enable channel I/O connection to user code
+        logic        afu_en_user_channel;
 
         logic [63:0] afu_write_frame;
         logic [63:0] afu_read_frame;

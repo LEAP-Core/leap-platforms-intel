@@ -13,10 +13,8 @@
 
 %generated -t VERILOG mkQADeviceSynth.v
 
-%param CCI_CACHE_WIDTH  512    "Cache line width"
+%param CCI_ADDR_WIDTH   32     "Address bits (cache line granularity)"
+%param CCI_DATA_WIDTH   512    "Cache line width"
 %param CCI_TXHDR_WIDTH  61     "TX Header width"
 %param CCI_RXHDR_WIDTH  18     "RX Header width"
 %param CCI_SIMULATION   0      "Is the CCI implementation actually a simulator?"
-
-%param CCI_LOOPBACK_HACK 0     "Hack to disable design in order to meet initial platform and driver timing (1: Build only CCI platform code and driver, 2: Build only CCI platform code)"
-

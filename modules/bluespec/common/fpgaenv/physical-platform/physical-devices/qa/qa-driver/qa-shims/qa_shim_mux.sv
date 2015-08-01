@@ -28,7 +28,7 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-`include "qa_driver_types.vh"
+`include "qa_driver.vh"
 
 
 //
@@ -51,8 +51,8 @@ module qa_shim_mux
     // Mdata bits.  The reserved bit is configurable using the MUX_MDATA_IDX
     // parameter.  The instantiation point must pick a bit -- the default value
     // is purposely illegal in order to force a decision.  The reserved bit
-    // must be 0 on requests from the afu ports and is guaranteed to be 0
-    // in responses to the afu ports.
+    // must be 0 on requests from the AFU ports and is guaranteed to be 0
+    // in responses to the AFU ports.
     //
     parameter MUX_MDATA_IDX = -1
     )
@@ -63,7 +63,7 @@ module qa_shim_mux
     qlp_interface.to_qlp qlp,
 
     // Connections toward user code.
-    qlp_interface.to_afu afu[0:1]
+    qlp_interface.to_afu afus[0:1]
     );
 
     //
@@ -78,6 +78,65 @@ module qa_shim_mux
     logic resetb;
     assign resetb = qlp.resetb;
 
+
+    // ====================================================================
+    //
+    // Instantiate a buffer on the AFU request ports, making them latency
+    // insensitive.
+    //
+    // ====================================================================
+
+    qlp_interface
+      #(
+        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
+        .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
+        .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
+        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
+        )
+      afu_buf[0:1] (.clk);
+
+    // Latency-insensitive ports need explicit dequeue (enable).
+    logic deqC0Tx[0:1];
+    logic deqC1Tx[0:1];
+
+    genvar p;
+    generate
+        for (p = 0; p < NUM_AFU_PORTS; p = p + 1)
+        begin : genBuffers
+
+            qa_shim_buffer_afu
+              #(
+                .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
+                .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
+                .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
+                .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
+                )
+              b
+                (
+                 .clk,
+                 .afu_raw(afus[p]),
+                 .afu_buf(afu_buf[p]),
+                 .deqC0Tx(deqC0Tx[p]),
+                 .deqC1Tx(deqC1Tx[p])
+                 );
+
+            //
+            // Almost full signals in the buffered input are ignored --
+            // replaced by deq signals and the buffer state.  Set them
+            // to 1 to be sure they are ignored.
+            //
+            assign afu_buf[p].C0TxAlmFull = 1'b1;
+            assign afu_buf[p].C1TxAlmFull = 1'b1;
+        end
+    endgenerate
+
+
+    // ====================================================================
+    //
+    // Arbitration.
+    //
+    // ====================================================================
+
     // Round-robin arbitration.  Last winner index recorded here.
     logic [AFU_PORTS_RADIX-1 : 0] last_c0_winner_idx;
     logic [AFU_PORTS_RADIX-1 : 0] last_c1_winner_idx;
@@ -86,14 +145,17 @@ module qa_shim_mux
     logic [NUM_AFU_PORTS-1 : 0] c0_request;
     logic [NUM_AFU_PORTS-1 : 0] c1_request;
 
-    genvar p;
     generate
         for (p = 0; p < NUM_AFU_PORTS; p = p + 1)
         begin : channelRequests
-            assign c0_request[p] = afu[p].C0TxRdValid;
+            //
+            // Are there incoming requests?
+            //
 
-            assign c1_request[p] = afu[p].C1TxWrValid ||
-                                   afu[p].C1TxIrValid;
+            assign c0_request[p] = afu_buf[p].C0TxRdValid;
+
+            assign c1_request[p] = (afu_buf[p].C1TxWrValid ||
+                                    afu_buf[p].C1TxIrValid);
         end
     endgenerate
 
@@ -121,7 +183,7 @@ module qa_shim_mux
         else
         begin
             // Only update the winner if there was a request.
-            if (|c0_request)
+            if (|c0_request && ! qlp.C0TxAlmFull)
             begin
                 last_c0_winner_idx <= c0_winner_idx;
 
@@ -129,7 +191,7 @@ module qa_shim_mux
                     $fatal("qa_sim_mux.sv: AFU C0 Mdata[%d] must be zero", MUX_MDATA_IDX);
             end
 
-            if (|c1_request)
+            if (|c1_request && ! qlp.C1TxAlmFull)
             begin
                 last_c1_winner_idx <= c1_winner_idx;
 
@@ -167,44 +229,66 @@ module qa_shim_mux
 
     always_comb
     begin
-        if (c0_winner_idx == 0)
+        if (qlp.C0TxAlmFull || ! (|c0_request))
         begin
-            qlp.C0TxHdr = tagRequest(afu[0].C0TxHdr, 0);
-            qlp.C0TxRdValid = afu[0].C0TxRdValid;
-            check_hdr0 = afu[0].C0TxHdr[MUX_MDATA_IDX];
+            // No request
+            qlp.C0TxHdr = 'x;
+            qlp.C0TxRdValid = 1'b0;
+            check_hdr0 = 'x;
+        end
+        else if (c0_winner_idx == 0)
+        begin
+            // Mux port 0 wins
+            qlp.C0TxHdr = tagRequest(afu_buf[0].C0TxHdr, 0);
+            qlp.C0TxRdValid = afu_buf[0].C0TxRdValid;
+            check_hdr0 = afu_buf[0].C0TxHdr[MUX_MDATA_IDX];
         end
         else
         begin
-            qlp.C0TxHdr = tagRequest(afu[1].C0TxHdr, 1);
-            qlp.C0TxRdValid = afu[1].C0TxRdValid;
-            check_hdr0 = afu[1].C0TxHdr[MUX_MDATA_IDX];
+            // Mux port 1 wins
+            qlp.C0TxHdr = tagRequest(afu_buf[1].C0TxHdr, 1);
+            qlp.C0TxRdValid = afu_buf[1].C0TxRdValid;
+            check_hdr0 = afu_buf[1].C0TxHdr[MUX_MDATA_IDX];
         end
 
-        if (c1_winner_idx == 0)
+        if (qlp.C1TxAlmFull || ! (|c1_request))
         begin
-            qlp.C1TxHdr = tagRequest(afu[0].C1TxHdr, 0);
-            qlp.C1TxData = afu[0].C1TxData;
-            qlp.C1TxWrValid = afu[0].C1TxWrValid;
-            qlp.C1TxIrValid = afu[0].C1TxIrValid;
-            check_hdr1 = afu[0].C1TxHdr[MUX_MDATA_IDX];
+            // No request
+            qlp.C1TxHdr = 'x;
+            qlp.C1TxData = 'x;
+            qlp.C1TxWrValid = 1'b0;
+            qlp.C1TxIrValid = 1'b0;
+            check_hdr1 = 'x;
+        end
+        else if (c1_winner_idx == 0)
+        begin
+            // Mux port 0 wins
+            qlp.C1TxHdr = tagRequest(afu_buf[0].C1TxHdr, 0);
+            qlp.C1TxData = afu_buf[0].C1TxData;
+            qlp.C1TxWrValid = afu_buf[0].C1TxWrValid;
+            qlp.C1TxIrValid = afu_buf[0].C1TxIrValid;
+            check_hdr1 = afu_buf[0].C1TxHdr[MUX_MDATA_IDX];
         end
         else
         begin
-            qlp.C1TxHdr = tagRequest(afu[1].C1TxHdr, 1);
-            qlp.C1TxData = afu[1].C1TxData;
-            qlp.C1TxWrValid = afu[1].C1TxWrValid;
-            qlp.C1TxIrValid = afu[1].C1TxIrValid;
-            check_hdr1 = afu[1].C1TxHdr[MUX_MDATA_IDX];
+            // Mux port 1 wins
+            qlp.C1TxHdr = tagRequest(afu_buf[1].C1TxHdr, 1);
+            qlp.C1TxData = afu_buf[1].C1TxData;
+            qlp.C1TxWrValid = afu_buf[1].C1TxWrValid;
+            qlp.C1TxIrValid = afu_buf[1].C1TxIrValid;
+            check_hdr1 = afu_buf[1].C1TxHdr[MUX_MDATA_IDX];
         end
     end
 
-    // Propagate reset and control ports
+    // Propagate reset and fire deq when appropriate.
     generate
         for (p = 0; p < NUM_AFU_PORTS; p = p + 1)
         begin : ctrlBlock
-            assign afu[p].resetb = qlp.resetb;
-            assign afu[p].C0TxAlmFull = qlp.C0TxAlmFull;
-            assign afu[p].C1TxAlmFull = qlp.C1TxAlmFull;
+            assign afu_buf[p].resetb = qlp.resetb;
+
+            // Dequeue if there was a request and the source won arbitration.
+            assign deqC0Tx[p] = c0_request[p] && (c0_winner_idx == p) && ! qlp.C0TxAlmFull;
+            assign deqC1Tx[p] = c1_request[p] && (c1_winner_idx == p) && ! qlp.C1TxAlmFull;
         end
     endgenerate
 
@@ -232,7 +316,7 @@ module qa_shim_mux
     endfunction
 
     // To which AFU are the channel responses going?  We will route the
-    // data and header to both unconditionally and has the control bits
+    // data and header to both unconditionally and use the control bits
     // to control destination.
     logic c0_rsp_idx;
     assign c0_rsp_idx = qlp.C0RxHdr[MUX_MDATA_IDX];
@@ -242,23 +326,23 @@ module qa_shim_mux
     generate
         for (p = 0; p < NUM_AFU_PORTS; p = p + 1)
         begin : respRouting
-            assign afu[p].C0RxHdr = untagRequest(qlp.C0RxHdr,
-                                                 qlp.C0RxWrValid ||
-                                                 qlp.C0RxRdValid);
+            assign afu_buf[p].C0RxHdr = untagRequest(qlp.C0RxHdr,
+                                                     qlp.C0RxWrValid ||
+                                                     qlp.C0RxRdValid);
 
-            assign afu[p].C0RxData = qlp.C0RxData;
-            assign afu[p].C0RxWrValid = qlp.C0RxWrValid && (p[0] == c0_rsp_idx);
-            assign afu[p].C0RxRdValid = qlp.C0RxRdValid && (p[0] == c0_rsp_idx);
+            assign afu_buf[p].C0RxData = qlp.C0RxData;
+            assign afu_buf[p].C0RxWrValid = qlp.C0RxWrValid && (p[0] == c0_rsp_idx);
+            assign afu_buf[p].C0RxRdValid = qlp.C0RxRdValid && (p[0] == c0_rsp_idx);
             // Host-generated requests are broadcasts
-            assign afu[p].C0RxCgValid = qlp.C0RxCgValid;
-            assign afu[p].C0RxUgValid = qlp.C0RxUgValid;
-            assign afu[p].C0RxIrValid = qlp.C0RxIrValid;
+            assign afu_buf[p].C0RxCgValid = qlp.C0RxCgValid;
+            assign afu_buf[p].C0RxUgValid = qlp.C0RxUgValid;
+            assign afu_buf[p].C0RxIrValid = qlp.C0RxIrValid;
 
-            assign afu[p].C1RxHdr = untagRequest(qlp.C1RxHdr,
-                                                 qlp.C1RxWrValid);
+            assign afu_buf[p].C1RxHdr = untagRequest(qlp.C1RxHdr,
+                                                     qlp.C1RxWrValid);
 
-            assign afu[p].C1RxWrValid = qlp.C1RxWrValid && (p[0] == c1_rsp_idx);
-            assign afu[p].C1RxIrValid = qlp.C1RxIrValid;
+            assign afu_buf[p].C1RxWrValid = qlp.C1RxWrValid && (p[0] == c1_rsp_idx);
+            assign afu_buf[p].C1RxIrValid = qlp.C1RxIrValid;
         end
     endgenerate
 

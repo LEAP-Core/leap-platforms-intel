@@ -44,6 +44,15 @@ import List::*;
 `include "awb/provides/librl_bsv_base.bsh"
 `include "awb/provides/physical_platform.bsh"
 `include "awb/provides/fpga_components.bsh"
+`include "awb/provides/qa_device.bsh"
+
+//
+// Configure local memory words as the entire QA CCI cache line.  Partial writes
+// are slow, so we want to discourage them.
+//
+`define LOCAL_MEM_ADDR_BITS       `CCI_ADDR_WIDTH
+`define LOCAL_MEM_WORD_BITS       `CCI_DATA_WIDTH
+`define LOCAL_MEM_WORDS_PER_LINE  1
 
 typedef `LOCAL_MEM_ADDR_BITS LOCAL_MEM_ADDR_SZ;
 `include "awb/provides/local_mem_interface.bsh"
@@ -59,31 +68,7 @@ typedef `LOCAL_MEM_ADDR_BITS LOCAL_MEM_ADDR_SZ;
 //
 function Bool platformHasLocalMem() = True;
 
-// 
-// Allow clients to determine whether and how many distributed local memory banks exist
-//
-typedef `LOCAL_MEM_BRAM_BANKS LOCAL_MEM_BANKS;
-
-// Cycle counter for calculating delays
-typedef UInt#(16) REQ_CYCLE;
-
-typedef struct
-{
-    // Reading a full line or a word?
-    Bool fullLine;
- 
-    // Word index when not a full line
-    LOCAL_MEM_WORD_IDX wordIdx;
- 
-    // Request cycle of load.  This field is used only when a delay is imposed
-    // on read responses.  The delay is most likely used only when a block RAM
-    // is being used in Bluesim in place of longer latency memory (e.g. DDR)
-    // on the hardware.  This field should be optimized away when no delay is
-    // requested.
-    REQ_CYCLE reqCycle;
-}
-READ_REQ
-    deriving (Bits, Eq);
+typedef 1 LOCAL_MEM_BANKS;
 
 
 module [CONNECTED_MODULE] mkLocalMem#(LOCAL_MEM_CONFIG conf)
@@ -96,222 +81,104 @@ module [CONNECTED_MODULE] mkLocalMem#(LOCAL_MEM_CONFIG conf)
     let allocator <- mkClientStub_LOCAL_MEM_QA();
 
     //
-    // Store each word in a separate block RAM.
+    // Connections to the host memory driver.
     //
-    Vector#(LOCAL_MEM_WORDS_PER_LINE,
-            Vector#(LOCAL_MEM_BYTES_PER_WORD,
-                    BRAM#(LOCAL_MEM_LINE_ADDR, Bit#(8)))) mem <- replicateM(replicateM(mkBRAM()));
+    String platformName <- getSynthesisBoundaryPlatform();
+    String hostMemoryName = "hostMemory_" + platformName + "_";
+
+    CONNECTION_SEND#(QA_CCI_ADDR) memReadLineReq <-
+        mkConnectionSend(hostMemoryName + "readLineReq");
+
+    CONNECTION_RECV#(QA_CCI_DATA) memReadLineRsp <-
+        mkConnectionRecv(hostMemoryName + "readLineRsp");
+
+    CONNECTION_SEND#(Tuple2#(QA_CCI_ADDR, QA_CCI_DATA)) memWriteLine <-
+        mkConnectionSend(hostMemoryName + "writeLine");
+
+    CONNECTION_RECV#(Bool) memWritesInFlight <-
+        mkConnectionRecv(hostMemoryName + "writesInFlight");
+
 
     //
-    // FIFOs added between incoming requests and the BRAM because reqeusts
-    // from the central cache and this local memory wind up on the critical
-    // path if the BRAM is exposed in methods.
+    // Memory lock.  The QA memory system is unordered.  Until we add ordering
+    // the the driver the code here cripples memory by only allowing one operation
+    // in flight at a time.
     //
-    Vector#(LOCAL_MEM_WORDS_PER_LINE,
-            FIFO#(LOCAL_MEM_LINE_ADDR)) memReadReq <- replicateM(mkFIFO());
-    Vector#(LOCAL_MEM_WORDS_PER_LINE,
-            FIFO#(Tuple3#(LOCAL_MEM_LINE_ADDR,
-                          LOCAL_MEM_WORD,
-                          LOCAL_MEM_WORD_MASK))) memWriteReq <- replicateM(mkFIFO());
+    COUNTER#(2) memoryLock <- mkLCounter(0);
 
-    // Record read requests (either full line or a word index).  If simulating
-    // latency then only permit one operation at a time.
-    FIFOF#(READ_REQ) readReqQ <- mkFIFOF();
-
-    //
-    // Count cycle for imposing delay
-    //
-    Reg#(REQ_CYCLE) cycle <- mkReg(0);
-
-    (* fire_when_enabled *)
-    rule countCycle (True);
-        cycle <= cycle + 1;
-    endrule
-
-    //
-    // Busy count for limiting write bandwidth
-    //
-    COUNTER#(TLog#(TAdd#(1, `LOCAL_MEM_WRITE_LATENCY))) writeBusyCnt <- mkLCounter(0);
-
-    if (`LOCAL_MEM_WRITE_LATENCY != 0)
-    begin
-        (* fire_when_enabled *)
-        rule busyCount (writeBusyCnt.value() != 0);
-            writeBusyCnt.down();
-        endrule
-    end
-
-    //
-    // Forward incoming read and write requests to the BRAM.  This FIFO and
-    // extra stage break a critical path between the central cache and
-    // local memory.  The stage is added here to mirror stages already
-    // present (and required) in DRAM-based local memory.
-    //
-    for (Integer w = 0; w < valueOf(LOCAL_MEM_WORDS_PER_LINE); w = w + 1)
-    begin
-        rule forwardReadReq (True);
-            let addr = memReadReq[w].first();
-            memReadReq[w].deq();
-
-            for (Integer b = 0; b < valueOf(LOCAL_MEM_BYTES_PER_WORD); b = b + 1)
-            begin
-                mem[w][b].readReq(addr);
-            end
-        endrule
-
-        rule forwardWriteReq (True);
-            match {.addr, .data, .byteMask} = memWriteReq[w].first();
-            memWriteReq[w].deq();
-
-            Vector#(LOCAL_MEM_BYTES_PER_WORD, Bit#(8)) bytes = unpack(data);
-            for (Integer b = 0; b < valueOf(LOCAL_MEM_BYTES_PER_WORD); b = b + 1)
-            begin
-                if (byteMask[b])
-                begin
-                    mem[w][b].write(addr, bytes[b]);
-                end
-            end
-        endrule
-    end
-
-    //
-    // checkLatency --
-    //     Validate that enough time has passed before permitting a read response.
-    //     This is typically used for debugging to match hardware memory latencies.
-    //     The relatively small counter may wrap, which will cause slightly
-    //     unpredictable latencies, but won't cause long delays.
-    //
-    function Bool checkLatency(READ_REQ req);
-        if (`LOCAL_MEM_READ_LATENCY == 0)
-            return True;
-        else
-            return ((cycle - req.reqCycle) > `LOCAL_MEM_READ_LATENCY);
-    endfunction
-
-    //
-    // notBusy --
-    //     Validate that simulated memory bus is available.  notBusy may return
-    //     False due to an in-flight memory write when LOCAL_MEM_WRITE_LATENCY
-    //     is non-zero.
-    //
     function Bool notBusy();
-        // readReqQ check is always required for correctness in order to keep
-        // reads and writes ordered.
-        return readReqQ.notFull() &&
-               ((`LOCAL_MEM_WRITE_LATENCY == 0) || (writeBusyCnt.value() == 0));
+        return memoryLock.isZero();
     endfunction
+
+    // Track memory write completing by looking for transitions from write
+    // activity to no activity.
+    Reg#(Bool) writeWasBusy <- mkReg(False);
+
+    rule trackWrites (! memoryLock.isZero);
+        let write_busy = memWritesInFlight.receive();
+        memWritesInFlight.deq();
+
+        if (writeWasBusy && ! write_busy)
+        begin
+            memoryLock.down();
+        end
+
+        writeWasBusy <= write_busy;
+    endrule
 
 
     method Action readWordReq(LOCAL_MEM_ADDR addr) if (notBusy());
-        match {.l_addr, .w_idx} = localMemSeparateAddr(addr);
-        memReadReq[w_idx].enq(l_addr);
-
-        // Note word read.
-        readReqQ.enq(READ_REQ { fullLine: False, wordIdx: w_idx, reqCycle: cycle });
+        error("Word-sized read/write not supported");
     endmethod
 
-    method ActionValue#(LOCAL_MEM_WORD) readWordRsp() if (! readReqQ.first().fullLine &&
-                                                          checkLatency(readReqQ.first()));
-        let req = readReqQ.first();
-        readReqQ.deq();
-
-        Vector#(LOCAL_MEM_BYTES_PER_WORD, Bit#(8)) bytes = newVector();
-        for (Integer b = 0; b < valueOf(LOCAL_MEM_BYTES_PER_WORD); b = b + 1)
-        begin
-            bytes[b] <- mem[req.wordIdx][b].readRsp();
-        end
-
-        return pack(bytes);
+    method ActionValue#(LOCAL_MEM_WORD) readWordRsp();
+        error("Word-sized read/write not supported");
+        return ?;
     endmethod
 
 
     method Action readLineReq(LOCAL_MEM_ADDR addr) if (notBusy());
         match {.l_addr, .w_idx} = localMemSeparateAddr(addr);
 
-        for (Integer w = 0; w < valueOf(LOCAL_MEM_WORDS_PER_LINE); w = w + 1)
-        begin
-            memReadReq[w].enq(l_addr);
-        end
-
-        // Note full line read.
-        readReqQ.enq(READ_REQ { fullLine: True, wordIdx: ?, reqCycle: cycle });
+        memReadLineReq.send(l_addr);
+        memoryLock.up();
     endmethod
 
-    method ActionValue#(LOCAL_MEM_LINE) readLineRsp() if (readReqQ.first().fullLine &&
-                                                          checkLatency(readReqQ.first()));
-        readReqQ.deq();
+    method ActionValue#(LOCAL_MEM_LINE) readLineRsp();
+        let data = memReadLineRsp.receive();
+        memReadLineRsp.deq();
 
-        Vector#(LOCAL_MEM_WORDS_PER_LINE,
-                Vector#(LOCAL_MEM_BYTES_PER_WORD, Bit#(8))) bytes = newVector();
-        for (Integer w = 0; w < valueOf(LOCAL_MEM_WORDS_PER_LINE); w = w + 1)
-        begin
-            for (Integer b = 0; b < valueOf(LOCAL_MEM_BYTES_PER_WORD); b = b + 1)
-            begin
-                bytes[w][b] <- mem[w][b].readRsp();
-            end
-        end
-
-        return pack(bytes);
+        memoryLock.down();
+        return data;
     endmethod
 
-
-    //
-    // write methods are predicated with readReqQ.notFull() to ensure
-    // synchronization of read and write requests.
-    //
 
     method Action writeWord(LOCAL_MEM_ADDR addr, LOCAL_MEM_WORD data) if (notBusy());
-        match {.l_addr, .w_idx} = localMemSeparateAddr(addr);
-        memWriteReq[w_idx].enq(tuple3(l_addr, data, replicate(True)));
-
-        writeBusyCnt.setC(`LOCAL_MEM_WRITE_LATENCY);
+        error("Word-sized read/write not supported");
     endmethod
 
     method Action writeLine(LOCAL_MEM_ADDR addr, LOCAL_MEM_LINE data) if (notBusy());
         match {.l_addr, .w_idx} = localMemSeparateAddr(addr);
 
-        Vector#(LOCAL_MEM_WORDS_PER_LINE, LOCAL_MEM_WORD) l_data = unpack(data);
-        for (Integer w = 0; w < valueOf(LOCAL_MEM_WORDS_PER_LINE); w = w + 1)
-        begin
-            memWriteReq[w].enq(tuple3(l_addr, l_data[w], replicate(True)));
-        end
-
-        writeBusyCnt.setC(`LOCAL_MEM_WRITE_LATENCY);
+        memWriteLine.send(tuple2(l_addr, data));
+        memoryLock.up();
     endmethod
 
     method Action writeWordMasked(LOCAL_MEM_ADDR addr, LOCAL_MEM_WORD data, LOCAL_MEM_WORD_MASK mask) if (notBusy());
-        match {.l_addr, .w_idx} = localMemSeparateAddr(addr);
-        if (pack(mask) != 0)
-        begin
-            memWriteReq[w_idx].enq(tuple3(l_addr, data, mask));
-        end
-
-        writeBusyCnt.setC(`LOCAL_MEM_WRITE_LATENCY);
+        error("Word-sized read/write not supported");
     endmethod
 
     method Action writeLineMasked(LOCAL_MEM_ADDR addr, LOCAL_MEM_LINE data, LOCAL_MEM_LINE_MASK mask) if (notBusy());
-        match {.l_addr, .w_idx} = localMemSeparateAddr(addr);
-
-        Vector#(LOCAL_MEM_WORDS_PER_LINE, LOCAL_MEM_WORD) l_data = unpack(data);
-        for (Integer w = 0; w < valueOf(LOCAL_MEM_WORDS_PER_LINE); w = w + 1)
-        begin
-            if (pack(mask[w]) != 0)
-            begin
-                memWriteReq[w].enq(tuple3(l_addr, l_data[w], mask[w]));
-            end
-        end
-
-        writeBusyCnt.setC(`LOCAL_MEM_WRITE_LATENCY);
+        $display("Masked write not supported");
     endmethod
 
     method Action allocRegionReq(LOCAL_MEM_ADDR addr);
         allocator.makeRequest_Alloc(zeroExtend(addr));
     endmethod
 
-    method ActionValue#(Maybe#(LOCAL_MEM_ADDR)) allocRegionRsp();
+    method ActionValue#(Maybe#(LOCAL_MEM_ALLOC_RSP)) allocRegionRsp();
         let base_addr <- allocator.getResponse_Alloc();
-        // Host memory not implemented yet.  Use BRAM for now.
-        return tagged Invalid;
-//        return tagged Valid truncate(base_addr);
+        return tagged Valid LOCAL_MEM_ALLOC_RSP { baseAddr: truncate(base_addr),
+                                                  needsInitZero: False };
     endmethod
 endmodule

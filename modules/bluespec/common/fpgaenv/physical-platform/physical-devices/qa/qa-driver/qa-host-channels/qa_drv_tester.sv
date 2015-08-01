@@ -167,7 +167,7 @@ module qa_drv_tester
                 rx_enable = rx_fifo_enable;
 
                 tx_data = tx_fifo_data;
-                tx_fifo_rdy = tx_rdy;
+                tx_fifo_rdy = tx_rdy && csr.afu_en_user_channel;
                 tx_enable = tx_fifo_enable;
             end
         endcase

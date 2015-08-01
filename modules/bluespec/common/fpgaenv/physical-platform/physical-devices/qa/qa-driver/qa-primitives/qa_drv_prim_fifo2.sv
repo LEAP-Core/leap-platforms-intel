@@ -34,89 +34,24 @@
 //
 
 module qa_drv_prim_fifo2
-  #(parameter N_DATA_BITS = 32)
-    (input  logic clk,
-     input  logic resetb,
+  #(
+    parameter N_DATA_BITS = 32
+    )
+   (
+    input  logic clk,
+    input  logic resetb,
 
-     input  logic [N_DATA_BITS-1 : 0] enq_data,
-     input  logic                     enq_en,
-     output logic                     notFull,
+    input  logic [N_DATA_BITS-1 : 0] enq_data,
+    input  logic                     enq_en,
+    output logic                     notFull,
 
-     output logic [N_DATA_BITS-1 : 0] first,
-     input  logic                     deq_en,
-     output logic                     notEmpty
-     );
-     
-    logic [N_DATA_BITS-1 : 0] data[0:1] /* synthesis ramstyle = "logic" */;
-    logic [1:0] valid_cnt;
-    logic [1:0] valid_cnt_next;
-    logic wr_idx;
-    logic rd_idx;
+    output logic [N_DATA_BITS-1 : 0] first,
+    input  logic                     deq_en,
+    output logic                     notEmpty
+    );
 
-    assign first = data[rd_idx];
+    logic almostFull;
 
-    // Write pointer advances on ENQ
-    always_ff @(posedge clk)
-    begin
-        if (! resetb)
-        begin
-            wr_idx <= 1'b0;
-        end
-        else if (enq_en)
-        begin
-            data[wr_idx] <= enq_data;
-            wr_idx <= ! wr_idx;
+    qa_drv_prim_fifo_lutram#(.N_DATA_BITS(N_DATA_BITS), .N_ENTRIES(2)) fifo(.*);
 
-            assert (notFull) else
-                $fatal("qa_drv_fifo: ENQ to full FIFO!");
-        end
-    end
-
-    // Read pointer advances on DEQ
-    always_ff @(posedge clk)
-    begin
-        if (! resetb)
-        begin
-            rd_idx <= 1'b0;
-        end
-        else if (deq_en)
-        begin
-            rd_idx <= ! rd_idx;
-
-            assert (notEmpty) else
-                $fatal("qa_drv_fifo: DEQ from empty FIFO!");
-        end
-    end
-
-    // Update count of live values
-    always_ff @(posedge clk)
-    begin
-        if (! resetb)
-        begin
-            valid_cnt <= 2'b0;
-            notFull <= 1'b1;
-            notEmpty <= 1'b0;
-        end
-        else
-        begin
-            valid_cnt <= valid_cnt_next;
-            notFull <= (valid_cnt_next != 2);
-            notEmpty <= (valid_cnt_next != 0);
-        end
-    end
-
-    always_comb
-    begin
-        valid_cnt_next = valid_cnt;
-
-        if (deq_en && ! enq_en)
-        begin
-            valid_cnt_next = valid_cnt_next - 2'b1;
-        end
-        else if (enq_en && ! deq_en)
-        begin
-            valid_cnt_next = valid_cnt_next + 2'b1;
-        end
-    end
-
-endmodule // qa_drv_fifo1
+endmodule // qa_drv_prim_fifo2

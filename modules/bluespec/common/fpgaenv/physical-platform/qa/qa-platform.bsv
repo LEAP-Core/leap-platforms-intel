@@ -93,6 +93,36 @@ interface PHYSICAL_PLATFORM;
     interface TOP_LEVEL_WIRES  topLevelWires;
 endinterface
 
+
+//
+// QA memory is exported as soft connections.  The request type combines
+// both read and write requests in a single connection so they stay ordered.
+//
+
+typedef struct
+{
+    QA_CCI_ADDR addr;
+}
+QA_MEM_READ_REQ
+    deriving (Eq, Bits);
+
+typedef struct
+{
+    QA_CCI_ADDR addr;
+    QA_CCI_DATA data;
+}
+QA_MEM_WRITE_REQ
+    deriving (Eq, Bits);
+
+typedef struct
+{
+    Maybe#(QA_MEM_READ_REQ) read;
+    Maybe#(QA_MEM_WRITE_REQ) write;
+}
+QA_MEM_REQ
+    deriving (Eq, Bits);
+
+
 // mkPhysicalPlatform
 
 // This is a convenient way for the outside world to instantiate all the devices
@@ -131,9 +161,9 @@ module [CONNECTED_MODULE] mkPhysicalPlatform
     // Next, create the physical device that can trigger a soft reset. Pass along the
     // interface to the trigger module that the clocks device has given us.
     let qaRst <- mkResetFanout(clocks.driver.baseReset, clocked_by clk);
-    QA_DEVICE qa <- mkQADevice(qa_driver_clock, qa_driver_reset,
-                               clocked_by clk,
-                               reset_by qaRst);
+    QA_DEVICE_PLAT qa <- mkQADevice(qa_driver_clock, qa_driver_reset,
+                                    clocked_by clk,
+                                    reset_by qaRst);
 
     //
     // Pass reset from QA to the model.  The host holds reset long enough that
@@ -169,25 +199,35 @@ module [CONNECTED_MODULE] mkPhysicalPlatform
     String platformName <- getSynthesisBoundaryPlatform();
     String hostMemoryName = "hostMemory_" + platformName + "_";
 
-    CONNECTION_RECV#(QA_CCI_ADDR) memReadLineReq <-
-        mkConnectionRecvOptional(hostMemoryName + "readLineReq",
+    CONNECTION_RECV#(QA_MEM_REQ) memReq <-
+        mkConnectionRecvOptional(hostMemoryName + "req",
                                  clocked_by clk, reset_by rst);
 
     CONNECTION_SEND#(QA_CCI_DATA) memReadLineRsp <-
         mkConnectionSendOptional(hostMemoryName + "readLineRsp",
                                  clocked_by clk, reset_by rst);
 
-    CONNECTION_RECV#(Tuple2#(QA_CCI_ADDR, QA_CCI_DATA)) memWriteLine <-
-        mkConnectionRecvOptional(hostMemoryName + "writeLine",
+    CONNECTION_SEND#(Bit#(QA_DEVICE_WRITE_ACK_BITS)) memWriteAck <-
+        mkConnectionSendOptional(hostMemoryName + "writeAck",
                                  clocked_by clk, reset_by rst);
 
-    CONNECTION_SEND#(Bool) memWritesInFlight <-
-        mkConnectionSendOptional(hostMemoryName + "writesInFlight",
-                                 clocked_by clk, reset_by rst);
+    //
+    // Process combined read/write request.  They stay in lock step to
+    // avoid ordering problems.
+    //
+    rule fwdHostMemReq (True);
+        let req = memReq.receive();
+        memReq.deq();
 
-    rule fwdHostMemReadReq (True);
-        qa.memoryDriver.readLineReq(memReadLineReq.receive);
-        memReadLineReq.deq();
+        if (req.read matches tagged Valid .read)
+        begin
+            qa.memoryDriver.readLineReq(read.addr);
+        end
+
+        if (req.write matches tagged Valid .write)
+        begin
+            qa.memoryDriver.writeLine(write.addr, write.data);
+        end
     endrule
 
     rule fwdHostMemReadRsp (True);
@@ -195,14 +235,9 @@ module [CONNECTED_MODULE] mkPhysicalPlatform
         memReadLineRsp.send(data);
     endrule
 
-    rule fwdHostMemWrite (True);
-        match {.addr, .data} = memWriteLine.receive();
-        qa.memoryDriver.writeLine(addr, data);
-        memWriteLine.deq();
-    endrule
-
     rule fwdHostMemWritesInFlight (True);
-        memWritesInFlight.send(qa.memoryDriver.writesInFlight);
+        let n <- qa.memoryDriver.writeAck();
+        memWriteAck.send(n);
     endrule
 
 

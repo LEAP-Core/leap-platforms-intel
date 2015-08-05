@@ -70,20 +70,16 @@ module qa_drv_memory
     input  logic [CCI_DATA_WIDTH-1:0] mem_write_data,
     output logic                      mem_write_rdy,
     input  logic                      mem_write_enable,
-    // True if a write is still in flight
-    output logic                      mem_writes_active
+
+    // Write ACK count.  Pulse with a count every time writes completes.
+    // Multiple writes may complete in a single cycle.
+    output logic [1:0]                mem_write_ack
     );
 
     logic  resetb;
     assign resetb = qlp.resetb;
 
     typedef logic [CCI_TX_HDR_WIDTH-1:0] t_TX_HEADER;
-
-    //
-    // Count of active writes.  When the MSB is high new writes are blocked.
-    //
-    logic [7:0] num_active_writes;
-    logic [7:0] num_active_writes_next;
 
     // The CCI-S and CCI-E headers share a base set of fields.  Construct
     // a CCI-E header and truncate to the requested size, which may be CCI-S.
@@ -102,23 +98,20 @@ module qa_drv_memory
                                       t_LINE_ADDR_CCI_E'(mem_write_addr),
                                       t_MDATA'(0)));
     assign qlp.C1TxData = mem_write_data;
-    assign mem_write_rdy = ! qlp.C1TxAlmFull &&
-                           ! num_active_writes[$high(num_active_writes)];
+    assign mem_write_rdy = ! qlp.C1TxAlmFull;
     assign qlp.C1TxWrValid = mem_write_enable;
     assign qlp.C1TxIrValid = 1'b0;
 
-    assign mem_writes_active = (num_active_writes != 0);
+    assign mem_write_ack = 2'(qlp.C0RxWrValid) + 2'(qlp.C1RxWrValid);
 
     always_ff @(posedge clk)
     begin
         if (! resetb)
         begin
-            num_active_writes <= 0;
+            // Nothing
         end
         else
         begin
-            num_active_writes <= num_active_writes_next;
-
             assert(mem_read_req_rdy || ! mem_read_req_enable) else
                 $fatal("qa_drv_memory: Memory read not ready!");
             assert(mem_write_rdy || ! mem_write_enable) else
@@ -126,16 +119,4 @@ module qa_drv_memory
         end
     end
 
-    //
-    // There are two paths signaling write completion from the QLP that may
-    // fire in parallel!
-    //
-    always_comb
-    begin
-        num_active_writes_next = num_active_writes;
-
-        if (mem_write_enable) num_active_writes_next = num_active_writes_next + 1;
-        if (qlp.C0RxWrValid) num_active_writes_next = num_active_writes_next - 1;
-        if (qlp.C1RxWrValid) num_active_writes_next = num_active_writes_next - 1;
-    end
 endmodule

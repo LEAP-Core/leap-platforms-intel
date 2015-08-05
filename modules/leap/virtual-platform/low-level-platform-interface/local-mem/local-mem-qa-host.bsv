@@ -86,17 +86,14 @@ module [CONNECTED_MODULE] mkLocalMem#(LOCAL_MEM_CONFIG conf)
     String platformName <- getSynthesisBoundaryPlatform();
     String hostMemoryName = "hostMemory_" + platformName + "_";
 
-    CONNECTION_SEND#(QA_CCI_ADDR) memReadLineReq <-
-        mkConnectionSend(hostMemoryName + "readLineReq");
+    CONNECTION_SEND#(QA_MEM_REQ) memReq <-
+        mkConnectionSend(hostMemoryName + "req");
 
     CONNECTION_RECV#(QA_CCI_DATA) memReadLineRsp <-
         mkConnectionRecv(hostMemoryName + "readLineRsp");
 
-    CONNECTION_SEND#(Tuple2#(QA_CCI_ADDR, QA_CCI_DATA)) memWriteLine <-
-        mkConnectionSend(hostMemoryName + "writeLine");
-
-    CONNECTION_RECV#(Bool) memWritesInFlight <-
-        mkConnectionRecv(hostMemoryName + "writesInFlight");
+    CONNECTION_RECV#(Bit#(QA_DEVICE_WRITE_ACK_BITS)) memWriteAck <-
+        mkConnectionRecv(hostMemoryName + "writeAck");
 
 
     //
@@ -106,24 +103,31 @@ module [CONNECTED_MODULE] mkLocalMem#(LOCAL_MEM_CONFIG conf)
     //
     COUNTER#(2) memoryLock <- mkLCounter(0);
 
+    //
+    // Gate for requests.  memReq.notFull must be here since request methods
+    // are sent through wires and merged in fwdMemReq!
+    //
     function Bool notBusy();
-        return memoryLock.isZero();
+        return memReq.notFull() && memoryLock.isZero();
     endfunction
 
-    // Track memory write completing by looking for transitions from write
-    // activity to no activity.
-    Reg#(Bool) writeWasBusy <- mkReg(False);
+    rule trackWrites (True);
+        let n = memWriteAck.receive();
+        memWriteAck.deq();
 
-    rule trackWrites (! memoryLock.isZero);
-        let write_busy = memWritesInFlight.receive();
-        memWritesInFlight.deq();
+        memoryLock.downBy(truncate(n));
+    endrule
 
-        if (writeWasBusy && ! write_busy)
-        begin
-            memoryLock.down();
-        end
 
-        writeWasBusy <= write_busy;
+    //
+    // Merge read and write requests into a single request so they stay aligned.
+    //
+    RWire#(QA_MEM_READ_REQ) readReqW <- mkRWire();
+    RWire#(QA_MEM_WRITE_REQ) writeReqW <- mkRWire();
+
+    (* fire_when_enabled *)
+    rule fwdMemReq (isValid(readReqW.wget) || isValid(writeReqW.wget));
+        memReq.send(QA_MEM_REQ { read: readReqW.wget, write: writeReqW.wget });
     endrule
 
 
@@ -140,7 +144,7 @@ module [CONNECTED_MODULE] mkLocalMem#(LOCAL_MEM_CONFIG conf)
     method Action readLineReq(LOCAL_MEM_ADDR addr) if (notBusy());
         match {.l_addr, .w_idx} = localMemSeparateAddr(addr);
 
-        memReadLineReq.send(l_addr);
+        readReqW.wset(QA_MEM_READ_REQ { addr: l_addr });
         memoryLock.up();
     endmethod
 
@@ -160,7 +164,7 @@ module [CONNECTED_MODULE] mkLocalMem#(LOCAL_MEM_CONFIG conf)
     method Action writeLine(LOCAL_MEM_ADDR addr, LOCAL_MEM_LINE data) if (notBusy());
         match {.l_addr, .w_idx} = localMemSeparateAddr(addr);
 
-        memWriteLine.send(tuple2(l_addr, data));
+        writeReqW.wset(QA_MEM_WRITE_REQ { addr: l_addr, data: data });
         memoryLock.up();
     endmethod
 

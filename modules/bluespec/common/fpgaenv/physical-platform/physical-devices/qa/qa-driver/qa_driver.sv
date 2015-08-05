@@ -81,8 +81,10 @@ module qa_driver
     input  logic [CCI_DATA_WIDTH-1:0] mem_write_data,
     output logic                      mem_write_rdy,
     input  logic                      mem_write_enable,
-    // True if a write is still in flight
-    output logic                      mem_writes_active,
+
+    // Write ACK count.  Pulse with a count every time writes completes.
+    // Multiple writes may complete in a single cycle.
+    output logic [1:0]                mem_write_ack,
 
     //
     // Client status registers.  Mostly useful for debugging.
@@ -261,7 +263,7 @@ module qa_driver
         .mem_write_data,
         .mem_write_rdy,
         .mem_write_enable,
-        .mem_writes_active
+        .mem_write_ack
         );
 
 

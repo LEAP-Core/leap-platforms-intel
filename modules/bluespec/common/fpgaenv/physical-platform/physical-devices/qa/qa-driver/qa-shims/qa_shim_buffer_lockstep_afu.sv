@@ -32,14 +32,12 @@
 
 
 //
-// This is more a primitive shim than a full fledged shim.  It takes an
-// AFU-side raw connection (wires) and adds latency insensitive buffering
-// on the read/write request wires.  Most shims will instantiate this
-// shim on the AFU-side connections in order to eliminate loops in the
-// computation of the AFU-side almost full signals.
+// The same as qa_shim_buffer_afu except that channels 0 and 1 are held
+// together and move through the buffer in lock step.  This is important
+// for portions of the pipeline that need to maintain read/write ordering.
 //
 
-module qa_shim_buffer_afu
+module qa_shim_buffer_lockstep_afu
   #(
     parameter CCI_DATA_WIDTH = 512,
     parameter CCI_RX_HDR_WIDTH = 18,
@@ -58,11 +56,13 @@ module qa_shim_buffer_afu
     // standard shim.
     qlp_interface.to_qlp afu_buf,
 
-    // Dequeue signals combined with the buffering make the buffered interface
+    // Dequeue signal combined with the buffering make the buffered interface
     // latency insensitive.  Requests sit in the buffers unless explicitly
     // removed.
-    input logic deqC0Tx,
-    input logic deqC1Tx
+    //
+    // Unline qa_shim_buffer_afu, a single deq signal moves both channels.
+    // The client must be prepared to move both channels or none.
+    input logic deqTx
     );
 
     assign afu_raw.resetb = afu_buf.resetb;
@@ -86,68 +86,57 @@ module qa_shim_buffer_afu
 
     // ====================================================================
     //
-    // Channel 0 Tx buffer.
+    // Tx buffer.
     //
-    //   The buffer triggers C0TxAlmFull when there are 4 or fewer slots
+    //   The buffer triggers TxAlmFull when there are 4 or fewer slots
     //   available, as required by the CCI specification.  Unlike the
     //   usual CCI request interface, movement through the pipeline is
     //   explicit.  The code that instantiates this buffer must dequeue
-    //   the head of the FIFO using deqC0Tx in order to consume a request.
+    //   the head of the FIFO in order to consume a request.
     //
     // ====================================================================
 
-    localparam C0TX_BITS = CCI_TX_HDR_WIDTH;
-
-    qa_drv_prim_fifo_lutram
-      #(
-        .N_DATA_BITS(C0TX_BITS),
-        .N_ENTRIES(8),
-        .THRESHOLD(4)
-        )
-      c0_fifo(.clk,
-              .resetb(afu_buf.resetb),
-
-              .enq_data(afu_raw.C0TxHdr),
-              // C0TxRdValid is the only incoming valid bit.  Map it through
-              // as enq here and notEmpty below.
-              .enq_en(afu_raw.C0TxRdValid),
-              .notFull(),
-              .almostFull(afu_raw.C0TxAlmFull),
-
-              .first(afu_buf.C0TxHdr),
-              .deq_en(deqC0Tx),
-              .notEmpty(afu_buf.C0TxRdValid)
-              );
-
-
-    // ====================================================================
-    //
-    // Channel 1 Tx buffer.
-    //
-    //   Same principle as channel 0 above.
-    //
-    // ====================================================================
-
+    localparam C0TX_BITS = CCI_TX_HDR_WIDTH + 1;
     localparam C1TX_BITS = CCI_TX_HDR_WIDTH + CCI_DATA_WIDTH + 2;
+    localparam TX_BITS = C0TX_BITS + C1TX_BITS;
 
     // Request payload exists when one of the valid bits is set.
+    logic c0_enq_en;
+    assign c0_enq_en = afu_raw.C0TxRdValid;
     logic c1_enq_en;
     assign c1_enq_en = afu_raw.C1TxWrValid || afu_raw.C1TxIrValid;
+    logic enq_en;
+    assign enq_en = c0_enq_en || c1_enq_en;
 
-    logic c1_notEmpty;
+    logic notEmpty;
 
     // Pull request details out of the head of the FIFO.
+    logic [TX_BITS-1 : 0] first;
+
+    logic [C0TX_BITS-1 : 0] c0_first;
     logic [C1TX_BITS-1 : 0] c1_first;
+    assign { c0_first, c1_first } = first;
+
+    logic c0_RdValid;
+    assign { afu_buf.C0TxHdr, c0_RdValid } = c0_first;
+
     logic c1_WrValid;
     logic c1_IrValid;
     assign { afu_buf.C1TxHdr, afu_buf.C1TxData, c1_WrValid, c1_IrValid } = c1_first;
+
     // Valid bits are only meaningful when the FIFO isn't empty.
-    assign afu_buf.C1TxWrValid = c1_WrValid && c1_notEmpty;
-    assign afu_buf.C1TxIrValid = c1_IrValid && c1_notEmpty;
+    assign afu_buf.C0TxRdValid = c0_RdValid && notEmpty;
+    assign afu_buf.C1TxWrValid = c1_WrValid && notEmpty;
+    assign afu_buf.C1TxIrValid = c1_IrValid && notEmpty;
+
+    logic almostFull;
+    assign afu_raw.C0TxAlmFull = almostFull;
+    assign afu_raw.C1TxAlmFull = almostFull;
+
 
     qa_drv_prim_fifo_lutram
       #(
-        .N_DATA_BITS(C1TX_BITS),
+        .N_DATA_BITS(TX_BITS),
         .N_ENTRIES(8),
         .THRESHOLD(4)
         )
@@ -155,16 +144,20 @@ module qa_shim_buffer_afu
               .resetb(afu_buf.resetb),
 
               // The concatenated field order must match the use of c1_first above.
-              .enq_data({ afu_raw.C1TxHdr,
+              .enq_data({ afu_raw.C0TxHdr,
+                          afu_raw.C0TxRdValid,
+                          afu_raw.C1TxHdr,
                           afu_raw.C1TxData,
                           afu_raw.C1TxWrValid,
                           afu_raw.C1TxIrValid }),
-              .enq_en(c1_enq_en),
+              .enq_en,
               .notFull(),
-              .almostFull(afu_raw.C1TxAlmFull),
+              .almostFull,
 
-              .first(c1_first),
-              .deq_en(deqC1Tx),
-              .notEmpty(c1_notEmpty)
+              .first,
+              .deq_en(deqTx),
+              .notEmpty(notEmpty)
               );
-endmodule // qa_shim_buffer_afu
+
+endmodule // qa_shim_buffer_lockstep_afu
+

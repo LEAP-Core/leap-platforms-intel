@@ -80,10 +80,9 @@ module qa_shim_sort_responses
       afu_buf (.clk);
 
     // Latency-insensitive ports need explicit dequeue (enable).
-    logic deqC0Tx;
-    logic deqC1Tx;
+    logic deqTx;
 
-    qa_shim_buffer_afu
+    qa_shim_buffer_lockstep_afu
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
         .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
@@ -95,8 +94,7 @@ module qa_shim_sort_responses
          .clk,
          .afu_raw(afu),
          .afu_buf(afu_buf),
-         .deqC0Tx(deqC0Tx),
-         .deqC1Tx(deqC1Tx)
+         .deqTx
          );
 
     assign afu_buf.resetb = qlp.resetb;
@@ -164,7 +162,7 @@ module qa_shim_sort_responses
       c0_scoreboard(.clk,
                     .resetb,
 
-                    .enq_en(deqC0Tx),
+                    .enq_en(qlp.C0TxRdValid),
                     // Mdata field is in the low bits of the request header
                     .enqMeta(t_MDATA'(afu_buf.C0TxHdr)),
                     .notFull(c0_scoreboard_notFull),
@@ -184,8 +182,8 @@ module qa_shim_sort_responses
     // and restored when the response is returned.
     assign qlp.C0TxHdr = { afu_buf.C0TxHdr[CCI_TX_HDR_WIDTH-1 : $bits(t_MDATA)],
                            t_MDATA'(c0_scoreboard_enqIdx) };
-    assign deqC0Tx = process_requests && c0_request_rdy;
-    assign qlp.C0TxRdValid = deqC0Tx;
+    assign deqTx = process_requests;
+    assign qlp.C0TxRdValid = process_requests && c0_request_rdy;
 
     //
     // Responses.  Forward non-read respnoses directly.  Read data responses
@@ -228,9 +226,6 @@ module qa_shim_sort_responses
     assign qlp.C1TxData = afu_buf.C1TxData;
     assign qlp.C1TxWrValid = afu_buf.C1TxWrValid && process_requests;
     assign qlp.C1TxIrValid = afu_buf.C1TxIrValid && process_requests;
-
-    // Deq from C1 request buffer if a request exists and is handled this cycle.
-    assign deqC1Tx = c1_request_rdy && process_requests;
 
     // Responses
     assign afu_buf.C1RxHdr = qlp.C1RxHdr;

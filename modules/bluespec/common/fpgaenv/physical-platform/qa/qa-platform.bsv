@@ -94,35 +94,6 @@ interface PHYSICAL_PLATFORM;
 endinterface
 
 
-//
-// QA memory is exported as soft connections.  The request type combines
-// both read and write requests in a single connection so they stay ordered.
-//
-
-typedef struct
-{
-    QA_CCI_ADDR addr;
-}
-QA_MEM_READ_REQ
-    deriving (Eq, Bits);
-
-typedef struct
-{
-    QA_CCI_ADDR addr;
-    QA_CCI_DATA data;
-}
-QA_MEM_WRITE_REQ
-    deriving (Eq, Bits);
-
-typedef struct
-{
-    Maybe#(QA_MEM_READ_REQ) read;
-    Maybe#(QA_MEM_WRITE_REQ) write;
-}
-QA_MEM_REQ
-    deriving (Eq, Bits);
-
-
 // mkPhysicalPlatform
 
 // This is a convenient way for the outside world to instantiate all the devices
@@ -219,15 +190,7 @@ module [CONNECTED_MODULE] mkPhysicalPlatform
         let req = memReq.receive();
         memReq.deq();
 
-        if (req.read matches tagged Valid .read)
-        begin
-            qa.memoryDriver.readLineReq(read.addr);
-        end
-
-        if (req.write matches tagged Valid .write)
-        begin
-            qa.memoryDriver.writeLine(write.addr, write.data);
-        end
+        qa.memoryDriver.req(req);
     endrule
 
     rule fwdHostMemReadRsp (True);

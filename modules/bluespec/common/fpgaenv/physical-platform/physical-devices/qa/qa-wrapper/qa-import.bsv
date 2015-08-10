@@ -68,6 +68,36 @@ typedef Bit#(64) QA_SREG;
 typedef Bit#(`CCI_ADDR_WIDTH) QA_CCI_ADDR;
 typedef Bit#(`CCI_DATA_WIDTH) QA_CCI_DATA;
 
+
+//
+// QA memory request type combines both read and write requests in a
+// single connection so they stay ordered.
+//
+
+typedef struct
+{
+    QA_CCI_ADDR addr;
+}
+QA_MEM_READ_REQ
+    deriving (Eq, Bits);
+
+typedef struct
+{
+    QA_CCI_ADDR addr;
+    QA_CCI_DATA data;
+}
+QA_MEM_WRITE_REQ
+    deriving (Eq, Bits);
+
+typedef struct
+{
+    Maybe#(QA_MEM_READ_REQ) read;
+    Maybe#(QA_MEM_WRITE_REQ) write;
+}
+QA_MEM_REQ
+    deriving (Eq, Bits);
+
+
 interface QA_CHANNEL_DRIVER;
     method Action                     deq();
     method Bit#(SizeOf#(UMF_CHUNK))   first();
@@ -76,7 +106,22 @@ interface QA_CHANNEL_DRIVER;
     method Bool                       notFull();
 endinterface
 
+//
+// Memory driver interface exposed to the platform.
+//
 interface QA_MEMORY_DRIVER#(numeric type n_WRITE_ACK_BITS);
+    method Action req(QA_MEM_REQ r);
+
+    method ActionValue#(QA_CCI_DATA) readLineRsp();
+
+    // True if any writes are still in flight
+    method ActionValue#(Bit#(n_WRITE_ACK_BITS)) writeAck();
+endinterface
+
+//
+// Memory driver interface through the imported Verilog.
+//
+interface QA_MEMORY_DRIVER_IMPORT#(numeric type n_WRITE_ACK_BITS);
     method Action readLineReq(QA_CCI_ADDR addr);
     method ActionValue#(QA_CCI_DATA) readLineRsp();
 
@@ -126,21 +171,21 @@ interface QA_WIRES;
     method Bit#(1)   ffs_vl_LP32ui_sy2lp_C1TxIrValid;
 endinterface
 
-interface QA_DEVICE#(numeric type n_WRITE_ACK_BITS);
-    interface QA_CHANNEL_DRIVER                   channelDriver; 
-    interface QA_MEMORY_DRIVER#(n_WRITE_ACK_BITS) memoryDriver;
-    interface QA_SREG_DRIVER                      sregDriver; 
+interface QA_DEVICE#(type t_QA_MEMORY_DRIVER);
+    interface QA_CHANNEL_DRIVER  channelDriver; 
+    interface t_QA_MEMORY_DRIVER memoryDriver;
+    interface QA_SREG_DRIVER     sregDriver; 
     (* prefix = "" *)
-    interface QA_WIRES                            wires;
+    interface QA_WIRES           wires;
 endinterface
 
-// Import version of the interface with 2-bit memory write ACK.
-typedef QA_DEVICE#(2) QA_DEVICE_IMPORT;
+// Import-BVI version of the interface with 2-bit memory write ACK.
+typedef QA_DEVICE#(QA_MEMORY_DRIVER_IMPORT#(2)) QA_DEVICE_IMPORT;
 
 // Bluespec platform version of the interface with 4-bit memory write ACK in
 // order to cope with latency-insensitivity and slower clocks.
 typedef 4 QA_DEVICE_WRITE_ACK_BITS;
-typedef QA_DEVICE#(QA_DEVICE_WRITE_ACK_BITS) QA_DEVICE_PLAT;
+typedef QA_DEVICE#(QA_MEMORY_DRIVER#(QA_DEVICE_WRITE_ACK_BITS)) QA_DEVICE_PLAT;
 
 
 Integer umfChunkSize = valueOf(SizeOf#(UMF_CHUNK));
@@ -171,7 +216,7 @@ module mkQADeviceImport#(Clock vl_clk_LPdomain_32ui,
         method tx_fifo_rdy notFull();
     endinterface
 
-    interface QA_MEMORY_DRIVER memoryDriver;
+    interface QA_MEMORY_DRIVER_IMPORT memoryDriver;
         method readLineReq(mem_read_req_addr) ready(mem_read_req_rdy) enable(mem_read_req_enable);
         method mem_read_rsp_data readLineRsp() ready(mem_read_rsp_rdy) enable((*inhigh*) en0);
 
@@ -308,12 +353,10 @@ module mkQADeviceSynth#(Clock vl_clk_LPdomain_32ui,
     // Memory
     //
 
-    SyncFIFOIfc#(QA_CCI_ADDR) syncMemoryReadReqQ <-
+    SyncFIFOIfc#(QA_MEM_REQ) syncMemoryReqQ <-
         mkSyncFIFOFromCC(16, qa_clock);
     SyncFIFOIfc#(QA_CCI_DATA) syncMemoryReadRspQ <-
         mkSyncFIFOToCC(valueOf(QA_MAX_MEM_READS), qa_clock, qa_reset);
-    SyncFIFOIfc#(Tuple2#(QA_CCI_ADDR, QA_CCI_DATA)) syncMemoryWriteQ <-
-        mkSyncFIFOFromCC(16, qa_clock);
 
     // A stream of counts of completed writes.
     SyncFIFOIfc#(Bit#(QA_DEVICE_WRITE_ACK_BITS)) syncMemoryWriteAckQ <-
@@ -323,22 +366,30 @@ module mkQADeviceSynth#(Clock vl_clk_LPdomain_32ui,
     COUNTER#(TLog#(TAdd#(QA_MAX_MEM_READS, 1))) activeMemReads <- mkLCounter(0);
     COUNTER#(TLog#(TAdd#(QA_MAX_MEM_WRITES, 1))) activeMemWrites <- mkLCounter(0);
 
-    rule fwdMemoryReadReq;
-        qaMemoryDriver.readLineReq(syncMemoryReadReqQ.first);
-        syncMemoryReadReqQ.deq;
+    function Bool canStartReq();
+        return (activeMemReads.value() < fromInteger(valueOf(QA_MAX_MEM_READS))) &&
+               (activeMemWrites.value() < fromInteger(valueOf(QA_MAX_MEM_WRITES)));
+    endfunction
+
+    rule fwdMemoryReq;
+        let req = syncMemoryReqQ.first();
+        syncMemoryReqQ.deq();
+
+        if (req.read matches tagged Valid .read)
+        begin
+            qaMemoryDriver.readLineReq(read.addr);
+        end
+
+        if (req.write matches tagged Valid .write)
+        begin
+            qaMemoryDriver.writeLine(write.addr, write.data);
+        end
     endrule
 
     (* fire_when_enabled *)
     rule fwdMemoryReadRsp;
         let d <- qaMemoryDriver.readLineRsp();
         syncMemoryReadRspQ.enq(d);
-    endrule
-
-    rule fwdMemoryWriteReq;
-        match {.addr, .data} = syncMemoryWriteQ.first;
-        syncMemoryWriteQ.deq;
-
-        qaMemoryDriver.writeLine(addr, data);
     endrule
 
 
@@ -399,13 +450,18 @@ module mkQADeviceSynth#(Clock vl_clk_LPdomain_32ui,
     endinterface
 
     interface QA_MEMORY_DRIVER memoryDriver;
-        // Read line request tracks the number of outstanding read requests
-        // since there is no flow control in the Verilog driver.  The incoming
-        // syncMemoryReadRspQ must be large enough to hold all outstanding
-        // responses.
-        method Action readLineReq(QA_CCI_ADDR addr) if (activeMemReads.value() < fromInteger(valueOf(QA_MAX_MEM_READS)));
-            syncMemoryReadReqQ.enq(addr);
-            activeMemReads.up();
+        method Action req(QA_MEM_REQ r) if (canStartReq);
+            syncMemoryReqQ.enq(r);
+
+            if (isValid(r.read))
+            begin
+                activeMemReads.up();
+            end
+
+            if (isValid(r.write))
+            begin
+                activeMemWrites.up();
+            end
         endmethod
 
         method ActionValue#(QA_CCI_DATA) readLineRsp();
@@ -414,11 +470,6 @@ module mkQADeviceSynth#(Clock vl_clk_LPdomain_32ui,
             activeMemReads.down();
 
             return d;
-        endmethod
-
-        method Action writeLine(QA_CCI_ADDR addr, QA_CCI_DATA data) if (activeMemWrites.value() < fromInteger(valueOf(QA_MAX_MEM_WRITES)));
-            syncMemoryWriteQ.enq(tuple2(addr, data));
-            activeMemWrites.up();
         endmethod
 
         // Ack one or more writes.  More than one is handled per cycle because

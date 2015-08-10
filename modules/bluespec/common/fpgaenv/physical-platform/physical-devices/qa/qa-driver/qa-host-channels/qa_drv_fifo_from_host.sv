@@ -33,28 +33,26 @@
 `include "qa.vh"
 
 module qa_drv_fifo_from_host
-  #(// Match N_SCOREBOARD_ENTRIES to the size of the scoreboard block RAM for
-    // greatest efficiency.  Altera M20K memory is 512 x 32 bits. (32 is the
-    // widest configuration.  The scoreboard memory is half the input width,
-    // using both write ports to store a full input in adjacent entries.
-    // Hence 512 / 2 entries.
+  #(
     N_SCOREBOARD_ENTRIES=256,
-    UMF_WIDTH=128)
-    (input logic clk,
-     input logic resetb,
+    UMF_WIDTH=128
+    )
+   (
+    input logic clk,
+    input logic resetb,
 
-     input t_RX_C0 rx0,
+    input t_RX_C0 rx0,
 
-     input  t_CSR_AFU_STATE     csr,
-     output t_FRAME_ARB         frame_reader,
-     input  t_CHANNEL_GRANT_ARB read_grant,
+    input  t_CSR_AFU_STATE     csr,
+    output t_FRAME_ARB         frame_reader,
+    input  t_CHANNEL_GRANT_ARB read_grant,
 
-     output [UMF_WIDTH-1:0]     rx_data,
-     output                     rx_rdy,
-     input                      rx_enable,
+    output [UMF_WIDTH-1:0]     rx_data,
+    output                     rx_rdy,
+    input                      rx_enable,
 
-     output t_TO_STATUS_MGR_FIFO_FROM_HOST   fifo_from_host_to_status,
-     input  t_FROM_STATUS_MGR_FIFO_FROM_HOST status_to_fifo_from_host
+    output t_TO_STATUS_MGR_FIFO_FROM_HOST   fifo_from_host_to_status,
+    input  t_FROM_STATUS_MGR_FIFO_FROM_HOST status_to_fifo_from_host
     );
 
     typedef logic [UMF_WIDTH-1:0] t_UMF_CHUNK;
@@ -300,9 +298,9 @@ module qa_drv_fifo_from_host
     end
 
 
-    qa_drv_prim_scoreboard_shared_rw#(.N_ENTRIES(N_SCOREBOARD_ENTRIES),
-                                      .N_DATA_BITS($bits(t_CACHE_LINE)),
-                                      .N_META_BITS(0))
+    qa_drv_prim_scoreboard#(.N_ENTRIES(N_SCOREBOARD_ENTRIES),
+                            .N_DATA_BITS($bits(t_CACHE_LINE)),
+                            .N_META_BITS(0))
         scoreboard(.clk,
                    .resetb,
 

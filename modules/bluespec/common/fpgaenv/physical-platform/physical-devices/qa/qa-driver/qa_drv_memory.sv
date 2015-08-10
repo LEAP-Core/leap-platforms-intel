@@ -81,28 +81,66 @@ module qa_drv_memory
 
     typedef logic [CCI_TX_HDR_WIDTH-1:0] t_TX_HEADER;
 
+    // ====================================================================
+    //
+    //  Sort read responses so they arrive in order.
+    //
+    // ====================================================================
+
+    qlp_interface
+      #(
+        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
+        .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
+        .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
+        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
+        )
+      qlp_inorder (.clk);
+
+    qa_shim_sort_responses
+      #(
+        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
+        .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
+        .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
+        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
+        )
+      sorter
+       (
+        .clk,
+        .qlp,
+        .afu(qlp_inorder)
+        );
+
+
+    // ====================================================================
+    //
+    //  Connect client requests to the QLP.
+    //
+    // ====================================================================
+
+    //
     // The CCI-S and CCI-E headers share a base set of fields.  Construct
     // a CCI-E header and truncate to the requested size, which may be CCI-S.
-    assign qlp.C0TxHdr =
+    assign qlp_inorder.C0TxHdr =
         t_TX_HEADER'(genReqHeaderCCIE(RdLine,
                                       t_LINE_ADDR_CCI_E'(mem_read_req_addr),
                                       t_MDATA'(0)));
-    assign qlp.C0TxRdValid = mem_read_req_enable;
-    assign mem_read_req_rdy = ! qlp.C0TxAlmFull;
+    assign qlp_inorder.C0TxRdValid = mem_read_req_enable;
+    assign mem_read_req_rdy = ! qlp_inorder.C0TxAlmFull;
 
-    assign mem_read_rsp_data = qlp.C0RxData;
-    assign mem_read_rsp_rdy = qlp.C0RxRdValid;
+    assign mem_read_rsp_data = qlp_inorder.C0RxData;
+    assign mem_read_rsp_rdy = qlp_inorder.C0RxRdValid;
 
-    assign qlp.C1TxHdr =
+    assign qlp_inorder.C1TxHdr =
         t_TX_HEADER'(genReqHeaderCCIE(WrLine,
                                       t_LINE_ADDR_CCI_E'(mem_write_addr),
                                       t_MDATA'(0)));
-    assign qlp.C1TxData = mem_write_data;
-    assign mem_write_rdy = ! qlp.C1TxAlmFull;
-    assign qlp.C1TxWrValid = mem_write_enable;
-    assign qlp.C1TxIrValid = 1'b0;
+    assign qlp_inorder.C1TxData = mem_write_data;
+    assign mem_write_rdy = ! qlp_inorder.C1TxAlmFull;
+    assign qlp_inorder.C1TxWrValid = mem_write_enable;
+    assign qlp_inorder.C1TxIrValid = 1'b0;
 
-    assign mem_write_ack = 2'(qlp.C0RxWrValid) + 2'(qlp.C1RxWrValid);
+    assign mem_write_ack = 2'(qlp_inorder.C0RxWrValid) +
+                           2'(qlp_inorder.C1RxWrValid);
 
     always_ff @(posedge clk)
     begin

@@ -5,3 +5,4 @@
 
 %sources -t VERILOG    -v PRIVATE qa_shim_buffer_afu.sv
 %sources -t VERILOG    -v PRIVATE qa_shim_mux.sv
+%sources -t VERILOG    -v PRIVATE qa_shim_sort_responses.sv

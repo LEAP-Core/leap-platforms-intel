@@ -51,6 +51,16 @@ package qa_driver_types;
     t_TX_REQUEST;
 
     //
+    // Response type.
+    //
+    typedef enum logic [3:0]
+    {
+        WrLineRsp = 4'h1,
+        RdLineRsp = 4'h4
+    }
+    t_RX_RESPONSE;
+
+    //
     // Mdata tag sent in CCI requests and returned with CCI responses.
     //
     typedef logic [12:0] t_MDATA;
@@ -87,6 +97,29 @@ package qa_driver_types;
         h.rsvd0 = 0;
 
         genReqHeaderCCIS = h;
+    endfunction
+
+
+    typedef struct packed
+    {
+        t_RX_RESPONSE responseType;
+        logic         rsvd0;
+        t_MDATA       mdata;
+    }
+    t_RX_HEADER_CCI_S;
+
+    function automatic t_RX_HEADER_CCI_S genRspHeaderCCIS;
+        input t_RX_RESPONSE responseType;
+        input t_MDATA       mdata;
+
+        t_RX_HEADER_CCI_S h;
+
+        h.responseType = responseType;
+        h.mdata = mdata;
+
+        h.rsvd0 = 0;
+
+        genRspHeaderCCIS = h;
     endfunction
 
 
@@ -132,6 +165,31 @@ package qa_driver_types;
         h.rsvd0 = 0;
 
         genReqHeaderCCIE = h;
+    endfunction
+
+
+    typedef struct packed
+    {
+        logic [5:0]   rsvd1;
+        t_RX_RESPONSE responseType;
+        logic         rsvd0;
+        t_MDATA       mdata;
+    }
+    t_RX_HEADER_CCI_E;
+
+    function automatic t_RX_HEADER_CCI_E genRspHeaderCCIE;
+        input t_RX_RESPONSE responseType;
+        input t_MDATA       mdata;
+
+        t_RX_HEADER_CCI_E h;
+
+        h.responseType = responseType;
+        h.mdata = mdata;
+
+        h.rsvd1 = 0;
+        h.rsvd0 = 0;
+
+        genRspHeaderCCIE = h;
     endfunction
 
 endpackage // qa_driver_types

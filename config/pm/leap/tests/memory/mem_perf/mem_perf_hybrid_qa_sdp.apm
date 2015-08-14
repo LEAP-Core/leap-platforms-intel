@@ -1,0 +1,66 @@
+
+[Global]
+SaveParameters=0
+Description=Hybrid Virtual Memory Test Model with Private Caches for Intel QA SDP
+File=mem_perf_hybrid_qa_sdp
+Version=2.2
+Name=Hybrid Virtual Memory Test Model with Private Caches for Intel QA SDP
+Type=Leap
+Class=Asim::Model
+DefaultBenchmark=
+DefaultRunOpts=
+RootName=HW/SW Hybrid Pipeline Build
+RootProvides=model
+
+[Model]
+DefaultAttributes=bram-test hasim hybrid
+model=HW/SW Hybrid Pipeline Build
+
+[Default Hybrid Project Common Utilities]
+File=config/pm/leap/submodels/common/project-common-default.apm
+Packagehint=leap
+
+[Soft Services Hybrid Application Environment]
+File=modules/leap/build-support/project/application-env/soft-services/application-env-hybrid-soft-service.awb
+Packagehint=leap
+
+[HW/SW Hybrid Pipeline Build/Requires]
+project_common=Default Hybrid Project Common Utilities
+fpgaenv=Intel QuickAssist FPGA Canoe Pass SDP
+application_env=Soft Services Hybrid Application Environment
+
+[Soft Services Hybrid Application Environment/Requires]
+connected_application=Scratchpad Perf Test Connected Application
+
+[HW/SW Hybrid Pipeline Build]
+File=modules/leap/build-support/project/project-pipeline.awb
+Packagehint=leap
+
+[Scratchpad Memory Performance Test System]
+File=modules/apps/tests/mem_perf/mem-perf.awb
+Packagehint=leap-debug
+
+[Scratchpad Memory Performance Test System Wrapper/Requires]
+mem_perf_tester=Scratchpad Memory Performance Test System
+mem_perf_common=Mem perf common types
+
+[Scratchpad Memory Performance Test System Wrapper]
+File=modules/apps/tests/mem_perf/mem-perf-wrapper.awb
+Packagehint=leap-debug
+
+[Scratchpad Perf Test Connected Application]
+File=modules/apps/tests/mem_perf/connected_application/connected-application-test.awb
+Packagehint=leap-debug
+
+[Scratchpad Perf Test Connected Application/Requires]
+mem_perf_wrapper=Scratchpad Memory Performance Test System Wrapper
+
+[Mem perf common types]
+File=modules/apps/tests/mem_perf/mem-perf-common.awb
+Packagehint=leap-debug
+
+
+
+[Intel QuickAssist FPGA Canoe Pass SDP]
+File=config/pm/leap/submodels/fpgaenv/intel/qa/fpgaenv-hybrid-qa-sdp.apm
+Packagehint=leap-platforms-intel

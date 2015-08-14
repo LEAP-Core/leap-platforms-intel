@@ -95,27 +95,17 @@ module [CONNECTED_MODULE] mkLocalMem#(LOCAL_MEM_CONFIG conf)
     CONNECTION_RECV#(Bit#(QA_DEVICE_WRITE_ACK_BITS)) memWriteAck <-
         mkConnectionRecv(hostMemoryName + "writeAck");
 
-
-    //
-    // Memory lock.  The QA memory system is unordered.  Until we add ordering
-    // the the driver the code here cripples memory by only allowing one operation
-    // in flight at a time.
-    //
-    COUNTER#(2) memoryLock <- mkLCounter(0);
-
     //
     // Gate for requests.  memReq.notFull must be here since request methods
     // are sent through wires and merged in fwdMemReq!
     //
     function Bool notBusy();
-        return memReq.notFull() && memoryLock.isZero();
+        return memReq.notFull();
     endfunction
 
     rule trackWrites (True);
         let n = memWriteAck.receive();
         memWriteAck.deq();
-
-        memoryLock.downBy(truncate(n));
     endrule
 
 
@@ -145,14 +135,12 @@ module [CONNECTED_MODULE] mkLocalMem#(LOCAL_MEM_CONFIG conf)
         match {.l_addr, .w_idx} = localMemSeparateAddr(addr);
 
         readReqW.wset(QA_MEM_READ_REQ { addr: l_addr });
-        memoryLock.up();
     endmethod
 
     method ActionValue#(LOCAL_MEM_LINE) readLineRsp();
         let data = memReadLineRsp.receive();
         memReadLineRsp.deq();
 
-        memoryLock.down();
         return data;
     endmethod
 
@@ -165,7 +153,6 @@ module [CONNECTED_MODULE] mkLocalMem#(LOCAL_MEM_CONFIG conf)
         match {.l_addr, .w_idx} = localMemSeparateAddr(addr);
 
         writeReqW.wset(QA_MEM_WRITE_REQ { addr: l_addr, data: data });
-        memoryLock.up();
     endmethod
 
     method Action writeWordMasked(LOCAL_MEM_ADDR addr, LOCAL_MEM_WORD data, LOCAL_MEM_WORD_MASK mask) if (notBusy());

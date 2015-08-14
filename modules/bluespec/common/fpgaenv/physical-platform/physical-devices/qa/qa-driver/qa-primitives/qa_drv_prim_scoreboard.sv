@@ -87,7 +87,6 @@ module qa_drv_prim_scoreboard
 
     // Track data arrival
     reg [N_ENTRIES-1 : 0] dataValid;
-    logic [N_ENTRIES-1 : 0] dataValid_next;
 
     assign notFull = ((newest + t_IDX'(1)) != oldest);
 
@@ -175,27 +174,20 @@ module qa_drv_prim_scoreboard
         end
         else
         begin
-            dataValid <= dataValid_next;
+            // Clear on completion
+            if (deq_en)
+            begin
+                dataValid[oldest] <= 1'b0;
+            end
+
+            // Set when data arrives
+            if (enqData_en)
+            begin
+                dataValid[enqDataIdx] <= 1'b1;
+            end
 
             assert(! deq_en || notEmpty) else
                 $fatal("qa_drv_prim_scoreboard: Can't DEQ when EMPTY!");
-        end
-    end
-
-    always_comb
-    begin
-        dataValid_next = dataValid;
-
-        // Clear on completion
-        if (deq_en)
-        begin
-            dataValid_next[oldest] = 1'b0;
-        end
-
-        // Set when data arrives
-        if (enqData_en)
-        begin
-            dataValid_next[enqDataIdx] = 1'b1;
         end
     end
 

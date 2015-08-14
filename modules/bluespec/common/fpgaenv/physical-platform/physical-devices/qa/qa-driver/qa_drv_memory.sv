@@ -83,6 +83,36 @@ module qa_drv_memory
 
     // ====================================================================
     //
+    //  Maintain read/write and write/write order to matching addresses.
+    //
+    // ====================================================================
+
+    qlp_interface
+      #(
+        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
+        .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
+        .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
+        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
+        )
+      qlp_write_order (.clk);
+
+    qa_shim_write_order
+      #(
+        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
+        .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
+        .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
+        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
+        )
+      filter
+       (
+        .clk,
+        .qlp,
+        .afu(qlp_write_order)
+        );
+
+
+    // ====================================================================
+    //
     //  Sort read responses so they arrive in order.
     //
     // ====================================================================
@@ -106,7 +136,7 @@ module qa_drv_memory
       sorter
        (
         .clk,
-        .qlp,
+        .qlp(qlp_write_order),
         .afu(qlp_inorder)
         );
 

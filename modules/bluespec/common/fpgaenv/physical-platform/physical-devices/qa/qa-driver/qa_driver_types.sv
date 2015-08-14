@@ -81,6 +81,14 @@ package qa_driver_types;
     }
     t_TX_HEADER_CCI_S;
 
+
+    function automatic [31:0] getReqAddrCCIS;
+        input t_TX_HEADER_CCI_S h;
+
+        return h.address;
+    endfunction
+
+
     function automatic t_TX_HEADER_CCI_S genReqHeaderCCIS;
         input t_TX_REQUEST      requestType;
         input t_LINE_ADDR_CCI_S address;
@@ -142,6 +150,14 @@ package qa_driver_types;
         t_MDATA       mdata;
     }
     t_TX_HEADER_CCI_E;
+
+
+    function automatic [31:0] getReqAddrCCIE;
+        input t_TX_HEADER_CCI_E h;
+
+        return {h.hAddress, h.address};
+    endfunction
+
 
     function automatic t_TX_HEADER_CCI_E genReqHeaderCCIE;
         input t_TX_REQUEST      requestType;

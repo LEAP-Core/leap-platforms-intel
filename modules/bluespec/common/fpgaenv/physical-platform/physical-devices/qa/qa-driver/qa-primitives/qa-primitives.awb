@@ -3,8 +3,12 @@
 
 %provides qa_driver_primitives
 
+%sources -t VERILOG_H  -v PRIVATE qa_drv_prim_hash.vh
+
+%sources -t VERILOG    -v PRIVATE qa_drv_prim_counting_filter.sv
 %sources -t VERILOG    -v PRIVATE qa_drv_prim_dualport_ram.sv
 %sources -t VERILOG    -v PRIVATE qa_drv_prim_fifo1.sv
 %sources -t VERILOG    -v PRIVATE qa_drv_prim_fifo2.sv
 %sources -t VERILOG    -v PRIVATE qa_drv_prim_fifo_lutram.sv
+%sources -t VERILOG    -v PRIVATE qa_drv_prim_heap.sv
 %sources -t VERILOG    -v PRIVATE qa_drv_prim_scoreboard.sv

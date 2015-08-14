@@ -42,7 +42,9 @@ module qa_shim_buffer_lockstep_afu
     parameter CCI_DATA_WIDTH = 512,
     parameter CCI_RX_HDR_WIDTH = 18,
     parameter CCI_TX_HDR_WIDTH = 61,
-    parameter CCI_TAG_WIDTH = 13
+    parameter CCI_TAG_WIDTH = 13,
+    parameter N_ENTRIES = 6,
+    parameter THRESHOLD = 4
     )
    (
     input  logic clk,
@@ -137,8 +139,8 @@ module qa_shim_buffer_lockstep_afu
     qa_drv_prim_fifo_lutram
       #(
         .N_DATA_BITS(TX_BITS),
-        .N_ENTRIES(8),
-        .THRESHOLD(4)
+        .N_ENTRIES(N_ENTRIES),
+        .THRESHOLD(THRESHOLD)
         )
       c1_fifo(.clk,
               .resetb(afu_buf.resetb),

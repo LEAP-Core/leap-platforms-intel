@@ -51,11 +51,12 @@ import List::*;
 // are slow, so we want to discourage them.
 //
 `define LOCAL_MEM_ADDR_BITS       `CCI_ADDR_WIDTH
-`define LOCAL_MEM_WORD_BITS       `CCI_DATA_WIDTH
-`define LOCAL_MEM_WORDS_PER_LINE  1
 
 typedef `LOCAL_MEM_ADDR_BITS LOCAL_MEM_ADDR_SZ;
 `include "awb/provides/local_mem_interface.bsh"
+
+typedef LOCAL_MEM_WORD_SZ LOCAL_MEM_BURST_DATA_SZ;
+
 
 // Host-side memory allocator
 `include "awb/rrr/client_stub_LOCAL_MEM_QA.bsh"
@@ -74,6 +75,11 @@ typedef 1 LOCAL_MEM_BANKS;
 module [CONNECTED_MODULE] mkLocalMem#(LOCAL_MEM_CONFIG conf)
     // interface:
     (LOCAL_MEM);
+
+    if (`LOCAL_MEM_WORD_BITS * `LOCAL_MEM_WORDS_PER_LINE != `CCI_DATA_WIDTH)
+    begin
+        error("LOCAL_MEM_WORD_BITS must match CCI_DATA_WIDTH");
+    end
 
     //
     // Host-side memory allocator

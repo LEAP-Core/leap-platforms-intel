@@ -71,13 +71,13 @@ module qa_drv_status_manager
     // AFU ID is used at the beginning of a run to tell the host the FPGA
     // is alive.
     //
-    //   C000C966-0D82-4272-9AEF-FE5F84570612
+    //   12345678-0D82-4272-9AEF-FE5F84570612
     //
     t_CACHE_LINE_VEC32 afu_id;
     assign afu_id[0] = 32'h84570612;
     assign afu_id[1] = 32'h9aeffe5f;
     assign afu_id[2] = 32'h0d824272;
-    assign afu_id[3] = 32'hc000c966;
+    assign afu_id[3] = 32'h12345678;
 
     // Communicate information about the hardware configuration in the remainder
     // of the afu_id line:

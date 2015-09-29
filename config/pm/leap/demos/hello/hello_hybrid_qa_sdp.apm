@@ -26,7 +26,7 @@ Packagehint=leap
 
 [HW/SW Hybrid Pipeline Build/Requires]
 project_common=Default Hybrid Project Common Utilities
-fpgaenv=Intel QuickAssist FPGA Canoe Pass SDP (no memory)
+fpgaenv=Intel QuickAssist FPGA Canoe Pass SDP
 application_env=Soft Services Hybrid Application Environment
 
 [HW/SW Hybrid Pipeline Build]
@@ -42,9 +42,6 @@ connected_application=Hello World
 
 
 
-[Intel QuickAssist FPGA Canoe Pass SDP (no memory)/Params]
-MODEL_CLOCK_FREQ=80
-
-[Intel QuickAssist FPGA Canoe Pass SDP (no memory)]
-File=config/pm/leap/submodels/fpgaenv/intel/qa/fpgaenv-hybrid-qa-sdp-no-mem.apm
+[Intel QuickAssist FPGA Canoe Pass SDP]
+File=config/pm/leap/submodels/fpgaenv/intel/qa/fpgaenv-hybrid-qa-sdp.apm
 Packagehint=leap-platforms-intel

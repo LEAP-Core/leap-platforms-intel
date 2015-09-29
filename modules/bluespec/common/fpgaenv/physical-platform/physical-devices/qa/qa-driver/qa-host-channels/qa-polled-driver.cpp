@@ -60,6 +60,10 @@ static QA_DEVICE_CLASS *debugQADev;
 // Receiver thread in loopback test
 static void* LoopbackTestRecv(void *arg);
 
+// ID of the accelerator.  For now we use a constant.  This should change
+// to at least application-specific if not compilation-specific.
+static const char* QA_AFU_ID = "12345678-0D82-4272-9AEF-FE5F84570612";
+
 
 // ============================================
 //           QA Physical Device
@@ -81,7 +85,7 @@ QA_DEVICE_CLASS::QA_DEVICE_CLASS(
         PLATFORMS_MODULE_CLASS(p),
         initReadComplete(),
         initWriteComplete(),
-        afu(EXPECTED_AFU_ID, CCI_SIMULATION ? CCI_ASE : CCI_DIRECT)
+        afu(QA_AFU_ID)
 {
     initReadComplete = false;
     initWriteComplete = false;
@@ -191,6 +195,8 @@ QA_DEVICE_CLASS::Init()
 void
 QA_DEVICE_CLASS::Uninit()
 {
+    // Disable AFU
+    afu.WriteCSR(CSR_AFU_EN, 0);
 }
 
 void

@@ -27,9 +27,6 @@
 %sources -t VERILOG -v PRIVATE cci_write_arbiter.sv  
 %sources -t VERILOG -v PRIVATE cci_can_issue.sv  
 
-%library libCCI.so
 %library libAAS.so
 %library libOSAL.so
-%library libltdl.so
-%library libaalclp.so
-%library libASECCIAFU.so
+%library libxlrt.so

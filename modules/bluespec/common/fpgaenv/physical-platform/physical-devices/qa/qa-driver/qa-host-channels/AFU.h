@@ -34,19 +34,26 @@
 
 #include <time.h>
 #include <vector>
-#include <aalsdk/ccilib/CCILib.h>
-#include <aalsdk/aalclp/aalclp.h>
+
+#include <aalsdk/AAL.h>
+#include <aalsdk/xlRuntime.h>
+#include <aalsdk/service/ICCIAFU.h>
+#include <aalsdk/service/ICCIClient.h>
+
 #include "AFU_csr.h"
 
 USING_NAMESPACE(std)
-USING_NAMESPACE(CCILib)
+USING_NAMESPACE(AAL)
+
+typedef class AFU_CLIENT_CLASS *AFU_CLIENT;
+typedef class AFU_RUNTIME_CLIENT_CLASS *AFU_RUNTIME_CLIENT;
+
 
 //
 // Descriptor for a shared memory buffer
 //
 typedef struct
 {
-    ICCIWorkspace    *workspace;
     volatile uint8_t *virtualAddress;
     btPhysAddr        physicalAddress;
     uint64_t          numBytes;
@@ -64,14 +71,7 @@ class AFU_CLASS
     static AFU instance;
 
   public:
-    // CCI_AAL     = AAL AFU implementation.
-    // CCI_ASE     = AFU Simulation Environment implementation.
-    // CCI_DIRECT  = Direct CCI driver implementation.
-
-    AFU_CLASS(const uint32_t *expected_afu_id,
-              CCIDeviceImplementation imp = CCI_ASE,
-              uint32_t dsm_size_bytes = 4096);
-
+    AFU_CLASS(const char* afuID, uint32_t dsmSizeBytes = 4096);
     ~AFU_CLASS();
 
     // There is a single instance of the AFU allocated.  This allows any
@@ -108,21 +108,121 @@ class AFU_CLASS
     // there is no corresponding CSR read.  Messages from FPGA to host are
     // usually passed in the DSM buffer.
     //
-    inline bool WriteCSR(btCSROffset offset, bt32bitCSR value) {
-        return pCCIDevice->SetCSR(offset, value);
-    }
-
-    inline bool WriteCSR64(btCSROffset offset, bt64bitCSR value) {
-        bool result = pCCIDevice->SetCSR(offset + 4, value >> 32);
-        result |= pCCIDevice->SetCSR(offset, value & 0xffffffff);
-        return result;
-    }
+    bool WriteCSR(btCSROffset offset, bt32bitCSR value);
+    bool WriteCSR64(btCSROffset offset, bt64bitCSR value);
 
   private:
-    ICCIDeviceFactory *pCCIDevFactory;
-    ICCIDevice *pCCIDevice;
+    AFU_RUNTIME_CLIENT afuRuntimeClient;
+    AFU_CLIENT afuClient;
+
     std::vector<AFU_BUFFER> buffers;
     AFU_BUFFER dsmBuffer;
 };
+
+
+//
+// AFU_CLIENT_CLASS --
+//   Define our client class so that we can receive notifications from the
+//   AAL Runtime.
+//
+class AFU_CLIENT_CLASS: public CAASBase,
+                        public IServiceClient,
+                        public ICCIClient
+{
+public:
+    AFU_CLIENT_CLASS(AFU_RUNTIME_CLIENT rtc);
+    ~AFU_CLIENT_CLASS();
+
+    btInt InitService(const char* afuID);
+    btInt UninitService();
+
+    inline bool WriteCSR(btCSROffset offset, bt32bitCSR value)
+    {
+        return m_Service->CSRWrite(offset, value);
+    }
+
+    inline bool WriteCSR64(btCSROffset offset, bt64bitCSR value)
+    {
+        return m_Service->CSRWrite64(offset, value);
+    }
+
+    inline bool ReadCSR(btCSROffset offset, btCSRValue* pValue)
+    {
+        return m_Service->CSRRead(offset, pValue);
+    }
+
+    //
+    // Allocate a memory buffer shared by the host and an FPGA.
+    //
+    AFU_BUFFER CreateSharedBuffer(uint64_t size_bytes);
+    void FreeSharedBuffer(AFU_BUFFER buffer);
+
+    // <begin IServiceClient interface>
+    void serviceAllocated(IBase *pServiceBase,
+                          TransactionID const &rTranID);
+    void serviceAllocateFailed(const IEvent &rEvent);
+    void serviceFreed(TransactionID const &rTranID);
+    void serviceEvent(const IEvent &rEvent);
+    // <end IServiceClient interface>
+
+    // <ICCIClient>
+    virtual void OnWorkspaceAllocated(TransactionID const &TranID,
+                                      btVirtAddr WkspcVirt,
+                                      btPhysAddr WkspcPhys,
+                                      btWSSize WkspcSize);
+    virtual void OnWorkspaceAllocateFailed(const IEvent &Event);
+    virtual void OnWorkspaceFreed(TransactionID const &TranID);
+    virtual void OnWorkspaceFreeFailed(const IEvent &Event);
+    // </ICCIClient>
+
+  protected:
+    IBase         *m_pAALService;    // The generic AAL Service interface for the AFU.
+    AFU_RUNTIME_CLIENT m_runtimeClient;
+    ICCIAFU       *m_Service;
+    CSemaphore     m_Sem;            // For synchronizing with the AAL runtime.
+    CSemaphore     m_SemWrk;         // Semaphore for workspace syc
+    btInt          m_Result;         // Returned result value; 0 if success
+
+    // Workspace info
+    btVirtAddr     m_WrkVA;          // Most recent workspace alloc VA
+    btPhysAddr     m_WrkPA;          // Most recent workspace alloc PA
+    btWSSize       m_WrkBytes;       // Most recent workspace alloc size
+};
+
+
+//
+// AFU_RUNTIME_CLIENT_CLASS --
+//   Define our runtime client class so that we can receive the runtime
+//   started/stopped notifications.
+//
+class AFU_RUNTIME_CLIENT_CLASS : public CAASBase,
+                                 public IRuntimeClient
+{
+public:
+    AFU_RUNTIME_CLIENT_CLASS();
+    ~AFU_RUNTIME_CLIENT_CLASS();
+
+    void end();
+    IRuntime* getRuntime() const { return m_pRuntime; };
+    btBool isActive() const { return m_isActive; };
+
+    // <begin IRuntimeClient interface>
+    void runtimeStarted(IRuntime *pRuntime,
+                        const NamedValueSet &rConfigParms);
+    void runtimeStopped(IRuntime *pRuntime);
+    void runtimeStartFailed(const IEvent &rEvent);
+    void runtimeAllocateServiceFailed(IEvent const &rEvent);
+    void runtimeAllocateServiceSucceeded(IBase *pClient,
+                                         TransactionID const &rTranID);
+    void runtimeEvent(const IEvent &rEvent);
+    // <end IRuntimeClient interface>
+
+  protected:
+    IRuntime   *m_pRuntime;  // Pointer to AAL runtime instance.
+    Runtime     m_Runtime;   // AAL Runtime
+    btBool      m_isActive;  // Status
+    CSemaphore  m_Sem;       // For synchronizing with the AAL runtime.
+};
+
 
 #endif

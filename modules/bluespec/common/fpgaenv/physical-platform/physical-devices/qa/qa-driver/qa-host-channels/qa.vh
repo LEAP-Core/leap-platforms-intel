@@ -40,7 +40,6 @@
 //
 `include "awb/provides/qa_driver_params.bsh"
 
-import qa_drv_csr_types::*;
 import qa_drv_types::*;
 
 `endif //  `ifndef QA_VH

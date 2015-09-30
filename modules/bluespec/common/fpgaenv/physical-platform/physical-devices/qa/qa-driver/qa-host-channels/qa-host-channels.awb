@@ -15,10 +15,8 @@
 %sources -t VERILOG_H -v PRIVATE qa.vh
 
 %sources -t VERILOG_PKG -v PRIVATE qa_drv_types.sv
-%sources -t VERILOG_PKG -v PRIVATE qa_drv_csr_types.sv
 
 %sources -t VERILOG -v PRIVATE qa_drv_host_channel.sv  
-%sources -t VERILOG -v PRIVATE qa_drv_csr.sv
 %sources -t VERILOG -v PRIVATE qa_drv_fifo_from_host.sv
 %sources -t VERILOG -v PRIVATE qa_drv_fifo_to_host.sv
 %sources -t VERILOG -v PRIVATE qa_drv_status_manager.sv  

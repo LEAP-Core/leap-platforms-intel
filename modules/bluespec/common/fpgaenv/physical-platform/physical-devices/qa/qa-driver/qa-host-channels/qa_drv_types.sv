@@ -33,10 +33,6 @@
 
 `include "qa_driver.vh"
 
-// Included because VCS fails to detect packages correctly.
-`include "qa_drv_csr_types.sv"
-
-
 //
 // Main type definitions for the QA driver.
 //
@@ -45,7 +41,7 @@ package qa_drv_types;
     localparam QA_DRIVER_DEBUG = 0;
 
     import qa_driver_types::*;
-    import qa_drv_csr_types::*;
+    import qa_driver_csr_types::*;
 
     typedef t_TX_HEADER_CCI_S t_TX_HEADER;
 

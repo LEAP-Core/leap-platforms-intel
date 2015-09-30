@@ -48,6 +48,9 @@ module qa_drv_host_channel
     //
     qlp_interface.to_qlp         qlp,
 
+    // CSR updates and state
+    input t_CSR_AFU_STATE        csr,
+
     // -------------------------------------------------------------------
     //
     //   Client interface
@@ -168,8 +171,6 @@ module qa_drv_host_channel
     logic                  tx_rdy;
     logic                  tx_enable;
 
-    t_CSR_AFU_STATE        csr;
-    
     t_FRAME_ARB            frame_writer;
     t_FRAME_ARB            frame_reader;
     t_FRAME_ARB            status_mgr_req;
@@ -191,9 +192,6 @@ module qa_drv_host_channel
     // configured by CSR writes into a variety of loopback and traffic generator
     // modes.
     qa_drv_tester#(.UMF_WIDTH(UMF_WIDTH))          qa_tester_inst(.*);
-
-    // Consume CSR writes and export state to the driver.
-    qa_drv_csr                                     qa_csr_inst(.*);
 
     // Manage memory-mapped FIFOs in each direction.
     qa_drv_fifo_from_host#(.UMF_WIDTH(UMF_WIDTH))  fifo_from_host(.*);

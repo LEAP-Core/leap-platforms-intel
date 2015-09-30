@@ -28,14 +28,14 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-`ifndef QA_DRV_CSR_TYPES
-`define QA_DRV_CSR_TYPES
+`ifndef QA_DRIVER_CSR_TYPES
+`define QA_DRIVER_CSR_TYPES
 
 //
 // FPGA-side control/status register definitions.
 //
 
-package qa_drv_csr_types;
+package qa_driver_csr_types;
 
     typedef enum logic [15:0]
     {
@@ -133,6 +133,6 @@ package qa_drv_csr_types;
     }
     t_CSR_AFU_STATE;
 
-endpackage // qa_drv_csr_types
+endpackage // qa_driver_csr_types
 
-`endif //  `ifndef QA_DRV_CSR_TYPES
+`endif //  `ifndef QA_DRIVER_CSR_TYPES

@@ -31,11 +31,16 @@
 `ifndef QA_DRIVER_TYPES
 `define QA_DRIVER_TYPES
 
+// Included because VCS fails to detect packages correctly.
+`include "qa_driver_csr_types.sv"
+
+
 //
 // Main type definitions for the QA driver.
 //
 
 package qa_driver_types;
+    import qa_driver_csr_types::*;
 
     //
     // Requested operation.

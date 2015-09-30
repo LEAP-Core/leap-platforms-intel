@@ -200,6 +200,26 @@ module qa_driver
 
     // ====================================================================    
     //
+    //  Parse CSR messages.
+    //
+    // ====================================================================    
+
+    t_CSR_AFU_STATE csr;
+    qa_driver_csr
+      #(
+        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
+        .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
+        .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
+        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
+        )
+      csr_mgr
+        (.clk,
+         .qlp,
+         .csr);
+
+
+    // ====================================================================    
+    //
     //  Split the connection into a pair of interfaces that will be
     //  routed to separate clients.  One client will be used for
     //  a direct memory interface.  The other will implement a pair
@@ -285,6 +305,7 @@ module qa_driver
        (
         .clk,
         .qlp(qlp_mux[MUX_IDX_CHANNELS]),
+        .csr,
         .rx_fifo_data,
         .rx_fifo_rdy,
         .rx_fifo_enable,

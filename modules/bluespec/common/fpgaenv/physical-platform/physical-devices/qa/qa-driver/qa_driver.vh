@@ -31,7 +31,12 @@
 `ifndef QA_DRIVER_TYPES_VH
 `define QA_DRIVER_TYPES_VH
 
+// Included because VCS fails to detect packages correctly.
+`include "qa_driver_types.sv"
+
+
 import qa_driver_types::*;
+import qa_driver_csr_types::*;
 
 
 //
@@ -88,56 +93,99 @@ interface qlp_interface
     logic                        C1RxIrValid;
 
     // Port directions for connections in the direction of the QLP (platform)
-    modport to_qlp(input  resetb,
+    modport to_qlp
+      (
+       input  resetb,
 
-                   output C0TxHdr,
-                   output C0TxRdValid,
-                   input  C0TxAlmFull,
+       output C0TxHdr,
+       output C0TxRdValid,
+       input  C0TxAlmFull,
 
-                   output C1TxHdr,
-                   output C1TxData,
-                   output C1TxWrValid,
-                   output C1TxIrValid,
-                   input  C1TxAlmFull,
+       output C1TxHdr,
+       output C1TxData,
+       output C1TxWrValid,
+       output C1TxIrValid,
+       input  C1TxAlmFull,
 
-                   input  C0RxHdr,
-                   input  C0RxData,
-                   input  C0RxWrValid,
-                   input  C0RxRdValid,
-                   input  C0RxCgValid,
-                   input  C0RxUgValid,
-                   input  C0RxIrValid,
+       input  C0RxHdr,
+       input  C0RxData,
+       input  C0RxWrValid,
+       input  C0RxRdValid,
+       input  C0RxCgValid,
+       input  C0RxUgValid,
+       input  C0RxIrValid,
 
-                   input  C1RxHdr,
-                   input  C1RxWrValid,
-                   input  C1RxIrValid
-                   );
+       input  C1RxHdr,
+       input  C1RxWrValid,
+       input  C1RxIrValid
+       );
 
     // Port directions for connections in the direction of the AFU (user code)
-    modport to_afu(output resetb,
+    modport to_afu
+      (
+       output resetb,
 
-                   input  C0TxHdr,
-                   input  C0TxRdValid,
-                   output C0TxAlmFull,
+       input  C0TxHdr,
+       input  C0TxRdValid,
+       output C0TxAlmFull,
 
-                   input  C1TxHdr,
-                   input  C1TxData,
-                   input  C1TxWrValid,
-                   input  C1TxIrValid,
-                   output C1TxAlmFull,
+       input  C1TxHdr,
+       input  C1TxData,
+       input  C1TxWrValid,
+       input  C1TxIrValid,
+       output C1TxAlmFull,
 
-                   output C0RxHdr,
-                   output C0RxData,
-                   output C0RxWrValid,
-                   output C0RxRdValid,
-                   output C0RxCgValid,
-                   output C0RxUgValid,
-                   output C0RxIrValid,
+       output C0RxHdr,
+       output C0RxData,
+       output C0RxWrValid,
+       output C0RxRdValid,
+       output C0RxCgValid,
+       output C0RxUgValid,
+       output C0RxIrValid,
 
-                   output C1RxHdr,
-                   output C1RxWrValid,
-                   output C1RxIrValid
-                   );
+       output C1RxHdr,
+       output C1RxWrValid,
+       output C1RxIrValid
+       );
+
+
+    // ====================================================================
+    //
+    // Snoop equivalents of the above interfaces: all the inputs and none
+    // of the outputs.
+    //
+    // ====================================================================
+
+    modport to_qlp_snoop
+      (
+       input  resetb,
+
+       input  C0TxAlmFull,
+       input  C1TxAlmFull,
+
+       input  C0RxHdr,
+       input  C0RxData,
+       input  C0RxWrValid,
+       input  C0RxRdValid,
+       input  C0RxCgValid,
+       input  C0RxUgValid,
+       input  C0RxIrValid,
+
+       input  C1RxHdr,
+       input  C1RxWrValid,
+       input  C1RxIrValid
+       );
+
+    modport to_afu_snoop
+      (
+       input  C0TxHdr,
+       input  C0TxRdValid,
+
+       input  C1TxHdr,
+       input  C1TxData,
+       input  C1TxWrValid,
+       input  C1TxIrValid
+       );
 
 endinterface
 

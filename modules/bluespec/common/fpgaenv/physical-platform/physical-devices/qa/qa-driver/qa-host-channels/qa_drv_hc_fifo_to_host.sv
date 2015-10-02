@@ -29,9 +29,9 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-`include "qa.vh"
+`include "qa_drv_hc.vh"
 
-module qa_drv_fifo_to_host
+module qa_drv_hc_fifo_to_host
   #(UMF_WIDTH=128)
     (input logic clk,
      input logic resetb,

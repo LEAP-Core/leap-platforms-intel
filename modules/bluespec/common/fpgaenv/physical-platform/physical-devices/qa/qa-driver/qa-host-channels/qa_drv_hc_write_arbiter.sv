@@ -29,9 +29,9 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-`include "qa.vh"
+`include "qa_drv_hc.vh"
 
-module cci_write_arbiter
+module qa_drv_hc_write_arbiter
   (
     input logic clk,
     input logic resetb,
@@ -63,12 +63,14 @@ module cci_write_arbiter
    state_t next_state;
 
    // Issue control FSM
-   cci_can_issue issue_control( .clk(clk),
-                                .resetb(resetb),
-                                .almostfull(tx1_almostfull),
-                                .can_issue(can_issue),
-                                .issue(write_grant.readerGrant | write_grant.writerGrant)
-                              );
+   qa_drv_hc_can_issue issue_control
+     (
+      .clk(clk),
+      .resetb(resetb),
+      .almostfull(tx1_almostfull),
+      .can_issue(can_issue),
+      .issue(write_grant.readerGrant | write_grant.writerGrant)
+      );
 
 
    // FSM state

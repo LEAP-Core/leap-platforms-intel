@@ -30,9 +30,9 @@
 //
 
 `include "qa_driver.vh"
-`include "qa.vh"
+`include "qa_drv_hc.vh"
 
-module qa_drv_host_channel
+module qa_drv_hc_root
   #(
     parameter CCI_DATA_WIDTH = 512,
     parameter CCI_RX_HDR_WIDTH = 18,
@@ -191,14 +191,14 @@ module qa_drv_host_channel
     // Normally the signals just pass through, but the tester can be
     // configured by CSR writes into a variety of loopback and traffic generator
     // modes.
-    qa_drv_tester#(.UMF_WIDTH(UMF_WIDTH))          qa_tester_inst(.*);
+    qa_drv_hc_tester#(.UMF_WIDTH(UMF_WIDTH))         qa_tester_inst(.*);
 
     // Manage memory-mapped FIFOs in each direction.
-    qa_drv_fifo_from_host#(.UMF_WIDTH(UMF_WIDTH))  fifo_from_host(.*);
-    qa_drv_fifo_to_host#(.UMF_WIDTH(UMF_WIDTH))    fifo_to_host(.*);
+    qa_drv_hc_fifo_from_host#(.UMF_WIDTH(UMF_WIDTH)) fifo_from_host(.*);
+    qa_drv_hc_fifo_to_host#(.UMF_WIDTH(UMF_WIDTH))   fifo_to_host(.*);
 
-    qa_drv_status_manager                          status_manager(.*);
-    cci_write_arbiter                              write_arb(.*);
-    cci_read_arbiter                               read_arb(.*);
+    qa_drv_hc_status_manager                         status_manager(.*);
+    qa_drv_hc_read_arbiter                           read_arb(.*);
+    qa_drv_hc_write_arbiter                          write_arb(.*);
     
 endmodule

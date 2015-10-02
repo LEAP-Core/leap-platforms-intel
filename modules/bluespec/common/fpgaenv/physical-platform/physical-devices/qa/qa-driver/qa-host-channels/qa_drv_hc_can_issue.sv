@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2015, Intel Corporation
+// Copyright (c) 2014, Intel Corporation
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -27,19 +27,25 @@
 // CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
-
-`ifndef QA_VH
-`define QA_VH
-
 //
-// Included to load AWB parameters as preprocessor variables.  For building
-// this driver outside AWB, replace the include with definitions of required
-// variables, such as QA_DRIVER_DEBUG.  Note that AWB automatically defines
-// FOO_Z when variable FOO is 0 to work around the limited preprocessor,
-// so define QA_DRIVER_DEBUG_Z when QA_DRIVER_DEBUG is 0.
-//
-`include "awb/provides/qa_driver_params.bsh"
 
-import qa_drv_types::*;
+`include "qa_drv_hc.vh"
 
-`endif //  `ifndef QA_VH
+module qa_drv_hc_can_issue
+  #(parameter CAN_ISSUE_FULL=4)
+  (
+    input  logic clk,
+    input  logic resetb,
+    input  logic almostfull,
+    input  logic issue,
+    output logic can_issue
+   );
+
+   logic almostfull_ff;
+
+   assign can_issue = ~almostfull_ff;
+   
+   always_ff @(posedge clk) begin
+      almostfull_ff <= almostfull;
+   end
+endmodule

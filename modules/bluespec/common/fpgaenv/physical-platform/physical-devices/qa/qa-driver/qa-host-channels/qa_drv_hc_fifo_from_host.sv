@@ -30,9 +30,9 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-`include "qa.vh"
+`include "qa_drv_hc.vh"
 
-module qa_drv_fifo_from_host
+module qa_drv_hc_fifo_from_host
   #(
     N_SCOREBOARD_ENTRIES=256,
     UMF_WIDTH=128

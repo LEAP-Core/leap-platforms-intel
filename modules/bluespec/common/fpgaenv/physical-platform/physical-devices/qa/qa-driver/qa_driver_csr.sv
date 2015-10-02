@@ -34,8 +34,6 @@
 // CSR state to all consumers through the t_CSR_AFU_STATE type.
 //
 
-`include "qa.vh"
-
 module qa_driver_csr
   #(
     parameter CCI_DATA_WIDTH = 512,

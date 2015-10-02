@@ -28,16 +28,16 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-`ifndef QA_DRV_TYPES
-`define QA_DRV_TYPES
+`ifndef QA_DRV_HC_TYPES
+`define QA_DRV_HC_TYPES
 
 `include "qa_driver.vh"
 
 //
-// Main type definitions for the QA driver.
+// Main type definitions for the QA host channel driver.
 //
 
-package qa_drv_types;
+package qa_drv_hc_types;
     localparam QA_DRIVER_DEBUG = 0;
 
     import qa_driver_types::*;
@@ -276,4 +276,4 @@ package qa_drv_types;
 
 endpackage // qa_drv_types
 
-`endif //  `ifndef QA_DRV_TYPES
+`endif //  `ifndef QA_DRV_HC_TYPES

@@ -28,6 +28,7 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
+`include "qa_drv_hc.vh"
 
 //
 // Test node that is always inserted between the driver top and the FIFO
@@ -36,7 +37,7 @@
 // into source, sink and loopback modes.
 //
 
-module qa_drv_tester
+module qa_drv_hc_tester
   #(parameter UMF_WIDTH=128)
     (input logic clk,
      input logic resetb,

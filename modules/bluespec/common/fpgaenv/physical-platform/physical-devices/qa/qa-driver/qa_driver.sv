@@ -293,7 +293,7 @@ module qa_driver
     //
     // ====================================================================    
 
-    qa_drv_host_channel
+    qa_drv_hc_root
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
         .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),

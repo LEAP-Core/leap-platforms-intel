@@ -29,9 +29,9 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-`include "qa.vh"
+`include "qa_drv_hc.vh"
 
-module qa_drv_status_manager
+module qa_drv_hc_status_manager
     (input logic clk,
      input logic resetb,
 

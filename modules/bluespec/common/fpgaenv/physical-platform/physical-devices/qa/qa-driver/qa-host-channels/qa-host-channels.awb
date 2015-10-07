@@ -8,10 +8,6 @@
 %sources -t H      -v PUBLIC  qa-polled-driver.h
 %sources -t CPP    -v PRIVATE qa-polled-driver.cpp
 
-%sources -t H      -v PUBLIC  AFU.h
-%sources -t H      -v PUBLIC  AFU_csr.h
-%sources -t CPP    -v PRIVATE AFU.cpp
-
 %sources -t VERILOG_H -v PRIVATE qa_drv_hc.vh
 
 %sources -t VERILOG_PKG -v PRIVATE qa_drv_hc_types.sv

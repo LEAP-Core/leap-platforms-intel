@@ -29,32 +29,15 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef __QA_SOFTWARE_DRIVER__
-#define __QA_SOFTWARE_DRIVER__
+#ifndef __QA_POLLED_DRIVER__
+#define __QA_POLLED_DRIVER__
 
 #include "awb/provides/command_switches.h"
 #include "awb/provides/umf.h"
+#include "awb/provides/qa_driver.h"
 
 #include "tbb/atomic.h"
 
-// AAL redefines TRACE
-#undef TRACE
-
-// Local includes
-#include "AFU.h"
-
-#ifndef CL
-# define CL(x)                     ((x) * 64)
-#endif // CL
-#ifndef LOG2_CL
-# define LOG2_CL                   6
-#endif // LOG2_CL
-#ifndef MB
-# define MB(x)                     ((x) * 1024 * 1024)
-#endif // MB
-
-#define UMF_CHUNKS_PER_CL       (CL(1) / sizeof(UMF_CHUNK))
-#define QA_BLOCK_SIZE           UMF_CHUNK_BYTES
 
 //
 // DSM offsets for various state.  THESE MUST MATCH THE VALUES IN
@@ -78,11 +61,8 @@ typedef class QA_DEVICE_CLASS* QA_DEVICE;
 class QA_DEVICE_CLASS: public PLATFORMS_MODULE_CLASS
 {
   private:
-    // switches for acquiring device uniquifier
-    COMMAND_SWITCH_DICTIONARY deviceSwitch;
-
     // Handles to AFU context.
-    AFU_CLASS afu;
+    AFU_CLASS& afu;
 
     // process/pipe state (physical channel)
     class tbb::atomic<bool> initReadComplete;
@@ -90,50 +70,60 @@ class QA_DEVICE_CLASS: public PLATFORMS_MODULE_CLASS
 
     AFU_BUFFER  readBuffer;
     uint64_t    readBufferBytes;
-    uint64_t    readBufferIdxMask;
 
     // Start/end of the read buffer
-    const UMF_CHUNK*  readBufferStart;
-    const UMF_CHUNK*  readBufferEnd;    // First address after the buffer
+    const uint8_t*  readBufferStart;
+    const uint8_t*  readBufferEnd;    // First address after the buffer
 
-    // Number of chunks remaining in current group
-    uint64_t    readChunksAvail;
-    // Pointer to next chunk to be read
-    const UMF_CHUNK*  readChunksNext;
-    // Start of the current read chunk -- used only for debugging
-    const UMF_CHUNK*  readChunksCurHead;
+    // Pointer to next address to be filled from FPGA
+    const uint8_t*  readFillNext;
+    // Pointer to next address to be read
+    const uint8_t*  readNext;
+    // Number of bytes known to be available for reading, cached from some
+    // previous read.
+    uint64_t        readBytesAvail;
 
     AFU_BUFFER  writeBuffer;
     uint64_t    writeBufferBytes;
     uint64_t    writeBufferIdxMask;
-    uint64_t    writeNextLineIdx;
-    // Pointer to next chunk to be written
-    UMF_CHUNK*  writeChunksNext;
 
     // Start/end of the write buffer
-    UMF_CHUNK*  writeBufferStart;
-    UMF_CHUNK*  writeBufferEnd;    // First address after the buffer
+    uint8_t*    writeBufferStart;
+    uint8_t*    writeBufferEnd;    // First address after the buffer
+
+    // Pointer to next address to be written
+    uint8_t*    writeNext;
+
+    bool        enableTests;
 
   public:
-    QA_DEVICE_CLASS(PLATFORMS_MODULE);
+    QA_DEVICE_CLASS(PLATFORMS_MODULE p, AFU_CLASS& afuDev);
     ~QA_DEVICE_CLASS();
 
     void Init();
-    void Cleanup();                            // cleanup
-    void Uninit();                             // uninit
-    bool Probe();                              // probe for data
-    void Read(void* buf, size_t count);        // blocking read
-    void Write(const void* buf, size_t count); // write
-    void RegisterLogicalDeviceName(string name);
+    void Cleanup();                             // cleanup
+    void Uninit();                              // uninit
+    bool Probe();                               // probe for data
+
+    // Run tests during Init()
+    void EnableTests() { enableTests = true; }
+
+    // Read nBytes from the FPGA.  If block is true then the call blocks
+    // until all requested bytes have been received.  If block is false
+    // then return whatever data is available.  The returned value is
+    // the number of bytes actually read.
+    size_t Read(void* buf, size_t nBytes, bool block = true);
+
+    // Write to the channel.  nBytes must be a multiple of a cache line.
+    void Write(const void* buf, size_t nBytes);
+
+    // Complete pending writes.  Writes are forwarded as multiples of the
+    // FPGA cache line size.  Partial writes are padded with 0's.
+    void Flush();
 
     // The driver implements a status register space in the FPGA.
     // The protocol is very slow -- the registers are intended for debugging.
     uint64_t ReadSREG(uint32_t n);
-
-    // Dump driver state by writing a CSR and waiting for a response in DSM.
-    void DebugDump();
-    void DebugDumpCurrentReadMessage();
-    void DebugDumpReadHistory();
 
     // Tests
     void TestSend();                    // Test sending to FPGA
@@ -144,13 +134,36 @@ class QA_DEVICE_CLASS: public PLATFORMS_MODULE_CLASS
     //
     // Convert a line offset to an address.
     //
-    UMF_CHUNK* getChunkAddressFromOffset(AFU_BUFFER buffer, uint64_t offset)
+    inline UMF_CHUNK*
+    getChunkAddressFromOffset(AFU_BUFFER buffer, uint64_t offset)
     {
         // Convert cache line index to byte offset
         offset *= CL(1);
 
         // Add the base address
         return (UMF_CHUNK*)(buffer->virtualAddress + offset);
+    }
+
+    //
+    // Update pointers following a read.
+    //
+    inline void UpdateReadPtr(size_t nBytes)
+    {
+        readBytesAvail -= nBytes;
+
+        // Time to wrap to the beginning?
+        readNext += nBytes;
+        if (readNext == readBufferEnd)
+        {
+            readNext = readBufferStart;
+        }
+
+        // Update sender credits updating the 2nd uint32_t of DSM POLL_STATE
+        // with the index of the line currently being processed.
+        uint32_t *cur_read_idx =
+            (uint32_t*)afu.DSMAddress(DSM_OFFSET_POLL_STATE +
+                                      sizeof(uint32_t));
+        *cur_read_idx = (readNext - readBufferStart) / CL(1);
     }
 };
 

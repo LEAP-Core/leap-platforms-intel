@@ -130,8 +130,8 @@ module qa_drv_hc_status_manager
     t_FIFO_FROM_HOST_IDX newest_read_line_idx;
     assign status_to_fifo_from_host.newestReadLineIdx = newest_read_line_idx;
 
-    t_FIFO_TO_HOST_IDX oldest_write_line_idx;
-    assign status_to_fifo_to_host.oldestWriteLineIdx = oldest_write_line_idx;
+    t_FIFO_TO_HOST_IDX oldest_write_idx;
+    assign status_to_fifo_to_host.oldestWriteIdx = oldest_write_idx;
 
 
     typedef enum
@@ -168,13 +168,13 @@ module qa_drv_hc_status_manager
         if (!resetb)
         begin
             newest_read_line_idx <= 0;
-            oldest_write_line_idx <= 0;
+            oldest_write_idx <= 0;
         end
         else if (reader_data_rdy)
         begin
             // New read data present!
             newest_read_line_idx <= read_data_vec32[0];
-            oldest_write_line_idx <= read_data_vec32[1];
+            oldest_write_idx <= read_data_vec32[1];
 
             assert (state_rd == STATE_RD_WAIT) else
                 $fatal("qa_drv_status_manager: Read response while not waiting for read!");
@@ -357,7 +357,7 @@ module qa_drv_hc_status_manager
             fifo_from_host_to_status.oldestReadLineIdx;
 
         fifo_to_host_next_write_idx <=
-            fifo_to_host_to_status.nextWriteLineIdx;
+            fifo_to_host_to_status.nextWriteIdx;
     end
 
     // The FIFO status to write to DSM
@@ -464,8 +464,6 @@ module qa_drv_hc_status_manager
         case (debug_req.idx)
             1:
               debug_rsp = fifo_from_host_to_status.dbgFIFOState;
-            2:
-              debug_rsp = fifo_to_host_to_status.dbgFIFOState;
             3:
               debug_rsp = tester_to_status.dbgTester;
             default:

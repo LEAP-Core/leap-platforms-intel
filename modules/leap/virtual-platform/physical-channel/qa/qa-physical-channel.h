@@ -36,7 +36,6 @@
 #include "awb/provides/physical_platform_utils.h"
 #include "awb/provides/qa_device.h"
 #include "awb/provides/qa_driver.h"
-#include "awb/provides/qa_driver_host_channels.h"
 #include "tbb/concurrent_queue.h"
 #include "tbb/atomic.h"
 #include <pthread.h>
@@ -47,80 +46,38 @@
 typedef class QA_PHYSICAL_CHANNEL_CLASS* QA_PHYSICAL_CHANNEL;
 class QA_PHYSICAL_CHANNEL_CLASS: public PHYSICAL_CHANNEL_CLASS
 {
-    private:
-        // our lower-level physical device.
-        QA_DEVICE_CLASS qaDevice;
-        
-        // queue for storing messages 
-	class tbb::concurrent_bounded_queue<UMF_MESSAGE> writeQ;
+  private:
+    // our lower-level physical device.
+    QA_DEVICE_WRAPPER_CLASS qaDevice;
 
-        // incomplete incoming read message
-        UMF_MESSAGE incomingMessage;
+    // queue for storing messages 
+    class tbb::concurrent_bounded_queue<UMF_MESSAGE> writeQ;
 
-        // internal methods
-        void readPipe();
+    // incomplete incoming read message
+    UMF_MESSAGE incomingMessage;
 
-        UMF_FACTORY umfFactory;
+    // internal methods
+    void readPipe();
 
-        pthread_t   writerThread;
+    UMF_FACTORY umfFactory;
 
-        class tbb::atomic<bool> uninitialized;
+    pthread_t writerThread;
 
-    public:
-        QA_PHYSICAL_CHANNEL_CLASS(PLATFORMS_MODULE);
-        ~QA_PHYSICAL_CHANNEL_CLASS();
+    class tbb::atomic<bool> uninitialized;
 
-        static void * WriterThread(void *argv) {
-	    void ** args = (void**) argv;
-	    QA_PHYSICAL_CHANNEL physicalChannel = (QA_PHYSICAL_CHANNEL) args[1];
-	    tbb::concurrent_bounded_queue<UMF_MESSAGE> *incomingQ = &(physicalChannel->writeQ); 
-	    QA_DEVICE qaDevice = (QA_DEVICE) args[0];
-	    while(1) {
-	        UMF_MESSAGE message;
-	        incomingQ->pop(message);
+  public:
+    QA_PHYSICAL_CHANNEL_CLASS(PLATFORMS_MODULE);
+    ~QA_PHYSICAL_CHANNEL_CLASS();
 
-                // Check to see if we're being torn down -- this is
-                // done by passing a special message through the writeQ
+    static void * WriterThread(void *argv);
 
-                if (message == NULL)
-                {
-                    if (!physicalChannel->uninitialized)
-                    {
-                        cerr << "QA_PHYSICAL_CHANNEL got an unexpected NULL value" << endl;
-                    }
-
-                    pthread_exit(0);
-                }
-
-	        // construct header                               
-	        UMF_CHUNK header = 0;
-	        message->EncodeHeader((unsigned char *)&header);
-
-                qaDevice->Write((unsigned char *)&header, UMF_CHUNK_BYTES);
-
-	        // write message data to pipe                                                     
-	        // NOTE: hardware demarshaller expects chunk pattern to start from most       	    
-                //       significant chunk and end at least significant chunk, so we will                  
-                //       send chunks in reverse order                                                               
-                message->StartExtract();
-                while (message->CanExtract())
-                {
-                    UMF_CHUNK chunk = message->ExtractChunk();
-                    qaDevice->Write((unsigned char*)&chunk, sizeof(UMF_CHUNK));
-                }
-
-                // de-allocate message                                                                                 	
-                delete message;
-	    }
-	}
-
-        UMF_MESSAGE Read();             // blocking read
-        UMF_MESSAGE TryRead();          // non-blocking read
-        void        Write(UMF_MESSAGE); // write
-        void        Uninit(); 
-        class tbb::concurrent_bounded_queue<UMF_MESSAGE> *GetWriteQ() { return &writeQ; }
-        void SetUMFFactory(UMF_FACTORY factoryInit) { umfFactory = factoryInit; };
-        void RegisterLogicalDeviceName(string name) { qaDevice.RegisterLogicalDeviceName(name); }
+    UMF_MESSAGE Read();             // blocking read
+    UMF_MESSAGE TryRead();          // non-blocking read
+    void        Write(UMF_MESSAGE); // write
+    void        Uninit(); 
+    class tbb::concurrent_bounded_queue<UMF_MESSAGE> *GetWriteQ() { return &writeQ; }
+    void SetUMFFactory(UMF_FACTORY factoryInit) { umfFactory = factoryInit; };
+    void RegisterLogicalDeviceName(string name) { qaDevice.RegisterLogicalDeviceName(name); }
 };
 
 #endif

@@ -92,6 +92,7 @@ module qa_drv_hc_read_arbiter
    always_comb
    begin
       rdvalid = 0;
+      read_grant.canIssue = can_issue;
       read_grant.readerGrant = 0;
       read_grant.writerGrant = 0;
       read_grant.statusGrant = 0;

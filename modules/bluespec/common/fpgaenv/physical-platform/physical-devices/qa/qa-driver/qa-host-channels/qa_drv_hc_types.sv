@@ -51,8 +51,10 @@ package qa_drv_hc_types;
     localparam QA_ADDR_SZ = 32;
     localparam QA_CACHE_LINE_SZ = 512;
 
-    typedef logic [QA_ADDR_SZ-1 : 0] t_CACHE_LINE_ADDR;
     typedef logic [QA_CACHE_LINE_SZ-1 : 0] t_CACHE_LINE;
+
+    // Most memory accesses use the address of a line
+    typedef logic [QA_ADDR_SZ-1 : 0] t_CACHE_LINE_ADDR;
 
     // Cache line as a vector of 8 bit objects
     localparam N_BIT8_PER_CACHE_LINE = QA_CACHE_LINE_SZ / 8;
@@ -72,11 +74,17 @@ package qa_drv_hc_types;
     typedef logic [N_BIT64_PER_CACHE_LINE-1 : 0][31:0] t_CACHE_LINE_VEC64;
 
 
+    //
     // FIFO ring buffer indices.  This is the only place the buffer sizes
     // are defined.  The hardware will tell the software the sizes during
     // initialization.
+    //
+    // Indices indicate the line within a buffer relative to a buffer's
+    // base address.
+    //
     typedef logic [12:0] t_FIFO_TO_HOST_IDX;
     typedef logic [12:0] t_FIFO_FROM_HOST_IDX;
+
 
     //
     // Read metadata is passed in the mdata field of each read request in
@@ -103,6 +111,11 @@ package qa_drv_hc_types;
         logic readerGrant;
         logic writerGrant;
         logic statusGrant;  
+
+        // Can issue indicates whether the channel is blocked due to flow
+        // control.  No request will be granted during cycles when canIssue
+        // is false, though clients are not obligated to check this field.
+        logic canIssue;
     }
     t_CHANNEL_GRANT_ARB;
 
@@ -248,18 +261,15 @@ package qa_drv_hc_types;
     //
     typedef struct
     {
-        // Index of the next that will be written by the FPGA.
-        t_FIFO_TO_HOST_IDX nextWriteLineIdx;
-
-        // Debugging state
-        t_AFU_DEBUG_RSP dbgFIFOState;
+        // Index of the next ring buffer position that will be written by the FPGA.
+        t_FIFO_TO_HOST_IDX nextWriteIdx;
     }
     t_TO_STATUS_MGR_FIFO_TO_HOST;
 
     typedef struct
     {
-        // Index of the oldest line still unread by the host.
-        t_FIFO_TO_HOST_IDX oldestWriteLineIdx;
+        // Index of the oldest position still unread by the host.
+        t_FIFO_TO_HOST_IDX oldestWriteIdx;
     }
     t_FROM_STATUS_MGR_FIFO_TO_HOST;
 

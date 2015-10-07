@@ -6,7 +6,10 @@
 
 %notes README
 
-%public qa-import.bsv
+%public qa-wrapper.bsv
+
+%sources -t H       -v PUBLIC  qa-wrapper.h
+%sources -t CPP     -v PRIVATE qa-wrapper.cpp
 
 %sources -t VERILOG -v PRIVATE cci_std_afu.sv
 %sources -t SDC     -v PRIVATE qa.sdc

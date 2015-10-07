@@ -37,8 +37,7 @@ module qa_drv_hc_root
     parameter CCI_DATA_WIDTH = 512,
     parameter CCI_RX_HDR_WIDTH = 18,
     parameter CCI_TX_HDR_WIDTH = 61,
-    parameter CCI_TAG_WIDTH = 13,
-    parameter UMF_WIDTH=128
+    parameter CCI_TAG_WIDTH = 13
     )
    (
     input  logic                 clk,
@@ -60,16 +59,16 @@ module qa_drv_hc_root
     //
     // To client FIFO
     //
-    output logic [UMF_WIDTH-1:0] rx_fifo_data,
-    output logic                 rx_fifo_rdy,
-    input  logic                 rx_fifo_enable,
+    output logic [CCI_DATA_WIDTH-1:0] rx_fifo_data,
+    output logic                      rx_fifo_rdy,
+    input  logic                      rx_fifo_enable,
 
     //
     // From client FIFO
     //
-    input  logic [UMF_WIDTH-1:0] tx_fifo_data,
-    output logic                 tx_fifo_rdy,
-    input  logic                 tx_fifo_enable,
+    input  logic [CCI_DATA_WIDTH-1:0] tx_fifo_data,
+    output logic                      tx_fifo_rdy,
+    input  logic                      tx_fifo_enable,
 
     //
     // Client status registers.  Mostly useful for debugging.
@@ -164,12 +163,13 @@ module qa_drv_hc_root
 
     // FIFO wires inside the driver.  They will be mapped to the wires
     // exported to the client in the qa_drv_tester module.
-    logic [UMF_WIDTH-1:0]  rx_data;
-    logic                  rx_rdy;
-    logic                  rx_enable;
-    logic [UMF_WIDTH-1:0]  tx_data;
-    logic                  tx_rdy;
-    logic                  tx_enable;
+    logic [CCI_DATA_WIDTH-1:0] rx_data;
+    logic                      rx_rdy;
+    logic                      rx_enable;
+
+    logic [CCI_DATA_WIDTH-1:0] tx_data;
+    logic                      tx_rdy;
+    logic                      tx_enable;
 
     t_FRAME_ARB            frame_writer;
     t_FRAME_ARB            frame_reader;
@@ -191,11 +191,33 @@ module qa_drv_hc_root
     // Normally the signals just pass through, but the tester can be
     // configured by CSR writes into a variety of loopback and traffic generator
     // modes.
-    qa_drv_hc_tester#(.UMF_WIDTH(UMF_WIDTH))         qa_tester_inst(.*);
+    qa_drv_hc_tester
+      #(
+        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
+        .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
+        .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
+        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
+        )
+      qa_tester_inst(.*);
 
     // Manage memory-mapped FIFOs in each direction.
-    qa_drv_hc_fifo_from_host#(.UMF_WIDTH(UMF_WIDTH)) fifo_from_host(.*);
-    qa_drv_hc_fifo_to_host#(.UMF_WIDTH(UMF_WIDTH))   fifo_to_host(.*);
+    qa_drv_hc_fifo_from_host
+      #(
+        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
+        .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
+        .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
+        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
+        )
+      fifo_from_host(.*);
+
+    qa_drv_hc_fifo_to_host
+      #(
+        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
+        .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
+        .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
+        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
+        )
+      fifo_to_host(.*);
 
     qa_drv_hc_status_manager                         status_manager(.*);
     qa_drv_hc_read_arbiter                           read_arb(.*);

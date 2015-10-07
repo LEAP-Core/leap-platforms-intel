@@ -37,8 +37,7 @@ module qa_driver
     parameter CCI_DATA_WIDTH = 512,
     parameter CCI_RX_HDR_WIDTH = 18,
     parameter CCI_TX_HDR_WIDTH = 61,
-    parameter CCI_TAG_WIDTH = 13,
-    parameter UMF_WIDTH=128
+    parameter CCI_TAG_WIDTH = 13
     )
    (
     input logic vl_clk_LPdomain_32ui,                      // CCI Inteface Clock. 32ui link/protocol clock domain.
@@ -53,16 +52,16 @@ module qa_driver
     //
     // To client FIFO
     //
-    output logic [UMF_WIDTH-1:0] rx_fifo_data,   
-    output logic                 rx_fifo_rdy,
-    input  logic                 rx_fifo_enable,
+    output logic [CCI_DATA_WIDTH-1:0] rx_fifo_data,
+    output logic                      rx_fifo_rdy,
+    input  logic                      rx_fifo_enable,
    
     //
     // From client FIFO
     //
-    input  logic [UMF_WIDTH-1:0] tx_fifo_data,
-    output logic                 tx_fifo_rdy,
-    input  logic                 tx_fifo_enable,
+    input  logic [CCI_DATA_WIDTH-1:0] tx_fifo_data,
+    output logic                      tx_fifo_rdy,
+    input  logic                      tx_fifo_enable,
 
     //
     // Memory read
@@ -298,8 +297,7 @@ module qa_driver
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
         .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
         .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
-        .CCI_TAG_WIDTH(CCI_TAG_WIDTH),
-        .UMF_WIDTH(UMF_WIDTH)
+        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
         )
       host_channel
        (

@@ -34,8 +34,11 @@
 
 module qa_drv_hc_fifo_from_host
   #(
-    N_SCOREBOARD_ENTRIES=256,
-    UMF_WIDTH=128
+    parameter CCI_DATA_WIDTH = 512,
+    parameter CCI_RX_HDR_WIDTH = 18,
+    parameter CCI_TX_HDR_WIDTH = 61,
+    parameter CCI_TAG_WIDTH = 13,
+    parameter N_SCOREBOARD_ENTRIES=256
     )
    (
     input logic clk,
@@ -47,15 +50,43 @@ module qa_drv_hc_fifo_from_host
     output t_FRAME_ARB         frame_reader,
     input  t_CHANNEL_GRANT_ARB read_grant,
 
-    output [UMF_WIDTH-1:0]     rx_data,
-    output                     rx_rdy,
-    input                      rx_enable,
+    output logic [CCI_DATA_WIDTH-1:0] rx_data,
+    output logic                      rx_rdy,
+    input  logic                      rx_enable,
 
     output t_TO_STATUS_MGR_FIFO_FROM_HOST   fifo_from_host_to_status,
     input  t_FROM_STATUS_MGR_FIFO_FROM_HOST status_to_fifo_from_host
     );
 
-    typedef logic [UMF_WIDTH-1:0] t_UMF_CHUNK;
+    logic [CCI_DATA_WIDTH-1 : 0] outQ_enq_data;
+    logic outQ_enq_en;
+    logic outQ_notFull;
+
+    //
+    // Buffer the outgoing stream to control timing.
+    //
+    qa_drv_prim_fifo2
+      #(
+        .N_DATA_BITS(CCI_DATA_WIDTH)
+        )
+      outQ
+        (
+         .clk,
+         .resetb,
+         .enq_data(outQ_enq_data),
+         .enq_en(outQ_enq_en),
+         .notFull(outQ_notFull),
+         .first(rx_data),
+         .deq_en(rx_enable),
+         .notEmpty(rx_rdy)
+         );
+
+
+    //=====================================================================
+    //
+    // Pointers that manage the ring buffer
+    //
+    //=====================================================================
 
     // Index of the next line to read in the ring buffer
     t_FIFO_FROM_HOST_IDX next_read_req_idx;
@@ -75,184 +106,6 @@ module qa_drv_hc_fifo_from_host
     localparam N_SCOREBOARD_IDX_BITS = $clog2(N_SCOREBOARD_ENTRIES);
     typedef logic [N_SCOREBOARD_IDX_BITS-1 : 0] t_SCOREBOARD_IDX;
 
-    // ====================================================================
-    //
-    //   Buffer the outgoing stream to control timing.
-    //
-    // ====================================================================
-
-    t_UMF_CHUNK outQ_enq_data;
-    logic outQ_enq_en;
-    logic outQ_notFull;
-
-    qa_drv_prim_fifo2#(.N_DATA_BITS($bits(t_UMF_CHUNK)))
-        outQ(.clk, .resetb,
-             .enq_data(outQ_enq_data),
-             .enq_en(outQ_enq_en),
-             .notFull(outQ_notFull),
-             .first(rx_data),
-             .deq_en(rx_enable),
-             .notEmpty(rx_rdy));
-
-
-    // ====================================================================
-    //
-    //   Convert a stream of cache lines into a stream of UMF_CHUNKs.
-    //
-    // ====================================================================
-
-    typedef enum
-    {
-        STATE_NEW_MESSAGE,
-        STATE_READ_HEADER,
-        STATE_NEW_LINE,
-        STATE_VALID_CHUNK
-    }
-    t_STATE;
-
-    t_STATE state;
-
-    localparam UMF_CHUNKS_PER_LINE = QA_CACHE_LINE_SZ / UMF_WIDTH;
-
-    // Cache line as a vector of UMF_CHUNKs
-    typedef t_UMF_CHUNK [UMF_CHUNKS_PER_LINE-1 : 0] t_CACHE_LINE_UMF_CHUNK_VEC;
-
-    // Index of a UMF_CHUNK within a line
-    typedef logic [$clog2(UMF_CHUNKS_PER_LINE)-1 : 0] t_UMF_CHUNK_IDX;
-
-    // Count of UMF_CHUNKs in a message group.  The size of this counter
-    // limits the maximum message size.
-    typedef logic [15:0] t_NUM_UMF_CHUNKS;
-
-    // Number of chunks remaining in the current message
-    t_NUM_UMF_CHUNKS num_chunks;
-
-    // Index of the chunk within the current line
-    t_UMF_CHUNK_IDX chunk_in_line;
-
-    logic is_last_chunk_in_line;
-    assign is_last_chunk_in_line = (chunk_in_line == t_UMF_CHUNK_IDX'(UMF_CHUNKS_PER_LINE-1));
-
-    // Cache line currently being processed
-    t_CACHE_LINE_UMF_CHUNK_VEC cur_line;
-
-    // Commands and wires to the scoreboard
-    logic sc_not_empty;
-    t_CACHE_LINE_UMF_CHUNK_VEC sc_next_line;
-
-    // Continue to next line if the current chunk is ending and valid data
-    // exists in the scoreboard.
-    logic continue_to_next_line;
-    assign continue_to_next_line =
-        ((state == STATE_VALID_CHUNK) &&
-         outQ_enq_en &&
-         is_last_chunk_in_line &&
-         (num_chunks != t_NUM_UMF_CHUNKS'(1)));
-
-    // Is the current line completely drained?
-    logic need_next_line;
-    assign need_next_line = ((state == STATE_NEW_MESSAGE) ||
-                             (state == STATE_NEW_LINE) ||
-                             continue_to_next_line);
-
-    // Time to request a new line from the scoreboard?
-    logic sc_req_next_line;
-    assign sc_req_next_line = sc_not_empty && need_next_line;
-
-    // Data is ready when it is sitting in the outbound buffer
-    assign outQ_enq_en = (state == STATE_VALID_CHUNK) && outQ_notFull;
-    assign outQ_enq_data = cur_line[0];
-
-    //
-    // State machine.
-    //
-    always_ff @(posedge clk)
-    begin
-        if (!resetb)
-        begin
-            state <= STATE_NEW_MESSAGE;
-        end
-        else
-        begin
-            case (state)
-              STATE_NEW_MESSAGE:
-                begin
-                    if (sc_not_empty)
-                    begin
-                        state <= STATE_READ_HEADER;
-                    end
-                end
-
-              STATE_READ_HEADER:
-                begin
-                    // The number of chunks is the first entry in the message
-                    num_chunks <= t_NUM_UMF_CHUNKS'(cur_line[0]);
-                    chunk_in_line <= 1;
-
-                    state <= STATE_VALID_CHUNK;
-                end
-
-              STATE_NEW_LINE:
-                begin
-                    chunk_in_line <= 0;
-
-                    if (sc_not_empty)
-                    begin
-                        state <= STATE_VALID_CHUNK;
-                    end
-                end
-
-              STATE_VALID_CHUNK:
-                begin
-                    // If the client consumed a chunk then advance the poniters
-                    if (outQ_enq_en)
-                    begin
-                        if (num_chunks == t_NUM_UMF_CHUNKS'(1))
-                        begin
-                            // End of message
-                            state <= STATE_NEW_MESSAGE;
-                        end
-                        else if (is_last_chunk_in_line)
-                        begin
-                            // End of line.  If the scoreboard has another line
-                            // just keep going.  Otherwise, wait for the next
-                            // line.
-                            if (! sc_not_empty)
-                            begin
-                                state <= STATE_NEW_LINE;
-                            end
-                        end
-
-                        num_chunks <= num_chunks - t_NUM_UMF_CHUNKS'(1);
-                        chunk_in_line <= chunk_in_line + t_UMF_CHUNK_IDX'(1);
-                    end
-                end
-            endcase
-        end
-    end
-
-
-    //
-    // Manage cur_line.
-    //
-    always_ff @(posedge clk)
-    begin
-        if (need_next_line)
-        begin
-            cur_line <= sc_next_line;
-        end
-
-        // Rotate if reading the header or sending a chunk to the client.
-        else if ((state == STATE_READ_HEADER) ||
-                 (outQ_enq_en && (state == STATE_VALID_CHUNK)))
-        begin
-            for (int i = 0; i < UMF_CHUNKS_PER_LINE-1; i++)
-            begin
-                cur_line[i] <= cur_line[i + 1];
-            end
-        end
-    end
-
 
     // ====================================================================
     //
@@ -263,7 +116,11 @@ module qa_drv_hc_fifo_from_host
 
     t_SCOREBOARD_IDX scoreboard_slot_idx;
     logic            scoreboard_slot_rdy;
-    logic            scoreboard_slot_en;
+
+    // Pass data from scoreboard toward the FPGA-side client when a message
+    // is available and space is available in outQ.
+    logic sc_notEmpty;
+    assign outQ_enq_en = sc_notEmpty && outQ_notFull;
 
     // Is the incoming read a FIFO read response?
     t_READ_METADATA response_read_metadata;
@@ -290,7 +147,7 @@ module qa_drv_hc_fifo_from_host
         begin
             oldest_read_line_idx <= 0;
         end
-        else if (sc_req_next_line)
+        else if (outQ_enq_en)
         begin
             // Read respose.  Update the oldest pointer.
             oldest_read_line_idx <= oldest_read_line_idx + 1;
@@ -298,25 +155,31 @@ module qa_drv_hc_fifo_from_host
     end
 
 
-    qa_drv_prim_scoreboard#(.N_ENTRIES(N_SCOREBOARD_ENTRIES),
-                            .N_DATA_BITS($bits(t_CACHE_LINE)),
-                            .N_META_BITS(0))
-        scoreboard(.clk,
-                   .resetb,
+    qa_drv_prim_scoreboard
+      #(
+        .N_ENTRIES(N_SCOREBOARD_ENTRIES),
+        .N_DATA_BITS(CCI_DATA_WIDTH),
+        .N_META_BITS(0)
+        )
+      scoreboard
+        (
+         .clk,
+         .resetb,
 
-                   .enq_en(read_grant.readerGrant),
-                   .enqMeta(2'b0),
-                   .notFull(scoreboard_slot_rdy),
-                   .enqIdx(scoreboard_slot_idx),
+         .enq_en(read_grant.readerGrant),
+         .enqMeta(2'b0),
+         .notFull(scoreboard_slot_rdy),
+         .enqIdx(scoreboard_slot_idx),
 
-                   .enqData_en(incoming_read_valid),
-                   .enqDataIdx(response_read_metadata.robAddr[N_SCOREBOARD_IDX_BITS-1 : 0]),
-                   .enqData(rx0.data),
+         .enqData_en(incoming_read_valid),
+         .enqDataIdx(t_SCOREBOARD_IDX'(response_read_metadata.robAddr)),
+         .enqData(rx0.data),
 
-                   .deq_en(sc_req_next_line),
-                   .notEmpty(sc_not_empty),
-                   .first(sc_next_line),
-                   .firstMeta());
+         .deq_en(outQ_enq_en),
+         .notEmpty(sc_notEmpty),
+         .first(outQ_enq_data),
+         .firstMeta()
+         );
 
 
     // ====================================================================
@@ -380,83 +243,5 @@ module qa_drv_hc_fifo_from_host
                 $fatal("qa_drv_fifo_from_host: read grant without request!");
         end
     end
-
-
-    // ====================================================================
-    //
-    //   Debugging
-    //
-    // ====================================================================
-
-`ifdef QA_DRIVER_DEBUG_Z
-
-    // Debugger disabled
-    assign fifo_from_host_to_status.dbgFIFOState = t_AFU_DEBUG_RSP'(0);
-
-`else
-
-    // Low 32 bits of the most recent four read data responses
-    logic [3:0][31:0] dbg_data_read_data;
-
-    // The most recent four read data offsets from the region base
-    logic [3:0][31:0] dbg_data_read_addr_offsets;
-
-    // Number of data read requests and responses
-    logic [31:0] dbg_n_data_read_rsp;
-    logic [31:0] dbg_n_data_read_req;
-
-    // A collection of flags
-    logic [31:0] dbg_flags;
-    assign dbg_flags[0] = scoreboard_slot_rdy;
-    assign dbg_flags[1] = (state == STATE_VALID_CHUNK);
-
-    assign fifo_from_host_to_status.dbgFIFOState =
-        { dbg_data_read_data,
-          dbg_data_read_addr_offsets,
-          dbg_n_data_read_rsp,
-          dbg_n_data_read_req,
-          dbg_flags };
-
-    always_ff @(posedge clk)
-    begin
-        if (!resetb)
-        begin
-            dbg_n_data_read_rsp <= 0;
-            dbg_n_data_read_req <= 0;
-            for (int i = 0; i < 4; i++)
-            begin
-                dbg_data_read_addr_offsets[i] <= 32'haaaaaaaa;
-                dbg_data_read_data[i] <= 32'haaaaaaaa;
-            end
-        end
-        else
-        begin
-            // Read data request accepted
-            if (read_grant.readerGrant)
-            begin
-                dbg_n_data_read_req <= dbg_n_data_read_req + 1;
-                // Shift in request offset
-                for (int i = 3; i > 0; i--)
-                begin
-                    dbg_data_read_addr_offsets[i] <= dbg_data_read_addr_offsets[i - 1];
-                end
-                dbg_data_read_addr_offsets[0] <= next_read_req_idx;
-            end
-
-            // Read data response
-            if (incoming_read_valid)
-            begin
-                dbg_n_data_read_rsp <= dbg_n_data_read_rsp + 1;
-                // Shift in response
-                for (int i = 3; i > 0; i--)
-                begin
-                    dbg_data_read_data[i] <= dbg_data_read_data[i - 1];
-                end
-                dbg_data_read_data[0] <= rx0.data;
-            end
-        end
-    end
-
-`endif // QA_DRIVER_DEBUG_Z
 
 endmodule

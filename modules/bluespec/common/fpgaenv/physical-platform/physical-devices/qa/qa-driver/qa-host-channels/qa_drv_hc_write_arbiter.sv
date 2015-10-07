@@ -92,6 +92,7 @@ module qa_drv_hc_write_arbiter
 
    // Set outgoing write control packet.
    always_comb begin
+      write_grant.canIssue = can_issue;
       write_grant.readerGrant = 0;
       write_grant.writerGrant = 0;
       write_grant.statusGrant = 0;                                           

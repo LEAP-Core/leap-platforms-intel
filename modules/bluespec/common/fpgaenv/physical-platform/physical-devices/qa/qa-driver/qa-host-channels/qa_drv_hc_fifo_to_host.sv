@@ -32,150 +32,52 @@
 `include "qa_drv_hc.vh"
 
 module qa_drv_hc_fifo_to_host
-  #(UMF_WIDTH=128)
-    (input logic clk,
-     input logic resetb,
+  #(
+    parameter CCI_DATA_WIDTH = 512,
+    parameter CCI_RX_HDR_WIDTH = 18,
+    parameter CCI_TX_HDR_WIDTH = 61,
+    parameter CCI_TAG_WIDTH = 13
+    )
+   (
+    input logic clk,
+    input logic resetb,
 
-     input  t_RX_C0 rx0,
+    input  t_RX_C0 rx0,
 
-     input  t_CSR_AFU_STATE     csr,
-     output t_FRAME_ARB         frame_writer,
-     input  t_CHANNEL_GRANT_ARB write_grant,
+    input  t_CSR_AFU_STATE     csr,
+    output t_FRAME_ARB         frame_writer,
+    input  t_CHANNEL_GRANT_ARB write_grant,
 
-     input  t_FROM_STATUS_MGR_FIFO_TO_HOST   status_to_fifo_to_host,
-     output t_TO_STATUS_MGR_FIFO_TO_HOST     fifo_to_host_to_status,
+    input  t_FROM_STATUS_MGR_FIFO_TO_HOST   status_to_fifo_to_host,
+    output t_TO_STATUS_MGR_FIFO_TO_HOST     fifo_to_host_to_status,
 
-     // LEAP-facing interface
-     input [UMF_WIDTH-1:0]     tx_data,
-     output logic              tx_rdy,
-     input                     tx_enable
+    // LEAP-facing interface
+    input  logic [CCI_DATA_WIDTH-1:0] tx_data,
+    output logic                      tx_rdy,
+    input  logic                      tx_enable
     );
 
-    //=====================================================================
-    //
-    //   Data type describing a cache line as a vector of UMF_CHUNKs
-    //
-    //=====================================================================
-
-    localparam N_UMF_CHUNKS_PER_CACHE_LINE = QA_CACHE_LINE_SZ / UMF_WIDTH;
-    typedef logic [UMF_WIDTH-1 : 0] t_UMF_CHUNK;
-    typedef logic [N_UMF_CHUNKS_PER_CACHE_LINE-1 : 0][UMF_WIDTH-1 : 0] t_CACHE_LINE_VEC_UMF_CHUNK;
-
-    // Count of UMF_CHUNKs within a cache line
-    typedef logic [$clog2(N_UMF_CHUNKS_PER_CACHE_LINE) : 0] t_UMF_CHUNK_CNT;
-
-
-    //=====================================================================
-    //
-    //  Functions and simple logic
-    //
-    //=====================================================================
-
-    //
-    // Shift a new chunk into an existing line of data.
-    //
-    function automatic t_CACHE_LINE_VEC_UMF_CHUNK pushChunk;
-        input t_CACHE_LINE_VEC_UMF_CHUNK line;
-        input t_UMF_CHUNK chunk;
-        begin
-            for (int i = 0; i < N_UMF_CHUNKS_PER_CACHE_LINE - 1; i++)
-            begin
-                line[i] = line[i + 1];
-            end
-            line[N_UMF_CHUNKS_PER_CACHE_LINE-1] = chunk;
-
-            pushChunk = line;
-        end
-    endfunction
-
-    //
-    // Last chunk in a line?
-    //
-    function automatic logic isLastChunk;
-        input t_UMF_CHUNK_CNT cnt;
-        begin
-            // Number of chunks per line is a power of 2
-            isLastChunk = cnt[$high(cnt)];
-        end
-    endfunction
-
-
-    //=====================================================================
-    //
-    // Collect incoming chunks in a line-sized buffer.
-    //
-    //=====================================================================
-
-    t_CACHE_LINE_VEC_UMF_CHUNK lineIn_data;
-
-    // Number of chunks held in lineIn_data
-    t_UMF_CHUNK_CNT lineIn_busy_chunks;
-
-    // Number of real chunks in lineIn_data excluding flushes (see below)
-    t_UMF_CHUNK_CNT lineIn_num_chunks;
-
-    // Properties of the buffer
-    logic lineIn_notFull;
-    assign lineIn_notFull = ! isLastChunk(lineIn_busy_chunks);
+    logic [CCI_DATA_WIDTH-1:0] lineIn_data;
     logic lineIn_notEmpty;
-    assign lineIn_notEmpty = (lineIn_busy_chunks != t_UMF_CHUNK_CNT'(0));
-
-    // Buffer has been drained by code below
     logic lineIn_deq;
-    // The consumer may take either the entire buffer or leave one entry
-    // in the most recent chunk.  The latter case hapens on the first line
-    // in a message, where the first chunk is the message length.
-    logic lineIn_deq_chunk_remainder;
-
-    // The state machine can enforce a timeout on short messages sitting
-    // here in the buffer by asserting lineIn_force_flush.  A flush request
-    // rotates the partial line into proper position, thus sharing the
-    // relatively expensive line shift hardware.
-    logic lineIn_force_flush;
 
     //
-    // Rotate new chunks into lineIn_data buffer.
+    // Buffer incoming messages in a FIFO.
     //
-    assign tx_rdy = csr.afu_en &&
-                    (lineIn_notFull || lineIn_deq) &&
-                    ! lineIn_force_flush;
-    
-    always_ff @(posedge clk)
-    begin
-        if (tx_enable || (lineIn_force_flush && lineIn_notFull))
-        begin
-            lineIn_data <= pushChunk(lineIn_data, tx_data);
-        end
-    end
-
-    //
-    // Update chunk counter.
-    //
-    always_ff @(posedge clk)
-    begin
-        if (!resetb)
-        begin
-            lineIn_busy_chunks <= 0;
-            lineIn_num_chunks  <= 0;
-        end
-        else if (lineIn_deq)
-        begin
-            // Buffer was consumed.  It now contains what was not consumed
-            // (at most one chunk) plus possible new data.
-            lineIn_busy_chunks <= t_UMF_CHUNK_CNT'(lineIn_deq_chunk_remainder) +
-                                  t_UMF_CHUNK_CNT'(tx_enable);
-            lineIn_num_chunks  <= t_UMF_CHUNK_CNT'(lineIn_deq_chunk_remainder) +
-                                  t_UMF_CHUNK_CNT'(tx_enable);
-        end
-        else
-        begin
-            // A chunk becomes busy even on forced rotation, but the number of
-            // real chunks increments only on tx_enable.
-            lineIn_busy_chunks <= lineIn_busy_chunks +
-                                  t_UMF_CHUNK_CNT'(tx_enable || lineIn_force_flush);
-            lineIn_num_chunks  <= lineIn_num_chunks + t_UMF_CHUNK_CNT'(tx_enable);
-        end
-    end
+    qa_drv_prim_fifo2
+      #(
+        .N_DATA_BITS(CCI_DATA_WIDTH)
+        )
+       (
+        .clk,
+        .resetb,
+        .enq_data(tx_data),
+        .enq_en(tx_enable),
+        .notFull(tx_rdy),
+        .first(lineIn_data),
+        .deq_en(lineIn_deq),
+        .notEmpty(lineIn_notEmpty)
+        );
 
 
     //=====================================================================
@@ -193,30 +95,23 @@ module qa_drv_hc_fifo_to_host
     // consume the existing messages.  The pointer is updated by the host
     // as messages are consumed and updated in the FPGA by the status
     // manager.
-    t_FIFO_TO_HOST_IDX oldest_write_line_idx;
-    assign oldest_write_line_idx = status_to_fifo_to_host.oldestWriteLineIdx;
+    t_FIFO_TO_HOST_IDX oldest_write_idx;
+    assign oldest_write_idx = status_to_fifo_to_host.oldestWriteIdx;
 
-    // Index of the line with the control word for the current group
-    t_FIFO_TO_HOST_IDX cur_header_idx;
-
-    // Index of the line currently collecting new data
+    // Index of the next ring buffer entry to write
     t_FIFO_TO_HOST_IDX cur_data_idx;
 
-    assign fifo_to_host_to_status.nextWriteLineIdx = cur_header_idx;
+    // Index of ring buffer before which data has been safely written and
+    // protected by a memory fence.  This is the pointer passed to the host
+    // to indicate the availability of new entries.  It tracks cur_data_idx
+    // once pending writes have been committed, using a fence.
+    t_FIFO_TO_HOST_IDX written_data_idx;
+    assign fifo_to_host_to_status.nextWriteIdx = written_data_idx;
 
-
-    //=====================================================================
-    //
-    // Buffers holding pending writes
-    //
-    //=====================================================================
-
-    t_CACHE_LINE_VEC_UMF_CHUNK cur_data_line;
-
-    // A separate buffer is needed for the header since it must be written
-    // last.  The first word in the header is a count of the number of
-    // chunks in the message.
-    t_CACHE_LINE_VEC_UMF_CHUNK cur_header_line;
+    // Force a fence/flush after writing 25% of the buffer
+    logic flush_for_writes;
+    assign flush_for_writes = (cur_data_idx[$bits(t_FIFO_TO_HOST_IDX)-2] !=
+                               written_data_idx[$bits(t_FIFO_TO_HOST_IDX)-2]);
 
 
     //=====================================================================
@@ -227,33 +122,24 @@ module qa_drv_hc_fifo_to_host
 
     typedef enum logic [2:0]
     {
-        STATE_WAIT_HEADER,
+        STATE_WAIT_EMPTY,
         STATE_WAIT_DATA,
-        STATE_EMIT_DATA,
-        STATE_EMIT_HEADER,
         STATE_EMIT_FENCE
     }
     t_STATE;
 
     t_STATE state;
 
-    // Number of chunks in current message.  The counter is sized to
-    // the total chunks the buffer can hold.
-    logic [$clog2(N_UMF_CHUNKS_PER_CACHE_LINE) + $bits(t_FIFO_TO_HOST_IDX) - 1 : 0] num_chunks;
+    // Consume incoming data if it was written to the write buffer
+    assign lineIn_deq = (write_grant.writerGrant && (state != STATE_EMIT_FENCE));
 
     //
-    // Flush write buffer after a run of idle cycles or when the maximum
-    // message size has been written.
+    // Flush write buffer after a run of idle cycles.
     //
     logic [4:0] idle_cycles;
     logic flush_for_idle;
     logic flush_for_idle_hold;
     assign flush_for_idle = idle_cycles[$high(idle_cycles)] || flush_for_idle_hold;
-
-    logic [10:0] active_lines;
-    logic flush_full_message;
-    logic flush_full_message_hold;
-    assign flush_full_message = active_lines[$high(active_lines)] || flush_full_message_hold;
 
     //
     // Hold flush until message sent out
@@ -262,16 +148,12 @@ module qa_drv_hc_fifo_to_host
     begin
         if (!resetb)
         begin
-            flush_for_idle_hold     <= 1'b0;
-            flush_full_message_hold <= 1'b0;
+            flush_for_idle_hold <= 1'b0;
         end
         else
         begin
-            flush_for_idle_hold     <= flush_for_idle &&
-                                       (state != STATE_EMIT_FENCE);
-
-            flush_full_message_hold <= flush_full_message &&
-                                       (state != STATE_EMIT_FENCE);
+            flush_for_idle_hold <= flush_for_idle &&
+                                   (state != STATE_EMIT_FENCE);
         end
     end
 
@@ -284,56 +166,26 @@ module qa_drv_hc_fifo_to_host
         if (!resetb)
         begin
             idle_cycles <= 0;
-            active_lines <= 0;
         end
         else
         begin
-            if (state == STATE_WAIT_HEADER)
-            begin
-                if (lineIn_notEmpty)
-                begin
-                    idle_cycles <= idle_cycles + 1;
-                end
-                else
-                begin
-                    // Message is completely empty
-                    idle_cycles <= 0;
-                end
-            end
-            else if ((state != STATE_WAIT_DATA) || lineIn_deq)
+            if ((state != STATE_WAIT_DATA) || lineIn_deq)
             begin
                 // Not waiting for data or data just arrived
                 idle_cycles <= 0;
             end
-            else
+            else if (write_grant.canIssue)
             begin
+                // Count idle cycles in order to decide when to flush.  Idle
+                // cycles are counted only when the channel isn't busy since
+                // the cost of a flush is high and we don't want to emit
+                // extra flushes simply because channel writes have saturated
+                // the memory bus.
                 idle_cycles <= idle_cycles + 1;
-            end
-
-            // Active lines increments on successful data writes and resets
-            // when a group is committed.
-            if (state == STATE_EMIT_HEADER)
-            begin
-                active_lines <= 0;
-            end
-            else if ((state == STATE_EMIT_DATA) && write_grant.writerGrant)
-            begin
-                active_lines <= active_lines + 1;
             end
         end
     end
 
-    // After some timeout for the incoming queue to produce what it has.
-    assign lineIn_force_flush = (state == STATE_WAIT_HEADER) && flush_for_idle;
-
-    // Consume incoming data based on state.
-    assign lineIn_deq = (! lineIn_notFull && ! flush_full_message &&
-                         ((state == STATE_WAIT_HEADER) || (state == STATE_WAIT_DATA)));
-
-    // The header will never consume a full incoming line, since one chunk
-    // is reserved for the message length.
-    assign lineIn_deq_chunk_remainder = ((state == STATE_WAIT_HEADER) &&
-                                         isLastChunk(lineIn_num_chunks));
 
     //
     // State transitions.
@@ -342,72 +194,33 @@ module qa_drv_hc_fifo_to_host
     begin
         if (!resetb)
         begin
-            state <= STATE_WAIT_HEADER;
-            cur_header_idx <= 0;
+            state <= STATE_WAIT_EMPTY;
             cur_data_idx <= 0;
+            written_data_idx <= 0;
         end
         else
         begin
             case (state)
-              STATE_WAIT_HEADER:
+              STATE_WAIT_EMPTY:
                 begin
-                    // Wait for chunks to fill the available slots in the header
-                    if (! lineIn_notFull)
+                    // Was a new line written?
+                    if (write_grant.writerGrant)
                     begin
-                        cur_header_line <= lineIn_data;
-
-                        // Might be a partial line if flush_for_idle is set
-                        if (isLastChunk(lineIn_num_chunks))
-                        begin
-                            // Left one chunk in the input buffer to make room
-                            // for sending the message length.
-                            num_chunks <= N_UMF_CHUNKS_PER_CACHE_LINE - 1;
-                        end
-                        else
-                        begin
-                            num_chunks <= lineIn_num_chunks;
-                        end
-
-                        state <= (flush_for_idle ? STATE_EMIT_HEADER :
-                                                   STATE_WAIT_DATA);
-                        cur_data_idx <= cur_data_idx + 1;
+                        state <= STATE_WAIT_DATA;
+                        cur_data_idx <= cur_data_idx + t_FIFO_TO_HOST_IDX'(1);
                     end
                 end
 
               STATE_WAIT_DATA:
                 begin
-                    if (flush_full_message)
-                    begin
-                        state <= STATE_EMIT_HEADER;
-                    end
-                    else if (! lineIn_notFull)
-                    begin
-                        cur_data_line <= lineIn_data;
-                        state <= STATE_EMIT_DATA;
-                        num_chunks <= num_chunks + N_UMF_CHUNKS_PER_CACHE_LINE;
-                    end
-                    // Must test for idle last since lineIn_deq is allowed
-                    // to fire in this state, allowing the existence of new
-                    // data to take precedence over the timeout.
-                    else if (flush_for_idle)
-                    begin
-                        state <= STATE_EMIT_HEADER;
-                    end
-                end
-
-              STATE_EMIT_DATA:
-                begin
+                    // New line written?
                     if (write_grant.writerGrant)
                     begin
-                        state <= (flush_full_message ? STATE_EMIT_HEADER :
-                                                       STATE_WAIT_DATA);
-                        cur_data_idx <= cur_data_idx + 1;
+                        cur_data_idx <= cur_data_idx + t_FIFO_TO_HOST_IDX'(1);
                     end
-                end
 
-              STATE_EMIT_HEADER:
-                begin
-                    if (write_grant.writerGrant)
+                    // Time to make the writes visible to the host?
+                    if (flush_for_idle || flush_for_writes)
                     begin
                         state <= STATE_EMIT_FENCE;
                     end
@@ -417,10 +230,10 @@ module qa_drv_hc_fifo_to_host
                 begin
                     if (write_grant.writerGrant)
                     begin
-                        state <= STATE_WAIT_HEADER;
+                        state <= STATE_WAIT_EMPTY;
 
-                        // Start position of next message
-                        cur_header_idx <= cur_data_idx;
+                        // Update valid data pointer
+                        written_data_idx <= cur_data_idx;
                     end
                 end
             endcase
@@ -439,14 +252,12 @@ module qa_drv_hc_fifo_to_host
 
     // Write only allowed if space is available in the shared memory buffer
     logic allow_write;
-    assign allow_write = (cur_data_idx + t_FIFO_TO_HOST_IDX'(1) != oldest_write_line_idx);
+    assign allow_write = (cur_data_idx + t_FIFO_TO_HOST_IDX'(1) != oldest_write_idx);
 
-    assign frame_writer.write.request = allow_write &&
-                                        ((state == STATE_EMIT_DATA) ||
-                                         (state == STATE_EMIT_HEADER) ||
+    assign frame_writer.write.request = csr.afu_en &&
+                                        allow_write &&
+                                        (lineIn_notEmpty ||
                                          (state == STATE_EMIT_FENCE));
-
-    t_CACHE_LINE_VEC_UMF_CHUNK header_line;
 
     //
     // Set write address and data.
@@ -456,74 +267,21 @@ module qa_drv_hc_fifo_to_host
         frame_writer.writeHeader = 0;
         frame_writer.writeHeader.mdata = 0;
 
-        // First chunk in the header is the message length
-        header_line = t_CACHE_LINE_VEC_UMF_CHUNK'({ cur_header_line,
-                                                    t_UMF_CHUNK'(num_chunks) });
+        frame_writer.data = lineIn_data;
 
         case (state)
-          STATE_EMIT_DATA:
+          STATE_EMIT_FENCE:
             begin
-                frame_writer.data = cur_data_line;
-                frame_writer.writeHeader.requestType = WrThru;
-                frame_writer.writeHeader.address = buffer_base_addr + cur_data_idx;
-            end
-          STATE_EMIT_HEADER:
-            begin
-                frame_writer.data = header_line;
-                frame_writer.writeHeader.requestType = WrThru;
-                frame_writer.writeHeader.address = buffer_base_addr + cur_header_idx;
-            end
-          default:
-            begin
-                frame_writer.data = header_line;
                 frame_writer.writeHeader.requestType = WrFence;
                 frame_writer.writeHeader.address = 0;
             end
+          default:
+            begin
+                frame_writer.writeHeader.requestType = WrThru;
+                frame_writer.writeHeader.address = buffer_base_addr +
+                                                   cur_data_idx;
+            end
         endcase
     end
-
-
-    // ====================================================================
-    //
-    //   Debugging
-    //
-    // ====================================================================
-
-`ifdef QA_DRIVER_DEBUG_Z
-
-    // Debugger disabled
-    assign fifo_to_host_to_status.dbgFIFOState = t_AFU_DEBUG_RSP'(0);
-
-`else
-
-    t_UMF_CHUNK dbg_chunk_log[0 : 511];
-    logic [8:0] dbg_chunk_next_idx;
-
-    // Host requests a history register to read
-    logic [8:0] dbg_chunk_read_idx;
-    assign dbg_chunk_read_idx = dbg_chunk_next_idx -
-                                9'(csr.afu_trigger_debug.subIdx);
-
-    always_ff @(posedge clk)
-    begin
-        if (! resetb)
-            dbg_chunk_next_idx <= 0;
-        else if (tx_enable)
-            dbg_chunk_next_idx <= dbg_chunk_next_idx + 1;
-    end
-
-    always_ff @(posedge clk)
-    begin
-        // Read a host-requested history register.
-        fifo_to_host_to_status.dbgFIFOState <= dbg_chunk_log[dbg_chunk_read_idx];
-
-        // Log arriving UMF_CHUNKs
-        if (tx_enable)
-        begin
-            dbg_chunk_log[dbg_chunk_next_idx] <= tx_data;
-        end
-    end
-
-`endif // QA_DRIVER_DEBUG_Z
 
 endmodule

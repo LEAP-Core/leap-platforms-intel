@@ -6,6 +6,10 @@
 %requires qa_driver_shims
 %requires qa_driver_primitives
 
+%sources -t H           -v PUBLIC  AFU.h
+%sources -t H           -v PUBLIC  AFU_csr.h
+%sources -t CPP         -v PRIVATE AFU.cpp
+
 %sources -t VERILOG_H   -v PRIVATE qa_driver.vh
 %sources -t VERILOG_PKG -v PRIVATE qa_driver_types.sv
 %sources -t VERILOG_PKG -v PRIVATE qa_driver_csr_types.sv

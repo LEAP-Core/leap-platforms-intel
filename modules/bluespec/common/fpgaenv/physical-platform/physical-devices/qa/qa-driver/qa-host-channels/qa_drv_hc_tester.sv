@@ -38,36 +38,42 @@
 //
 
 module qa_drv_hc_tester
-  #(parameter UMF_WIDTH=128)
-    (input logic clk,
-     input logic resetb,
+  #(
+    parameter CCI_DATA_WIDTH = 512,
+    parameter CCI_RX_HDR_WIDTH = 18,
+    parameter CCI_TX_HDR_WIDTH = 61,
+    parameter CCI_TAG_WIDTH = 13
+    )
+   (
+    input logic clk,
+    input logic resetb,
 
-     input   t_CSR_AFU_STATE        csr,
+    input   t_CSR_AFU_STATE        csr,
 
-     // To-client FIFO
-     output logic [UMF_WIDTH-1:0] rx_fifo_data,
-     output logic                 rx_fifo_rdy,
-     input  logic                 rx_fifo_enable,
+    // To-client FIFO
+    output logic [CCI_DATA_WIDTH-1:0] rx_fifo_data,
+    output logic                      rx_fifo_rdy,
+    input  logic                      rx_fifo_enable,
 
-     // From-client FIFO
-     input  logic [UMF_WIDTH-1:0] tx_fifo_data,
-     output logic                 tx_fifo_rdy,
-     input  logic                 tx_fifo_enable,
+    // From-client FIFO
+    input  logic [CCI_DATA_WIDTH-1:0] tx_fifo_data,
+    output logic                      tx_fifo_rdy,
+    input  logic                      tx_fifo_enable,
 
-     // Internal wires for to-client FIFO
-     input  logic [UMF_WIDTH-1:0] rx_data,
-     input  logic                 rx_rdy,
-     output logic                 rx_enable,
+    // Internal wires for to-client FIFO
+    input  logic [CCI_DATA_WIDTH-1:0] rx_data,
+    input  logic                      rx_rdy,
+    output logic                      rx_enable,
 
-     // Internal wires for from-client FIFO
-     output logic [UMF_WIDTH-1:0] tx_data,
-     input  logic                 tx_rdy,
-     output logic                 tx_enable,
+    // Internal wires for from-client FIFO
+    output logic [CCI_DATA_WIDTH-1:0] tx_data,
+    input  logic                      tx_rdy,
+    output logic                      tx_enable,
 
-     output t_TO_STATUS_MGR_TESTER tester_to_status
+    output t_TO_STATUS_MGR_TESTER tester_to_status
     );
 
-    typedef logic [UMF_WIDTH-1:0] t_DATA;
+    typedef logic [CCI_DATA_WIDTH-1:0] t_DATA;
 
     //
     // Test mode.
@@ -84,7 +90,6 @@ module qa_drv_hc_tester
     t_STATE state;
 
     // SOURCE state
-    t_DATA source_data;
     logic [30:0] source_count;
 
     // Signal completed operation
@@ -97,6 +102,11 @@ module qa_drv_hc_tester
     begin
         test_done = 0;
 
+        // Normal data connection passes RX/TX wires between client
+        // and FIFO channels.
+        rx_fifo_data = rx_data;
+        tx_data = tx_fifo_data;
+
         case (state)
           SINK:
             begin
@@ -106,14 +116,12 @@ module qa_drv_hc_tester
                 //   The data wires remain wired as normal since they are
                 //   don't cares.
                 //
-                rx_fifo_data = rx_data;         // Don't care
                 rx_fifo_rdy = 1'b0;             // Disable client
                 rx_enable = rx_rdy && tx_rdy;   // Sink!
 
                 // Done if bit 0 of received data is 1
                 test_done = (rx_enable && (rx_data[0] == 1'b1));
 
-                tx_data = rx_enable;            // Loopback (only last message)
                 tx_fifo_rdy = 1'b0;             // Disable client
                 tx_enable = test_done;          // Send one message when the test
                                                 // ends.
@@ -124,17 +132,15 @@ module qa_drv_hc_tester
                 //
                 // SOURCE:  Send messages continuously to host.
                 //
-                rx_fifo_data = rx_data;         // Don't care
                 rx_fifo_rdy = 1'b0;             // Disable client
                 rx_enable = rx_rdy;             // Sink incoming
 
                 // Done if count of messages to send is 0
                 test_done = (tx_rdy && (source_count == 1));
 
-                tx_data = t_DATA'({ source_count, 1'b0 });
-
-                // Signal the last message by setting bit 0 to 1 iff last
-                tx_data[0] = (source_count == 1);
+                // Put a counter in the low bits and signal the last message
+                // by setting bit 0 to 1 iff last
+                tx_data[31:0] = { source_count, (source_count == 1) };
 
                 tx_fifo_rdy = 1'b0;             // Disable client
                 tx_enable = tx_rdy;
@@ -145,7 +151,6 @@ module qa_drv_hc_tester
                 //
                 // LOOPBACK:  Send all messages from host back to host.
                 //
-                rx_fifo_data = rx_data;         // Don't care
                 rx_fifo_rdy = 1'b0;             // Disable client
                 rx_enable = rx_rdy && tx_rdy;   // Accept a new message if it
                                                 // can be transmitted back.
@@ -153,7 +158,7 @@ module qa_drv_hc_tester
                 // Done if bit 0 of received data is 1
                 test_done = (rx_enable && (rx_data[0] == 1'b1));
 
-                tx_data = rx_data;              // Loopback
+                tx_data[31:0] = rx_data[31:0];  // Loopback low bits
                 tx_fifo_rdy = 1'b0;             // Disable client
                 tx_enable = rx_enable;
             end
@@ -163,11 +168,9 @@ module qa_drv_hc_tester
                 //
                 // Normal mode.  Connect the client to the driver.
                 //
-                rx_fifo_data = rx_data;
                 rx_fifo_rdy = rx_rdy;
                 rx_enable = rx_fifo_enable;
 
-                tx_data = tx_fifo_data;
                 tx_fifo_rdy = tx_rdy && csr.afu_en_user_channel;
                 tx_enable = tx_fifo_enable;
             end
@@ -183,13 +186,10 @@ module qa_drv_hc_tester
         if (state != SOURCE)
         begin
             source_count <= csr.afu_enable_test.count;
-            source_data <= UMF_WIDTH'(1);
         end
         else if (tx_rdy)
         begin
             source_count <= source_count - 1;
-            // Shift the data around in a predictable way
-            source_data <= (source_data << 1) ^ UMF_WIDTH'(12345);
         end
     end
 

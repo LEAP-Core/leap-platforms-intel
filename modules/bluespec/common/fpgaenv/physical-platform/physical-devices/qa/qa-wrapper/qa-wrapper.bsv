@@ -35,6 +35,7 @@ import Clocks::*;
 import Vector::*;
 import FIFO::*;
 import FIFOF::*;
+import ConfigReg::*;
 
 `ifndef CCI_LOOPBACK_HACK_Z
 import GetPut::*;
@@ -98,11 +99,25 @@ QA_MEM_REQ
     deriving (Eq, Bits);
 
 
+//
+// Channel interface exposed to the platform.
+//
 interface QA_CHANNEL_DRIVER;
     method Action                     deq();
     method Bit#(SizeOf#(UMF_CHUNK))   first();
     method Bool                       notEmpty();
     method Action                     write(Bit#(SizeOf#(UMF_CHUNK)) chunk);
+    method Bool                       notFull();
+endinterface
+
+//
+// Channel driver interface through the imported Verilog.
+//
+interface QA_CHANNEL_DRIVER_IMPORT;
+    method Action                     deq();
+    method QA_CCI_DATA                first();
+    method Bool                       notEmpty();
+    method Action                     write(QA_CCI_DATA data);
     method Bool                       notFull();
 endinterface
 
@@ -171,21 +186,23 @@ interface QA_WIRES;
     method Bit#(1)   ffs_vl_LP32ui_sy2lp_C1TxIrValid;
 endinterface
 
-interface QA_DEVICE#(type t_QA_MEMORY_DRIVER);
-    interface QA_CHANNEL_DRIVER  channelDriver; 
-    interface t_QA_MEMORY_DRIVER memoryDriver;
-    interface QA_SREG_DRIVER     sregDriver; 
+interface QA_DEVICE#(type t_QA_CHANNEL_DRIVER, type t_QA_MEMORY_DRIVER);
+    interface t_QA_CHANNEL_DRIVER channelDriver; 
+    interface t_QA_MEMORY_DRIVER  memoryDriver;
+    interface QA_SREG_DRIVER      sregDriver; 
     (* prefix = "" *)
-    interface QA_WIRES           wires;
+    interface QA_WIRES            wires;
 endinterface
 
 // Import-BVI version of the interface with 2-bit memory write ACK.
-typedef QA_DEVICE#(QA_MEMORY_DRIVER_IMPORT#(2)) QA_DEVICE_IMPORT;
+typedef QA_DEVICE#(QA_CHANNEL_DRIVER_IMPORT,
+                   QA_MEMORY_DRIVER_IMPORT#(2)) QA_DEVICE_IMPORT;
 
 // Bluespec platform version of the interface with 4-bit memory write ACK in
 // order to cope with latency-insensitivity and slower clocks.
 typedef 4 QA_DEVICE_WRITE_ACK_BITS;
-typedef QA_DEVICE#(QA_MEMORY_DRIVER#(QA_DEVICE_WRITE_ACK_BITS)) QA_DEVICE_PLAT;
+typedef QA_DEVICE#(QA_CHANNEL_DRIVER,
+                   QA_MEMORY_DRIVER#(QA_DEVICE_WRITE_ACK_BITS)) QA_DEVICE_PLAT;
 
 
 Integer umfChunkSize = valueOf(SizeOf#(UMF_CHUNK));
@@ -200,7 +217,6 @@ module mkQADeviceImport#(Clock vl_clk_LPdomain_32ui,
     parameter CCI_DATA_WIDTH   = `CCI_DATA_WIDTH;
     parameter CCI_RX_HDR_WIDTH = `CCI_RXHDR_WIDTH;
     parameter CCI_TX_HDR_WIDTH = `CCI_TXHDR_WIDTH;
-    parameter UMF_WIDTH        = umfChunkSize;
 
     input_clock (vl_clk_LPdomain_32ui) = vl_clk_LPdomain_32ui;
     default_clock vl_clk_LPdomain_32ui;
@@ -208,7 +224,7 @@ module mkQADeviceImport#(Clock vl_clk_LPdomain_32ui,
     input_reset (ffs_vl_LP32ui_lp2sy_SoftReset_n) = ffs_vl_LP32ui_lp2sy_SoftReset_n;
     default_reset ffs_vl_LP32ui_lp2sy_SoftReset_n;
 
-    interface QA_CHANNEL_DRIVER channelDriver;
+    interface QA_CHANNEL_DRIVER_IMPORT channelDriver;
         method deq() ready(rx_fifo_rdy) enable(rx_fifo_enable);
         method rx_fifo_data first() ready(rx_fifo_rdy);
         method rx_fifo_rdy notEmpty();
@@ -317,7 +333,12 @@ endmodule
 module mkQADeviceSynth#(Clock vl_clk_LPdomain_32ui,
                         Reset ffs_vl_LP32ui_lp2sy_SoftReset_n)
     // Interface:
-    (QA_DEVICE_PLAT);
+    (QA_DEVICE_PLAT)
+    provisos (Bits#(UMF_CHUNK, n_UMF_CHUNK_SZ),
+              Bits#(QA_CCI_DATA, n_QA_CCI_DATA_SZ),
+              NumAlias#(n_CHUNKS_PER_LINE, TDiv#(n_QA_CCI_DATA_SZ, n_UMF_CHUNK_SZ)),
+              Alias#(t_NUM_CHUNKS, Bit#(TLog#(n_CHUNKS_PER_LINE))),
+              Alias#(t_CHUNK_VEC, Vector#(n_CHUNKS_PER_LINE, UMF_CHUNK)));
 
     let qa_clock = vl_clk_LPdomain_32ui;
     let qa_reset = ffs_vl_LP32ui_lp2sy_SoftReset_n;
@@ -338,14 +359,150 @@ module mkQADeviceSynth#(Clock vl_clk_LPdomain_32ui,
     SyncFIFOIfc#(UMF_CHUNK) syncChannelReadQ <- mkSyncFIFOToCC(16, qa_clock, qa_reset);
     SyncFIFOIfc#(UMF_CHUNK) syncChannelWriteQ <- mkSyncFIFOFromCC(16, qa_clock);
 
+    //
+    // Extract UMF_CHUNKS from the incoming cache line sized vector coming
+    // from the driver.
+    //
+    Reg#(t_CHUNK_VEC) readChunkVec <- mkRegU(clocked_by qa_clock, reset_by qa_reset);
+    // Number of chunks remaining in current line
+    Reg#(t_NUM_CHUNKS) nReadVecChunksRem <- mkConfigReg(0, clocked_by qa_clock, reset_by qa_reset);
+    // Number of chunks remaining in current UMF packet
+    Reg#(UMF_MSG_LENGTH) nReadPacketChunksRem <- mkConfigReg(0, clocked_by qa_clock, reset_by qa_reset);
+
+    //
+    // Convert incoming lines from the channel to UMF_CHUNKs.
+    //
     rule pullDataIn;
-        syncChannelReadQ.enq(qaChannelDriver.first);
-        qaChannelDriver.deq;
+        t_CHUNK_VEC v;
+        if (nReadVecChunksRem == 0)
+        begin
+            // Time for a new line from the channel
+            v = unpack(qaChannelDriver.first);
+            qaChannelDriver.deq();
+            nReadVecChunksRem <= fromInteger(valueOf(n_CHUNKS_PER_LINE) - 1);
+        end
+        else
+        begin
+            // Chunks remain in the current line
+            v = shiftInAtN(readChunkVec, ?);
+            nReadVecChunksRem <= nReadVecChunksRem - 1;
+        end
+
+        readChunkVec <= v;
+
+        if (nReadPacketChunksRem == 0)
+        begin
+            // Beginning of a UMF packet.  Find the length of the packet.
+            UMF_MSG_LENGTH rem = truncate(v[0]);
+            nReadPacketChunksRem <= rem;
+
+            // Is this chunk a header or is it just filler in the line for
+            // alignment?  It is a header if the packet length is not zero.
+            if (rem != 0)
+            begin
+                syncChannelReadQ.enq(v[0]);
+            end
+        end
+        else
+        begin
+            syncChannelReadQ.enq(v[0]);
+            nReadPacketChunksRem <= nReadPacketChunksRem - 1;
+        end
     endrule
 
-    rule pushDataOut;
-        qaChannelDriver.write(syncChannelWriteQ.first);
+
+    //
+    // Merge UMF_CHUNKs into cache line sized vectors before writing them to
+    // the host.  When the number of chunks isn't a multiple of the line size
+    // it may be necessary to flush a line before it is complete in order to
+    // transmit a message to the host.
+    //
+    Reg#(t_CHUNK_VEC) writeChunkVec <- mkRegU(clocked_by qa_clock, reset_by qa_reset);
+    // Number of chunks valid in current line
+    Reg#(t_NUM_CHUNKS) nWriteChunksActive <- mkConfigReg(0, clocked_by qa_clock, reset_by qa_reset);
+    // Number of chunks remaining in current UMF packet
+    Reg#(UMF_MSG_LENGTH) nWriteChunksRem <- mkConfigReg(0, clocked_by qa_clock, reset_by qa_reset);
+    // Idle cycles since last chunk arrived
+    Reg#(Bit#(4)) nWriteIdleCycles <- mkConfigReg(0, clocked_by qa_clock, reset_by qa_reset);
+
+    PulseWire didWriteFlushW <- mkPulseWire(clocked_by qa_clock, reset_by qa_reset);
+
+    rule pushDataOut (syncChannelWriteQ.notEmpty);
+        // Shift the next entry in to the output buffer
+        t_CHUNK_VEC v = shiftInAtN(writeChunkVec, syncChannelWriteQ.first);
+        writeChunkVec <= v;
         syncChannelWriteQ.deq;
+
+        if (nWriteChunksActive == (fromInteger(valueOf(n_CHUNKS_PER_LINE) - 1)))
+        begin
+            // Finished a line
+            qaChannelDriver.write(pack(v));
+            nWriteChunksActive <= 0;
+        end
+        else
+        begin
+            // Incomplete line
+            nWriteChunksActive <= nWriteChunksActive + 1;
+        end
+
+        //
+        // Track UMF packets.  Once a packet starts it will be stored densely
+        // in the output stream.
+        //
+        if (nWriteChunksRem == 0)
+        begin
+            // Chunk is the start of a packet.  Get the count of chunks
+            // left in the packet.
+            nWriteChunksRem <= truncate(syncChannelWriteQ.first);
+        end
+        else
+        begin
+            nWriteChunksRem <= nWriteChunksRem - 1;
+        end
+    endrule
+
+    // Count idle cycles when data is buffered so it can be flushed to the
+    // host if necessary.
+    (* no_implicit_conditions, fire_when_enabled *)
+    rule countDataOutIdle (True);
+        if (syncChannelWriteQ.notEmpty ||
+           (nWriteChunksRem != 0) ||
+           (nWriteChunksActive == 0) ||
+           didWriteFlushW)
+        begin
+            nWriteIdleCycles <= 0;
+        end
+        else
+        begin
+            nWriteIdleCycles <= nWriteIdleCycles + 1;
+        end
+    endrule
+
+
+    // Flush the output channel buffer to the host if no UMF packet is active
+    // and too much time has passed.
+    rule flushDataOut (! syncChannelWriteQ.notEmpty &&
+                       (msb(nWriteIdleCycles) == 1));
+        // Time to flush the buffer.  Rotate and flush when it is rotated
+        // into the proper position.  Rotation may take multiple cycles.
+        // If new data arrives before rotation then the flush sequence
+        // terminates and real output resumes.  The host will handle an
+        // arbitrary number of NULLs interted between UMF packets.
+        t_CHUNK_VEC v = shiftInAtN(writeChunkVec, 0);
+        writeChunkVec <= v;
+
+        if (nWriteChunksActive == (fromInteger(valueOf(n_CHUNKS_PER_LINE) - 1)))
+        begin
+            // Finished a line
+            qaChannelDriver.write(pack(v));
+            nWriteChunksActive <= 0;
+            didWriteFlushW.send();
+        end
+        else
+        begin
+            // Incomplete line
+            nWriteChunksActive <= nWriteChunksActive + 1;
+        end
     endrule
 
 

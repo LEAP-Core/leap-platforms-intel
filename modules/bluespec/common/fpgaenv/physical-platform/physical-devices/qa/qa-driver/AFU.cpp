@@ -36,7 +36,6 @@
 #include <stdlib.h>
 #include <assert.h>
 
-#include "AFU.h"
 #include "awb/provides/qa_device.h"
 
 

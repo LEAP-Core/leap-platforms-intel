@@ -32,6 +32,10 @@
 #ifndef AFU_H
 #define AFU_H
 
+// AAL redefines ASSERT and TRACE
+#undef ASSERT
+#undef TRACE
+
 #include <time.h>
 #include <vector>
 
@@ -47,6 +51,17 @@ USING_NAMESPACE(AAL)
 
 typedef class AFU_CLIENT_CLASS *AFU_CLIENT;
 typedef class AFU_RUNTIME_CLIENT_CLASS *AFU_RUNTIME_CLIENT;
+
+
+#ifndef CL
+# define CL(x)                     ((x) * 64)
+#endif // CL
+#ifndef LOG2_CL
+# define LOG2_CL                   6
+#endif // LOG2_CL
+#ifndef MB
+# define MB(x)                     ((x) * 1024 * 1024)
+#endif // MB
 
 
 //

@@ -161,34 +161,81 @@ QA_PHYSICAL_CHANNEL_CLASS::readPipe()
     if (incomingMessage == NULL)
     {
         // new message: read header
-        unsigned char header[UMF_CHUNK_BYTES];
+        UMF_CHUNK header;
+        qaDevice.Read(&header, sizeof(header));
 
-        qaDevice.Read(header, UMF_CHUNK_BYTES);
-
-        // create a new message
-        incomingMessage = umfFactory->createUMFMessage();
-        incomingMessage->DecodeHeader(header);
-    }
-    else if (!incomingMessage->CanAppend())
-    {
-        // uh-oh.. we already have a full message, but it hasn't been
-        // asked for yet. We will simply not read the pipe, but in
-        // future, we might want to include a read buffer.
-    }
-    else
-    {
-        // read in some more bytes for the current message
-        unsigned char buf[QA_BLOCK_SIZE];
-        int bytes_requested = QA_BLOCK_SIZE;
-
-        if (incomingMessage->BytesUnwritten() < QA_BLOCK_SIZE)
+        // If header is 0 then it was just filler on the channel.
+        if (header != 0)
         {
-            bytes_requested = incomingMessage->BytesUnwritten();
+            // create a new message
+            incomingMessage = umfFactory->createUMFMessage();
+            incomingMessage->DecodeHeader(header);
+        }
+    }
+    else if (incomingMessage->CanAppend())
+    {
+        size_t n_bytes = incomingMessage->BytesUnwritten();
+
+        // Read in the message.  Once the header has been received the
+        // rest of the data is guaranteed to follow.
+        void* dst = incomingMessage->AppendGetRawPtr();
+        qaDevice.Read(dst, n_bytes);
+        incomingMessage->AppendUpdateRawPtr(n_bytes);
+    }
+}
+
+
+void *
+QA_PHYSICAL_CHANNEL_CLASS::WriterThread(void *argv)
+{
+    void ** args = (void**) argv;
+    QA_PHYSICAL_CHANNEL physicalChannel = (QA_PHYSICAL_CHANNEL) args[1];
+
+    tbb::concurrent_bounded_queue<UMF_MESSAGE> *incomingQ = &(physicalChannel->writeQ);
+    QA_DEVICE_WRAPPER qaDevice = (QA_DEVICE_WRAPPER) args[0];
+
+    while (1)
+    {
+        UMF_MESSAGE message;
+        incomingQ->pop(message);
+
+        // Check to see if we're being torn down -- this is
+        // done by passing a special message through the writeQ
+
+        if (message == NULL)
+        {
+            if (!physicalChannel->uninitialized)
+            {
+                cerr << "QA_PHYSICAL_CHANNEL got an unexpected NULL value" << endl;
+            }
+
+            pthread_exit(0);
         }
 
-        qaDevice.Read(buf, bytes_requested);
+        // The FPGA side detects NULLs inserted for alignment by looking at the
+        // length field.  Having a length of 0 would break the protocol.
+        ASSERTX(message->GetLength() != 0);
 
-        // append read bytes into message
-        incomingMessage->AppendBytes(bytes_requested, buf);
+        // construct header
+        UMF_CHUNK header = 0;
+        message->EncodeHeader((unsigned char *)&header);
+
+        qaDevice->Write(&header, sizeof(header));
+
+        size_t n_bytes = message->ExtractBytesLeft();
+        // Round up to multiple of UMF_CHUNK size
+        n_bytes = (n_bytes + sizeof(UMF_CHUNK) - 1) & ~(sizeof(UMF_CHUNK) - 1);
+
+        qaDevice->Write(message->ExtractGetRawPtr(), n_bytes);
+        message->ExtractUpdateRawPtr(n_bytes);
+
+        // de-allocate message
+        delete message;
+
+        // Flush output channel if there isn't another message ready.
+        if (incomingQ->empty())
+        {
+            qaDevice->Flush();
+        }
     }
 }

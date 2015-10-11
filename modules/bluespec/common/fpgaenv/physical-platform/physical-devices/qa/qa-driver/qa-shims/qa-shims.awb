@@ -3,6 +3,9 @@
 
 %provides qa_driver_shims
 
+%sources -t H          -v PUBLIC  qa_shim_tlb_simple.h
+%sources -t CPP        -v PRIVATE qa_shim_tlb_simple.cpp
+
 %sources -t VERILOG    -v PRIVATE qa_shim_buffer_afu.sv
 %sources -t VERILOG    -v PRIVATE qa_shim_buffer_lockstep_afu.sv
 %sources -t VERILOG    -v PRIVATE qa_shim_buffer_qlp.sv

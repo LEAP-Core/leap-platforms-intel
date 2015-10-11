@@ -37,6 +37,8 @@
 #include <assert.h>
 
 #include "awb/provides/qa_device.h"
+#include "awb/provides/qa_driver_shims.h"
+
 
 
 AFU AFU_CLASS::instance = NULL;
@@ -51,6 +53,11 @@ AFU_CLASS::AFU_CLASS(const char* afuID, uint32_t dsmSizeBytes)
     afuRuntimeClient = new AFU_RUNTIME_CLIENT_CLASS();
     afuClient = new AFU_CLIENT_CLASS(afuRuntimeClient);
     afuClient->InitService(afuID);
+
+    // Allocate the TLB that enables host/FPGA shared virtual regions.
+    // Shared regions are allocated with the CreateSharedBufferInVM()
+    // method.
+    tlb = new QA_SHIM_TLB_CLASS(afuClient);
 
     // create buffer for DSM
     dsmBuffer = CreateSharedBuffer(dsmSizeBytes);
@@ -93,7 +100,7 @@ AFU_CLASS::~AFU_CLASS() {
 
 
 AFU_BUFFER 
-AFU_CLASS::CreateSharedBuffer(uint64_t size_bytes) {
+AFU_CLASS::CreateSharedBuffer(size_t size_bytes) {
     AFU_BUFFER buffer = afuClient->CreateSharedBuffer(size_bytes);
 
     // store buffer in vector, so it can be released later
@@ -101,6 +108,20 @@ AFU_CLASS::CreateSharedBuffer(uint64_t size_bytes) {
 
     // return buffer struct
     return buffer;
+}
+
+
+void*
+AFU_CLASS::CreateSharedBufferInVM(size_t size_bytes)
+{
+    return tlb->CreateSharedBufferInVM(size_bytes);
+}
+
+
+btPhysAddr
+AFU_CLASS::SharedBufferVAtoPA(const void* va)
+{
+    return tlb->SharedBufferVAtoPA(va);
 }
 
 
@@ -213,7 +234,7 @@ AFU_CLIENT_CLASS::UninitService()
 
 
 AFU_BUFFER
-AFU_CLIENT_CLASS::CreateSharedBuffer(uint64_t size_bytes)
+AFU_CLIENT_CLASS::CreateSharedBuffer(size_t size_bytes)
 {
     //
     // The API doesn't return the workspace.  Instead, a callback is informed
@@ -235,9 +256,15 @@ AFU_CLIENT_CLASS::CreateSharedBuffer(uint64_t size_bytes)
     buffer->numBytes = m_WrkBytes;
 
     // set contents of buffer to 0
-    memset((void *)buffer->virtualAddress, 0, size_bytes);
+    if (buffer->virtualAddress != NULL)
+    {
+        memset((void *)buffer->virtualAddress, 0, size_bytes);
+        return buffer;
+    }
 
-    return buffer;
+    // Failed
+    delete buffer;
+    return NULL;
 }
 
 
@@ -258,11 +285,11 @@ AFU_CLIENT_CLASS::serviceAllocated(
     TransactionID const &rTranID)
 {
     m_pAALService = pServiceBase;
-    ASSERT(NULL != m_pAALService);
+    assert(NULL != m_pAALService);
 
     // CCIAFU Service publishes ICCIAFU as subclass interface.
     m_Service = subclass_ptr<ICCIAFU>(pServiceBase);
-    ASSERT(NULL != m_Service);
+    assert(NULL != m_Service);
 
     m_Sem.Post(1);
 }
@@ -311,6 +338,8 @@ AFU_CLIENT_CLASS::OnWorkspaceAllocateFailed(const IEvent &rEvent)
     fprintf(stderr, "ERROR: AFU CLIENT workspace allocation failed: %s\n",
             pExEvent->Description());
 
+    m_WrkVA = NULL;
+    m_WrkPA = 0;
     m_WrkBytes = 0;
     m_SemWrk.Post(1);
 }

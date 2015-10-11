@@ -45,6 +45,8 @@
 #include <aalsdk/service/ICCIClient.h>
 
 #include "AFU_csr.h"
+#include "qa_shim_tlb_simple.h"
+
 
 USING_NAMESPACE(std)
 USING_NAMESPACE(AAL)
@@ -96,9 +98,21 @@ class AFU_CLASS
     void ResetAFU();
 
     //
-    // Allocate a memory buffer shared by the host and an FPGA
+    // Allocate a memory buffer shared by the host and an FPGA.  This call
+    // DOES NOT add the VA/PA pair to the FPGA-side TLB.
     //
-    AFU_BUFFER CreateSharedBuffer(uint64_t size_bytes);
+    AFU_BUFFER CreateSharedBuffer(size_t size_bytes);
+
+    //
+    // Allocate a shared memory buffer and add the VA/PA mapping to the
+    // FPGA-side TLB, implemented in QA_SHIM_TLB_CLASS and the corresponding
+    // RTL.
+    //
+    void* CreateSharedBufferInVM(size_t size_bytes);
+
+    // Virtual to physical translation for memory created by
+    // CreateSharedBufferInVM.
+    btPhysAddr SharedBufferVAtoPA(const void* va);
 
     //
     // DSM is a relatively small shared memory buffer defined by the CCI
@@ -132,6 +146,9 @@ class AFU_CLASS
 
     std::vector<AFU_BUFFER> buffers;
     AFU_BUFFER dsmBuffer;
+
+    // Shared TLB and virtual memory manager.  Only one is permitted per AFU.
+    QA_SHIM_TLB tlb;
 };
 
 
@@ -169,7 +186,7 @@ public:
     //
     // Allocate a memory buffer shared by the host and an FPGA.
     //
-    AFU_BUFFER CreateSharedBuffer(uint64_t size_bytes);
+    AFU_BUFFER CreateSharedBuffer(size_t size_bytes);
     void FreeSharedBuffer(AFU_BUFFER buffer);
 
     // <begin IServiceClient interface>

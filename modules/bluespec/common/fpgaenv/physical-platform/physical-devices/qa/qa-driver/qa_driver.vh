@@ -31,6 +31,17 @@
 `ifndef QA_DRIVER_TYPES_VH
 `define QA_DRIVER_TYPES_VH
 
+//
+// Widths of standard CCI interfaces
+//
+
+`define CCI_S_RX_HDR_WIDTH 18
+`define CCI_S_TX_HDR_WIDTH 61
+
+`define CCI_E_RX_HDR_WIDTH 24
+`define CCI_E_TX_HDR_WIDTH 99
+
+
 // Included because VCS fails to detect packages correctly.
 `include "qa_driver_types.sv"
 
@@ -45,11 +56,6 @@ import qa_driver_csr_types::*;
 // platform (QLP) and the user code (AFU).  Most shims expose two copies
 // of the interface: one connecting in the direction of the QLP and the
 // other connecting in the direction of the QFU.
-//
-// Ideally this code would expose two modports, one for each of the directions
-// that shims connect.  The two modports would have mirror images of input vs.
-// output on the wires.  Until Quartus supports modport we will make due with
-// simple structure-like definitions.
 //
 interface qlp_interface
   #(

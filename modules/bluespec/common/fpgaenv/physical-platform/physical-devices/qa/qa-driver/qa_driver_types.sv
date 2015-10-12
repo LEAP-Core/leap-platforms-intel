@@ -34,7 +34,6 @@
 // Included because VCS fails to detect packages correctly.
 `include "qa_driver_csr_types.sv"
 
-
 //
 // Main type definitions for the QA driver.
 //

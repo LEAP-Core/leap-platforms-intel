@@ -11,4 +11,5 @@
 %sources -t VERILOG    -v PRIVATE qa_shim_buffer_qlp.sv
 %sources -t VERILOG    -v PRIVATE qa_shim_mux.sv
 %sources -t VERILOG    -v PRIVATE qa_shim_sort_responses.sv
+%sources -t VERILOG    -v PRIVATE qa_shim_tlb_simple.sv
 %sources -t VERILOG    -v PRIVATE qa_shim_write_order.sv

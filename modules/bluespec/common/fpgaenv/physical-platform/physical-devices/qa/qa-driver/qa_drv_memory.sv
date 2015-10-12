@@ -33,7 +33,7 @@
 
 module qa_drv_memory
   #(
-    parameter CCI_ADDR_WIDTH = 32,
+    parameter CCI_ADDR_WIDTH = 56,
     parameter CCI_DATA_WIDTH = 512,
     parameter CCI_RX_HDR_WIDTH = 18,
     parameter CCI_TX_HDR_WIDTH = 61,
@@ -76,22 +76,85 @@ module qa_drv_memory
     output logic [1:0]                mem_write_ack
     );
 
+
+    //
+    // Sanity checks on configuration parameters. This driver configuration
+    // maps a client interface that uses virtual addresses to a host interface
+    // that expects physical addresses. Multiple flavors of CCI thus appear.
+    //
+    generate
+        // Expose virtual addresses to the client
+        if (CCI_ADDR_WIDTH != 64 - $clog2(CCI_DATA_WIDTH / 8))
+        begin
+            $error("qa_driver.sv expects CCI_ADDR_WIDTH %d but configured with %d",
+                   64 - $clog2(CCI_DATA_WIDTH / 8), CCI_ADDR_WIDTH);
+        end
+
+        // Connect physical addresses to CCI
+        if (CCI_RX_HDR_WIDTH != `CCI_S_RX_HDR_WIDTH)
+        begin
+            $error("qa_driver.sv expects CCI_RX_HDR_WIDTH %d but configured with %d",
+                   `CCI_S_RX_HDR_WIDTH, CCI_RX_HDR_WIDTH);
+        end
+        if (CCI_TX_HDR_WIDTH != `CCI_S_TX_HDR_WIDTH)
+        begin
+            $error("qa_driver.sv expects CCI_TX_HDR_WIDTH %d but configured with %d",
+                   `CCI_S_TX_HDR_WIDTH, CCI_TX_HDR_WIDTH);
+        end
+    endgenerate
+
+
     logic  resetb;
     assign resetb = qlp.resetb;
 
-    typedef logic [CCI_TX_HDR_WIDTH-1:0] t_TX_HEADER;
-
     // ====================================================================
     //
-    //  Maintain read/write and write/write order to matching addresses.
+    //  Virtual to physical translation. This is the lowest level of
+    //  the hierarchy, nearest the QLP connection. The translation layer
+    //  can thus depend on a few properties, such as that only one
+    //  request is outstanding to a given line. The virtual to physical
+    //  translator is thus free to reorder any requests.
     //
     // ====================================================================
 
     qlp_interface
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
-        .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
+        .CCI_RX_HDR_WIDTH($bits(t_RX_HEADER_CCI_E)),
+        .CCI_TX_HDR_WIDTH($bits(t_TX_HEADER_CCI_E)),
+        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
+        )
+      qlp_virtual (.clk);
+
+    qa_shim_tlb_simple
+      #(
+        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
+        .CCI_QLP_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
+        .CCI_QLP_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
+        .CCI_AFU_RX_HDR_WIDTH($bits(t_RX_HEADER_CCI_E)),
+        .CCI_AFU_TX_HDR_WIDTH($bits(t_TX_HEADER_CCI_E)),
+        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
+        )
+      v_to_p
+       (
+        .clk,
+        .qlp,
+        .afu(qlp_virtual)
+        );
+
+
+    // ====================================================================
+    //
+    //  Maintain read/write and write/write order to matching addresses.
+    //  This level of the hierarchy operates on virtual addresses.
+    //
+    // ====================================================================
+
+    qlp_interface
+      #(
+        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
+        .CCI_RX_HDR_WIDTH($bits(t_RX_HEADER_CCI_E)),
+        .CCI_TX_HDR_WIDTH($bits(t_TX_HEADER_CCI_E)),
         .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
         )
       qlp_write_order (.clk);
@@ -99,29 +162,30 @@ module qa_drv_memory
     qa_shim_write_order
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
-        .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
+        .CCI_RX_HDR_WIDTH($bits(t_RX_HEADER_CCI_E)),
+        .CCI_TX_HDR_WIDTH($bits(t_TX_HEADER_CCI_E)),
         .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
         )
       filter
        (
         .clk,
-        .qlp,
+        .qlp(qlp_virtual),
         .afu(qlp_write_order)
         );
 
 
     // ====================================================================
     //
-    //  Sort read responses so they arrive in order.
+    //  Sort read responses so they arrive in order. Operates on virtual
+    //  addresses.
     //
     // ====================================================================
 
     qlp_interface
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
-        .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
+        .CCI_RX_HDR_WIDTH($bits(t_RX_HEADER_CCI_E)),
+        .CCI_TX_HDR_WIDTH($bits(t_TX_HEADER_CCI_E)),
         .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
         )
       qlp_inorder (.clk);
@@ -129,8 +193,8 @@ module qa_drv_memory
     qa_shim_sort_responses
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
-        .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
+        .CCI_RX_HDR_WIDTH($bits(t_RX_HEADER_CCI_E)),
+        .CCI_TX_HDR_WIDTH($bits(t_TX_HEADER_CCI_E)),
         .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
         )
       sorter
@@ -146,6 +210,8 @@ module qa_drv_memory
     //  Connect client requests to the QLP.
     //
     // ====================================================================
+
+    typedef logic [$bits(qlp_inorder.C0TxHdr)-1 : 0] t_TX_HEADER;
 
     //
     // The CCI-S and CCI-E headers share a base set of fields.  Construct

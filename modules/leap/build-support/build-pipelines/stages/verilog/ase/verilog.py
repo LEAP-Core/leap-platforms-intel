@@ -147,9 +147,10 @@ class Verilog():
     if (moduleList.getAWBParam('verilog_tool', 'VCS_ENABLE_LINT') != 0):
         vexe_gen_command += ' -Xv +lint=all,noVCDE'
 
-    vexe_gen_command += ' -Xv -full64 '
-    vexe_gen_command += ' -Xv -sverilog '
-    vexe_gen_command += ' -Xv +librescan '
+    vexe_gen_command += ' -Xv -assert -Xv svaext'
+    vexe_gen_command += ' -Xv -full64'
+    vexe_gen_command += ' -Xv -sverilog'
+    vexe_gen_command += ' -Xv +librescan'
     vexe_gen_command += ' -Xv +libext+.sv '
     if (moduleList.getAWBParam('verilog_tool', 'VCS_ARGUMENTS')):
         vexe_gen_command += moduleList.getAWBParam('verilog_tool', 'VCS_ARGUMENTS')

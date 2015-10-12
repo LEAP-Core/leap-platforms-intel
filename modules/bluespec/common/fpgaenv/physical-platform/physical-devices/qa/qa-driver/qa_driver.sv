@@ -29,11 +29,38 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
+
+// ========================================================================
+//
+//   Compose a memory interface and host/FPGA channel over the CCI
+//   for Xeon+FPGA. There are three sets of wires in the driver:
+//
+//     1.  A client interface to a bidirectional host/FPGA latency
+//         insensitive channel. The channel operates at the width
+//         of a cache line and provides a simple FIFO. Clients of
+//         the channel are free to layer any protocol on top of the
+//         base FIFO primitive.
+//
+//     2.  A client interface to system memory, exposed as simple
+//         read and write requests. In the configuration here addresses
+//         are virtual and translated by the TLB shim, instantiated
+//         below. The constructed memory system guarantees that stores
+//         to the same line remain ordered. Loads and stores to the same
+//         line are also ordered. No order is guaranteed between
+//         references to distinct lines.
+//
+//     3.  A system interface that must be tied to the CCI driver
+//         provided by Intel. The topology constructed here connects
+//         to CCI-S -- the interface that employs physical addresses
+//         for memory references.
+//
+// ========================================================================
+
 `include "qa_driver.vh"
 
 module qa_driver
   #(
-    parameter CCI_ADDR_WIDTH = 32,
+    parameter CCI_ADDR_WIDTH = 56,
     parameter CCI_DATA_WIDTH = 512,
     parameter CCI_RX_HDR_WIDTH = 18,
     parameter CCI_TX_HDR_WIDTH = 61,
@@ -139,8 +166,10 @@ module qa_driver
     input  logic                   ffs_vl_LP32ui_lp2sy_InitDnForSys     // System layer is aok to run
     );
 
+
     logic  clk;
     assign clk = vl_clk_LPdomain_32ui;
+
 
     // ====================================================================
     //

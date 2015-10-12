@@ -16,7 +16,7 @@
 
 %generated -t VERILOG mkQADeviceSynth.v
 
-%param CCI_ADDR_WIDTH   32     "Address bits (cache line granularity)"
+%param CCI_ADDR_WIDTH   58     "Address bits (cache line granularity)"
 %param CCI_DATA_WIDTH   512    "Cache line width"
 %param CCI_TXHDR_WIDTH  61     "TX Header width"
 %param CCI_RXHDR_WIDTH  18     "RX Header width"

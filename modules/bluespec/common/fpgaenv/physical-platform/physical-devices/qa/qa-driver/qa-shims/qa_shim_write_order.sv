@@ -152,8 +152,7 @@ module qa_shim_write_order
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
         .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
         .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
-        .CCI_TAG_WIDTH(CCI_TAG_WIDTH),
-        .REGISTER_OUTBOUND(1)
+        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
         )
       bufqlp
         (

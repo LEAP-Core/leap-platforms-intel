@@ -113,14 +113,14 @@ module qa_shim_tlb_simple
 
     assign deqC0Tx = afu_buf.C0TxRdValid && ! qlp.C0TxAlmFull;
 
-    assign qlp.C0TxHdr = $bits(qlp.C0TxHdr)'(afu_buf.C0TxHdr);
+    assign qlp.C0TxHdr = CCI_QLP_TX_HDR_WIDTH'(afu_buf.C0TxHdr);
     assign qlp.C0TxRdValid = deqC0Tx;
 
 
     assign deqC1Tx = (afu_buf.C1TxWrValid || afu_buf.C1TxIrValid) &&
                      ! qlp.C1TxAlmFull;
 
-    assign qlp.C1TxHdr = $bits(qlp.C1TxHdr)'(afu_buf.C1TxHdr);
+    assign qlp.C1TxHdr = CCI_QLP_TX_HDR_WIDTH'(afu_buf.C1TxHdr);
     assign qlp.C1TxData = afu_buf.C1TxData;
     assign qlp.C1TxWrValid = afu_buf.C1TxWrValid && deqC1Tx;
     assign qlp.C1TxIrValid = afu_buf.C1TxIrValid && deqC1Tx;
@@ -132,7 +132,7 @@ module qa_shim_tlb_simple
     //
     // ====================================================================
 
-    assign afu_buf.C0RxHdr = $bits(afu_buf.C0RxHdr)'(qlp.C0RxHdr);
+    assign afu_buf.C0RxHdr = CCI_AFU_RX_HDR_WIDTH'(qlp.C0RxHdr);
     assign afu_buf.C0RxData = qlp.C0RxData;
     assign afu_buf.C0RxWrValid = qlp.C0RxWrValid;
     assign afu_buf.C0RxRdValid = qlp.C0RxRdValid;
@@ -140,7 +140,7 @@ module qa_shim_tlb_simple
     assign afu_buf.C0RxUgValid = qlp.C0RxUgValid;
     assign afu_buf.C0RxIrValid = qlp.C0RxIrValid;
 
-    assign afu_buf.C1RxHdr = $bits(afu_buf.C1RxHdr)'(qlp.C1RxHdr);
+    assign afu_buf.C1RxHdr = CCI_AFU_RX_HDR_WIDTH'(qlp.C1RxHdr);
     assign afu_buf.C1RxWrValid = qlp.C1RxWrValid;
     assign afu_buf.C1RxIrValid = qlp.C1RxIrValid;
 

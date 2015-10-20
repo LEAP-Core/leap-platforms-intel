@@ -68,6 +68,7 @@ module qa_drv_hc_fifo_to_host
       #(
         .N_DATA_BITS(CCI_DATA_WIDTH)
         )
+      inBuf
        (
         .clk,
         .resetb,

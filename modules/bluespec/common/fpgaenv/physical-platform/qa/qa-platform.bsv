@@ -29,6 +29,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
+import ConfigReg::*;
 import FIFO::*;
 import Vector::*;
 import Clocks::*;
@@ -38,6 +39,8 @@ import DefaultValue::*;
 //
 // Standard physical platform for Intel QuickAssist FPGAs.
 //
+
+`include "awb/provides/librl_bsv_base.bsh"
 
 `include "awb/provides/qa_device.bsh"
 `include "awb/provides/clocks_device.bsh"
@@ -190,13 +193,32 @@ module [CONNECTED_MODULE] mkPhysicalPlatform
         let req = memReq.receive();
         memReq.deq();
 
+`ifdef QA_PLATFORM_MEMTEST_Z
+        // Normal mode (not testing memory).
         qa.memoryDriver.req(req);
+`endif
     endrule
 
+`ifdef QA_PLATFORM_MEMTEST_Z
+    //
+    // Normal mode (not testing memory).  Forward memory read responses
+    // to client.
+    //
     rule fwdHostMemReadRsp (True);
         let data <- qa.memoryDriver.readLineRsp();
         memReadLineRsp.send(data);
     endrule
+
+`else
+
+    // Memory test mode. LEAP client is disconnected and memory is driven
+    // by the tester. There is a corresponding software routine to configure
+    // the test.
+    let memtest <- mkPhysicalPlatformMemTester(qa.memoryDriver,
+                                               qa.sregDriver,
+                                               clocked_by clk, reset_by rst);
+
+`endif
 
     rule fwdHostMemWritesInFlight (True);
         let n <- qa.memoryDriver.writeAck();
@@ -228,4 +250,181 @@ module [CONNECTED_MODULE] mkPhysicalPlatform
         interface ddrWires     = sdram.wires;
     endinterface
                
+endmodule
+
+
+
+// ========================================================================
+//
+// Memory tester. This module is normally not instantiated. It is a simple
+// traffic driver to test the QA memory interface.
+//
+// ========================================================================
+
+typedef enum
+{
+    MEMTEST_STATE_IDLE,
+    MEMTEST_STATE_READ,
+    MEMTEST_STATE_WRITE,
+    MEMTEST_STATE_BOTH,
+    MEMTEST_STATE_RESULT,
+    MEMTEST_STATE_RESULT1
+}
+MEMTEST_STATE
+    deriving (Eq, Bits);
+
+module [CONNECTED_MODULE] mkPhysicalPlatformMemTester#(
+    QA_MEMORY_DRIVER#(QA_DEVICE_WRITE_ACK_BITS) memoryDriver,
+    QA_SREG_DRIVER sregDriver)
+    //interface: 
+    ();
+
+    Reg#(MEMTEST_STATE) state <- mkReg(MEMTEST_STATE_IDLE);
+    Reg#(QA_CCI_ADDR) baseAddr <- mkRegU();
+    Reg#(Bit#(15)) idx <- mkRegU();
+    Reg#(Bit#(32)) rdCnt <- mkRegU();
+
+    COUNTER#(16) rdActive <- mkLCounter(0);
+    Reg#(Bit#(64)) rdTotalActive <- mkRegU();
+
+    Reg#(Bit#(32)) wrCnt <- mkRegU();
+    Reg#(Bit#(32)) trips <- mkRegU();
+    Reg#(Bit#(64)) cycles <- mkConfigRegU();
+
+    Reg#(Bool) cached <- mkRegU();
+    Reg#(Bool) checkOrder <- mkRegU();
+
+    rule getTestReq (state == MEMTEST_STATE_IDLE);
+        let r <- sregDriver.sregReq();
+
+        // Starting state arrives in the low two bits of an SReg request.
+        MEMTEST_STATE new_state = unpack(zeroExtend(r[1:0]));
+        state <= new_state;
+
+        // If the starting state in the SReg request is still IDLE then
+        // it is sending the base address of the test.
+        if (new_state == MEMTEST_STATE_IDLE)
+        begin
+            baseAddr <= zeroExtend(r);
+            sregDriver.sregRsp(?);
+        end
+
+        // Use the FPGA-side cache?  Encoded in bit 2 of the request.
+        cached <= unpack(r[2]);
+        // Enforce load/store and store/store order in the driver?
+        checkOrder <= unpack(r[3]);
+        // The remainder of the request is the number of trips through
+        // the test loop.  The trip count just clears the low 4 bits
+        // in order to encode more trips in a 32 bit request.
+        trips <= { r[31:4], 4'b0 };
+
+        idx <= 0;
+        rdTotalActive <= 0;
+        rdCnt <= 0;
+        wrCnt <= 0;
+        cycles <= 0;
+    endrule
+
+    // After a test runs the state switches to MEMTEST_STATE_RESULT.  The
+    // number of reads and writes completed during the test is returned
+    // in response to the next SReg request.
+    rule getTestResult (state == MEMTEST_STATE_RESULT);
+        let r <- sregDriver.sregReq();
+        sregDriver.sregRsp({ rdCnt, wrCnt });
+        state <= MEMTEST_STATE_RESULT1;
+    endrule
+
+    // The next SReg request returns the sum of active reads each cycle.
+    // This can be used to compute average latency using Little's Law.
+    rule getTestResult1 (state == MEMTEST_STATE_RESULT1);
+        let r <- sregDriver.sregReq();
+        sregDriver.sregRsp(rdTotalActive);
+        state <= MEMTEST_STATE_IDLE;
+    endrule
+
+    rule countCycles (state != MEMTEST_STATE_IDLE);
+        cycles <= cycles + 1;
+    endrule
+
+    //
+    // Read and write tests cycle through cache lines in a 2MB page.
+    //
+
+    rule testDoRead (state == MEMTEST_STATE_READ);
+        QA_MEM_REQ req;
+        req.write = tagged Invalid;
+        req.read = tagged Valid
+                       QA_MEM_READ_REQ { addr: baseAddr | zeroExtend(idx),
+                                         cached: cached,
+                                         checkLoadStoreOrder: checkOrder };
+        memoryDriver.req(req);
+
+        idx <= idx + 1;
+        rdCnt <= rdCnt + 1;
+        trips <= trips - 1;
+
+        rdActive.up();
+        rdTotalActive <= rdTotalActive + zeroExtend(rdActive.value());
+
+        if (trips == 1)
+        begin
+            state <= MEMTEST_STATE_RESULT;
+            sregDriver.sregRsp(cycles);
+        end
+    endrule
+
+    rule sinkReadRsp (True);
+        let data <- memoryDriver.readLineRsp();
+        rdActive.down();
+    endrule
+
+    rule testDoWrite (state == MEMTEST_STATE_WRITE);
+        QA_MEM_REQ req;
+        req.write = tagged Valid
+                        QA_MEM_WRITE_REQ { addr: baseAddr | zeroExtend(idx),
+                                           data: 0,
+                                           cached: cached,
+                                           checkLoadStoreOrder: checkOrder };
+        req.read = tagged Invalid;
+        memoryDriver.req(req);
+
+        idx <= idx + 1;
+        wrCnt <= wrCnt + 1;
+        trips <= trips - 1;
+
+        if (trips == 1)
+        begin
+            state <= MEMTEST_STATE_RESULT;
+            sregDriver.sregRsp(cycles);
+        end
+    endrule
+
+    rule testDoBoth (state == MEMTEST_STATE_BOTH);
+        QA_MEM_REQ req;
+        let a = idx + 3000;
+        req.write = tagged Valid
+                        QA_MEM_WRITE_REQ { addr: baseAddr | zeroExtend(a),
+                                           data: 0,
+                                           cached: cached,
+                                           checkLoadStoreOrder: checkOrder };
+        req.read = tagged Valid
+                       QA_MEM_READ_REQ { addr: baseAddr | zeroExtend(idx),
+                                         cached: cached,
+                                         checkLoadStoreOrder: checkOrder };
+        memoryDriver.req(req);
+
+        idx <= idx + 1;
+        rdCnt <= rdCnt + 1;
+        wrCnt <= wrCnt + 1;
+        trips <= trips - 1;
+
+        rdActive.up();
+        rdTotalActive <= rdTotalActive + zeroExtend(rdActive.value());
+
+        if (trips == 1)
+        begin
+            state <= MEMTEST_STATE_RESULT;
+            sregDriver.sregRsp(cycles);
+        end
+    endrule
 endmodule

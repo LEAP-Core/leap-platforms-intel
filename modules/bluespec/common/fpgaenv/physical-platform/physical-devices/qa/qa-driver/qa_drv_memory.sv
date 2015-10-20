@@ -57,6 +57,10 @@ module qa_drv_memory
     // Memory read
     //
     input  logic [CCI_ADDR_WIDTH-1:0] mem_read_req_addr,
+    // Use CCI's cache if true
+    input  logic                      mem_read_req_cached,
+    // Enforce order of references to the same address?
+    input  logic                      mem_read_req_check_order,
     output logic                      mem_read_req_rdy,
     input  logic                      mem_read_req_enable,
 
@@ -68,6 +72,10 @@ module qa_drv_memory
     //
     input  logic [CCI_ADDR_WIDTH-1:0] mem_write_addr,
     input  logic [CCI_DATA_WIDTH-1:0] mem_write_data,
+    // Use CCI's cache if true
+    input  logic                      mem_write_req_cached,
+    // Enforce order of references to the same address?
+    input  logic                      mem_write_req_check_order,
     output logic                      mem_write_rdy,
     input  logic                      mem_write_enable,
 
@@ -86,20 +94,20 @@ module qa_drv_memory
         // Expose virtual addresses to the client
         if (CCI_ADDR_WIDTH != 64 - $clog2(CCI_DATA_WIDTH / 8))
         begin
-            $error("qa_driver.sv expects CCI_ADDR_WIDTH %d but configured with %d",
-                   64 - $clog2(CCI_DATA_WIDTH / 8), CCI_ADDR_WIDTH);
+//            $error("qa_driver.sv expects CCI_ADDR_WIDTH %d but configured with %d",
+//                   64 - $clog2(CCI_DATA_WIDTH / 8), CCI_ADDR_WIDTH);
         end
 
         // Connect physical addresses to CCI
         if (CCI_RX_HDR_WIDTH != `CCI_S_RX_HDR_WIDTH)
         begin
-            $error("qa_driver.sv expects CCI_RX_HDR_WIDTH %d but configured with %d",
-                   `CCI_S_RX_HDR_WIDTH, CCI_RX_HDR_WIDTH);
+//            $error("qa_driver.sv expects CCI_RX_HDR_WIDTH %d but configured with %d",
+//                   `CCI_S_RX_HDR_WIDTH, CCI_RX_HDR_WIDTH);
         end
         if (CCI_TX_HDR_WIDTH != `CCI_S_TX_HDR_WIDTH)
         begin
-            $error("qa_driver.sv expects CCI_TX_HDR_WIDTH %d but configured with %d",
-                   `CCI_S_TX_HDR_WIDTH, CCI_TX_HDR_WIDTH);
+//            $error("qa_driver.sv expects CCI_TX_HDR_WIDTH %d but configured with %d",
+//                   `CCI_S_TX_HDR_WIDTH, CCI_TX_HDR_WIDTH);
         end
     endgenerate
 
@@ -211,15 +219,14 @@ module qa_drv_memory
     //
     // ====================================================================
 
-    typedef logic [$bits(qlp_inorder.C0TxHdr)-1 : 0] t_TX_HEADER;
-
     //
     // The CCI-S and CCI-E headers share a base set of fields.  Construct
     // a CCI-E header and truncate to the requested size, which may be CCI-S.
     assign qlp_inorder.C0TxHdr =
-        t_TX_HEADER'(genReqHeaderCCIE(RdLine,
-                                      t_LINE_ADDR_CCI_E'(mem_read_req_addr),
-                                      t_MDATA'(0)));
+        genReqHeaderCCIE(mem_read_req_cached ? RdLine : RdLine_I,
+                         t_LINE_ADDR_CCI_E'(mem_read_req_addr),
+                         t_MDATA'(0),
+                         mem_read_req_check_order);
     assign qlp_inorder.C0TxRdValid = mem_read_req_enable;
     assign mem_read_req_rdy = ! qlp_inorder.C0TxAlmFull;
 
@@ -227,9 +234,10 @@ module qa_drv_memory
     assign mem_read_rsp_rdy = qlp_inorder.C0RxRdValid;
 
     assign qlp_inorder.C1TxHdr =
-        t_TX_HEADER'(genReqHeaderCCIE(WrLine,
-                                      t_LINE_ADDR_CCI_E'(mem_write_addr),
-                                      t_MDATA'(0)));
+        genReqHeaderCCIE(mem_write_req_cached ? WrLine : WrThru,
+                         t_LINE_ADDR_CCI_E'(mem_write_addr),
+                         t_MDATA'(0),
+                         mem_write_req_check_order);
     assign qlp_inorder.C1TxData = mem_write_data;
     assign mem_write_rdy = ! qlp_inorder.C1TxAlmFull;
     assign qlp_inorder.C1TxWrValid = mem_write_enable;

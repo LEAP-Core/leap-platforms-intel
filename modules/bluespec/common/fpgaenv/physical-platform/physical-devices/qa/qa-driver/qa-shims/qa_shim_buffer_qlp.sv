@@ -52,7 +52,9 @@ module qa_shim_buffer_qlp
     parameter CCI_DATA_WIDTH = 512,
     parameter CCI_RX_HDR_WIDTH = 18,
     parameter CCI_TX_HDR_WIDTH = 61,
-    parameter CCI_TAG_WIDTH = 13
+    parameter CCI_TAG_WIDTH = 13,
+    // Register outbound signals if nonzero.
+    parameter REGISTER_OUTBOUND = 0
     )
    (
     input  logic clk,
@@ -70,17 +72,41 @@ module qa_shim_buffer_qlp
     assign qlp_buf.resetb = qlp_raw.resetb;
 
     //
-    // Tx wires pass through toward the AFU.
+    // Tx wires pass through toward the QLP. They are straight assignments
+    // if REGISTER_OUTBOUND is 0.
     //
-    assign qlp_raw.C0TxHdr = qlp_buf.C0TxHdr;
-    assign qlp_raw.C0TxRdValid = qlp_buf.C0TxRdValid;
-    assign qlp_buf.C0TxAlmFull = qlp_raw.C0TxAlmFull;
+    generate
+        if (REGISTER_OUTBOUND == 0)
+        begin
+            always_comb
+            begin
+                qlp_raw.C0TxHdr = qlp_buf.C0TxHdr;
+                qlp_raw.C0TxRdValid = qlp_buf.C0TxRdValid;
+                qlp_buf.C0TxAlmFull = qlp_raw.C0TxAlmFull;
 
-    assign qlp_raw.C1TxHdr = qlp_buf.C1TxHdr;
-    assign qlp_raw.C1TxData = qlp_buf.C1TxData;
-    assign qlp_raw.C1TxWrValid = qlp_buf.C1TxWrValid;
-    assign qlp_raw.C1TxIrValid = qlp_buf.C1TxIrValid;
-    assign qlp_buf.C1TxAlmFull = qlp_raw.C1TxAlmFull;
+                qlp_raw.C1TxHdr = qlp_buf.C1TxHdr;
+                qlp_raw.C1TxData = qlp_buf.C1TxData;
+                qlp_raw.C1TxWrValid = qlp_buf.C1TxWrValid;
+                qlp_raw.C1TxIrValid = qlp_buf.C1TxIrValid;
+                qlp_buf.C1TxAlmFull = qlp_raw.C1TxAlmFull;
+            end
+        end
+        else
+        begin
+            always_ff @(posedge clk)
+            begin
+                qlp_raw.C0TxHdr <= qlp_buf.C0TxHdr;
+                qlp_raw.C0TxRdValid <= qlp_buf.C0TxRdValid;
+                qlp_buf.C0TxAlmFull <= qlp_raw.C0TxAlmFull;
+
+                qlp_raw.C1TxHdr <= qlp_buf.C1TxHdr;
+                qlp_raw.C1TxData <= qlp_buf.C1TxData;
+                qlp_raw.C1TxWrValid <= qlp_buf.C1TxWrValid;
+                qlp_raw.C1TxIrValid <= qlp_buf.C1TxIrValid;
+                qlp_buf.C1TxAlmFull <= qlp_raw.C1TxAlmFull;
+            end
+        end
+    endgenerate
 
     //
     // Rx input is registered for a one cycle delay.

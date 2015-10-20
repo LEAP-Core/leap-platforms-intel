@@ -53,6 +53,7 @@ USING_NAMESPACE(AAL)
 
 typedef class AFU_CLIENT_CLASS *AFU_CLIENT;
 typedef class AFU_RUNTIME_CLIENT_CLASS *AFU_RUNTIME_CLIENT;
+typedef class QA_DEVICE_CLASS *QA_DEVICE;
 
 
 #ifndef CL
@@ -139,6 +140,8 @@ class AFU_CLASS
     //
     bool WriteCSR(btCSROffset offset, bt32bitCSR value);
     bool WriteCSR64(btCSROffset offset, bt64bitCSR value);
+
+    void RunTests(QA_DEVICE qa);
 
   private:
     AFU_RUNTIME_CLIENT afuRuntimeClient;

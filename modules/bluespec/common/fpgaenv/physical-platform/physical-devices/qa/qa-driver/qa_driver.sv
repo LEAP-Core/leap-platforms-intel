@@ -94,6 +94,10 @@ module qa_driver
     // Memory read
     //
     input  logic [CCI_ADDR_WIDTH-1:0] mem_read_req_addr,
+    // Use CCI's cache if true
+    input  logic                      mem_read_req_cached,
+    // Enforce order of references to the same address?
+    input  logic                      mem_read_req_check_order,
     output logic                      mem_read_req_rdy,
     input  logic                      mem_read_req_enable,
 
@@ -105,6 +109,10 @@ module qa_driver
     //
     input  logic [CCI_ADDR_WIDTH-1:0] mem_write_addr,
     input  logic [CCI_DATA_WIDTH-1:0] mem_write_data,
+    // Use CCI's cache if true
+    input  logic                      mem_write_req_cached,
+    // Enforce order of references to the same address?
+    input  logic                      mem_write_req_check_order,
     output logic                      mem_write_rdy,
     input  logic                      mem_write_enable,
 
@@ -303,12 +311,16 @@ module qa_driver
         .clk,
         .qlp(qlp_mux[MUX_IDX_MEMORY]),
         .mem_read_req_addr,
+        .mem_read_req_cached,
+        .mem_read_req_check_order,
         .mem_read_req_rdy,
         .mem_read_req_enable,
         .mem_read_rsp_data,
         .mem_read_rsp_rdy,
         .mem_write_addr,
         .mem_write_data,
+        .mem_write_req_cached,
+        .mem_write_req_check_order,
         .mem_write_rdy,
         .mem_write_enable,
         .mem_write_ack

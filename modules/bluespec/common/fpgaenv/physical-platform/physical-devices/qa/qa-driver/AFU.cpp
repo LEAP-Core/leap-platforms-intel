@@ -39,6 +39,7 @@
 #include "awb/provides/qa_device.h"
 #include "awb/provides/qa_driver_shims.h"
 
+#include "awb/provides/physical_platform.h"
 
 
 AFU AFU_CLASS::instance = NULL;
@@ -157,6 +158,77 @@ bool
 AFU_CLASS::WriteCSR64(btCSROffset offset, bt64bitCSR value)
 {
     return afuClient->WriteCSR64(offset, value);
+}
+
+
+void
+AFU_CLASS::RunTests(QA_DEVICE qa)
+{
+#if (QA_PLATFORM_MEMTEST != 0)
+    void* base = CreateSharedBufferInVM(MB(16));
+    // Send base PA
+    uint64_t pa_line = SharedBufferVAtoPA(base) >> 6;
+    printf("Host VA: 0x%p\n", base);
+    printf("Host PA: 0x%016llx, PA line: 0x%016llx\n", SharedBufferVAtoPA(base), pa_line);
+    qa->ReadSREG(pa_line);
+
+    uint32_t cached = 4;
+    uint32_t check_order = 8;
+    uint32_t trips = 0x3ffff00 | cached | check_order;
+//    trips = 8192 | cached | check_order;
+    uint64_t cycles;
+    uint64_t rdWrCnt;
+    uint64_t totalActiveRd;
+
+    printf("Trips %d, %scached, %sordered\n",
+           trips & ~3,
+           trips & 4 ? "" : "not ",
+           trips & 8 ? "" : "not ");
+
+    double gb;
+    double sec;
+
+    cycles = qa->ReadSREG(trips | 1);
+    rdWrCnt = qa->ReadSREG(0);
+    totalActiveRd = qa->ReadSREG(0);
+    gb = 64.0 * double(rdWrCnt >> 32) / (1024.0 * 1024.0 * 1024.0);
+    sec = 5.0 * double(cycles) * 1.0e-9;
+    printf("Read %ld in %lld cycles (%0.4f GB/s), latency %lld cycles (%d ns)\n",
+           rdWrCnt >> 32, cycles,
+           gb / sec,
+           totalActiveRd / cycles, 5 * totalActiveRd / cycles);
+
+    *(uint64_t*)base = 0xdeadbeef;
+    cycles = qa->ReadSREG(trips | 2);
+    rdWrCnt = qa->ReadSREG(0);
+    totalActiveRd = qa->ReadSREG(0);
+    gb = 64.0 * double(rdWrCnt & 0xffffffff) / (1024.0 * 1024.0 * 1024.0);
+    sec = 5.0 * double(cycles) * 1.0e-9;
+    printf("Write %ld in %lld cycles (%0.4f GB/s)\n",
+           rdWrCnt & 0xffffffff, cycles,
+           gb / sec);
+
+    *(uint64_t*)base = 0xdeadbeef;
+    cycles = qa->ReadSREG(trips | 2);
+    rdWrCnt = qa->ReadSREG(0);
+    totalActiveRd = qa->ReadSREG(0);
+    gb = 64.0 * double(rdWrCnt & 0xffffffff) / (1024.0 * 1024.0 * 1024.0);
+    sec = 5.0 * double(cycles) * 1.0e-9;
+    printf("Write %ld in %lld cycles (%0.4f GB/s)\n",
+           rdWrCnt & 0xffffffff, cycles,
+           gb / sec);
+
+    cycles = qa->ReadSREG(trips | 3);
+    rdWrCnt = qa->ReadSREG(0);
+    totalActiveRd = qa->ReadSREG(0);
+    gb = 64.0 * (double(rdWrCnt >> 32) + double(rdWrCnt & 0xffffffff)) / (1024.0 * 1024.0 * 1024.0);
+    sec = 5.0 * double(cycles) * 1.0e-9;
+    printf("Read %ld in %lld cycles\n",
+           rdWrCnt >> 32, cycles);
+    printf("Write %ld in %lld cycles\n",
+           rdWrCnt & 0xffffffff, cycles);
+    printf("Total throughput %0.4f GB/s)\n", gb / sec);
+#endif
 }
 
 

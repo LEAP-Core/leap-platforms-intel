@@ -140,7 +140,10 @@ module [CONNECTED_MODULE] mkLocalMem#(LOCAL_MEM_CONFIG conf)
     method Action readLineReq(LOCAL_MEM_ADDR addr) if (notBusy());
         match {.l_addr, .w_idx} = localMemSeparateAddr(addr);
 
-        readReqW.wset(QA_MEM_READ_REQ { addr: l_addr });
+        // Don't use the small FPGA-side cache. Assume we will miss.
+        readReqW.wset(QA_MEM_READ_REQ { addr: l_addr,
+                                        cached: False,
+                                        checkLoadStoreOrder: True });
     endmethod
 
     method ActionValue#(LOCAL_MEM_LINE) readLineRsp();
@@ -158,7 +161,10 @@ module [CONNECTED_MODULE] mkLocalMem#(LOCAL_MEM_CONFIG conf)
     method Action writeLine(LOCAL_MEM_ADDR addr, LOCAL_MEM_LINE data) if (notBusy());
         match {.l_addr, .w_idx} = localMemSeparateAddr(addr);
 
-        writeReqW.wset(QA_MEM_WRITE_REQ { addr: l_addr, data: data });
+        writeReqW.wset(QA_MEM_WRITE_REQ { addr: l_addr,
+                                          data: data,
+                                          cached: False,
+                                          checkLoadStoreOrder: True });
     endmethod
 
     method Action writeWordMasked(LOCAL_MEM_ADDR addr, LOCAL_MEM_WORD data, LOCAL_MEM_WORD_MASK mask) if (notBusy());

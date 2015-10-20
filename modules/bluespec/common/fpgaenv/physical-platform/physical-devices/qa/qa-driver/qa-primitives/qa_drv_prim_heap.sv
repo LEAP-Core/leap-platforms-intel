@@ -34,6 +34,9 @@
 // time.
 //
 
+//
+// Single ported implementation. Multi-ported implementation is below.
+//
 module qa_drv_prim_heap
   #(
     parameter N_ENTRIES = 32,
@@ -53,6 +56,67 @@ module qa_drv_prim_heap
 
     input  logic free,                               // enable free freeIdx
     input  logic [$clog2(N_ENTRIES)-1 : 0] freeIdx
+    );
+
+    logic [$clog2(N_ENTRIES)-1 : 0] readReq0[0 : 0];
+    logic [N_DATA_BITS-1 : 0] readRsp0[0 : 0];
+    assign readReq0[0] = readReq;
+    assign readRsp = readRsp0[0];
+
+    logic free0[0 : 0];
+    logic [$clog2(N_ENTRIES)-1 : 0] freeIdx0[0 : 0];
+    assign free0[0] = free;
+    assign freeIdx0[0] = freeIdx;
+
+    qa_drv_prim_heap_multi
+      #(
+        .N_ENTRIES(N_ENTRIES),
+        .N_DATA_BITS(N_DATA_BITS),
+        .N_READ_PORTS(1)
+        )
+      h(
+        .clk,
+        .resetb,
+        .enq,
+        .enqData,
+        .notFull,
+        .allocIdx,
+        .readReq(readReq0),
+        .readRsp(readRsp0),
+        .free(free0),
+        .freeIdx(freeIdx0)
+        );
+
+endmodule
+
+
+//
+// Multi ported implementation. There is only one enq/alloc port but
+// multiple read and free ports.
+//
+module qa_drv_prim_heap_multi
+  #(
+    parameter N_ENTRIES = 32,
+    parameter N_DATA_BITS = 64,
+    parameter N_READ_PORTS = 1
+    )
+   (
+    input  logic clk,
+    input  logic resetb,
+
+    input  logic enq,                                // Allocate an entry
+    input  logic [N_DATA_BITS-1 : 0] enqData,
+    output logic notFull,                            // Is scoreboard full?
+    output logic [$clog2(N_ENTRIES)-1 : 0] allocIdx, // Index of new entry
+
+    // Read requested index
+    input  logic [$clog2(N_ENTRIES)-1 : 0] readReq[0 : N_READ_PORTS-1],
+    // Read data (cycle after req)
+    output logic [N_DATA_BITS-1 : 0] readRsp[0 : N_READ_PORTS-1],
+
+    // enable free freeIdx
+    input  logic free[0 : N_READ_PORTS-1],
+    input  logic [$clog2(N_ENTRIES)-1 : 0] freeIdx[0 : N_READ_PORTS-1]
     );
 
     typedef logic [N_DATA_BITS-1 : 0] t_DATA;
@@ -84,20 +148,27 @@ module qa_drv_prim_heap
 
 
     //
-    // Heap memory.
+    // Heap memory. Replicate the memory for each read port in order to
+    // support simultaneous enq and read on all ports.
     //
-    t_DATA mem[0 : N_ENTRIES-1];
+    t_DATA mem[0 : N_READ_PORTS-1][0 : N_ENTRIES-1];
 
-    always_ff @(posedge clk)
-    begin
-        // Value available one cycle after request.
-        readRsp <= mem[readReq];
+    genvar p;
+    generate
+        for (p = 0; p < N_READ_PORTS; p = p + 1)
+        begin : memory
+            always_ff @(posedge clk)
+            begin
+                // Value available one cycle after request.
+                readRsp[p] <= mem[p][readReq[p]];
 
-        if (enq)
-        begin
-            mem[allocIdx] <= enqData;
+                if (enq)
+                begin
+                    mem[p][allocIdx] <= enqData;
+                end
+            end
         end
-    end
+    endgenerate
 
 
     //
@@ -116,9 +187,12 @@ module qa_drv_prim_heap
                 notBusy[allocIdx] <= 1'b0;
             end
 
-            if (free)
+            for (int i = 0; i < N_READ_PORTS; i = i + 1)
             begin
-                notBusy[freeIdx] <= 1'b1;
+                if (free[i])
+                begin
+                    notBusy[freeIdx[i]] <= 1'b1;
+                end
             end
         end
     end

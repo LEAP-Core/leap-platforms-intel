@@ -165,6 +165,9 @@ QA_DEVICE_CLASS::Init()
 
     initReadComplete = true;
     initWriteComplete = true;
+    
+    // Run AFU tests
+    afu.RunTests(this);
 
     sleep(1);
     if (enableTests)

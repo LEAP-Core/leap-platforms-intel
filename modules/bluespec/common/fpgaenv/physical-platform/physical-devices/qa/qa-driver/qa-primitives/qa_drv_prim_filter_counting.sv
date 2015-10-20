@@ -29,7 +29,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 
-module qa_drv_prim_counting_filter
+module qa_drv_prim_filter_counting
   #(
     // Number of individual buckets in the filter
     parameter N_BUCKETS = 16,
@@ -74,11 +74,12 @@ module qa_drv_prim_counting_filter
     generate
         for (p = 0; p < N_TEST_CLIENTS; p = p + 1)
         begin : test
-            // notFull is 1 if there are at least N_INSERT_CLIENTS entries
-            // remaining in the bucket.  This avoids having to examine multiple
-            // test ports to loook for requests on the same bucket.
-            assign test_notFull[p] = (counters[test_req[p]] <
-                                      BITS_PER_BUCKET'((1 << BITS_PER_BUCKET) - N_INSERT_CLIENTS));
+            // Technically, notFull should be 1 if there are at least
+            // N_INSERT_CLIENTS entries remaining in the bucket. To avoid
+            // an add we instead simply require that the high bit be 0,
+            // trading storage for time.
+            assign test_notFull[p] = (! counters[test_req[p]][BITS_PER_BUCKET-1]);
+
             assign test_isZero[p] = (counters[test_req[p]] == BITS_PER_BUCKET'(0));
         end
     endgenerate
@@ -146,4 +147,4 @@ module qa_drv_prim_counting_filter
             end
         end
     endgenerate
-endmodule // qa_drv_prim_counting_filter
+endmodule // qa_drv_prim_filter_counting

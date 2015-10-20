@@ -142,7 +142,12 @@ package qa_driver_types;
 
     typedef struct packed
     {
-        logic [5:0]   rsvd4;
+        // The last reserved bit is used internally in this driver to hold
+        // the memory order request bit. It will be dropped before sending
+        // the request to the CCI.
+        //
+        logic         checkLoadStoreOrder;
+        logic [4:0]   rsvd4;
         logic [25:0]  hAddress;
         logic         atype;
         logic [4:0]   rsvd3;
@@ -163,10 +168,18 @@ package qa_driver_types;
     endfunction
 
 
+    function automatic [31:0] getReqCheckOrderCCIE;
+        input t_TX_HEADER_CCI_E h;
+
+        return {h.checkLoadStoreOrder};
+    endfunction
+
+
     function automatic t_TX_HEADER_CCI_E genReqHeaderCCIE;
         input t_TX_REQUEST      requestType;
         input t_LINE_ADDR_CCI_E address;
         input t_MDATA           mdata;
+        input logic             checkLoadStoreOrder;
 
         t_TX_HEADER_CCI_E h;
 
@@ -177,6 +190,8 @@ package qa_driver_types;
         h.address = address[31:0];
 
         h.mdata = mdata;
+
+        h.checkLoadStoreOrder = checkLoadStoreOrder;
 
         h.rsvd4 = 0;
         h.rsvd3 = 0;

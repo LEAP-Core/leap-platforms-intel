@@ -57,7 +57,7 @@ import Connectable::*;
 `include "awb/provides/clocks_device.bsh"
 
 // Maximum outstanding memory requests
-typedef 64 QA_MAX_MEM_READS;
+typedef 80 QA_MAX_MEM_READS;
 
 // Maximum outstanding memory requests.  Allow many writes since the overhead
 // here is low.  (Just a counter.)
@@ -78,6 +78,11 @@ typedef Bit#(`CCI_DATA_WIDTH) QA_CCI_DATA;
 typedef struct
 {
     QA_CCI_ADDR addr;
+
+    // Cached in FPGA CCI?
+    Bool cached;
+    // Enforce load store order in the driver?
+    Bool checkLoadStoreOrder;
 }
 QA_MEM_READ_REQ
     deriving (Eq, Bits);
@@ -86,6 +91,11 @@ typedef struct
 {
     QA_CCI_ADDR addr;
     QA_CCI_DATA data;
+
+    // Cached in FPGA CCI?
+    Bool cached;
+    // Enforce load store order in the driver?
+    Bool checkLoadStoreOrder;
 }
 QA_MEM_WRITE_REQ
     deriving (Eq, Bits);
@@ -137,11 +147,15 @@ endinterface
 // Memory driver interface through the imported Verilog.
 //
 interface QA_MEMORY_DRIVER_IMPORT#(numeric type n_WRITE_ACK_BITS);
-    method Action readLineReq(QA_CCI_ADDR addr);
+    method Action readLineReq(QA_CCI_ADDR addr,
+                              Bool cached,
+                              Bool checkLoadStoreOrder);
     method ActionValue#(QA_CCI_DATA) readLineRsp();
 
     method Action writeLine(QA_CCI_ADDR addr,
-                            QA_CCI_DATA data);
+                            QA_CCI_DATA data,
+                            Bool cached,
+                            Bool checkLoadStoreOrder);
 
     // True if any writes are still in flight
     method ActionValue#(Bit#(n_WRITE_ACK_BITS)) writeAck();
@@ -233,10 +247,15 @@ module mkQADeviceImport#(Clock vl_clk_LPdomain_32ui,
     endinterface
 
     interface QA_MEMORY_DRIVER_IMPORT memoryDriver;
-        method readLineReq(mem_read_req_addr) ready(mem_read_req_rdy) enable(mem_read_req_enable);
+        method readLineReq(mem_read_req_addr,
+                           mem_read_req_cached,
+                           mem_read_req_check_order) ready(mem_read_req_rdy) enable(mem_read_req_enable);
         method mem_read_rsp_data readLineRsp() ready(mem_read_rsp_rdy) enable((*inhigh*) en0);
 
-        method writeLine(mem_write_addr, mem_write_data) ready(mem_write_rdy) enable(mem_write_enable);
+        method writeLine(mem_write_addr,
+                         mem_write_data,
+                         mem_write_req_cached,
+                         mem_write_req_check_order) ready(mem_write_rdy) enable(mem_write_enable);
         method mem_write_ack writeAck() enable((*inhigh*) en1);
     endinterface
 
@@ -534,12 +553,14 @@ module mkQADeviceSynth#(Clock vl_clk_LPdomain_32ui,
 
         if (req.read matches tagged Valid .read)
         begin
-            qaMemoryDriver.readLineReq(read.addr);
+            qaMemoryDriver.readLineReq(read.addr,
+                                       read.cached, read.checkLoadStoreOrder);
         end
 
         if (req.write matches tagged Valid .write)
         begin
-            qaMemoryDriver.writeLine(write.addr, write.data);
+            qaMemoryDriver.writeLine(write.addr, write.data,
+                                     write.cached, write.checkLoadStoreOrder);
         end
     endrule
 

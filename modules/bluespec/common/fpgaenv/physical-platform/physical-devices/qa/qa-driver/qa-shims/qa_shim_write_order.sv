@@ -66,17 +66,21 @@ module qa_shim_write_order
 
     // ====================================================================
     //
-    //  Characteristics of the counting Bloom filters.
+    //  Characteristics of the filters.
     //
     // ====================================================================
 
-    // Number of hashes in each filter.
-    localparam N_HASHES = 3;
+    // Number of reads or writes permitted in flight is a function of the
+    // index space.  C0 is the read request channel and C1 is the write
+    // request channel.  Often more reads must be in flight than writes
+    // for full throughput.
+    localparam N_C0_CAM_IDX_ENTRIES = 80;
+    localparam N_C1_CAM_IDX_ENTRIES = 48;
 
-    // t_HASH defines the number of entries in each Bloom filter hash
-    // bucket.
-    typedef logic [3:0] t_HASH;
-    typedef t_HASH [0 : N_HASHES-1] t_HASH_GROUP;
+    // Size of an address hash entry. Smaller sizes take less space but
+    // increase the probability of address collisions.
+    localparam ADDRESS_HASH_BITS = 9;
+
 
     // ====================================================================
     //
@@ -95,7 +99,8 @@ module qa_shim_write_order
       afu_buf (.clk);
 
     // Latency-insensitive ports need explicit dequeue (enable).
-    logic deqTx;
+    logic afu_deq;
+    logic addr_conflict_incoming;
 
     qa_shim_buffer_lockstep_afu
       #(
@@ -111,7 +116,7 @@ module qa_shim_write_order
          .clk,
          .afu_raw(afu),
          .afu_buf(afu_buf),
-         .deqTx
+         .deqTx(afu_deq)
          );
 
     assign afu_buf.resetb = qlp.resetb;
@@ -147,7 +152,8 @@ module qa_shim_write_order
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
         .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
         .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
-        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
+        .CCI_TAG_WIDTH(CCI_TAG_WIDTH),
+        .REGISTER_OUTBOUND(1)
         )
       bufqlp
         (
@@ -163,73 +169,159 @@ module qa_shim_write_order
     //
     // ====================================================================
 
-    // Is either AFU making a request?
-    logic c0_request_rdy;
-    assign c0_request_rdy = afu_buf.C0TxRdValid;
+    //
+    // Hash addresses into smaller values to reduce storage and comparison
+    // overhead.
+    //
+    
+    typedef logic [ADDRESS_HASH_BITS-1 : 0] t_HASH;
 
-    logic c1_request_rdy;
-    assign c1_request_rdy = afu_buf.C1TxWrValid || afu_buf.C1TxIrValid;
+    t_HASH c0_hash_calc;
+    t_HASH c1_hash_calc;
 
-    // Full/empty signals that will come from the heap and filters
-    logic c0_heap_notFull;
-    logic c0_filter_notFull;
-    logic c0_filter_hasZero;
-    logic c1_filter_notFull;
-    logic c1_filter_hasZero;
+    // Start by expanding the addresses to 64 bits.  The hash is computed
+    // on the way in to the afu_buf and stored in a FIFO the same size
+    // as the buffer in order to reduce timing pressure at the point the
+    // filter is checked and updated.
+    logic [63:0] c0_req_addr;
+    assign c0_req_addr = 64'(getReqAddrCCIE(t_TX_HEADER_CCI_E'(afu_buf.C0TxHdr)));
 
-    // Is a request blocked by inability to forward it to the QLP or a
-    // conflict?  c0_filter_notFull asserts that the read filter counters
-    // can be incremented.  c0_filter_hasZero asserts that no store is
-    // in flight to the same address.
-    logic c0_blocked;
-    assign c0_blocked = c0_request_rdy &&
-                        (qlp_buf.C0TxAlmFull || ! c0_heap_notFull ||
-                         ! c0_filter_notFull || ! c0_filter_hasZero);
+    logic [63:0] c1_req_addr;
+    assign c1_req_addr = 64'(getReqAddrCCIE(t_TX_HEADER_CCI_E'(afu_buf.C1TxHdr)));
 
-    logic c1_blocked;
-    assign c1_blocked = c1_request_rdy &&
-                        (qlp_buf.C1TxAlmFull ||
-                         ! c1_filter_notFull || ! c1_filter_hasZero);
-
-    // Process requests if one exists on either channel AND neither channel
-    // is blocked.  The requirement that neither channel be blocked keeps
-    // the two channels synchronized with respect to each other so that
-    // read and write requests stay ordered relative to each other.
-    logic process_requests;
-    assign process_requests = (c0_request_rdy || c1_request_rdy) &&
-                              ! (c0_blocked || c1_blocked);
+    assign c0_hash_calc =
+        t_HASH'(hash32(c0_req_addr[63:32] ^ c0_req_addr[31:0]));
+    assign c1_hash_calc =
+        t_HASH'(hash32(c1_req_addr[63:32] ^ c1_req_addr[31:0]));
 
 
     // ====================================================================
     //
-    //  Heaps to hold old Mdata and hash info.
+    //  Filter to track busy addresses.
     //
     // ====================================================================
 
-    typedef logic [7:0] t_HEAP_IDX;
+    typedef logic [$clog2(N_C0_CAM_IDX_ENTRIES)-1 : 0] t_C0_REQ_IDX;
+    typedef logic [$clog2(N_C1_CAM_IDX_ENTRIES)-1 : 0] t_C1_REQ_IDX;
+
+    // There are two sets of filters: one for reads and one for writes.
+    // They are separate because multiple reads can be outstanding to
+    // a single address but only one write may be live. New read requests
+    // check only that there is no conflicting write.
+    logic         rd_filter_test_notPresent;
+    // New write requests check both that there is no conflicting write
+    // and no conflicting read.
+    logic [0 : 1] wr_filter_test_notPresent;
+
+    // One hash for each request channel
+    t_HASH [0 : 1] filter_test_req;
+    logic  [0 : 1] filter_test_req_en;
+
+    // Insert lines for entering new active reads and writes in the filter.
+    // One for each channel.
+    t_C0_REQ_IDX rd_filter_insert_idx;
+    t_HASH       rd_filter_insert_hash;
+
+    t_C1_REQ_IDX wr_filter_insert_idx;
+    t_HASH       wr_filter_insert_hash;
+
+    // Read response handling on channel 0.
+    t_C0_REQ_IDX [0 : 0] rd_filter_remove_idx;
+    logic        [0 : 0] rd_filter_remove_en;
+
+    // Write responses arrive on both response channels.
+    t_C1_REQ_IDX [0 : 1] wr_filter_remove_idx;
+    logic        [0 : 1] wr_filter_remove_en;
+
+    //
+    // Generate the read and write filters.
+    //
+    qa_drv_prim_filter_cam
+      #(
+        .N_BUCKETS(N_C0_CAM_IDX_ENTRIES),
+        .BITS_PER_BUCKET(ADDRESS_HASH_BITS),
+        .N_TEST_CLIENTS(1),
+        .N_REMOVE_CLIENTS(1),
+        .BYPASS_INSERT_TO_TEST(1)
+        )
+      rdFilter(.clk,
+               .resetb,
+               // Only the write request channel checks against outstanding
+               // reads. Multiple reads to the same address may be in flight
+               // at the same time.
+               .test_value(filter_test_req[1]),
+               .test_en(filter_test_req_en[1]),
+               .test_notPresent(),
+               .test_notPresent_reg(rd_filter_test_notPresent),
+               .insert_idx(rd_filter_insert_idx),
+               .insert_value(rd_filter_insert_hash),
+               .insert_en(qlp_buf.C0TxRdValid),
+               .remove_idx(rd_filter_remove_idx),
+               .remove_en(rd_filter_remove_en));
+
+    qa_drv_prim_filter_cam
+      #(
+        .N_BUCKETS(N_C1_CAM_IDX_ENTRIES),
+        .BITS_PER_BUCKET(ADDRESS_HASH_BITS),
+        .N_TEST_CLIENTS(2),
+        .N_REMOVE_CLIENTS(2),
+        .BYPASS_INSERT_TO_TEST(1)
+        )
+      wrFilter(.clk,
+               .resetb,
+               .test_value(filter_test_req),
+               .test_en(filter_test_req_en),
+               .test_notPresent(),
+               .test_notPresent_reg(wr_filter_test_notPresent),
+               .insert_idx(wr_filter_insert_idx),
+               .insert_value(wr_filter_insert_hash),
+               .insert_en(qlp_buf.C1TxWrValid),
+               .remove_idx(wr_filter_remove_idx),
+               .remove_en(wr_filter_remove_en));
+
+
+    // Hold the hashed address associated with the buffered test result.
+    // This is used only in assertions below and should be dropped
+    // during dead code elimination when synthesized.
+    t_HASH [0 : 1] filter_verify_req;
+    logic  [0 : 1] filter_verify_req_en;
+
+    always_ff @(posedge clk)
+    begin
+        filter_verify_req <= filter_test_req;
+        filter_verify_req_en <= filter_test_req_en;
+    end
+
+
+    // ====================================================================
+    //
+    //  Heaps to hold old Mdata
+    //
+    // ====================================================================
 
     typedef struct packed
     {
         // Save the part of the request's Mdata that is overwritten by the
         // heap index.
-        t_HEAP_IDX mdata;
-        t_HASH_GROUP hash;
+        t_C0_REQ_IDX mdata;
     }
-    t_HEAP_ENTRY;
+    t_C0_HEAP_ENTRY;
 
-    t_HEAP_ENTRY c0_heap_enqData;
-    t_HEAP_IDX c0_heap_allocIdx;
+    t_C0_HEAP_ENTRY c0_heap_enqData;
+    t_C0_REQ_IDX c0_heap_allocIdx;
 
-    t_HEAP_IDX c0_heap_readReq;
-    t_HEAP_ENTRY c0_heap_readRsp;
+    logic c0_heap_notFull;
+
+    t_C0_REQ_IDX c0_heap_readReq;
+    t_C0_HEAP_ENTRY c0_heap_readRsp;
 
     logic c0_heap_free;
-    t_HEAP_IDX c0_heap_freeIdx;
+    t_C0_REQ_IDX c0_heap_freeIdx;
 
     qa_drv_prim_heap
       #(
-        .N_ENTRIES(1 << $bits(t_HEAP_IDX)),
-        .N_DATA_BITS($bits(t_HEAP_ENTRY))
+        .N_ENTRIES(N_C0_CAM_IDX_ENTRIES),
+        .N_DATA_BITS($bits(t_C0_HEAP_ENTRY))
         )
       c0_heap(.clk,
               .resetb,
@@ -244,173 +336,346 @@ module qa_shim_write_order
               );
 
 
-    // ====================================================================
     //
-    //  Counting Bloom filter to track busy addresses.  By using counters
-    //  in the filter buckets the filter never has to be cleared.  Entries
-    //  can be removed as requests retire.
+    // The channel 1 (write request) heap is dual ported since write
+    // responses may arrive on either response channel.
     //
-    // ====================================================================
 
-    // Tests are indexed by the filter instance and the two request channels.
-    // Both request channels are checked in parallel for each filter.
-    t_HASH [0 : N_HASHES-1][0 : 1] filter_test_req;
-    t_HASH [0 : N_HASHES-1][0 : 1] filter_test_req_in;
+    typedef struct packed
+    {
+        // Save the part of the request's Mdata that is overwritten by the
+        // heap index.
+        t_C1_REQ_IDX mdata;
+    }
+    t_C1_HEAP_ENTRY;
 
-    // A FIFO of identical depth to bufafu for olding the hashed addresses.
-    // This is necessary for timing.
-    qa_drv_prim_fifo_lutram
+    t_C1_HEAP_ENTRY c1_heap_enqData;
+    t_C1_REQ_IDX c1_heap_allocIdx;
+
+    logic c1_heap_notFull;
+
+    t_C1_REQ_IDX c1_heap_readReq[0:1];
+    t_C1_HEAP_ENTRY c1_heap_readRsp[0:1];
+
+    logic c1_heap_free[0:1];
+    t_C1_REQ_IDX c1_heap_freeIdx[0:1];
+
+    qa_drv_prim_heap_multi
       #(
-        .N_DATA_BITS($bits(filter_test_req)),
-        .N_ENTRIES(N_AFU_BUF_ENTRIES),
-        .THRESHOLD(AFU_BUF_THRESHOLD)
+        .N_ENTRIES(N_C1_CAM_IDX_ENTRIES),
+        .N_DATA_BITS($bits(t_C1_HEAP_ENTRY)),
+        .N_READ_PORTS(2)
         )
-      bufhash
-        (.clk,
-         .resetb(qlp.resetb),
+      c1_heap(.clk,
+              .resetb,
+              .enq(qlp_buf.C1TxWrValid),
+              .enqData(c1_heap_enqData),
+              .notFull(c1_heap_notFull),
+              .allocIdx(c1_heap_allocIdx),
+              .readReq(c1_heap_readReq),
+              .readRsp(c1_heap_readRsp),
+              .free(c1_heap_free),
+              .freeIdx(c1_heap_freeIdx)
+              );
 
-         .enq_data(filter_test_req_in),
-         .enq_en(afu.C0TxRdValid || afu.C1TxWrValid || afu.C1TxIrValid),
-         // Ignore the control signals.  afu_buf is the same size.
-         .notFull(),
-         .almostFull(),
 
-         .first(filter_test_req),
-         .deq_en(deqTx),
-         .notEmpty()
-         );
+    //
+    // Update the read and write filters as responses are processed.
+    //
+    assign rd_filter_remove_idx[0] = c0_heap_freeIdx;
+    assign rd_filter_remove_en[0]  = c0_heap_free;
 
-    // There are two sets of filters: one for reads and one for writes.
-    // They exist because multiple reads can be outstanding to a single
-    // address but only one store may be live.
-    logic  [0 : N_HASHES-1][0 : 1] rd_filter_test_notFull;
-    logic  [0 : N_HASHES-1][0 : 1] rd_filter_test_isZero;
-    logic  [0 : N_HASHES-1][0 : 1] wr_filter_test_notFull;
-    logic  [0 : N_HASHES-1][0 : 1] wr_filter_test_isZero;
+    assign wr_filter_remove_idx[0] = c1_heap_freeIdx[0];
+    assign wr_filter_remove_idx[1] = c1_heap_freeIdx[1];
+    assign wr_filter_remove_en[0]  = c1_heap_free[0];
+    assign wr_filter_remove_en[1]  = c1_heap_free[1];
 
-    logic c1_filter_hasZero_rd;
-    logic c1_filter_hasZero_wr;
-    assign c1_filter_hasZero = c1_filter_hasZero_rd && c1_filter_hasZero_wr;
+
+    // ====================================================================
+    //
+    //  Filtering pipeline
+    //
+    // ====================================================================
+
+    //
+    // Request data flowing through filtering pipeline
+    //
+    typedef struct packed
+    {
+        logic [CCI_TX_HDR_WIDTH-1:0] C0TxHdr;
+        logic                        C0TxRdValid;
+
+        t_HASH                       C0AddrHash;
+
+        logic [CCI_TX_HDR_WIDTH-1:0] C1TxHdr;
+        logic [CCI_DATA_WIDTH-1:0]   C1TxData;
+        logic                        C1TxWrValid;
+        logic                        C1TxIrValid;
+
+        t_HASH                       C1AddrHash;
+    }
+    t_REQUEST_PIPE;
+
+    // Pipeline stage storage
+    t_REQUEST_PIPE afu_pipe[0:1];
+
+    //
+    // Work backwards in the pipeline.  First decide whether the oldest
+    // request can fire.  If it can (or there is no request) then younger
+    // requests will ripple through the pipeline.
+    //
+
+    // Is either AFU making a request?
+    logic c0_request_rdy;
+    assign c0_request_rdy = afu_pipe[1].C0TxRdValid;
+
+    logic c1_request_rdy;
+    assign c1_request_rdy = afu_pipe[1].C1TxWrValid || afu_pipe[1].C1TxIrValid;
+
+    // Does the request want order to be enforced?
+    logic c0_enforce_order;
+    assign c0_enforce_order =
+        getReqCheckOrderCCIE(t_TX_HEADER_CCI_E'(afu_pipe[1].C0TxHdr));
+    logic c1_enforce_order;
+    assign c1_enforce_order =
+        getReqCheckOrderCCIE(t_TX_HEADER_CCI_E'(afu_pipe[1].C1TxHdr));
+
+    // Was the request pipeline stalled last cycle?  If yes then the
+    // filter is a function of the request at the end of the afu_pipe.
+    // If it was not blocked then the filter is a function of an
+    // earlier stage in the pipeline.  We have this stage for timing
+    // despite the complexity it adds.
+    logic was_blocked;
+
+    // A pipeline bubble must be inserted every time was_blocked changes
+    // in order for the tested filter test to catch up due to the
+    // use of registers to break the test across cycles.
+    logic pipeline_bubble;
 
     //
     // Compute whether new requests can be inserted into the filters.
     // c0 is read requests, c1 is write requests.
     //
-    // Each Bloom filter has N_HASHES hashes.  An entry is in the set when
-    // the counter associated with each hash is non-zero.  An entry is not
-    // in the set when at least one counter is zero.
+    logic c0_filter_may_insert;
+    assign c0_filter_may_insert = wr_filter_test_notPresent[0] ||
+                                  ! c0_enforce_order;
+
+    logic c1_filter_may_insert;
+    assign c1_filter_may_insert = (rd_filter_test_notPresent &&
+                                   wr_filter_test_notPresent[1]) ||
+                                  ! c1_enforce_order;
+
+    // Is a request blocked by inability to forward it to the QLP or a
+    // conflict?
+    logic c0_blocked;
+    assign c0_blocked = c0_request_rdy &&
+                        (qlp_buf.C0TxAlmFull ||
+                         ! c0_heap_notFull ||
+                         ! c0_filter_may_insert);
+
+    logic c1_blocked;
+    assign c1_blocked = c1_request_rdy &&
+                        (qlp_buf.C1TxAlmFull ||
+                         ! c1_heap_notFull ||
+                         ! c1_filter_may_insert);
+
+    // Process requests if one exists on either channel AND neither channel
+    // is blocked.  The requirement that neither channel be blocked keeps
+    // the two channels synchronized with respect to each other so that
+    // read and write requests stay ordered relative to each other.
+    logic process_requests;
+    assign process_requests = (c0_request_rdy || c1_request_rdy) &&
+                              ! (c0_blocked || c1_blocked) &&
+                              ! pipeline_bubble;
+
+    // Set the hashed value to insert in the filter when requests are
+    // processed.
+    assign rd_filter_insert_hash = afu_pipe[1].C0AddrHash;
+    assign rd_filter_insert_idx = c0_heap_allocIdx;
+    assign wr_filter_insert_hash = afu_pipe[1].C1AddrHash;
+    assign wr_filter_insert_idx = c1_heap_allocIdx;
+
     //
-    always_comb
+    // Now that we know whether the oldest request was processed we can
+    // manage flow through the pipeline.
+    //
+
+    // Advance if the oldest request was processed or the last stage is empty.
+    logic advance_pipeline;
+    assign advance_pipeline = ((process_requests && ! was_blocked) ||
+                               ! (c0_request_rdy || c1_request_rdy));
+
+    // Is the incoming pipeline moving?
+    assign afu_deq = advance_pipeline &&
+                     ! addr_conflict_incoming &&
+                     (afu_buf.C0TxRdValid ||
+                      afu_buf.C1TxWrValid ||
+                      afu_buf.C1TxIrValid);
+
+    // Does an incoming request have read and write to the same address?
+    // Special case: delay the write.
+    logic handled_addr_conflict;
+    assign addr_conflict_incoming = afu_buf.C0TxRdValid && afu_buf.C1TxWrValid &&
+                                    (c0_req_addr == c1_req_addr) &&
+                                    ! handled_addr_conflict;
+
+    // Update the pipeline
+    t_REQUEST_PIPE afu_pipe_init;
+    logic swap_entries;
+
+    always_ff @(posedge clk)
     begin
-        c0_filter_notFull = 1'b1;
-        c1_filter_notFull = 1'b1;
-
-        c0_filter_hasZero = 1'b0;
-        c1_filter_hasZero_rd = 1'b0;
-        c1_filter_hasZero_wr = 1'b0;
-
-        for (int i = 0; i < N_HASHES; i = i + 1)
+        if (! resetb)
         begin
-            // The full test is on the filter that will be updated by the
-            // new request.  For c0 that is the read filter and for c1 the
-            // write filter.
-            c0_filter_notFull = c0_filter_notFull && rd_filter_test_notFull[i][0];
-            c1_filter_notFull = c1_filter_notFull && wr_filter_test_notFull[i][1];
+            for (int i = 0; i < 2; i = i + 1)
+            begin
+                afu_pipe[i].C0TxRdValid <= 0;
+                afu_pipe[i].C1TxWrValid <= 0;
+                afu_pipe[i].C1TxIrValid <= 0;
+            end
 
-            // hasZero is a test that no other reference to the same address
-            // is in flight.  Reads require hasZero only of writes since
-            // two reads may be in flight to the same address.
-            c0_filter_hasZero = c0_filter_hasZero || wr_filter_test_isZero[i][0];
+            handled_addr_conflict <= 0;
+        end
+        else
+        begin
+            if (advance_pipeline)
+            begin
+                afu_pipe[1] <= afu_pipe[0];
+                afu_pipe[0] <= afu_pipe_init;
 
-            // Writes require that no read and no write be outstanding to
-            // the address.
-            c1_filter_hasZero_rd = c1_filter_hasZero_rd || rd_filter_test_isZero[i][1];
-            c1_filter_hasZero_wr = c1_filter_hasZero_wr || wr_filter_test_isZero[i][1];
+                // Remember whether there was an address conflict.  If there
+                // was then the read has already been processed.
+                handled_addr_conflict <= addr_conflict_incoming;
+            end
+            else if (swap_entries)
+            begin
+                // Oldest was blocked.  Try moving a newer entry around the
+                // oldest.  They have been proven to be independent.
+                afu_pipe[1] <= afu_pipe[0];
+                afu_pipe[0] <= afu_pipe[1];
+            end
+            else if (process_requests)
+            begin
+                // Pipeline restarted after a bubble. Drop the request
+                // that left the pipeline but don't advance yet so the
+                // filter pipeline can catch up.
+                afu_pipe[1].C0TxRdValid <= 0;
+                afu_pipe[1].C1TxWrValid <= 0;
+                afu_pipe[1].C1TxIrValid <= 0;
+            end
         end
     end
 
-    t_HASH [0 : N_HASHES-1][0 : 1] wr_filter_remove;
-    logic  [0 : 1] wr_filter_remove_en;
+    assign afu_pipe_init.C0TxHdr = afu_buf.C0TxHdr;
+    assign afu_pipe_init.C0TxRdValid = afu_buf.C0TxRdValid & ! handled_addr_conflict;
+    assign afu_pipe_init.C0AddrHash = c0_hash_calc;
+    assign afu_pipe_init.C1TxHdr = afu_buf.C1TxHdr;
+    assign afu_pipe_init.C1TxData = afu_buf.C1TxData;
+    // Process write later if it conflicts with the read.
+    assign afu_pipe_init.C1TxWrValid = afu_buf.C1TxWrValid & ! addr_conflict_incoming;
+    assign afu_pipe_init.C1TxIrValid = afu_buf.C1TxIrValid;
+    assign afu_pipe_init.C1AddrHash = c1_hash_calc;
+
 
     //
-    // Generate the read and write Bloom filters.  Each Bloom filter is
-    // the composition of N_HASHES hash functions.
+    // Calculate whether the entries in the afu_pipe can be swapped when
+    // the oldest one is blocked. This may permit requests to continue.
     //
-    genvar f;
-    generate
-        for (f = 0; f < N_HASHES; f = f + 1)
-        begin : bloom
-            qa_drv_prim_counting_filter
-              #(
-                .N_BUCKETS(16),
-                .BITS_PER_BUCKET($size(t_HASH)),
-                .N_TEST_CLIENTS(2),
-                .N_INSERT_CLIENTS(1),
-                .N_REMOVE_CLIENTS(1)
-                )
-              rd_filter(.clk,
-                        .resetb,
-                        .test_req(filter_test_req[f]),
-                        .test_notFull(rd_filter_test_notFull[f]),
-                        .test_isZero(rd_filter_test_isZero[f]),
-                        .insert(filter_test_req[f][0]),
-                        .insert_en(qlp_buf.C0TxRdValid),
-                        .remove(c0_heap_readRsp.hash[f]),
-                        .remove_en(qlp_buf.C0RxRdValid));
+    logic can_swap_oldest;
+    assign can_swap_oldest =
+        // Write can't conflict with read or write of slot 0
+        (! afu_pipe[1].C1TxWrValid ||
+         ((! afu_pipe[0].C1TxWrValid || (afu_pipe[1].C1AddrHash != afu_pipe[0].C1AddrHash)) &&
+          (! afu_pipe[0].C0TxRdValid || (afu_pipe[1].C1AddrHash != afu_pipe[0].C0AddrHash))))
+        // Write in slot 0 can't conflict with read in slot 1
+        && (! afu_pipe[0].C1TxWrValid || ! afu_pipe[1].C0TxRdValid ||
+            (afu_pipe[1].C0AddrHash != afu_pipe[0].C1AddrHash));
 
-            //
-            // The write filter has two remove clients since write responses
-            // can come back on either port.
-            //
-            qa_drv_prim_counting_filter
-              #(
-                .N_BUCKETS(16),
-                .BITS_PER_BUCKET($size(t_HASH)),
-                .N_TEST_CLIENTS(2),
-                .N_INSERT_CLIENTS(1),
-                .N_REMOVE_CLIENTS(2)
-                )
-              wr_filter(.clk,
-                        .resetb,
-                        .test_req(filter_test_req[f]),
-                        .test_notFull(wr_filter_test_notFull[f]),
-                        .test_isZero(wr_filter_test_isZero[f]),
-                        .insert(filter_test_req[f][1]),
-                        .insert_en(qlp_buf.C1TxWrValid),
-                        .remove(wr_filter_remove[f]),
-                        .remove_en(wr_filter_remove_en));
+    //
+    // Update the addresses being tested in the filter.  The test value
+    // for the filter is stored in a register.  Combinational logic could
+    // be used but it would add a mux to the head of the already expensive
+    // filter.
+    //
+
+    // If the pipeline is about to block try swapping the entries to avoid
+    // blocking.
+    assign swap_entries = (c0_blocked || c1_blocked) && can_swap_oldest;
+
+    logic blocked_next;
+    assign blocked_next = (c0_blocked || c1_blocked) && ! can_swap_oldest;
+
+    always_ff @(posedge clk)
+    begin
+        if (! resetb)
+        begin
+            filter_test_req_en <= 0;
+            was_blocked <= 0;
+            pipeline_bubble <= 0;
         end
-    endgenerate
+        else
+        begin
+            if (blocked_next)
+            begin
+                // The pipeline advanced beyond the current test.  Restore
+                // the test of the blocked request.
+                filter_test_req[0] <= afu_pipe[1].C0AddrHash;
+                filter_test_req[1] <= afu_pipe[1].C1AddrHash;
 
-    //
-    // Pick filter buckets based on hashes of incoming request addresses.
-    //
-    
-    // Start by expanding the addresses to 64 bits.  The hash is computed
-    // on the way in to the afu_buf and stored in a FIFO the same size
-    // as the buffer in order to reduce timing pressure at the point the
-    // filter is checked and updated.
-    logic [63:0] c0_req_addr;
-    assign c0_req_addr = 64'(getReqAddrCCIE(t_TX_HEADER_CCI_E'(afu.C0TxHdr)));
+                filter_test_req_en[0] <= afu_pipe[1].C0TxRdValid;
+                filter_test_req_en[1] <= afu_pipe[1].C1TxWrValid;
+            end
+            else if (was_blocked)
+            begin
+                // The pipeline was blocked by the filter in the previous
+                // cycle.  Now that the flow is resuming test the next
+                // value, already stored in the first stage of the pipeline.
+                filter_test_req[0] <= afu_pipe[0].C0AddrHash;
+                filter_test_req[1] <= afu_pipe[0].C1AddrHash;
 
-    logic [63:0] c1_req_addr;
-    assign c1_req_addr = 64'(getReqAddrCCIE(t_TX_HEADER_CCI_E'(afu.C1TxHdr)));
+                filter_test_req_en[0] <= afu_pipe[0].C0TxRdValid;
+                filter_test_req_en[1] <= afu_pipe[0].C1TxWrValid;
+            end
+            else if (swap_entries)
+            begin
+                // The oldest entry is moving to the position of the newest.
+                // Put its filtering request back in the pipeline.
+                filter_test_req[0] <= afu_pipe[1].C0AddrHash;
+                filter_test_req[1] <= afu_pipe[1].C1AddrHash;
 
-    // Hash them
-    logic [31:0] c0_addr_hash;
-    assign c0_addr_hash = hash32(c0_req_addr[63:32] ^ c0_req_addr[31:0]);
+                filter_test_req_en[0] <= afu_pipe[1].C0TxRdValid;
+                filter_test_req_en[1] <= afu_pipe[1].C1TxWrValid;
+            end
+            else
+            begin
+                // Normal, pipelined flow.  Next cycle we will test the value
+                // being written to the first stage of the pipeline.
+                filter_test_req[0] <= c0_hash_calc;
+                filter_test_req[1] <= c1_hash_calc;
 
-    logic [31:0] c1_addr_hash;
-    assign c1_addr_hash = hash32(c1_req_addr[63:32] ^ c1_req_addr[31:0]);
+                filter_test_req_en[0] <= afu_buf.C0TxRdValid & ! handled_addr_conflict;
+                filter_test_req_en[1] <= afu_buf.C1TxWrValid & ! addr_conflict_incoming;
+            end
 
-    // Use different bit ranges from the hash as Bloom filter indices
-    assign filter_test_req_in[0][0] = c0_addr_hash[3:0];
-    assign filter_test_req_in[1][0] = c0_addr_hash[7:4];
-    assign filter_test_req_in[2][0] = c0_addr_hash[11:8];
+            // Remember whether pipeline was blocked and whether a pipeline
+            // bubble must be inserted due to a change in filter test source.
+            pipeline_bubble <= (! was_blocked && blocked_next);
+            was_blocked <= blocked_next;
 
-    assign filter_test_req_in[0][1] = c1_addr_hash[3:0];
-    assign filter_test_req_in[1][1] = c1_addr_hash[7:4];
-    assign filter_test_req_in[2][1] = c1_addr_hash[11:8];
+            //
+            // This pipeline has complicated control flow.  Confirm that
+            // decisions made this cycle were based on the correct addresses.
+            //
+            if (process_requests)
+            begin
+                assert ((filter_verify_req[0] == afu_pipe[1].C0AddrHash) &&
+                        (filter_verify_req[1] == afu_pipe[1].C1AddrHash) &&
+                        (filter_verify_req_en[0] == afu_pipe[1].C0TxRdValid) &&
+                        (filter_verify_req_en[1] == afu_pipe[1].C1TxWrValid)) else
+                    $fatal("qa_sim_write_order: Incorrect pipeline control");
+            end
+        end
+    end
 
 
     // ====================================================================
@@ -422,21 +687,19 @@ module qa_shim_write_order
     // Forward requests toward the QLP.  Replace part of the Mdata entry
     // with the scoreboard index.  The original Mdata is saved in the
     // heap and restored when the response is returned.
-    assign qlp_buf.C0TxHdr = { afu_buf.C0TxHdr[CCI_TX_HDR_WIDTH-1 : $bits(t_HEAP_IDX)],
+    assign qlp_buf.C0TxHdr = { afu_pipe[1].C0TxHdr[CCI_TX_HDR_WIDTH-1 : $bits(t_C0_REQ_IDX)],
                                c0_heap_allocIdx };
-    assign deqTx = process_requests;
     assign qlp_buf.C0TxRdValid = process_requests && c0_request_rdy;
 
     // Save state that will be used when the response is returned.
-    assign c0_heap_enqData.mdata = t_HEAP_IDX'(afu_buf.C0TxHdr);
-    assign c0_heap_enqData.hash = { filter_test_req[0][0], filter_test_req[1][0], filter_test_req[2][0] };
+    assign c0_heap_enqData.mdata = t_C0_REQ_IDX'(afu_pipe[1].C0TxHdr);
 
     // Request heap read as qlp responses arrive.  The heap's value will be
     // available the cycle qlp_buf is read.
-    assign c0_heap_readReq = t_HEAP_IDX'(qlp.C0RxHdr);
+    assign c0_heap_readReq = t_C0_REQ_IDX'(qlp.C0RxHdr);
 
     // Free heap entries as read responses arrive.
-    assign c0_heap_freeIdx = t_HEAP_IDX'(qlp.C0RxHdr);
+    assign c0_heap_freeIdx = t_C0_REQ_IDX'(qlp.C0RxHdr);
     assign c0_heap_free = qlp.C0RxRdValid;
 
     assign afu_buf.C0RxData    = qlp_buf.C0RxData;
@@ -447,13 +710,23 @@ module qa_shim_write_order
     assign afu_buf.C0RxIrValid = qlp_buf.C0RxIrValid;
 
     // Either forward the header from the QLP for non-read responses or
-    // reconstruct the read response header.  The CCI-E header has the same
-    // low bits as CCI-S so we always construct CCI-E and truncate when
-    // in CCI-S mode.
-    assign afu_buf.C0RxHdr =
-        qlp_buf.C0RxRdValid ?
-            { qlp_buf.C0RxHdr[CCI_RX_HDR_WIDTH-1 : $bits(t_HEAP_IDX)], c0_heap_readRsp.mdata } :
-            qlp_buf.C0RxHdr;
+    // reconstruct the read response header.
+    always_comb
+    begin
+        if (qlp_buf.C0RxRdValid)
+        begin
+            afu_buf.C0RxHdr = { qlp_buf.C0RxHdr[CCI_RX_HDR_WIDTH-1 : $bits(t_C0_REQ_IDX)], c0_heap_readRsp.mdata };
+        end
+        else if (qlp_buf.C0RxWrValid)
+        begin
+            // This is a write response. The request came in on channel 1.
+            afu_buf.C0RxHdr = { qlp_buf.C0RxHdr[CCI_RX_HDR_WIDTH-1 : $bits(t_C1_REQ_IDX)], c1_heap_readRsp[0].mdata };
+        end
+        else
+        begin
+            afu_buf.C0RxHdr = qlp_buf.C0RxHdr;
+        end
+    end
 
 
     // ====================================================================
@@ -462,42 +735,110 @@ module qa_shim_write_order
     //
     // ====================================================================
 
-    t_HASH [0 : N_HASHES-1] c1_tx_hash;
-
+    // If request is a write update the Mdata with the index of the hash
+    // details.
     assign qlp_buf.C1TxHdr =
-        afu_buf.C1TxWrValid ?
-            { afu_buf.C1TxHdr[CCI_TX_HDR_WIDTH-1 : $bits(c1_tx_hash)], c1_tx_hash } :
-            afu_buf.C1TxHdr;
+        afu_pipe[1].C1TxWrValid ?
+            { afu_pipe[1].C1TxHdr[CCI_TX_HDR_WIDTH-1 : $bits(t_C1_REQ_IDX)], c1_heap_allocIdx } :
+              afu_pipe[1].C1TxHdr;
 
-    assign qlp_buf.C1TxData = afu_buf.C1TxData;
-    assign qlp_buf.C1TxWrValid = afu_buf.C1TxWrValid && process_requests;
-    assign qlp_buf.C1TxIrValid = afu_buf.C1TxIrValid && process_requests;
+    assign qlp_buf.C1TxData = afu_pipe[1].C1TxData;
+    assign qlp_buf.C1TxWrValid = afu_pipe[1].C1TxWrValid && process_requests;
+    assign qlp_buf.C1TxIrValid = afu_pipe[1].C1TxIrValid && process_requests;
+
+    // Save state that will be used when the response is returned.
+    assign c1_heap_enqData.mdata = t_C1_REQ_IDX'(afu_pipe[1].C1TxHdr);
+
+    // Request heap read as qlp responses arrive. The heap's value will be
+    // available the cycle qlp_buf is read. Responses may arrive on either
+    // channel!
+    assign c1_heap_readReq[0] = t_C1_REQ_IDX'(qlp.C0RxHdr);
+    assign c1_heap_readReq[1] = t_C1_REQ_IDX'(qlp.C1RxHdr);
+
+    // Free heap entries as read responses arrive.
+    assign c1_heap_freeIdx[0] = t_C1_REQ_IDX'(qlp.C0RxHdr);
+    assign c1_heap_free[0] = qlp.C0RxWrValid;
+    assign c1_heap_freeIdx[1] = t_C1_REQ_IDX'(qlp.C1RxHdr);
+    assign c1_heap_free[1] = qlp.C1RxWrValid;
 
     // Responses
-    assign afu_buf.C1RxHdr = qlp_buf.C1RxHdr;
     assign afu_buf.C1RxWrValid = qlp_buf.C1RxWrValid;
     assign afu_buf.C1RxIrValid = qlp_buf.C1RxIrValid;
 
-    //
-    // Write responses can come back on either channel.  Handle both here.
-    //
-    t_HASH [0 : N_HASHES-1] c0_rx_hash;
-    assign c0_rx_hash = $bits(c0_rx_hash)'(qlp_buf.C0RxHdr);
-    t_HASH [0 : N_HASHES-1] c1_rx_hash;
-    assign c1_rx_hash = $bits(c1_rx_hash)'(qlp_buf.C1RxHdr);
-
-    assign wr_filter_remove_en[0] = qlp_buf.C0RxWrValid;
-    assign wr_filter_remove_en[1] = qlp_buf.C1RxWrValid;
-
-    generate
-        for (f = 0; f < N_HASHES; f = f + 1)
-        begin : c1_remove
-            assign c1_tx_hash[f] = filter_test_req[f][1];
-
-            assign wr_filter_remove[f][0] = c0_rx_hash[f];
-            assign wr_filter_remove[f][1] = c1_rx_hash[f];
+    // Either forward the header from the QLP for non-read responses or
+    // reconstruct the read response header.
+    always_comb
+    begin
+        if (qlp_buf.C1RxWrValid)
+        begin
+            afu_buf.C1RxHdr = { qlp_buf.C1RxHdr[CCI_RX_HDR_WIDTH-1 : $bits(t_C1_REQ_IDX)], c1_heap_readRsp[1].mdata };
         end
-    endgenerate
+        else
+        begin
+            afu_buf.C1RxHdr = qlp_buf.C1RxHdr;
+        end
+    end
+
+`ifdef DEBUG_MESSAGES
+    t_C0_REQ_IDX c0_prev_heap_allocIdx;
+    t_C1_REQ_IDX c1_prev_heap_allocIdx;
+    logic [15:0] cycle;
+
+    always_ff @(posedge clk)
+    begin
+        if (! resetb)
+        begin
+            c0_prev_heap_allocIdx <= 0;
+            c1_prev_heap_allocIdx <= 0;
+            cycle <= 0;
+        end
+        else
+        begin
+            cycle <= cycle + 1;
+
+            if (c0_blocked && ! c0_filter_may_insert && (c0_heap_allocIdx != c0_prev_heap_allocIdx))
+            begin
+                c0_prev_heap_allocIdx <= c0_heap_allocIdx;
+                $display("C0 blocked %d", c0_heap_allocIdx);
+            end
+            if (c1_blocked && ! c1_filter_may_insert && (c1_heap_allocIdx != c1_prev_heap_allocIdx))
+            begin
+                c1_prev_heap_allocIdx <= c1_heap_allocIdx;
+                $display("C1 blocked %d", c1_heap_allocIdx);
+            end
+
+            if (qlp_buf.C0TxRdValid)
+            begin
+                $display("XX A 0 %d %x %d",
+                         c0_heap_allocIdx,
+                         getReqAddrCCIE(t_TX_HEADER_CCI_E'(qlp_buf.C0TxHdr)),
+                         cycle);
+            end
+            if (qlp_buf.C1TxWrValid)
+            begin
+                $display("XX A 1 %d %x %d",
+                         c1_heap_allocIdx,
+                         getReqAddrCCIE(t_TX_HEADER_CCI_E'(qlp_buf.C1TxHdr)),
+                         cycle);
+            end
+
+            if (c0_heap_free)
+            begin
+                $display("XX R 0 %0d %d",
+                         c0_heap_freeIdx, cycle);
+            end
+            if (c1_heap_free[0])
+            begin
+                $display("XX W 0 %0d %d",
+                         c1_heap_freeIdx[0], cycle);
+            end
+            if (c1_heap_free[1])
+            begin
+                $display("XX W 1 %0d %d",
+                         c1_heap_freeIdx[1], cycle);
+            end
+        end
+    end
+`endif
 
 endmodule // qa_shim_write_order
-

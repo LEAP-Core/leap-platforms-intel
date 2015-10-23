@@ -80,7 +80,6 @@ AFU_BUFFER_CLASS;
 
 // Fields describing a typical AFU buffer may not be modified after allocation.
 typedef const AFU_BUFFER_CLASS *AFU_BUFFER;
-
 typedef class AFU_CLASS *AFU;
 
 class AFU_CLASS
@@ -142,6 +141,13 @@ class AFU_CLASS
     bool WriteCSR64(btCSROffset offset, bt64bitCSR value);
 
     void RunTests(QA_DEVICE qa);
+
+
+    //
+    // Properties of the system.
+    //
+    const uint64_t ByteAddrToLineIdx(uint64_t addr) { return addr / CL(1); }
+    const uint64_t ByteAddrToLineIdx(const void* addr) { return uint64_t(addr) / CL(1); }
 
   private:
     AFU_RUNTIME_CLIENT afuRuntimeClient;

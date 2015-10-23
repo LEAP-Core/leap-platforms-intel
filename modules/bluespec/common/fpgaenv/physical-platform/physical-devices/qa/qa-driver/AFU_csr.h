@@ -15,6 +15,8 @@
 #define CSR_AFU_ENABLE_TEST     0x1a2c
 #define CSR_AFU_SREG_READ       0x1a30
 
+// Page table base for qa_shim_tlb_simple (64 bits)
+#define CSR_AFU_PAGE_TABLE_BASE 0x1a80
 
 //
 // System CSRs

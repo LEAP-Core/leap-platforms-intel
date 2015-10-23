@@ -55,11 +55,6 @@ AFU_CLASS::AFU_CLASS(const char* afuID, uint32_t dsmSizeBytes)
     afuClient = new AFU_CLIENT_CLASS(afuRuntimeClient);
     afuClient->InitService(afuID);
 
-    // Allocate the TLB that enables host/FPGA shared virtual regions.
-    // Shared regions are allocated with the CreateSharedBufferInVM()
-    // method.
-    tlb = new QA_SHIM_TLB_CLASS(afuClient);
-
     // create buffer for DSM
     dsmBuffer = CreateSharedBuffer(dsmSizeBytes);
 
@@ -79,6 +74,11 @@ AFU_CLASS::AFU_CLASS(const char* afuID, uint32_t dsmSizeBytes)
     {
         printf("Polling DSM...\n"); sleep(1);
     }
+
+    // Allocate the TLB that enables host/FPGA shared virtual regions.
+    // Shared regions are allocated with the CreateSharedBufferInVM()
+    // method.
+    tlb = new QA_SHIM_TLB_CLASS(afuClient);
 
     cout << "AFU ready." << endl;
 }
@@ -165,7 +165,7 @@ void
 AFU_CLASS::RunTests(QA_DEVICE qa)
 {
 #if (QA_PLATFORM_MEMTEST != 0)
-    void* base = CreateSharedBufferInVM(MB(16));
+    void* base = CreateSharedBufferInVM(MB(64));
     // Send base PA
     uint64_t pa_line = SharedBufferVAtoPA(base) >> 6;
     printf("Host VA: 0x%p\n", base);

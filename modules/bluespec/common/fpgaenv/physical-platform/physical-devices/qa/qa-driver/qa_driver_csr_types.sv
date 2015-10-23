@@ -55,7 +55,10 @@ package qa_driver_csr_types;
 
         CSR_AFU_TRIGGER_DEBUG      = 16'h1a28,
         CSR_AFU_ENABLE_TEST        = 16'h1a2c,
-        CSR_AFU_SREG_READ          = 16'h1a30
+        CSR_AFU_SREG_READ          = 16'h1a30,
+
+        // Page table base for qa_shim_tlb_simple (64 bits)
+        CSR_AFU_PAGE_TABLE_BASE    = 16'h1a80
     }
     t_CSR_AFU_MAP;
 

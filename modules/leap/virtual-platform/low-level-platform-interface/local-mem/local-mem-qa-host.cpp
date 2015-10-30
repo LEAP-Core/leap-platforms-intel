@@ -75,11 +75,10 @@ LOCAL_MEM_QA_SERVER_CLASS::Alloc(uint64_t size)
     // The incoming "size" is the index of the last word in the buffer.
     // Convert to bytes.
     uint64_t size_bytes = (size + 1) * CCI_DATA_WIDTH / 8;
-    AFU_BUFFER buf = afu->CreateSharedBuffer(size_bytes);
+    void* buf = afu->CreateSharedBufferInVM(size_bytes);
 
-    printf("ALLOC 0x%016llx, p_addr %p, bytes 0x%016llx\n",
-           size, buf->physicalAddress, buf->numBytes);
+    assert(buf != NULL);
 
-    // Return physical address indexed by lines
-    return (buf->physicalAddress * 8) / CCI_DATA_WIDTH;
+    // Hardware expects a line index
+    return uint64_t(buf) / (CCI_DATA_WIDTH / 8);
 }

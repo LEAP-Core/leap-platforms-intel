@@ -167,10 +167,15 @@ AFU_CLASS::RunTests(QA_DEVICE qa)
 #if (QA_PLATFORM_MEMTEST != 0)
     void* base = CreateSharedBufferInVM(MB(64));
     // Send base PA
+    uint64_t base_line = uint64_t(base) >> 6;
     uint64_t pa_line = SharedBufferVAtoPA(base) >> 6;
-    printf("Host VA: 0x%p\n", base);
+    printf("Host VA: 0x%p, VA line: 0x%016llx\n", base, base_line);
     printf("Host PA: 0x%016llx, PA line: 0x%016llx\n", SharedBufferVAtoPA(base), pa_line);
-    qa->ReadSREG(pa_line);
+
+    // Send 30 bits at a time, high part first.  Low 2 bits must be 0 and
+    // aren't part of the address.
+    qa->ReadSREG(uint32_t((base_line >> 30) << 2));
+    qa->ReadSREG(uint32_t(base_line << 2));
 
     uint32_t cached = 4;
     uint32_t check_order = 8;

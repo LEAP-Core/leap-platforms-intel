@@ -45,10 +45,9 @@ typedef enum
     // Low order zero bits in both VA and PA of a page
     CCI_PT_PAGE_OFFSET_BITS = 21,   // 21 == 2MB pages
     // VA bits used as an index into the shared page table
-    CCI_PT_VA_IDX_BITS      = 1,   // 14 == 16K buckets in the hash table
+    CCI_PT_VA_IDX_BITS      = 14,   // 14 == 16K buckets in the hash table
     // Remaining VA bits (should total 64)
-//    CCI_PT_VA_TAG_BITS      = 29,
-    CCI_PT_VA_TAG_BITS      = 42,
+    CCI_PT_VA_TAG_BITS      = 29,
 
     // Physical page index size.  A physical address is the concatenation
     // of a page index and a page offset, defined above.  NOTE: While
@@ -61,6 +60,6 @@ typedef enum
     // associated with the current hash.  Pointers are line offsets from
     // the base of the page table.  The size of this offset determines
     // the maximum size of the page table.
-    CCI_PT_LINE_IDX_BITS    = 8     // 15 == 2MB with 64 byte lines
+    CCI_PT_LINE_IDX_BITS    = 15    // 15 == 2MB with 64 byte lines
 }
 t_TLB_SIMPLE_PARAMS;

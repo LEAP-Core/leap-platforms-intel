@@ -70,7 +70,7 @@ QA_SHIM_TLB_CLASS::QA_SHIM_TLB_CLASS(AFU_CLIENT afuClient) :
     assert(m_pageTableFree <= m_pageTableEnd);
 
     // Tell the hardware the address of the table
-    afuClient->WriteCSR64(CSR_AFU_PAGE_TABLE_BASE, m_pageTablePA);
+    afuClient->WriteCSR64(CSR_AFU_PAGE_TABLE_BASE, m_pageTablePA / CL(1));
 }
 
 
@@ -394,6 +394,7 @@ QA_SHIM_TLB_CLASS::DumpPageTable()
     // Loop through all lines in the hash table
     for (int hash_idx = 0; hash_idx < (1LL << CCI_PT_VA_IDX_BITS); hash_idx += 1)
     {
+        int cur_idx = hash_idx;
         uint8_t* pte = m_pageTable + hash_idx * CL(1);
 
         // Loop over all lines in the hash group
@@ -418,7 +419,8 @@ QA_SHIM_TLB_CLASS::DumpPageTable()
                 //
                 // The PA in a PTE is stored as the index of the 2MB-aligned
                 // physical address.
-                printf("    VA 0x%016llx -> PA 0x%016llx\n",
+                printf("    %d/%d:\t\tVA 0x%016llx -> PA 0x%016llx\n",
+                       hash_idx, cur_idx,
                        (va_tag << (CCI_PT_VA_IDX_BITS + CCI_PT_PAGE_OFFSET_BITS)) |
                        (hash_idx << CCI_PT_PAGE_OFFSET_BITS),
                        pa_idx << CCI_PT_PAGE_OFFSET_BITS);
@@ -432,7 +434,8 @@ QA_SHIM_TLB_CLASS::DumpPageTable()
 
             // Follow the next pointer to the connected line holding another
             // vector of PTEs.
-            pte = m_pageTable + ReadTableIdx(pte) * CL(1);
+            cur_idx = ReadTableIdx(pte);
+            pte = m_pageTable + cur_idx * CL(1);
             // End of list?  (Table index was NULL.)
             if (pte == m_pageTable) break;
         }

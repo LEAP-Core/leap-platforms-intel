@@ -58,7 +58,8 @@ package qa_driver_csr_types;
         CSR_AFU_SREG_READ          = 16'h1a30,
 
         // Page table base for qa_shim_tlb_simple (64 bits)
-        CSR_AFU_PAGE_TABLE_BASE    = 16'h1a80
+        CSR_AFU_PAGE_TABLE_BASEL   = 16'h1a80,
+        CSR_AFU_PAGE_TABLE_BASEH   = 16'h1a84
     }
     t_CSR_AFU_MAP;
 

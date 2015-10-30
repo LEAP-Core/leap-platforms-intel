@@ -305,7 +305,7 @@ module [CONNECTED_MODULE] mkPhysicalPlatformMemTester#(
         // it is sending the base address of the test.
         if (new_state == MEMTEST_STATE_IDLE)
         begin
-            baseAddr <= zeroExtend(r);
+            baseAddr <= resize({baseAddr, r[31:2]});
             sregDriver.sregRsp(?);
         end
 
@@ -357,6 +357,7 @@ module [CONNECTED_MODULE] mkPhysicalPlatformMemTester#(
                        QA_MEM_READ_REQ { addr: baseAddr | zeroExtend(idx),
                                          cached: cached,
                                          checkLoadStoreOrder: checkOrder };
+        $display("READ 0x%x", baseAddr | zeroExtend(idx));
         memoryDriver.req(req);
 
         idx <= idx + 1;

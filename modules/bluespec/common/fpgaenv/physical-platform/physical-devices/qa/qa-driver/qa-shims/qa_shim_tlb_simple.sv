@@ -35,6 +35,11 @@
 // Map virtual to physical addresses.  The AFU and QLP interfaces are thus
 // different widths.
 //
+// Requests coming from the AFU can be tagged as containing either virtual
+// or physical addresses.  Physical addresses are passed directly to the
+// QLP without translation here.  The tag is accessed with the
+// getReqAddrIsVirtual() function.
+//
 //                             * * * * * * * *
 //
 //   This module freely reorders memory references, including load/store
@@ -398,14 +403,20 @@ module qa_shim_tlb_simple
     // forwarded toward the QLP? TLB miss handler read requests have priority
     // on channel 0. lookupValid will only be set if there was a request.
     logic c0_fwd_req;
-    assign c0_fwd_req = lookupValid[0] &&
-                        c0_heap_notFull &&
-                        ! qlp_buf.C0TxAlmFull &&
-                        ! tlbReadIdxEn;
+    assign c0_fwd_req =
+        c0_request_rdy &&
+        (lookupValid[0] || ! getReqAddrIsVirtualCCIE(c0_afu_pipe[AFU_PIPE_LAST_STAGE].C0TxHdr)) &&
+        c0_heap_notFull &&
+        ! qlp_buf.C0TxAlmFull &&
+        ! tlbReadIdxEn;
 
     logic c1_fwd_req;
-    assign c1_fwd_req = (lookupValid[1] ||  c1_afu_pipe[AFU_PIPE_LAST_STAGE].C1TxIrValid) &&
-                        ! qlp_buf.C1TxAlmFull;
+    assign c1_fwd_req =
+        c1_request_rdy &&
+        (lookupValid[1] ||
+         c1_afu_pipe[AFU_PIPE_LAST_STAGE].C1TxIrValid ||
+         ! getReqAddrIsVirtualCCIE(c1_afu_pipe[AFU_PIPE_LAST_STAGE].C1TxHdr)) &&
+        ! qlp_buf.C1TxAlmFull;
 
     // Did a request miss in the TLB or fail arbitration?  It will be rotated
     // back to the head of afu_pipe.
@@ -485,17 +496,22 @@ module qa_shim_tlb_simple
 
 
     //
-    // Tap afu_pipe to request translation from the TLB.
+    // Tap afu_pipe to request translation from the TLB.  Translation is
+    // skilled if the incoming request already has a physical address.
     //
     assign lookupPageVA[0] =
         pageFromVA(getReqAddrCCIE(c0_afu_pipe[AFU_PIPE_LAST_STAGE-1].C0TxHdr));
-    assign lookupEn[0] = lookupRdy[0] &&
-                         c0_afu_pipe[AFU_PIPE_LAST_STAGE-1].C0TxRdValid;
+    assign lookupEn[0] =
+        lookupRdy[0] &&
+        c0_afu_pipe[AFU_PIPE_LAST_STAGE-1].C0TxRdValid &&
+        getReqAddrIsVirtualCCIE(c0_afu_pipe[AFU_PIPE_LAST_STAGE-1].C0TxHdr);
 
     assign lookupPageVA[1] =
         pageFromVA(getReqAddrCCIE(c1_afu_pipe[AFU_PIPE_LAST_STAGE-1].C1TxHdr));
-    assign lookupEn[1] = lookupRdy[1] &&
-                         c1_afu_pipe[AFU_PIPE_LAST_STAGE-1].C1TxWrValid;
+    assign lookupEn[1] =
+        lookupRdy[1] &&
+        c1_afu_pipe[AFU_PIPE_LAST_STAGE-1].C1TxWrValid &&
+        getReqAddrIsVirtualCCIE(c1_afu_pipe[AFU_PIPE_LAST_STAGE-1].C1TxHdr);
 
 
     // ====================================================================
@@ -532,8 +548,11 @@ module qa_shim_tlb_simple
                   c0_req_mdata };
 
             // Replace the address with the physical address
-            c0_req_hdr = setReqAddrCCIS(c0_req_hdr,
-                                        { lookupRspPagePA[0], c0_req_offset });
+            if (getReqAddrIsVirtualCCIE(c0_afu_pipe[AFU_PIPE_LAST_STAGE].C0TxHdr))
+            begin
+                c0_req_hdr = setReqAddrCCIS(c0_req_hdr,
+                                            { lookupRspPagePA[0], c0_req_offset });
+            end
         end
         else
         begin
@@ -569,8 +588,11 @@ module qa_shim_tlb_simple
         c1_req_offset = pageOffsetFromVA(getReqAddrCCIS(c1_req_hdr));
 
         // Replace the address with the physical address
-        c1_req_hdr = setReqAddrCCIS(c1_req_hdr,
-                                    { lookupRspPagePA[1], c1_req_offset });
+        if (getReqAddrIsVirtualCCIE(c1_afu_pipe[AFU_PIPE_LAST_STAGE].C1TxHdr))
+        begin
+            c1_req_hdr = setReqAddrCCIS(c1_req_hdr,
+                                        { lookupRspPagePA[1], c1_req_offset });
+        end
     end
 
     // Update channel 1 header with translated address (writes) or pass
@@ -658,7 +680,7 @@ endmodule // qa_shim_tlb_simple
 module qa_shim_tlb_assoc
   #(
     parameter CCI_DATA_WIDTH = 512,
-    parameter DEBUG_MESSAGES = 1
+    parameter DEBUG_MESSAGES = 0
     )
    (
     input  logic clk,

@@ -154,14 +154,19 @@ package qa_driver_types;
 
     typedef struct packed
     {
-        // The last reserved bit is used internally in this driver to hold
-        // the memory order request bit. It will be dropped before sending
-        // the request to the CCI.
-        //
-        logic         checkLoadStoreOrder;
+        // Reserved bits are used internally in this driver to hold
+        // some control signals on driver features.  They will be dropped
+        // before sending the request to the CCI.
+        logic         checkLoadStoreOrder;  // Enable qa_shim_write_order?
+
         logic [4:0]   rsvd4;
         logic [25:0]  hAddress;
+
+        // CCI-E uses atype to signal virtual virtual addresses (1) or DSM (0).
+        // The qa_shim_tlb_simple module here uses the bit for incoming virtual
+        // addresses (1) or physical addresses (0).
         logic         atype;
+
         logic [4:0]   rsvd3;
         logic [4:0]   rsvd2;
         t_TX_REQUEST  requestType;
@@ -184,6 +189,13 @@ package qa_driver_types;
         input t_TX_HEADER_CCI_E h;
 
         return {h.checkLoadStoreOrder};
+    endfunction
+
+
+    function automatic logic getReqAddrIsVirtualCCIE;
+        input t_TX_HEADER_CCI_E h;
+
+        return {h.atype};
     endfunction
 
 

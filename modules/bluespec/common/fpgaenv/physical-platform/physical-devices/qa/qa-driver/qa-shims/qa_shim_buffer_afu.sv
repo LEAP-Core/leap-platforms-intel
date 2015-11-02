@@ -46,7 +46,13 @@ module qa_shim_buffer_afu
     parameter CCI_TX_HDR_WIDTH = 61,
     parameter CCI_TAG_WIDTH = 13,
     parameter N_ENTRIES = 6,
-    parameter THRESHOLD = 4
+    parameter THRESHOLD = 4,
+    // If nonzero, incoming requests from afu_raw on channel 0 may bypass
+    // the FIFO and be received in the same cycle through afu_buf.  This
+    // is offered only on channel 0.  Bypassing is not offered on channel
+    // 1 both because stores are less latency sensitive and because the
+    // cost of a bypass MUX on the line-sized store data is too high.
+    parameter ENABLE_C0_BYPASS = 0
     )
    (
     input  logic clk,
@@ -100,6 +106,39 @@ module qa_shim_buffer_afu
 
     localparam C0TX_BITS = CCI_TX_HDR_WIDTH;
 
+    logic [CCI_TX_HDR_WIDTH-1 : 0] c0_fifo_first;
+    logic c0_fifo_notEmpty;
+    logic c0_fifo_enq;
+    logic c0_fifo_deq;
+
+    // If the bypass is enabled on channel 0 then route around the FIFO if
+    // the FIFO is currently empty and the logic connected to afu_buf consumes
+    // a new message from afu_raw immediately.
+    generate
+        if (ENABLE_C0_BYPASS == 0)
+        begin
+            // No bypass.  All messages flow through the FIFO.
+            assign afu_buf.C0TxRdValid = c0_fifo_notEmpty;
+            assign afu_buf.C0TxHdr = c0_fifo_first;
+            assign c0_fifo_enq = afu_raw.C0TxRdValid;
+            assign c0_fifo_deq = deqC0Tx;
+        end
+        else
+        begin
+            // Bypass FIFO when possible.
+            assign afu_buf.C0TxRdValid = c0_fifo_notEmpty || afu_raw.C0TxRdValid;
+            assign afu_buf.C0TxHdr =
+                c0_fifo_notEmpty ?  c0_fifo_first : afu_raw.C0TxHdr;
+
+            // Enq to the FIFO if a new request has arrived and it wasn't
+            // consumed immediately through afu_buf.
+            assign c0_fifo_enq =
+                afu_raw.C0TxRdValid && (c0_fifo_notEmpty || ! deqC0Tx);
+
+            assign c0_fifo_deq = deqC0Tx && c0_fifo_notEmpty;
+        end
+    endgenerate
+
     qa_drv_prim_fifo_lutram
       #(
         .N_DATA_BITS(C0TX_BITS),
@@ -112,13 +151,13 @@ module qa_shim_buffer_afu
               .enq_data(afu_raw.C0TxHdr),
               // C0TxRdValid is the only incoming valid bit.  Map it through
               // as enq here and notEmpty below.
-              .enq_en(afu_raw.C0TxRdValid),
+              .enq_en(c0_fifo_enq),
               .notFull(),
               .almostFull(afu_raw.C0TxAlmFull),
 
-              .first(afu_buf.C0TxHdr),
-              .deq_en(deqC0Tx),
-              .notEmpty(afu_buf.C0TxRdValid)
+              .first(c0_fifo_first),
+              .deq_en(c0_fifo_deq),
+              .notEmpty(c0_fifo_notEmpty)
               );
 
 

@@ -116,7 +116,8 @@ module qa_shim_tlb_simple
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
         .CCI_RX_HDR_WIDTH(CCI_AFU_RX_HDR_WIDTH),
         .CCI_TX_HDR_WIDTH(CCI_AFU_TX_HDR_WIDTH),
-        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
+        .CCI_TAG_WIDTH(CCI_TAG_WIDTH),
+        .ENABLE_C0_BYPASS(1)
         )
       buffer
         (

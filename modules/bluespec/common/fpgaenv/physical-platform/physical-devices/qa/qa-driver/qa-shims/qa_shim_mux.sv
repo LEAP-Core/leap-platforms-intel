@@ -109,7 +109,8 @@ module qa_shim_mux
                 .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
                 .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
                 .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
-                .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
+                .CCI_TAG_WIDTH(CCI_TAG_WIDTH),
+                .ENABLE_C0_BYPASS(1)
                 )
               b
                 (

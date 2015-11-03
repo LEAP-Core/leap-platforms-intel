@@ -141,7 +141,15 @@ module qa_drv_memory
         .CCI_QLP_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
         .CCI_AFU_RX_HDR_WIDTH($bits(t_RX_HEADER_CCI_E)),
         .CCI_AFU_TX_HDR_WIDTH($bits(t_TX_HEADER_CCI_E)),
-        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
+        .CCI_TAG_WIDTH(CCI_TAG_WIDTH),
+        // The TLB needs to generate loads internally in order to walk the
+        // page table.  The reserved bit in Mdata is a location offered
+        // to the page table walker to tag internal loads.  The Mdata location
+        // is guaranteed to be zero on all requests flowing in to the TLB
+        // from the AFU.  In the composition here, qa_shim_sort_responses
+        // provides this guarantee by rewriting Mdata as requests and
+        // responses as they flow in and out of the stack.
+        .RESERVED_MDATA_IDX(CCI_TAG_WIDTH-2)
         )
       v_to_p
        (

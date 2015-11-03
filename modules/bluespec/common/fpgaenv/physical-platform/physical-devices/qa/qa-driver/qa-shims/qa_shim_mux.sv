@@ -48,13 +48,13 @@ module qa_shim_mux
     // This MUX requires that one bit be reserved for message routing in the
     // Mdata field.  This reserved bit allows the MUX to route responses with
     // simple logic and without having to allocate extra storage to preserve
-    // Mdata bits.  The reserved bit is configurable using the MUX_MDATA_IDX
-    // parameter.  The instantiation point must pick a bit -- the default value
-    // is purposely illegal in order to force a decision.  The reserved bit
+    // Mdata bits.  The reserved bit is configurable using RESERVED_MDATA_IDX.
+    // The instantiation point must pick a bit -- the default value is
+    // purposely illegal in order to force a decision.  The reserved bit
     // must be 0 on requests from the AFU ports and is guaranteed to be 0
     // in responses to the AFU ports.
     //
-    parameter MUX_MDATA_IDX = -1
+    parameter RESERVED_MDATA_IDX = -1
     )
    (
     input  logic clk,
@@ -189,7 +189,7 @@ module qa_shim_mux
                 last_c0_winner_idx <= c0_winner_idx;
 
                 assert(check_hdr0 == 0) else
-                    $fatal("qa_sim_mux.sv: AFU C0 Mdata[%d] must be zero", MUX_MDATA_IDX);
+                    $fatal("qa_sim_mux.sv: AFU C0 Mdata[%d] must be zero", RESERVED_MDATA_IDX);
             end
 
             if (|c1_request && ! qlp.C1TxAlmFull)
@@ -197,7 +197,7 @@ module qa_shim_mux
                 last_c1_winner_idx <= c1_winner_idx;
 
                 assert(check_hdr1 == 0) else
-                    $fatal("qa_sim_mux.sv: AFU C1 Mdata[%d] must be zero", MUX_MDATA_IDX);
+                    $fatal("qa_sim_mux.sv: AFU C1 Mdata[%d] must be zero", RESERVED_MDATA_IDX);
             end
         end
     end
@@ -211,8 +211,8 @@ module qa_shim_mux
 
     always_ff @(posedge clk)
     begin
-        assert ((MUX_MDATA_IDX > 0) && (MUX_MDATA_IDX < CCI_TAG_WIDTH)) else
-            $fatal("qa_sim_mux.sv: Illegal MUX_MDATA_IDX value: %d", MUX_MDATA_IDX);
+        assert ((RESERVED_MDATA_IDX > 0) && (RESERVED_MDATA_IDX < CCI_TAG_WIDTH)) else
+            $fatal("qa_sim_mux.sv: Illegal RESERVED_MDATA_IDX value: %d", RESERVED_MDATA_IDX);
     end
 
     //
@@ -225,7 +225,7 @@ module qa_shim_mux
         input afu_idx;
 
         tagRequest = header;
-        tagRequest[MUX_MDATA_IDX] = afu_idx;
+        tagRequest[RESERVED_MDATA_IDX] = afu_idx;
     endfunction
 
     always_comb
@@ -242,14 +242,14 @@ module qa_shim_mux
             // Mux port 0 wins
             qlp.C0TxHdr = tagRequest(afu_buf[0].C0TxHdr, 0);
             qlp.C0TxRdValid = afu_buf[0].C0TxRdValid;
-            check_hdr0 = afu_buf[0].C0TxHdr[MUX_MDATA_IDX];
+            check_hdr0 = afu_buf[0].C0TxHdr[RESERVED_MDATA_IDX];
         end
         else
         begin
             // Mux port 1 wins
             qlp.C0TxHdr = tagRequest(afu_buf[1].C0TxHdr, 1);
             qlp.C0TxRdValid = afu_buf[1].C0TxRdValid;
-            check_hdr0 = afu_buf[1].C0TxHdr[MUX_MDATA_IDX];
+            check_hdr0 = afu_buf[1].C0TxHdr[RESERVED_MDATA_IDX];
         end
 
         if (qlp.C1TxAlmFull || ! (|c1_request))
@@ -268,7 +268,7 @@ module qa_shim_mux
             qlp.C1TxData = afu_buf[0].C1TxData;
             qlp.C1TxWrValid = afu_buf[0].C1TxWrValid;
             qlp.C1TxIrValid = afu_buf[0].C1TxIrValid;
-            check_hdr1 = afu_buf[0].C1TxHdr[MUX_MDATA_IDX];
+            check_hdr1 = afu_buf[0].C1TxHdr[RESERVED_MDATA_IDX];
         end
         else
         begin
@@ -277,7 +277,7 @@ module qa_shim_mux
             qlp.C1TxData = afu_buf[1].C1TxData;
             qlp.C1TxWrValid = afu_buf[1].C1TxWrValid;
             qlp.C1TxIrValid = afu_buf[1].C1TxIrValid;
-            check_hdr1 = afu_buf[1].C1TxHdr[MUX_MDATA_IDX];
+            check_hdr1 = afu_buf[1].C1TxHdr[RESERVED_MDATA_IDX];
         end
     end
 
@@ -312,7 +312,7 @@ module qa_shim_mux
         untagRequest = header;
         if (isResponse)
         begin
-            untagRequest[MUX_MDATA_IDX] = 0;
+            untagRequest[RESERVED_MDATA_IDX] = 0;
         end
     endfunction
 
@@ -320,9 +320,9 @@ module qa_shim_mux
     // data and header to both unconditionally and use the control bits
     // to control destination.
     logic c0_rsp_idx;
-    assign c0_rsp_idx = qlp.C0RxHdr[MUX_MDATA_IDX];
+    assign c0_rsp_idx = qlp.C0RxHdr[RESERVED_MDATA_IDX];
     logic c1_rsp_idx;
-    assign c1_rsp_idx = qlp.C1RxHdr[MUX_MDATA_IDX];
+    assign c1_rsp_idx = qlp.C1RxHdr[RESERVED_MDATA_IDX];
 
     generate
         for (p = 0; p < NUM_AFU_PORTS; p = p + 1)

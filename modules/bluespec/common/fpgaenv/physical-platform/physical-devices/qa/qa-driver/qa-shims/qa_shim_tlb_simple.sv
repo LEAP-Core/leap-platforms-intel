@@ -76,7 +76,17 @@ module qa_shim_tlb_simple
     parameter CCI_QLP_TX_HDR_WIDTH = 61,
     parameter CCI_AFU_RX_HDR_WIDTH = 24,
     parameter CCI_AFU_TX_HDR_WIDTH = 99,
-    parameter CCI_TAG_WIDTH = 13
+    parameter CCI_TAG_WIDTH = 13,
+
+    // The TLB needs to generate loads internally in order to walk the
+    // page table.  The reserved bit in Mdata is a location offered
+    // to the page table walker to tag internal loads.  The Mdata location
+    // must be zero on all requests flowing in to the TLB through the
+    // afu interface below.
+    //
+    // Some shims (e.g. qa_shim_sort_responses) already manage Mdata and
+    // guarantee that some high bits will be zero.
+    parameter RESERVED_MDATA_IDX = -1
     )
    (
     input  logic clk,
@@ -90,6 +100,7 @@ module qa_shim_tlb_simple
 
     logic resetb;
     assign resetb = qlp.resetb;
+
 
     // ====================================================================
     //
@@ -138,95 +149,22 @@ module qa_shim_tlb_simple
     assign afu_buf.C0TxAlmFull = 1'b1;
     assign afu_buf.C1TxAlmFull = 1'b1;
 
-
-    // ====================================================================
     //
-    //  Instantiate a buffer on the QLP response port to give time to
-    //  read local state in block RAMs before forwarding the response
-    //  toward the AFU.
+    // Validate parameter settings and that the Mdata reserved bit is 0
+    // on all incoming read requests.
     //
-    // ====================================================================
+    always_ff @(posedge clk)
+    begin
+        assert ((RESERVED_MDATA_IDX > 0) && (RESERVED_MDATA_IDX < CCI_TAG_WIDTH)) else
+            $fatal("qa_sim_tlb_simple.sv: Illegal RESERVED_MDATA_IDX value: %d", RESERVED_MDATA_IDX);
 
-    qlp_interface
-      #(
-        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_RX_HDR_WIDTH(CCI_QLP_RX_HDR_WIDTH),
-        .CCI_TX_HDR_WIDTH(CCI_QLP_TX_HDR_WIDTH),
-        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
-        )
-      qlp_buf (.clk);
-
-    qa_shim_buffer_qlp
-      #(
-        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_RX_HDR_WIDTH(CCI_QLP_RX_HDR_WIDTH),
-        .CCI_TX_HDR_WIDTH(CCI_QLP_TX_HDR_WIDTH),
-        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
-        )
-      bufqlp
-        (
-         .clk,
-         .qlp_raw(qlp),
-         .qlp_buf(qlp_buf)
-         );
-
-
-    // ====================================================================
-    //
-    //  Heap to hold old Mdata.  Only read requests and responses have
-    //  modified Mdata fields.
-    //
-    // ====================================================================
-
-    // Number of reads can be relatively large since a block RAM will be
-    // allocated for the Mdata storage.
-    localparam MAX_ACTIVE_READS = 128;
-
-    // Heap entry index
-    typedef logic [$clog2(MAX_ACTIVE_READS)-1 : 0] t_C0_REQ_IDX;
-
-    // Module-specific data stored in Mdata requests
-    typedef struct packed
-    {
-        // Saved Mdata from a client read
-        t_C0_REQ_IDX heapIdx;
-
-        // Read from the page table requested by this module?
-        logic isPageTableLine;
-    }
-    t_C0_MDATA;
-
-    // Heap entry holding a requests original Mdata
-    typedef logic [$bits(t_C0_MDATA)-1 : 0] t_C0_HEAP_ENTRY;
-
-    logic c0_heap_enqEn;
-    t_C0_HEAP_ENTRY c0_heap_enqData;
-    t_C0_REQ_IDX c0_heap_allocIdx;
-
-    logic c0_heap_notFull;
-
-    t_C0_REQ_IDX c0_heap_readReq;
-    t_C0_HEAP_ENTRY c0_heap_readRsp;
-
-    logic c0_heap_free;
-    t_C0_REQ_IDX c0_heap_freeIdx;
-
-    qa_drv_prim_heap
-      #(
-        .N_ENTRIES(MAX_ACTIVE_READS),
-        .N_DATA_BITS($bits(t_C0_HEAP_ENTRY))
-        )
-      c0_heap(.clk,
-              .resetb,
-              .enq(c0_heap_enqEn),
-              .enqData(c0_heap_enqData),
-              .notFull(c0_heap_notFull),
-              .allocIdx(c0_heap_allocIdx),
-              .readReq(c0_heap_readReq),
-              .readRsp(c0_heap_readRsp),
-              .free(c0_heap_free),
-              .freeIdx(c0_heap_freeIdx)
-              );
+        if (resetb)
+        begin
+            assert((afu_buf.C0TxHdr[RESERVED_MDATA_IDX] == 0) ||
+                   ! afu_buf.C0TxRdValid) else
+                $fatal("qa_shim_tlb_simple.sv: AFU C0 Mdata[%d] must be zero", RESERVED_MDATA_IDX);
+        end
+    end
 
 
     // ====================================================================
@@ -329,15 +267,15 @@ module qa_shim_tlb_simple
         end
         else
         begin
-            if (qlp_buf.C0RxCgValid &&
-                (csr_addr_matches(qlp_buf.C0RxHdr, CSR_AFU_PAGE_TABLE_BASEL) ||
-                 csr_addr_matches(qlp_buf.C0RxHdr, CSR_AFU_PAGE_TABLE_BASEH)))
+            if (qlp.C0RxCgValid &&
+                (csr_addr_matches(qlp.C0RxHdr, CSR_AFU_PAGE_TABLE_BASEL) ||
+                 csr_addr_matches(qlp.C0RxHdr, CSR_AFU_PAGE_TABLE_BASEH)))
             begin
                 // Shift address into page_table_base
                 page_table_base <=
-                    t_LINE_ADDR_CCI_S'({ page_table_base, qlp_buf.C0RxData[31:0]});
+                    t_LINE_ADDR_CCI_S'({ page_table_base, qlp.C0RxData[31:0]});
 
-                if (csr_addr_matches(qlp_buf.C0RxHdr, CSR_AFU_PAGE_TABLE_BASEL))
+                if (csr_addr_matches(qlp.C0RxHdr, CSR_AFU_PAGE_TABLE_BASEL))
                 begin
                     tlbReadIdxRdy <= 1;
                 end
@@ -407,8 +345,7 @@ module qa_shim_tlb_simple
     assign c0_fwd_req =
         c0_request_rdy &&
         (lookupValid[0] || ! getReqAddrIsVirtualCCIE(c0_afu_pipe[AFU_PIPE_LAST_STAGE].C0TxHdr)) &&
-        c0_heap_notFull &&
-        ! qlp_buf.C0TxAlmFull &&
+        ! qlp.C0TxAlmFull &&
         ! tlbReadIdxEn;
 
     logic c1_fwd_req;
@@ -417,7 +354,7 @@ module qa_shim_tlb_simple
         (lookupValid[1] ||
          c1_afu_pipe[AFU_PIPE_LAST_STAGE].C1TxIrValid ||
          ! getReqAddrIsVirtualCCIE(c1_afu_pipe[AFU_PIPE_LAST_STAGE].C1TxHdr)) &&
-        ! qlp_buf.C1TxAlmFull;
+        ! qlp.C1TxAlmFull;
 
     // Did a request miss in the TLB or fail arbitration?  It will be rotated
     // back to the head of afu_pipe.
@@ -523,8 +460,6 @@ module qa_shim_tlb_simple
 
     // Construct the read request header.
     logic [CCI_QLP_TX_HDR_WIDTH-1 : 0] c0_req_hdr;
-    t_C0_MDATA c0_req_mdata;
-    t_VA_PAGE_OFFSET c0_req_offset;
 
     always_comb
     begin
@@ -533,26 +468,16 @@ module qa_shim_tlb_simple
             //
             // Normal read.
             //
-
-            // Add module-specific data to Mdata in order to route the response
-            c0_req_mdata.isPageTableLine = 0;
-            c0_req_mdata.heapIdx = c0_heap_allocIdx;
-
             c0_req_hdr = c0_afu_pipe[AFU_PIPE_LAST_STAGE].C0TxHdr;
-
-            // Request's line offset within the page.
-            c0_req_offset = pageOffsetFromVA(getReqAddrCCIS(c0_req_hdr));
-
-            // Copy the original header but replace the Mdata field
-            c0_req_hdr =
-                { c0_req_hdr[CCI_QLP_TX_HDR_WIDTH-1 : $bits(t_C0_HEAP_ENTRY)],
-                  c0_req_mdata };
 
             // Replace the address with the physical address
             if (getReqAddrIsVirtualCCIE(c0_afu_pipe[AFU_PIPE_LAST_STAGE].C0TxHdr))
             begin
-                c0_req_hdr = setReqAddrCCIS(c0_req_hdr,
-                                            { lookupRspPagePA[0], c0_req_offset });
+                c0_req_hdr =
+                    setReqAddrCCIS(c0_req_hdr,
+                                   { lookupRspPagePA[0],
+                                     // Page offset remains the same in VA and PA
+                                     pageOffsetFromVA(getReqAddrCCIS(c0_req_hdr)) });
             end
         end
         else
@@ -562,19 +487,16 @@ module qa_shim_tlb_simple
             //
             c0_req_hdr = genReqHeaderCCIS(RdLine,
                                           page_table_base + tlbReadIdx,
-                                          t_MDATA'(1));
-            c0_req_mdata = 'x;
-            c0_req_offset = 'x;
+                                          t_MDATA'(0));
+
+            // Tag the request as a local page table walk
+            c0_req_hdr[RESERVED_MDATA_IDX] = 1'b1;
         end
     end
 
     // Channel 0 (read) is either client requests or reads for TLB misses
-    assign qlp_buf.C0TxHdr = c0_req_hdr;
-    assign qlp_buf.C0TxRdValid = c0_fwd_req || tlbReadIdxEn;
-
-    // Save state that will be used when the response is returned.
-    assign c0_heap_enqData = t_C0_HEAP_ENTRY'(c0_afu_pipe[AFU_PIPE_LAST_STAGE].C0TxHdr);
-    assign c0_heap_enqEn = c0_fwd_req;
+    assign qlp.C0TxHdr = c0_req_hdr;
+    assign qlp.C0TxRdValid = c0_fwd_req || tlbReadIdxEn;
 
 
     // Channel 1 request logic
@@ -598,16 +520,16 @@ module qa_shim_tlb_simple
 
     // Update channel 1 header with translated address (writes) or pass
     // through original request (interrupt).
-    assign qlp_buf.C1TxHdr =
+    assign qlp.C1TxHdr =
         c1_afu_pipe[AFU_PIPE_LAST_STAGE].C1TxWrValid ?
             c1_req_hdr :
             CCI_QLP_TX_HDR_WIDTH'(c1_afu_pipe[AFU_PIPE_LAST_STAGE].C1TxHdr);
 
-    assign qlp_buf.C1TxData = c1_afu_pipe[AFU_PIPE_LAST_STAGE].C1TxData;
-    assign qlp_buf.C1TxWrValid = c1_afu_pipe[AFU_PIPE_LAST_STAGE].C1TxWrValid &&
-                                 c1_fwd_req;
-    assign qlp_buf.C1TxIrValid = c1_afu_pipe[AFU_PIPE_LAST_STAGE].C1TxIrValid &&
-                                 c1_fwd_req;
+    assign qlp.C1TxData = c1_afu_pipe[AFU_PIPE_LAST_STAGE].C1TxData;
+    assign qlp.C1TxWrValid = c1_afu_pipe[AFU_PIPE_LAST_STAGE].C1TxWrValid &&
+                             c1_fwd_req;
+    assign qlp.C1TxIrValid = c1_afu_pipe[AFU_PIPE_LAST_STAGE].C1TxIrValid &&
+                             c1_fwd_req;
 
 
     // ====================================================================
@@ -616,47 +538,22 @@ module qa_shim_tlb_simple
     //
     // ====================================================================
 
-    // Retrieve state stored in the response header's Mdata field.
-    t_C0_MDATA rsp_mdata;
-    assign rsp_mdata = t_C0_MDATA'(qlp.C0RxHdr);
-    t_C0_MDATA rsp_buf_mdata;
-    assign rsp_buf_mdata = t_C0_MDATA'(qlp_buf.C0RxHdr);
+    // Is the read response an internal page table reference?
+    logic is_pt_rsp;
+    assign is_pt_rsp = qlp.C0RxHdr[RESERVED_MDATA_IDX];
 
-    // Request heap read as qlp responses arrive.  The heap's value will be
-    // available the cycle qlp_buf is read.
-    assign c0_heap_readReq = rsp_mdata.heapIdx;
-
-    // Free heap entries as read responses arrive.
-    assign c0_heap_freeIdx = rsp_mdata.heapIdx;
-    assign c0_heap_free = qlp.C0RxRdValid && ! rsp_mdata.isPageTableLine;
-
-    assign afu_buf.C0RxData    = qlp_buf.C0RxData;
-    assign afu_buf.C0RxWrValid = qlp_buf.C0RxWrValid;
+    assign afu_buf.C0RxHdr     = qlp.C0RxHdr;
+    assign afu_buf.C0RxData    = qlp.C0RxData;
+    assign afu_buf.C0RxWrValid = qlp.C0RxWrValid;
     // Only forward client-generated read responses
-    assign afu_buf.C0RxRdValid = qlp_buf.C0RxRdValid && ! rsp_buf_mdata.isPageTableLine;
-    assign afu_buf.C0RxCgValid = qlp_buf.C0RxCgValid;
-    assign afu_buf.C0RxUgValid = qlp_buf.C0RxUgValid;
-    assign afu_buf.C0RxIrValid = qlp_buf.C0RxIrValid;
-
-    // Either forward the header from the QLP for non-read responses or
-    // reconstruct the read response header.
-    always_comb
-    begin
-        if (qlp_buf.C0RxRdValid)
-        begin
-            afu_buf.C0RxHdr =
-                { qlp_buf.C0RxHdr[CCI_QLP_RX_HDR_WIDTH-1 : $bits(t_C0_HEAP_ENTRY)],
-                  c0_heap_readRsp };
-        end
-        else
-        begin
-            afu_buf.C0RxHdr = qlp_buf.C0RxHdr;
-        end
-    end
+    assign afu_buf.C0RxRdValid = qlp.C0RxRdValid && ! is_pt_rsp;
+    assign afu_buf.C0RxCgValid = qlp.C0RxCgValid;
+    assign afu_buf.C0RxUgValid = qlp.C0RxUgValid;
+    assign afu_buf.C0RxIrValid = qlp.C0RxIrValid;
 
     // Connect read responses to the TLB management code
-    assign tlbReadData = qlp_buf.C0RxData;
-    assign tlbReadDataEn = qlp_buf.C0RxRdValid && rsp_buf_mdata.isPageTableLine;
+    assign tlbReadData = qlp.C0RxData;
+    assign tlbReadDataEn = qlp.C0RxRdValid && is_pt_rsp;
 
     // Channel 1 (write) responses can flow directly from the QLP port since
     // there is no processing needed here.

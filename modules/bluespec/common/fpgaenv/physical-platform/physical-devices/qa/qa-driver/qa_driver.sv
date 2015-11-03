@@ -282,7 +282,10 @@ module qa_driver
         .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
         .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
         .CCI_TAG_WIDTH(CCI_TAG_WIDTH),
-        .MUX_MDATA_IDX(CCI_TAG_WIDTH-1)
+        // The bit in Mdata that the MUX code will use to record the source
+        // of requests. This Mdata location but be 0 on all requests
+        // arriving at the MUX.
+        .RESERVED_MDATA_IDX(CCI_TAG_WIDTH-1)
         )
       mux
        (

@@ -9,6 +9,8 @@
 %public local-mem-qa-host.cpp
 %public local-mem-qa-host.h
 
+%param --dynamic LOCAL_MEM_ENFORCE_ORDER  1  "(0) No order guarantees, (1) Enforce load/store and store/store order within a line"
+
 %param LOCAL_MEM_WORD_BITS       512  "Local memory word size"
 %param LOCAL_MEM_WORDS_PER_LINE  1    "Local memory words per line (must be power of 2)"
 

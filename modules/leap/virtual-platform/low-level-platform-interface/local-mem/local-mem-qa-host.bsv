@@ -41,11 +41,18 @@ import FIFOF::*;
 import Vector::*;
 import List::*;
 
+`include "awb/provides/soft_connections.bsh"
+`include "awb/provides/soft_services.bsh"
+`include "awb/provides/soft_services_lib.bsh"
+`include "awb/provides/soft_services_deps.bsh"
+
 `include "awb/provides/librl_bsv_base.bsh"
+`include "awb/provides/common_services.bsh"
 `include "awb/provides/physical_platform.bsh"
 `include "awb/provides/fpga_components.bsh"
 `include "awb/provides/qa_device.bsh"
 
+`include "awb/dict/PARAMS_LOCAL_MEM.bsh"
 //
 // Configure local memory words as the entire QA CCI cache line.  Partial writes
 // are slow, so we want to discourage them.
@@ -102,6 +109,15 @@ module [CONNECTED_MODULE] mkLocalMem#(LOCAL_MEM_CONFIG conf)
         mkConnectionRecv(hostMemoryName + "writeAck");
 
     //
+    // Dynamic parameters
+    //
+    PARAMETER_NODE paramNode <- mkDynamicParameterNode();
+    Param#(1) enforceOrder <-
+        mkDynamicParameter(`PARAMS_LOCAL_MEM_LOCAL_MEM_ENFORCE_ORDER,
+                           paramNode);
+    Bool checkLoadStoreOrder = (enforceOrder != 0);
+
+    //
     // Gate for requests.  memReq.notFull must be here since request methods
     // are sent through wires and merged in fwdMemReq!
     //
@@ -143,7 +159,7 @@ module [CONNECTED_MODULE] mkLocalMem#(LOCAL_MEM_CONFIG conf)
         // Don't use the small FPGA-side cache. Assume we will miss.
         readReqW.wset(QA_MEM_READ_REQ { addr: l_addr,
                                         cached: False,
-                                        checkLoadStoreOrder: True });
+                                        checkLoadStoreOrder: checkLoadStoreOrder });
     endmethod
 
     method ActionValue#(LOCAL_MEM_LINE) readLineRsp();
@@ -164,7 +180,7 @@ module [CONNECTED_MODULE] mkLocalMem#(LOCAL_MEM_CONFIG conf)
         writeReqW.wset(QA_MEM_WRITE_REQ { addr: l_addr,
                                           data: data,
                                           cached: False,
-                                          checkLoadStoreOrder: True });
+                                          checkLoadStoreOrder: checkLoadStoreOrder });
     endmethod
 
     method Action writeWordMasked(LOCAL_MEM_ADDR addr, LOCAL_MEM_WORD data, LOCAL_MEM_WORD_MASK mask) if (notBusy());

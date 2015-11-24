@@ -37,6 +37,8 @@
 // the user code through the usual QuickAssist cci_stf_afu() module.
 //
 
+import "DPI-C" function string getenv(input string env_name);
+
 module qa_sim_top_level(CLK,
                         RST_N);
     input CLK;
@@ -47,7 +49,16 @@ module qa_sim_top_level(CLK,
     initial
     begin
         $dumpfile("driver_dump.vcd");
-        $dumpvars(0, emulator);
-        $dumpon;
+        if ({getenv("VCD_ENABLE_DUMP")} != "")
+        begin
+            $display("Enabling dump to driver_dump.vcd");
+            $dumpvars(0, emulator);
+            $dumpon;
+        end
+        else
+        begin
+            $display("VCD disabled. To enable: \"setenv VCD_ENABLE_DUMP 1\".");
+            $system("rm -f driver_dump.vcd");
+        end
     end
 endmodule // qa_sim_top_level

@@ -40,8 +40,10 @@
 module qa_drv_prim_scoreboard
   #(
     parameter N_ENTRIES = 32,
-              N_DATA_BITS = 64,
-              N_META_BITS = 1
+    parameter N_DATA_BITS = 64,
+    parameter N_META_BITS = 1,
+    // Threshold below which heap asserts "full"
+    parameter MIN_FREE_SLOTS = 1
     )
    (
     input  logic clk,
@@ -72,6 +74,10 @@ module qa_drv_prim_scoreboard
     typedef logic [N_META_BITS-1 : 0] t_META_DATA;
     typedef logic [$clog2(N_ENTRIES)-1 : 0] t_IDX;
 
+    // Index logic in a space 1 bit larger than the true space
+    // in order to accommodate pointer comparison as pointers wrap.
+    typedef logic [$clog2(N_ENTRIES) : 0] t_IDX_NOWRAP;
+
     typedef struct packed
     {
         t_DATA data;
@@ -79,8 +85,6 @@ module qa_drv_prim_scoreboard
     }
     t_OUTPUT_DATA;
 
-    // Scoreboard is empty when oldest == newest and full when
-    // newest + 1 == oldest.
     t_IDX newest;
     t_IDX oldest;
     t_IDX oldest_next;
@@ -88,7 +92,13 @@ module qa_drv_prim_scoreboard
     // Track data arrival
     reg [N_ENTRIES-1 : 0] dataValid;
 
-    assign notFull = ((newest + t_IDX'(1)) != oldest);
+    // notFull is true as long as there are at least MIN_FREE_SLOTS available
+    // at the end of the ring buffer. The computation is complicated by the
+    // wrapping pointer.
+    logic newest_ge_oldest;
+    assign newest_ge_oldest = (newest >= oldest);
+    assign notFull =
+        ({1'b0, newest} + t_IDX_NOWRAP'(MIN_FREE_SLOTS)) < {newest_ge_oldest, oldest};
 
     // enq allocates a slot and returns the index of the slot.
     assign enqIdx = newest;
@@ -103,8 +113,10 @@ module qa_drv_prim_scoreboard
         begin
             newest <= newest + 1;
 
-            assert (notFull) else
+            assert ((newest + t_IDX'(1)) != oldest) else
                 $fatal("qa_drv_prim_scoreboard: Can't ENQ when FULL!");
+            assert ((N_ENTRIES & (N_ENTRIES - 1)) == 0) else
+                $fatal("qa_drv_prim_scoreboard: N_ENTRIES must be a power of 2!");
         end
     end
 

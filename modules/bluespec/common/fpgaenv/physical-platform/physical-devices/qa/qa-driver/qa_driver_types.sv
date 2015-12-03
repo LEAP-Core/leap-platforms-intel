@@ -42,6 +42,18 @@ package qa_driver_types;
     import qa_driver_csr_types::*;
 
     //
+    // General parameters
+    //
+    typedef enum
+    {
+        // Number of requests that can be accepted after almost full
+        // is asserted.
+        ALM_FULL_THRESHOLD = 4
+    }
+    t_QA_DRIVER_PARAMS;
+
+
+    //
     // Requested operation.
     //
     typedef enum logic [3:0]

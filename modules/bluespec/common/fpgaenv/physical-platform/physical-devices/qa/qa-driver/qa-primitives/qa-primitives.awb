@@ -14,3 +14,4 @@
 %sources -t VERILOG    -v PRIVATE qa_drv_prim_heap.sv
 %sources -t VERILOG    -v PRIVATE qa_drv_prim_lru_pseudo.sv
 %sources -t VERILOG    -v PRIVATE qa_drv_prim_scoreboard.sv
+%sources -t VERILOG    -v PRIVATE qa_drv_prim_scoreboard_dualport.sv

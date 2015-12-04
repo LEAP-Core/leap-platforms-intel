@@ -192,8 +192,43 @@ module qa_drv_memory
 
     // ====================================================================
     //
-    //  Sort read responses so they arrive in order. Operates on virtual
-    //  addresses.
+    //  Sort read responses so they arrive in the order they were
+    //  requested.
+    //
+    //  Operates on virtual addresses.
+    //
+    // ====================================================================
+
+    qlp_interface
+      #(
+        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
+        .CCI_RX_HDR_WIDTH($bits(t_RX_HEADER_CCI_E)),
+        .CCI_TX_HDR_WIDTH($bits(t_TX_HEADER_CCI_E)),
+        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
+        )
+      qlp_rd_rsp_inorder (.clk);
+
+    qa_shim_sort_read_rsp
+      #(
+        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
+        .CCI_RX_HDR_WIDTH($bits(t_RX_HEADER_CCI_E)),
+        .CCI_TX_HDR_WIDTH($bits(t_TX_HEADER_CCI_E)),
+        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
+        )
+      sortReads
+       (
+        .clk,
+        .qlp(qlp_write_order),
+        .afu(qlp_rd_rsp_inorder)
+        );
+
+
+    // ====================================================================
+    //
+    //  Sort write responses so they arrive in the order they were
+    //  requested.
+    //
+    //  Operates on virtual addresses.
     //
     // ====================================================================
 
@@ -206,17 +241,17 @@ module qa_drv_memory
         )
       qlp_inorder (.clk);
 
-    qa_shim_sort_responses
+    qa_shim_sort_write_rsp
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
         .CCI_RX_HDR_WIDTH($bits(t_RX_HEADER_CCI_E)),
         .CCI_TX_HDR_WIDTH($bits(t_TX_HEADER_CCI_E)),
         .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
         )
-      sorter
+      sortWrites
        (
         .clk,
-        .qlp(qlp_write_order),
+        .qlp(qlp_rd_rsp_inorder),
         .afu(qlp_inorder)
         );
 

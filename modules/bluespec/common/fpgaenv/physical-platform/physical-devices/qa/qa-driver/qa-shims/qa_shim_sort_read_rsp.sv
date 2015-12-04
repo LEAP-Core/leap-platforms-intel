@@ -37,14 +37,17 @@
 //
 
 
-module qa_shim_sort_responses
+module qa_shim_sort_read_rsp
   #(
     parameter CCI_DATA_WIDTH = 512,
     parameter CCI_RX_HDR_WIDTH = 18,
     parameter CCI_TX_HDR_WIDTH = 61,
     parameter CCI_TAG_WIDTH = 13,
 
-    parameter N_SCOREBOARD_ENTRIES=256
+    parameter N_SCOREBOARD_ENTRIES = 256,
+    // Synchronize request channels if non-zero. Channel synchronization is
+    // required to preserve load/store ordering.
+    parameter SYNC_REQ_CHANNELS = 1
     )
    (
     input  logic clk,
@@ -58,6 +61,8 @@ module qa_shim_sort_responses
 
     logic resetb;
     assign resetb = qlp.resetb;
+    assign afu.resetb = qlp.resetb;
+
 
     // Index of a scoreboard entry
     localparam N_SCOREBOARD_IDX_BITS = $clog2(N_SCOREBOARD_ENTRIES);
@@ -69,21 +74,34 @@ module qa_shim_sort_responses
 
     // ====================================================================
     //
-    //  Assert almost full if either request channel is filling so that
-    //  the two channels stay synchronized. This maintains load/store
-    //  order.
-    //
     //  The scoreboard is allocated with enough reserve space so that
-    //  it honors the almost full semantics.
+    //  it honors the almost full semantics. No other buffering is
+    //  required.
+    //
+    //  When SYNC_REQ_CHANNELS is true, Assert almost full if either
+    //  request channel is filling so that the two channels stay
+    //  synchronized. This maintains load/store order.
     //
     // ====================================================================
 
-    logic almostFull;
-    assign almostFull = qlp.C0TxAlmFull || qlp.C1TxAlmFull ||
-                        ! c0_scoreboard_notFull;
+    logic c0_TxAlmFull;
+    assign c0_TxAlmFull = qlp.C0TxAlmFull || ! c0_scoreboard_notFull;
 
-    assign afu.C0TxAlmFull = almostFull;
-    assign afu.C1TxAlmFull = almostFull;
+    logic c1_TxAlmFull;
+    assign c1_TxAlmFull = qlp.C1TxAlmFull;
+
+    generate
+        if (SYNC_REQ_CHANNELS == 0)
+        begin
+            assign afu.C0TxAlmFull = c0_TxAlmFull;
+            assign afu.C1TxAlmFull = c1_TxAlmFull;
+        end
+        else
+        begin
+            assign afu.C0TxAlmFull = c0_TxAlmFull || c1_TxAlmFull;
+            assign afu.C1TxAlmFull = c0_TxAlmFull || c1_TxAlmFull;
+        end
+    endgenerate
 
 
     // ====================================================================
@@ -107,7 +125,7 @@ module qa_shim_sort_responses
       c0_scoreboard(.clk,
                     .resetb,
 
-                    .enq_en(qlp.C0TxRdValid),
+                    .enq_en(afu.C0TxRdValid),
                     // Mdata field is in the low bits of the request header
                     .enqMeta(t_MDATA'(afu.C0TxHdr)),
                     .notFull(c0_scoreboard_notFull),
@@ -130,7 +148,7 @@ module qa_shim_sort_responses
     assign qlp.C0TxRdValid = afu.C0TxRdValid;
 
     //
-    // Responses.  Forward non-read respnoses directly.  Read data responses
+    // Responses.  Forward non-read responses directly.  Read data responses
     // come from the scoreboard.
     //
     assign afu.C0RxWrValid = qlp.C0RxWrValid;
@@ -176,4 +194,5 @@ module qa_shim_sort_responses
     assign afu.C1RxWrValid = qlp.C1RxWrValid;
     assign afu.C1RxIrValid = qlp.C1RxIrValid;
 
-endmodule // qa_shim_mux
+endmodule // qa_shim_sort_read_rsp
+

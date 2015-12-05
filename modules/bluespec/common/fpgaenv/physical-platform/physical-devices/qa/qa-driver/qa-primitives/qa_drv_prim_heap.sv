@@ -40,7 +40,9 @@
 module qa_drv_prim_heap
   #(
     parameter N_ENTRIES = 32,
-    parameter N_DATA_BITS = 64
+    parameter N_DATA_BITS = 64,
+    // Threshold below which heap asserts "full"
+    parameter MIN_FREE_SLOTS = 1
     )
    (
     input  logic clk,
@@ -72,7 +74,8 @@ module qa_drv_prim_heap
       #(
         .N_ENTRIES(N_ENTRIES),
         .N_DATA_BITS(N_DATA_BITS),
-        .N_READ_PORTS(1)
+        .N_READ_PORTS(1),
+        .MIN_FREE_SLOTS(MIN_FREE_SLOTS)
         )
       h(
         .clk,
@@ -98,7 +101,9 @@ module qa_drv_prim_heap_multi
   #(
     parameter N_ENTRIES = 32,
     parameter N_DATA_BITS = 64,
-    parameter N_READ_PORTS = 1
+    parameter N_READ_PORTS = 1,
+    // Threshold below which heap asserts "full"
+    parameter MIN_FREE_SLOTS = 1
     )
    (
     input  logic clk,
@@ -123,12 +128,26 @@ module qa_drv_prim_heap_multi
     typedef logic [$clog2(N_ENTRIES)-1 : 0] t_IDX;
 
     // Track whether an entry is free or busy
-    reg [N_ENTRIES-1 : 0] notBusy;
+    logic [N_ENTRIES-1 : 0] notBusy;
 
     t_IDX nextAlloc;
-
-    assign notFull = notBusy[nextAlloc];
     assign allocIdx = nextAlloc;
+
+
+    // ====================================================================
+    //
+    // Slots are allocated round robin instead of using a complicated free
+    // list. There must be at least MIN_FREE_SLOTS in the oldest positions.
+    //
+    // ====================================================================
+
+    // notBusyRepl replicates the low bits of notBusy at the end to avoid
+    // computing wrap-around.
+    logic [MIN_FREE_SLOTS + N_ENTRIES-1 : 0] notBusyRepl;
+    assign notBusyRepl = {notBusy[MIN_FREE_SLOTS-1 : 0], notBusy};
+
+    // The next MIN_FREE_SLOTS entries must be free
+    assign notFull = &(notBusyRepl[nextAlloc +: MIN_FREE_SLOTS]);
 
     always_ff @(posedge clk)
     begin
@@ -141,16 +160,19 @@ module qa_drv_prim_heap_multi
             nextAlloc <= (nextAlloc == t_IDX'(N_ENTRIES-1)) ?
                              t_IDX'(0) : nextAlloc + 1;
 
-            assert (notFull) else
+            assert (notBusy[nextAlloc]) else
                 $fatal("qa_drv_prim_heap: Can't ENQ when FULL!");
         end
     end
 
 
+    // ====================================================================
     //
     // Heap memory. Replicate the memory for each read port in order to
     // support simultaneous enq and read on all ports.
     //
+    // ====================================================================
+
     t_DATA mem[0 : N_READ_PORTS-1][0 : N_ENTRIES-1];
 
     genvar p;

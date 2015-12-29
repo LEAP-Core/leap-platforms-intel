@@ -181,13 +181,13 @@ module qa_driver
 
     // ====================================================================
     //
-    //   Map the CCI driver interface to the qlp_interface used by the
+    //   Map the CCI driver interface to the cci_mpf_if used by the
     //   composable components in the driver.  All I/O ports are
     //   registered here for timing.
     //
     // ====================================================================
 
-    qlp_interface
+    cci_mpf_if
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
         .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
@@ -267,7 +267,7 @@ module qa_driver
     localparam MUX_IDX_MEMORY   = 0;
     localparam MUX_IDX_CHANNELS = 1;
 
-    qlp_interface
+    cci_mpf_if
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
         .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
@@ -276,7 +276,7 @@ module qa_driver
         )
       qlp_mux[0:1] (.clk);
 
-    qa_shim_mux
+    cci_mpf_shim_mux
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
         .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),

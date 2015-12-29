@@ -37,7 +37,7 @@
 //
 // Single ported implementation. Multi-ported implementation is below.
 //
-module qa_drv_prim_heap
+module cci_mpf_prim_heap
   #(
     parameter N_ENTRIES = 32,
     parameter N_DATA_BITS = 64,
@@ -70,7 +70,7 @@ module qa_drv_prim_heap
     assign free0[0] = free;
     assign freeIdx0[0] = freeIdx;
 
-    qa_drv_prim_heap_multi
+    cci_mpf_prim_heap_multi
       #(
         .N_ENTRIES(N_ENTRIES),
         .N_DATA_BITS(N_DATA_BITS),
@@ -97,7 +97,7 @@ endmodule
 // Multi ported implementation. There is only one enq/alloc port but
 // multiple read and free ports.
 //
-module qa_drv_prim_heap_multi
+module cci_mpf_prim_heap_multi
   #(
     parameter N_ENTRIES = 32,
     parameter N_DATA_BITS = 64,
@@ -161,7 +161,7 @@ module qa_drv_prim_heap_multi
                              t_IDX'(0) : nextAlloc + 1;
 
             assert (notBusy[nextAlloc]) else
-                $fatal("qa_drv_prim_heap: Can't ENQ when FULL!");
+                $fatal("cci_mpf_prim_heap: Can't ENQ when FULL!");
         end
     end
 
@@ -219,4 +219,4 @@ module qa_drv_prim_heap_multi
         end
     end
 
-endmodule // qa_drv_prim_heap
+endmodule // cci_mpf_prim_heap

@@ -62,4 +62,4 @@ typedef enum
     // the maximum size of the page table.
     CCI_PT_LINE_IDX_BITS    = 15    // 15 == 2MB with 64 byte lines
 }
-t_TLB_SIMPLE_PARAMS;
+t_CCI_MPF_SHIM_VTP_PARAMS;

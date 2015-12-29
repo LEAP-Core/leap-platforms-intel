@@ -1,0 +1,12 @@
+%name Intel CCI Abstract Interface
+%desc Intel CCI Abstract Interface
+
+%provides qa_cci_if
+
+%sources -t VERILOG_PKG -v PRIVATE cci_mpf_if_pkg.sv
+%sources -t VERILOG_PKG -v PRIVATE ccip_if_pkg.sv
+%sources -t VERILOG_PKG -v PRIVATE ccis_if_pkg.sv
+
+%sources -t VERILOG_H   -v PRIVATE cci_mpf_if.vh
+
+%param CCI_TYPE  "CCI-S"  "What version of CCI is the target?"

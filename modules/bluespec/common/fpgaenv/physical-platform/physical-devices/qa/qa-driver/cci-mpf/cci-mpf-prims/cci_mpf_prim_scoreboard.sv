@@ -37,7 +37,7 @@
 // field for the response header in combination with read data.
 //
 
-module qa_drv_prim_scoreboard
+module cci_mpf_prim_scoreboard
   #(
     parameter N_ENTRIES = 32,
     parameter N_DATA_BITS = 64,
@@ -114,9 +114,9 @@ module qa_drv_prim_scoreboard
             newest <= newest + 1;
 
             assert ((newest + t_IDX'(1)) != oldest) else
-                $fatal("qa_drv_prim_scoreboard: Can't ENQ when FULL!");
+                $fatal("cci_mpf_prim_scoreboard: Can't ENQ when FULL!");
             assert ((N_ENTRIES & (N_ENTRIES - 1)) == 0) else
-                $fatal("qa_drv_prim_scoreboard: N_ENTRIES must be a power of 2!");
+                $fatal("cci_mpf_prim_scoreboard: N_ENTRIES must be a power of 2!");
         end
     end
 
@@ -141,7 +141,7 @@ module qa_drv_prim_scoreboard
     // Storage where data will be sorted.  Port 0 is used for writes and
     // port 1 for reads.
     //
-    qa_drv_prim_dualport_ram#(.N_ENTRIES(N_ENTRIES),
+    cci_mpf_prim_dualport_ram#(.N_ENTRIES(N_ENTRIES),
                               .N_DATA_BITS(N_DATA_BITS))
         mem(.clk0(clk),
             .addr0(enqDataIdx),
@@ -199,7 +199,7 @@ module qa_drv_prim_scoreboard
             end
 
             assert(! deq_en || notEmpty) else
-                $fatal("qa_drv_prim_scoreboard: Can't DEQ when EMPTY!");
+                $fatal("cci_mpf_prim_scoreboard: Can't DEQ when EMPTY!");
         end
     end
 
@@ -218,4 +218,5 @@ module qa_drv_prim_scoreboard
         end
     end
 
-endmodule // qa_dvr_scoreboard
+endmodule // cci_mpf_prim_scoreboard
+

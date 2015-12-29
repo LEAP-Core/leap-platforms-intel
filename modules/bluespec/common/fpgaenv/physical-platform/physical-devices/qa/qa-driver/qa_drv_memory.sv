@@ -29,7 +29,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-`include "qa_driver.vh"
+`include "cci_mpf_if.vh"
 
 module qa_drv_memory
   #(
@@ -40,12 +40,12 @@ module qa_drv_memory
     parameter CCI_TAG_WIDTH = 13
     )
    (
-    input  logic                 clk,
+    input  logic                      clk,
 
     //
     // Signals connecting to QA Platform
     //
-    qlp_interface.to_qlp         qlp,
+    cci_mpf_if.to_qlp                 qlp,
 
     // -------------------------------------------------------------------
     //
@@ -125,7 +125,7 @@ module qa_drv_memory
     //
     // ====================================================================
 
-    qlp_interface
+    cci_mpf_if
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
         .CCI_RX_HDR_WIDTH($bits(t_RX_HEADER_CCI_E)),
@@ -134,7 +134,7 @@ module qa_drv_memory
         )
       qlp_virtual (.clk);
 
-    qa_shim_tlb_simple
+    cci_mpf_shim_vtp
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
         .CCI_QLP_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
@@ -142,10 +142,10 @@ module qa_drv_memory
         .CCI_AFU_RX_HDR_WIDTH($bits(t_RX_HEADER_CCI_E)),
         .CCI_AFU_TX_HDR_WIDTH($bits(t_TX_HEADER_CCI_E)),
         .CCI_TAG_WIDTH(CCI_TAG_WIDTH),
-        // The TLB needs to generate loads internally in order to walk the
+        // VTP needs to generate loads internally in order to walk the
         // page table.  The reserved bit in Mdata is a location offered
         // to the page table walker to tag internal loads.  The Mdata location
-        // is guaranteed to be zero on all requests flowing in to the TLB
+        // is guaranteed to be zero on all requests flowing in to VTP
         // from the AFU.  In the composition here, qa_shim_sort_responses
         // provides this guarantee by rewriting Mdata as requests and
         // responses as they flow in and out of the stack.
@@ -166,7 +166,7 @@ module qa_drv_memory
     //
     // ====================================================================
 
-    qlp_interface
+    cci_mpf_if
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
         .CCI_RX_HDR_WIDTH($bits(t_RX_HEADER_CCI_E)),
@@ -175,7 +175,7 @@ module qa_drv_memory
         )
       qlp_write_order (.clk);
 
-    qa_shim_write_order
+    cci_mpf_shim_write_order
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
         .CCI_RX_HDR_WIDTH($bits(t_RX_HEADER_CCI_E)),
@@ -199,7 +199,7 @@ module qa_drv_memory
     //
     // ====================================================================
 
-    qlp_interface
+    cci_mpf_if
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
         .CCI_RX_HDR_WIDTH($bits(t_RX_HEADER_CCI_E)),
@@ -208,7 +208,7 @@ module qa_drv_memory
         )
       qlp_rd_rsp_inorder (.clk);
 
-    qa_shim_sort_read_rsp
+    cci_mpf_shim_sort_read_rsp
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
         .CCI_RX_HDR_WIDTH($bits(t_RX_HEADER_CCI_E)),
@@ -232,7 +232,7 @@ module qa_drv_memory
     //
     // ====================================================================
 
-    qlp_interface
+    cci_mpf_if
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
         .CCI_RX_HDR_WIDTH($bits(t_RX_HEADER_CCI_E)),
@@ -241,7 +241,7 @@ module qa_drv_memory
         )
       qlp_inorder (.clk);
 
-    qa_shim_sort_write_rsp
+    cci_mpf_shim_sort_write_rsp
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
         .CCI_RX_HDR_WIDTH($bits(t_RX_HEADER_CCI_E)),

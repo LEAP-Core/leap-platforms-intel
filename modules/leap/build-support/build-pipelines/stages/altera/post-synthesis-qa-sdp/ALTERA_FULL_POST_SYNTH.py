@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import string
 import SCons.Script
 import model
 import synthesis_library
@@ -43,6 +44,14 @@ class PostSynthesize():
         prjFile.write('} else  {\n')
         prjFile.write('    project_new ' + moduleList.apmName +'\n')
         prjFile.write('}\n\n')
+
+        ##
+        ## Define which version of CCI is in use for SystemVerilog packages
+        ## imported from outside LEAP.
+        ##
+        cci_type = moduleList.getAWBParamSafe('qa_cci_if', 'CCI_TYPE')
+        if (cci_type != None):
+            prjFile.write('set_global_assignment -name VERILOG_MACRO "USE_' + string.replace(cci_type, '-', '_') + '=1"\n')
 
         prjFile.write('source ' + rel_qsf_src_dir + '/ome2_ivt.qsf\n')
         prjFile.write('source ' + rel_qsf_src_dir + '/qsf_env_settings.qsf\n')

@@ -174,21 +174,14 @@ File=modules/leap/virtual-platform/low-level-platform-interface/local-mem/local-
 Packagehint=leap
 
 [Intel QuickAssist Driver/Requires]
-qa_driver_shims=Intel QuickAssist Driver Shims
-qa_driver_primitives=Intel QuickAssist Primitive Modules
 qa_driver_host_channels=Intel QuickAssist Host/FPGA Channels
+qa_cci_mpf=Intel MPF (Memory Protocol Factory)
 
 [Intel QuickAssist Driver]
 File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/qa-driver.awb
 Packagehint=leap-platforms-intel
 
-[Intel QuickAssist Primitive Modules]
-File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/qa-primitives/qa-primitives.awb
-Packagehint=leap-platforms-intel
 
-[Intel QuickAssist Driver Shims]
-File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/qa-shims/qa-shims.awb
-Packagehint=leap-platforms-intel
 
 [Intel QuickAssist Host/FPGA Channels]
 File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/qa-host-channels/qa-host-channels.awb
@@ -203,3 +196,24 @@ local_mem_interface=Local Memory Interface
 
 [Standard Platform Services (Local Memory Scratchpad) Submodel/Params]
 SCRATCHPAD_MEMORY_USE_LINES=1
+
+[Intel MPF (Memory Protocol Factory)]
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/cci-mpf.awb
+Packagehint=leap-platforms-intel
+
+[Intel MPF (Memory Protocol Factory)/Requires]
+qa_cci_if=Intel CCI Abstract Interface
+qa_cci_mpf_shims=Intel MPF Shims
+qa_cci_mpf_prims=Primitive Modules for MPF
+
+[Intel CCI Abstract Interface]
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/cci-if/cci-if.awb
+Packagehint=leap-platforms-intel
+
+[Intel MPF Shims]
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/cci-mpf-shims/cci-mpf-shims.awb
+Packagehint=leap-platforms-intel
+
+[Primitive Modules for MPF]
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/cci-mpf-prims/cci-mpf-prims.awb
+Packagehint=leap-platforms-intel

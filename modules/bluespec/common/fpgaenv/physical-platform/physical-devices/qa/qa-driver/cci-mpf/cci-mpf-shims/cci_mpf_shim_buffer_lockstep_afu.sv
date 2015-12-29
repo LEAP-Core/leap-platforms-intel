@@ -28,16 +28,16 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-`include "qa_driver.vh"
+`include "cci_mpf_if.vh"
 
 
 //
-// The same as qa_shim_buffer_afu except that channels 0 and 1 are held
+// The same as cci_mpf_shim_buffer_afu except that channels 0 and 1 are held
 // together and move through the buffer in lock step.  This is important
 // for portions of the pipeline that need to maintain read/write ordering.
 //
 
-module qa_shim_buffer_lockstep_afu
+module cci_mpf_shim_buffer_lockstep_afu
   #(
     parameter CCI_DATA_WIDTH = 512,
     parameter CCI_RX_HDR_WIDTH = 18,
@@ -51,18 +51,18 @@ module qa_shim_buffer_lockstep_afu
 
     // Raw unbuffered connection.  This is the AFU-side connection of the
     // parent module.
-    qlp_interface.to_afu afu_raw,
+    cci_mpf_if.to_afu afu_raw,
 
     // Generated buffered connection.  The confusing interface direction
     // arises because the shim is an interposer on the AFU side of a
     // standard shim.
-    qlp_interface.to_qlp afu_buf,
+    cci_mpf_if.to_qlp afu_buf,
 
     // Dequeue signal combined with the buffering make the buffered interface
     // latency insensitive.  Requests sit in the buffers unless explicitly
     // removed.
     //
-    // Unline qa_shim_buffer_afu, a single deq signal moves both channels.
+    // Unlike cci_mpf_shim_buffer_afu, a single deq signal moves both channels.
     // The client must be prepared to move both channels or none.
     input logic deqTx
     );
@@ -136,7 +136,7 @@ module qa_shim_buffer_lockstep_afu
     assign afu_raw.C1TxAlmFull = almostFull;
 
 
-    qa_drv_prim_fifo_lutram
+    cci_mpf_prim_fifo_lutram
       #(
         .N_DATA_BITS(TX_BITS),
         .N_ENTRIES(N_ENTRIES),
@@ -161,5 +161,5 @@ module qa_shim_buffer_lockstep_afu
               .notEmpty(notEmpty)
               );
 
-endmodule // qa_shim_buffer_lockstep_afu
+endmodule // cci_mpf_shim_buffer_lockstep_afu
 

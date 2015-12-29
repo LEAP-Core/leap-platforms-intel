@@ -37,7 +37,7 @@
 #include <assert.h>
 
 #include "awb/provides/qa_device.h"
-#include "awb/provides/qa_driver_shims.h"
+#include "awb/provides/qa_cci_mpf_shims.h"
 
 #include "awb/provides/physical_platform.h"
 
@@ -75,10 +75,10 @@ AFU_CLASS::AFU_CLASS(const char* afuID, uint32_t dsmSizeBytes)
         printf("Polling DSM...\n"); sleep(1);
     }
 
-    // Allocate the TLB that enables host/FPGA shared virtual regions.
-    // Shared regions are allocated with the CreateSharedBufferInVM()
-    // method.
-    tlb = new QA_SHIM_TLB_CLASS(afuClient);
+    // Allocate the virtual to physical translation table that enables
+    // host/FPGA shared virtual regions.  Shared regions are allocated
+    // with the CreateSharedBufferInVM() method.
+    vtp = new CCI_MPF_SHIM_VTP_CLASS(afuClient);
 
     cout << "AFU ready." << endl;
 }
@@ -115,14 +115,14 @@ AFU_CLASS::CreateSharedBuffer(size_t size_bytes) {
 void*
 AFU_CLASS::CreateSharedBufferInVM(size_t size_bytes)
 {
-    return tlb->CreateSharedBufferInVM(size_bytes);
+    return vtp->CreateSharedBufferInVM(size_bytes);
 }
 
 
 btPhysAddr
 AFU_CLASS::SharedBufferVAtoPA(const void* va)
 {
-    return tlb->SharedBufferVAtoPA(va);
+    return vtp->SharedBufferVAtoPA(va);
 }
 
 

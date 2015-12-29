@@ -34,7 +34,7 @@
 //   THRESHOLD or fewer slots are free.
 //
 
-module qa_drv_prim_fifo_lutram
+module cci_mpf_prim_fifo_lutram
   #(
     parameter N_DATA_BITS = 32,
     parameter N_ENTRIES = 2,
@@ -83,7 +83,7 @@ module qa_drv_prim_fifo_lutram
             wr_idx <= (wr_idx == t_IDX'(N_ENTRIES-1)) ? 0 : wr_idx + 1;
 
             assert (notFull) else
-                $fatal("qa_drv_prom_fifo_lutram: ENQ to full FIFO!");
+                $fatal("cci_mpf_prim_fifo_lutram: ENQ to full FIFO!");
         end
     end
 
@@ -99,7 +99,7 @@ module qa_drv_prim_fifo_lutram
             rd_idx <= (rd_idx == t_IDX'(N_ENTRIES-1)) ? 0 : rd_idx + 1;
 
             assert (notEmpty) else
-                $fatal("qa_drv_prom_fifo_lutram: DEQ from empty FIFO!");
+                $fatal("cci_mpf_prim_fifo_lutram: DEQ from empty FIFO!");
         end
     end
 
@@ -136,4 +136,4 @@ module qa_drv_prim_fifo_lutram
         end
     end
 
-endmodule // qa_drv_prim_fifo_lutram
+endmodule // cci_mpf_prim_fifo_lutram

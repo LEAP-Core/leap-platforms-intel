@@ -29,8 +29,8 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef QA_SHIM_TLB_SIMPLE_H
-#define QA_SHIM_TLB_SIMPLE_H
+#ifndef CCI_MPF_SHIM_VTP_H
+#define CCI_MPF_SHIM_VTP_H
 
 // AAL redefines ASSERT and TRACE
 #undef ASSERT
@@ -48,7 +48,7 @@ USING_NAMESPACE(AAL)
 // All configuration parameters are defined in this include file.  The
 // file is legal C and System Verilog syntax.
 //
-#include "qa_shim_tlb_simple_params.h"
+#include "cci_mpf_shim_vtp_params.h"
 
 //
 // The shared page table is stored in a contiguous region of physical memory.
@@ -77,15 +77,15 @@ USING_NAMESPACE(AAL)
 //
 
 
-typedef class QA_SHIM_TLB_CLASS* QA_SHIM_TLB;
+typedef class CCI_MPF_SHIM_VTP_CLASS* CCI_MPF_SHIM_VTP;
 typedef class AFU_CLIENT_CLASS* AFU_CLIENT;
 
 
-class QA_SHIM_TLB_CLASS : public CAASBase
+class CCI_MPF_SHIM_VTP_CLASS : public CAASBase
 {
   public:
-    QA_SHIM_TLB_CLASS(AFU_CLIENT afuClient);
-    ~QA_SHIM_TLB_CLASS();
+    CCI_MPF_SHIM_VTP_CLASS(AFU_CLIENT afuClient);
+    ~CCI_MPF_SHIM_VTP_CLASS();
 
     //
     // Allocate a memory buffer shared by the host and an FPGA.
@@ -166,7 +166,7 @@ class QA_SHIM_TLB_CLASS : public CAASBase
 
 
 inline void
-QA_SHIM_TLB_CLASS::AddrComponentsFromVA(
+CCI_MPF_SHIM_VTP_CLASS::AddrComponentsFromVA(
     uint64_t va,
     uint64_t& tag,
     uint64_t& idx,
@@ -184,7 +184,7 @@ QA_SHIM_TLB_CLASS::AddrComponentsFromVA(
 }
 
 inline void
-QA_SHIM_TLB_CLASS::AddrComponentsFromVA(
+CCI_MPF_SHIM_VTP_CLASS::AddrComponentsFromVA(
     const void *va,
     uint64_t& tag,
     uint64_t& idx,
@@ -194,7 +194,7 @@ QA_SHIM_TLB_CLASS::AddrComponentsFromVA(
 }
 
 inline void
-QA_SHIM_TLB_CLASS::AddrComponentsFromPA(
+CCI_MPF_SHIM_VTP_CLASS::AddrComponentsFromPA(
     uint64_t pa,
     uint64_t& idx,
     uint64_t& byteOffset)
@@ -212,7 +212,7 @@ QA_SHIM_TLB_CLASS::AddrComponentsFromPA(
 }
 
 inline uint64_t
-QA_SHIM_TLB_CLASS::AddrToPTE(
+CCI_MPF_SHIM_VTP_CLASS::AddrToPTE(
     uint64_t va,
     uint64_t pa)
 {
@@ -222,7 +222,7 @@ QA_SHIM_TLB_CLASS::AddrToPTE(
 }
 
 inline uint64_t
-QA_SHIM_TLB_CLASS::AddrToPTE(
+CCI_MPF_SHIM_VTP_CLASS::AddrToPTE(
     const void* va,
     uint64_t pa)
 {

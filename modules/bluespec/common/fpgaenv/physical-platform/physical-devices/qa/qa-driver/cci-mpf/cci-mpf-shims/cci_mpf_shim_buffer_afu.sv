@@ -28,7 +28,7 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-`include "qa_driver.vh"
+`include "cci_mpf_if.vh"
 
 
 //
@@ -39,7 +39,7 @@
 // computation of the AFU-side almost full signals.
 //
 
-module qa_shim_buffer_afu
+module cci_mpf_shim_buffer_afu
   #(
     parameter CCI_DATA_WIDTH = 512,
     parameter CCI_RX_HDR_WIDTH = 18,
@@ -59,12 +59,12 @@ module qa_shim_buffer_afu
 
     // Raw unbuffered connection.  This is the AFU-side connection of the
     // parent module.
-    qlp_interface.to_afu afu_raw,
+    cci_mpf_if.to_afu afu_raw,
 
     // Generated buffered connection.  The confusing interface direction
     // arises because the shim is an interposer on the AFU side of a
     // standard shim.
-    qlp_interface.to_qlp afu_buf,
+    cci_mpf_if.to_qlp afu_buf,
 
     // Dequeue signals combined with the buffering make the buffered interface
     // latency insensitive.  Requests sit in the buffers unless explicitly
@@ -139,7 +139,7 @@ module qa_shim_buffer_afu
         end
     endgenerate
 
-    qa_drv_prim_fifo_lutram
+    cci_mpf_prim_fifo_lutram
       #(
         .N_DATA_BITS(C0TX_BITS),
         .N_ENTRIES(N_ENTRIES),
@@ -186,7 +186,7 @@ module qa_shim_buffer_afu
     assign afu_buf.C1TxWrValid = c1_WrValid && c1_notEmpty;
     assign afu_buf.C1TxIrValid = c1_IrValid && c1_notEmpty;
 
-    qa_drv_prim_fifo_lutram
+    cci_mpf_prim_fifo_lutram
       #(
         .N_DATA_BITS(C1TX_BITS),
         .N_ENTRIES(N_ENTRIES),
@@ -208,4 +208,4 @@ module qa_shim_buffer_afu
               .deq_en(deqC1Tx),
               .notEmpty(c1_notEmpty)
               );
-endmodule // qa_shim_buffer_afu
+endmodule // cci_mpf_shim_buffer_afu

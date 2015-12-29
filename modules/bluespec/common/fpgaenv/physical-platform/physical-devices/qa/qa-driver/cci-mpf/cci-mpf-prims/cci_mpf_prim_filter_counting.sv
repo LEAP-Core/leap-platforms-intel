@@ -29,7 +29,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 
-module qa_drv_prim_filter_counting
+module cci_mpf_prim_filter_counting
   #(
     // Number of individual buckets in the filter
     parameter N_BUCKETS = 16,
@@ -147,4 +147,4 @@ module qa_drv_prim_filter_counting
             end
         end
     endgenerate
-endmodule // qa_drv_prim_filter_counting
+endmodule // cci_mpf_prim_filter_counting

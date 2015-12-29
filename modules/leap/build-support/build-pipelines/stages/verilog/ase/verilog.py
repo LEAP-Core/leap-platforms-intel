@@ -144,6 +144,14 @@ class Verilog():
         file = array.pop()
         return  moduleList.env['DEFS']['ROOT_DIR_HW'] + '/' + '/'.join(array) + '/' + TMP_BSC_DIR + '/' + file 
 
+    ##
+    ## Define which version of CCI is in use for SystemVerilog packages
+    ## imported from outside LEAP.
+    ##
+    cci_type = moduleList.getAWBParamSafe('qa_cci_if', 'CCI_TYPE')
+    if (cci_type != None):
+        vexe_gen_command += ' -Xv +define+USE_' + string.replace(cci_type, '-', '_')
+
     if (moduleList.getAWBParam('verilog_tool', 'VCS_ENABLE_LINT') != 0):
         vexe_gen_command += ' -Xv +lint=all,noVCDE'
 

@@ -28,7 +28,7 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-`include "qa_driver.vh"
+`include "cci_mpf_if.vh"
 
 
 //
@@ -38,7 +38,7 @@
 //
 
 
-module qa_shim_mux
+module cci_mpf_shim_mux
   #(
     parameter CCI_DATA_WIDTH = 512,
     parameter CCI_RX_HDR_WIDTH = 18,
@@ -60,10 +60,10 @@ module qa_shim_mux
     input  logic clk,
 
     // Connection toward the QA platform.  Reset comes in here.
-    qlp_interface.to_qlp qlp,
+    cci_mpf_if.to_qlp qlp,
 
     // Connections toward user code.
-    qlp_interface.to_afu afus[0:1]
+    cci_mpf_if.to_afu afus[0:1]
     );
 
     //
@@ -86,7 +86,7 @@ module qa_shim_mux
     //
     // ====================================================================
 
-    qlp_interface
+    cci_mpf_if
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
         .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
@@ -104,7 +104,7 @@ module qa_shim_mux
         for (p = 0; p < NUM_AFU_PORTS; p = p + 1)
         begin : genBuffers
 
-            qa_shim_buffer_afu
+            cci_mpf_shim_buffer_afu
               #(
                 .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
                 .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
@@ -189,7 +189,7 @@ module qa_shim_mux
                 last_c0_winner_idx <= c0_winner_idx;
 
                 assert(check_hdr0 == 0) else
-                    $fatal("qa_sim_mux.sv: AFU C0 Mdata[%d] must be zero", RESERVED_MDATA_IDX);
+                    $fatal("cci_mpf_shim_mux.sv: AFU C0 Mdata[%d] must be zero", RESERVED_MDATA_IDX);
             end
 
             if (|c1_request && ! qlp.C1TxAlmFull)
@@ -197,7 +197,7 @@ module qa_shim_mux
                 last_c1_winner_idx <= c1_winner_idx;
 
                 assert(check_hdr1 == 0) else
-                    $fatal("qa_sim_mux.sv: AFU C1 Mdata[%d] must be zero", RESERVED_MDATA_IDX);
+                    $fatal("cci_mpf_shim_mux.sv: AFU C1 Mdata[%d] must be zero", RESERVED_MDATA_IDX);
             end
         end
     end
@@ -212,7 +212,7 @@ module qa_shim_mux
     always_ff @(posedge clk)
     begin
         assert ((RESERVED_MDATA_IDX > 0) && (RESERVED_MDATA_IDX < CCI_TAG_WIDTH)) else
-            $fatal("qa_sim_mux.sv: Illegal RESERVED_MDATA_IDX value: %d", RESERVED_MDATA_IDX);
+            $fatal("cci_mpf_shim_mux.sv: Illegal RESERVED_MDATA_IDX value: %d", RESERVED_MDATA_IDX);
     end
 
     //
@@ -347,4 +347,5 @@ module qa_shim_mux
         end
     endgenerate
 
-endmodule // qa_shim_mux
+endmodule // cci_mpf_shim_mux
+

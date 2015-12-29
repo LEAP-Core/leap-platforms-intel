@@ -33,7 +33,7 @@
 //   A FIFO with two storage elements supporting full pipelining.
 //
 
-module qa_drv_prim_fifo2
+module cci_mpf_prim_fifo2
   #(
     parameter N_DATA_BITS = 32
     )
@@ -52,6 +52,6 @@ module qa_drv_prim_fifo2
 
     logic almostFull;
 
-    qa_drv_prim_fifo_lutram#(.N_DATA_BITS(N_DATA_BITS), .N_ENTRIES(2)) fifo(.*);
+    cci_mpf_prim_fifo_lutram#(.N_DATA_BITS(N_DATA_BITS), .N_ENTRIES(2)) fifo(.*);
 
-endmodule // qa_drv_prim_fifo2
+endmodule // cci_mpf_prim_fifo2

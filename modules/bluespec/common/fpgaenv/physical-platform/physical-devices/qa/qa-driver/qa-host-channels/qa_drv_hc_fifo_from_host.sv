@@ -65,7 +65,7 @@ module qa_drv_hc_fifo_from_host
     //
     // Buffer the outgoing stream to control timing.
     //
-    qa_drv_prim_fifo2
+    cci_mpf_prim_fifo2
       #(
         .N_DATA_BITS(CCI_DATA_WIDTH)
         )
@@ -155,7 +155,7 @@ module qa_drv_hc_fifo_from_host
     end
 
 
-    qa_drv_prim_scoreboard
+    cci_mpf_prim_scoreboard
       #(
         .N_ENTRIES(N_SCOREBOARD_ENTRIES),
         .N_DATA_BITS(CCI_DATA_WIDTH),

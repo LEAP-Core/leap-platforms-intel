@@ -1,0 +1,17 @@
+%name Primitive Modules for MPF
+%desc Primitive Modules for MPF
+
+%provides qa_cci_mpf_prims
+
+%sources -t VERILOG_H  -v PRIVATE cci_mpf_prim_hash.vh
+
+%sources -t VERILOG    -v PRIVATE cci_mpf_prim_dualport_ram.sv
+%sources -t VERILOG    -v PRIVATE cci_mpf_prim_fifo1.sv
+%sources -t VERILOG    -v PRIVATE cci_mpf_prim_fifo2.sv
+%sources -t VERILOG    -v PRIVATE cci_mpf_prim_fifo_lutram.sv
+%sources -t VERILOG    -v PRIVATE cci_mpf_prim_filter_cam.sv
+%sources -t VERILOG    -v PRIVATE cci_mpf_prim_filter_counting.sv
+%sources -t VERILOG    -v PRIVATE cci_mpf_prim_heap.sv
+%sources -t VERILOG    -v PRIVATE cci_mpf_prim_lru_pseudo.sv
+%sources -t VERILOG    -v PRIVATE cci_mpf_prim_scoreboard.sv
+%sources -t VERILOG    -v PRIVATE cci_mpf_prim_scoreboard_dualport.sv

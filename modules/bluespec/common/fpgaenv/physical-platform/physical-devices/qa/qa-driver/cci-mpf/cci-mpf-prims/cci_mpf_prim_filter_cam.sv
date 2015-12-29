@@ -29,7 +29,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 
-module qa_drv_prim_filter_cam
+module cci_mpf_prim_filter_cam
   #(
     // Number of individual buckets in the filter
     parameter N_BUCKETS = 16,
@@ -184,5 +184,5 @@ module qa_drv_prim_filter_cam
         end
     end
 
-endmodule // qa_drv_prim_filter_cam
+endmodule // cci_mpf_prim_filter_cam
 

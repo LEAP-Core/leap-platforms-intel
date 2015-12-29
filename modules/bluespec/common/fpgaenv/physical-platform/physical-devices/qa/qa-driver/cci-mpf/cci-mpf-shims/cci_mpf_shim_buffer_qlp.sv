@@ -28,7 +28,7 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-`include "qa_driver.vh"
+`include "cci_mpf_if.vh"
 
 
 //
@@ -47,7 +47,7 @@
 // interface does not provide for back pressure on the flow of responses.
 //
 
-module qa_shim_buffer_qlp
+module cci_mpf_shim_buffer_qlp
   #(
     parameter CCI_DATA_WIDTH = 512,
     parameter CCI_RX_HDR_WIDTH = 18,
@@ -61,12 +61,12 @@ module qa_shim_buffer_qlp
 
     // Raw unbuffered connection.  This is the QLP-side connection of the
     // parent module.
-    qlp_interface.to_qlp qlp_raw,
+    cci_mpf_if.to_qlp qlp_raw,
 
     // Generated buffered connection.  The confusing interface direction
     // arises because the shim is an interposer on the QLP side of a
     // standard shim.
-    qlp_interface.to_afu qlp_buf
+    cci_mpf_if.to_afu qlp_buf
     );
 
     assign qlp_buf.resetb = qlp_raw.resetb;
@@ -126,5 +126,5 @@ module qa_shim_buffer_qlp
         qlp_buf.C1RxIrValid <= qlp_raw.C1RxIrValid;
     end
 
-endmodule // qa_shim_buffer_qlp
+endmodule // cci_mpf_shim_buffer_qlp
 

@@ -28,8 +28,8 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-`include "qa_driver.vh"
-`include "qa_drv_prim_hash.vh"
+`include "cci_mpf_if.vh"
+`include "cci_mpf_prim_hash.vh"
 
 
 //
@@ -38,7 +38,7 @@
 //
 
 
-module qa_shim_write_order
+module cci_mpf_shim_write_order
   #(
     parameter CCI_DATA_WIDTH = 512,
     parameter CCI_RX_HDR_WIDTH = 18,
@@ -55,10 +55,10 @@ module qa_shim_write_order
     input  logic clk,
 
     // Connection toward the QA platform.  Reset comes in here.
-    qlp_interface.to_qlp qlp,
+    cci_mpf_if.to_qlp qlp,
 
     // Connections toward user code.
-    qlp_interface.to_afu afu
+    cci_mpf_if.to_afu afu
     );
 
     logic resetb;
@@ -89,7 +89,7 @@ module qa_shim_write_order
     //
     // ====================================================================
 
-    qlp_interface
+    cci_mpf_if
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
         .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
@@ -102,7 +102,7 @@ module qa_shim_write_order
     logic afu_deq;
     logic addr_conflict_incoming;
 
-    qa_shim_buffer_lockstep_afu
+    cci_mpf_shim_buffer_lockstep_afu
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
         .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
@@ -138,7 +138,7 @@ module qa_shim_write_order
     //
     // ====================================================================
 
-    qlp_interface
+    cci_mpf_if
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
         .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
@@ -147,7 +147,7 @@ module qa_shim_write_order
         )
       qlp_buf (.clk);
 
-    qa_shim_buffer_qlp
+    cci_mpf_shim_buffer_qlp
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
         .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
@@ -235,7 +235,7 @@ module qa_shim_write_order
     //
     // Generate the read and write filters.
     //
-    qa_drv_prim_filter_cam
+    cci_mpf_prim_filter_cam
       #(
         .N_BUCKETS(N_C0_CAM_IDX_ENTRIES),
         .BITS_PER_BUCKET(ADDRESS_HASH_BITS),
@@ -258,7 +258,7 @@ module qa_shim_write_order
                .remove_idx(rd_filter_remove_idx),
                .remove_en(rd_filter_remove_en));
 
-    qa_drv_prim_filter_cam
+    cci_mpf_prim_filter_cam
       #(
         .N_BUCKETS(N_C1_CAM_IDX_ENTRIES),
         .BITS_PER_BUCKET(ADDRESS_HASH_BITS),
@@ -317,7 +317,7 @@ module qa_shim_write_order
     logic c0_heap_free;
     t_C0_REQ_IDX c0_heap_freeIdx;
 
-    qa_drv_prim_heap
+    cci_mpf_prim_heap
       #(
         .N_ENTRIES(N_C0_CAM_IDX_ENTRIES),
         .N_DATA_BITS($bits(t_C0_HEAP_ENTRY))
@@ -359,7 +359,7 @@ module qa_shim_write_order
     logic c1_heap_free[0:1];
     t_C1_REQ_IDX c1_heap_freeIdx[0:1];
 
-    qa_drv_prim_heap_multi
+    cci_mpf_prim_heap_multi
       #(
         .N_ENTRIES(N_C1_CAM_IDX_ENTRIES),
         .N_DATA_BITS($bits(t_C1_HEAP_ENTRY)),
@@ -671,7 +671,7 @@ module qa_shim_write_order
                         (filter_verify_req[1] == afu_pipe[1].C1AddrHash) &&
                         (filter_verify_req_en[0] == afu_pipe[1].C0TxRdValid) &&
                         (filter_verify_req_en[1] == afu_pipe[1].C1TxWrValid)) else
-                    $fatal("qa_sim_write_order: Incorrect pipeline control");
+                    $fatal("cci_mpf_shim_write_order: Incorrect pipeline control");
             end
         end
     end
@@ -840,4 +840,5 @@ module qa_shim_write_order
     end
 `endif
 
-endmodule // qa_shim_write_order
+endmodule // cci_mpf_shim_write_order
+

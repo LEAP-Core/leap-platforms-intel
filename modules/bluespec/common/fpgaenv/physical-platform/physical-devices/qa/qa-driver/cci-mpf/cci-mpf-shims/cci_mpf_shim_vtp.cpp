@@ -37,10 +37,10 @@
 #include <assert.h>
 
 #include "awb/provides/qa_driver.h"
-#include "awb/provides/qa_driver_shims.h"
+#include "awb/provides/qa_cci_mpf_shims.h"
 
 
-QA_SHIM_TLB_CLASS::QA_SHIM_TLB_CLASS(AFU_CLIENT afuClient) :
+CCI_MPF_SHIM_VTP_CLASS::CCI_MPF_SHIM_VTP_CLASS(AFU_CLIENT afuClient) :
     m_afuClient(afuClient)
 {
     // The three VA fields must fill a 64 bit virtual address
@@ -74,13 +74,13 @@ QA_SHIM_TLB_CLASS::QA_SHIM_TLB_CLASS(AFU_CLIENT afuClient) :
 }
 
 
-QA_SHIM_TLB_CLASS::~QA_SHIM_TLB_CLASS()
+CCI_MPF_SHIM_VTP_CLASS::~CCI_MPF_SHIM_VTP_CLASS()
 {
 }
 
 
 void*
-QA_SHIM_TLB_CLASS::CreateSharedBufferInVM(size_t size_bytes)
+CCI_MPF_SHIM_VTP_CLASS::CreateSharedBufferInVM(size_t size_bytes)
 {
     AutoLock(this);
 
@@ -182,7 +182,7 @@ QA_SHIM_TLB_CLASS::CreateSharedBufferInVM(size_t size_bytes)
 
 
 void
-QA_SHIM_TLB_CLASS::FreeSharedBuffer(void* va)
+CCI_MPF_SHIM_VTP_CLASS::FreeSharedBuffer(void* va)
 {
     // Because of the remapping we can't currently free workspaces.
     // AAL doesn't know about the reorganized virtual address space and
@@ -192,7 +192,7 @@ QA_SHIM_TLB_CLASS::FreeSharedBuffer(void* va)
 
 
 void
-QA_SHIM_TLB_CLASS::InsertPageMapping(const void* va, btPhysAddr pa)
+CCI_MPF_SHIM_VTP_CLASS::InsertPageMapping(const void* va, btPhysAddr pa)
 {
     printf("Map %p at 0x%08lx\n", va, pa);
 
@@ -277,7 +277,7 @@ QA_SHIM_TLB_CLASS::InsertPageMapping(const void* va, btPhysAddr pa)
 
 
 void
-QA_SHIM_TLB_CLASS::ReadPTE(
+CCI_MPF_SHIM_VTP_CLASS::ReadPTE(
     const uint8_t* pte,
     uint64_t& vaTag,
     uint64_t& paIdx)
@@ -293,7 +293,7 @@ QA_SHIM_TLB_CLASS::ReadPTE(
 }
 
 uint64_t
-QA_SHIM_TLB_CLASS::ReadTableIdx(
+CCI_MPF_SHIM_VTP_CLASS::ReadTableIdx(
     const uint8_t* p)
 {
     // Might not be a natural size
@@ -305,7 +305,7 @@ QA_SHIM_TLB_CLASS::ReadTableIdx(
 
 
 void
-QA_SHIM_TLB_CLASS::WritePTE(
+CCI_MPF_SHIM_VTP_CLASS::WritePTE(
     uint8_t* pte,
     uint64_t vaTag,
     uint64_t paIdx)
@@ -318,7 +318,7 @@ QA_SHIM_TLB_CLASS::WritePTE(
 
 
 void
-QA_SHIM_TLB_CLASS::WriteTableIdx(
+CCI_MPF_SHIM_VTP_CLASS::WriteTableIdx(
     uint8_t* p,
     uint64_t idx)
 {
@@ -331,7 +331,7 @@ QA_SHIM_TLB_CLASS::WriteTableIdx(
 // Translate VA to PA using page table.
 //
 btPhysAddr
-QA_SHIM_TLB_CLASS::SharedBufferVAtoPA(const void* va)
+CCI_MPF_SHIM_VTP_CLASS::SharedBufferVAtoPA(const void* va)
 {
     // Get the hash index and VA tag
     uint64_t tag;
@@ -383,7 +383,7 @@ QA_SHIM_TLB_CLASS::SharedBufferVAtoPA(const void* va)
 
 
 void
-QA_SHIM_TLB_CLASS::DumpPageTable()
+CCI_MPF_SHIM_VTP_CLASS::DumpPageTable()
 {
     printf("Page table dump:\n");
     printf("  %lld lines, %ld PTEs per line, max. memory represented in PTE %lld GB\n",

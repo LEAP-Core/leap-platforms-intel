@@ -27,57 +27,63 @@
 // CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
-
-//
-// FIFO1 --
-//   A FIFO with a single storage element allowing only deq or enq in a cycle
-//   but not both.
 //
 
-module qa_drv_prim_fifo1
-  #(parameter N_DATA_BITS = 32)
-    (input  logic clk,
-     input  logic resetb,
+//
+// Dual port Block RAM.  When write is enabled on a port the rdata response
+// on the same port is the new data.  The rdata for the same address written
+// by the other port is the old data.
+//
 
-     input  logic [N_DATA_BITS-1 : 0] enq_data,
-     input  logic                     enq_en,
-     output logic                     notFull,
+module cci_mpf_prim_dualport_ram
+  #(
+    parameter N_ENTRIES = 32,
+              N_DATA_BITS = 64
+    )
+   (
+    input  logic clk0,
+    input  logic [$clog2(N_ENTRIES)-1 : 0] addr0,
+    input  logic wen0,
+    input  logic [N_DATA_BITS-1 : 0] wdata0,
+    output logic [N_DATA_BITS-1 : 0] rdata0,
 
-     output logic [N_DATA_BITS-1 : 0] first,
-     input  logic                     deq_en,
-     output logic                     notEmpty
-     );
-     
-    logic [N_DATA_BITS-1 : 0] data;
-    logic valid;
+    input  logic clk1,
+    input  logic [$clog2(N_ENTRIES)-1 : 0] addr1,
+    input  logic wen1,
+    input  logic [N_DATA_BITS-1 : 0] wdata1,
+    output logic [N_DATA_BITS-1 : 0] rdata1
+    );
 
-    assign first = data;
-    assign notFull = ! valid;
-    assign notEmpty = valid;
+    reg [N_DATA_BITS-1 : 0] data[0 : N_ENTRIES-1];
 
-    always_ff @(posedge clk)
+    // Port A
+    always @(posedge clk0)
     begin
-        if (! resetb)
+        if (wen0)
         begin
-            valid <= 1'b0;
+            data[addr0] <= wdata0;
+            // Altera includes this bypass in the sample dual write port memory.
+            rdata0 <= wdata0;
         end
-        else if (deq_en)
+        else
         begin
-            valid <= 1'b0;
-
-            assert (notEmpty) else
-                $fatal("qa_drv_fifo1: Can't DEQ when empty!");
-            assert (! enq_en) else
-                $fatal("qa_drv_fifo1: Can't DEQ and ENQ in same cycle!");
-        end
-        else if (enq_en)
-        begin
-            valid <= 1'b1;
-            data <= enq_data;
-
-            assert (notFull) else
-                $fatal("qa_drv_fifo1: Can't ENQ when full!");
+            rdata0 <= data[addr0];
         end
     end
 
-endmodule // qa_drv_fifo1
+    // Port B
+    always @(posedge clk1)
+    begin
+        if (wen1)
+        begin
+            data[addr1] <= wdata1;
+            // Altera includes this bypass in the sample dual write port memory.
+            rdata1 <= wdata1;
+        end
+        else
+        begin
+            rdata1 <= data[addr1];
+        end
+    end
+
+endmodule // cci_mpf_prim_dualport_ram

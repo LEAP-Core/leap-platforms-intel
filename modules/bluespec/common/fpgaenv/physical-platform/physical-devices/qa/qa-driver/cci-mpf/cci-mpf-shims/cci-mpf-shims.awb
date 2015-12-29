@@ -1,0 +1,22 @@
+%name Intel MPF Shims
+%desc Intel MPF Shims
+
+%provides qa_cci_mpf_shims
+
+%sources -t H          -v PUBLIC  cci_mpf_shim_vtp.h
+%sources -t CPP        -v PRIVATE cci_mpf_shim_vtp.cpp
+
+##
+## File with shared parameters, declared for both Verilog and C
+##
+%sources -t H          -v PRIVATE cci_mpf_shim_vtp_params.h
+%sources -t VERILOG_H  -v PRIVATE cci_mpf_shim_vtp_params.h
+
+%sources -t VERILOG    -v PRIVATE cci_mpf_shim_buffer_afu.sv
+%sources -t VERILOG    -v PRIVATE cci_mpf_shim_buffer_lockstep_afu.sv
+%sources -t VERILOG    -v PRIVATE cci_mpf_shim_buffer_qlp.sv
+%sources -t VERILOG    -v PRIVATE cci_mpf_shim_mux.sv
+%sources -t VERILOG    -v PRIVATE cci_mpf_shim_sort_read_rsp.sv
+%sources -t VERILOG    -v PRIVATE cci_mpf_shim_sort_write_rsp.sv
+%sources -t VERILOG    -v PRIVATE cci_mpf_shim_vtp.sv
+%sources -t VERILOG    -v PRIVATE cci_mpf_shim_write_order.sv

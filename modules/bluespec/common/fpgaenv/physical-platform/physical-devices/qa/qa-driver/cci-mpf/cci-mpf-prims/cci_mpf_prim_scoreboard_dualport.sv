@@ -29,11 +29,11 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 //
-// Same as qa_drv_prim_scoreboard except that the payload and ordered
+// Same as cci_mpf_prim_scoreboard except that the payload and ordered
 // output are dual ported.
 //
 
-module qa_drv_prim_scoreboard_dualport
+module cci_mpf_prim_scoreboard_dualport
   #(
     parameter N_ENTRIES = 32,
     parameter N_DATA_BITS = 64,
@@ -110,9 +110,9 @@ module qa_drv_prim_scoreboard_dualport
             newest <= newest + 1;
 
             assert ((newest + t_IDX'(1)) != oldest) else
-                $fatal("qa_drv_prim_scoreboard_dualport: Can't ENQ when FULL!");
+                $fatal("cci_mpf_prim_scoreboard_dualport: Can't ENQ when FULL!");
             assert ((N_ENTRIES & (N_ENTRIES - 1)) == 0) else
-                $fatal("qa_drv_prim_scoreboard_dualport: N_ENTRIES must be a power of 2!");
+                $fatal("cci_mpf_prim_scoreboard_dualport: N_ENTRIES must be a power of 2!");
         end
     end
 
@@ -144,7 +144,7 @@ module qa_drv_prim_scoreboard_dualport
     //
     t_IDX m_addr[0 : 1];
 
-    qa_drv_prim_dualport_ram#(.N_ENTRIES(N_ENTRIES),
+    cci_mpf_prim_dualport_ram#(.N_ENTRIES(N_ENTRIES),
                               .N_DATA_BITS(N_DATA_BITS))
         mem(.clk0(clk),
             .addr0(m_addr[0]),
@@ -211,12 +211,12 @@ module qa_drv_prim_scoreboard_dualport
             end
 
             assert(! (deq_en[0] && deq_en[1])) else
-                $fatal("qa_drv_prim_scoreboard_dualport: Dual deq!");
+                $fatal("cci_mpf_prim_scoreboard_dualport: Dual deq!");
 
             assert(! deq_en[0] || notEmpty[0]) else
-                $fatal("qa_drv_prim_scoreboard_dualport: Can't DEQ when EMPTY (0)!");
+                $fatal("cci_mpf_prim_scoreboard_dualport: Can't DEQ when EMPTY (0)!");
             assert(! deq_en[1] || notEmpty[1]) else
-                $fatal("qa_drv_prim_scoreboard_dualport: Can't DEQ when EMPTY (1)!");
+                $fatal("cci_mpf_prim_scoreboard_dualport: Can't DEQ when EMPTY (1)!");
         end
     end
 
@@ -246,5 +246,5 @@ module qa_drv_prim_scoreboard_dualport
         end
     end
 
-endmodule // qa_drv_prim_scoreboard_dualport
+endmodule // cci_mpf_prim_scoreboard_dualport
 

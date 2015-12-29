@@ -45,7 +45,7 @@
 #include <aalsdk/service/ICCIClient.h>
 
 #include "AFU_csr.h"
-#include "qa_shim_tlb_simple.h"
+#include "cci_mpf_shim_vtp.h"
 
 
 USING_NAMESPACE(std)
@@ -99,14 +99,14 @@ class AFU_CLASS
 
     //
     // Allocate a memory buffer shared by the host and an FPGA.  This call
-    // DOES NOT add the VA/PA pair to the FPGA-side TLB.
+    // DOES NOT add the VA/PA pair to the FPGA-side VTP.
     //
     AFU_BUFFER CreateSharedBuffer(size_t size_bytes);
 
     //
     // Allocate a shared memory buffer and add the VA/PA mapping to the
-    // FPGA-side TLB, implemented in QA_SHIM_TLB_CLASS and the corresponding
-    // RTL.
+    // FPGA-side VTP, implemented in CCI_MPF_SHIM_VTP_CLASS and the
+    // corresponding RTL.
     //
     void* CreateSharedBufferInVM(size_t size_bytes);
 
@@ -156,8 +156,9 @@ class AFU_CLASS
     std::vector<AFU_BUFFER> buffers;
     AFU_BUFFER dsmBuffer;
 
-    // Shared TLB and virtual memory manager.  Only one is permitted per AFU.
-    QA_SHIM_TLB tlb;
+    // Shared translation and virtual memory manager.  Only one is
+    // permitted per AFU.
+    CCI_MPF_SHIM_VTP vtp;
 };
 
 

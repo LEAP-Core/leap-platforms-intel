@@ -42,7 +42,7 @@
 // updates instead of recording each one is sufficient.
 //
 
-module qa_drv_prim_lru_pseudo
+module cci_mpf_prim_lru_pseudo
   #(
     parameter N_WAYS = 4,
     parameter N_ENTRIES = 1024
@@ -116,7 +116,7 @@ module qa_drv_prim_lru_pseudo
     logic wen1;
     t_WAY_VEC rdata1;
 
-    qa_drv_prim_dualport_ram
+    cci_mpf_prim_dualport_ram
       #(
         .N_ENTRIES(N_ENTRIES),
         .N_DATA_BITS($bits(t_WAY_VEC))
@@ -311,4 +311,4 @@ module qa_drv_prim_lru_pseudo
         end 
     end
 
-endmodule // qa_drv_prim_lru_pseudo
+endmodule // cci_mpf_prim_lru_pseudo

@@ -31,6 +31,7 @@
 
 `include "qa_driver.vh"
 `include "qa_drv_hc.vh"
+`include "cci_mpf_if.vh"
 
 module qa_drv_hc_root
   #(
@@ -45,7 +46,7 @@ module qa_drv_hc_root
     //
     // Signals connecting to QA Platform
     //
-    qlp_interface.to_qlp         qlp,
+    cci_mpf_if.to_qlp            qlp,
 
     // CSR updates and state
     input t_CSR_AFU_STATE        csr,

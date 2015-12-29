@@ -28,8 +28,8 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-`include "qa_driver.vh"
-`include "qa_shim_tlb_simple_params.h"
+`include "cci_mpf_if.vh"
+`include "cci_mpf_shim_vtp_params.h"
 
 //
 // Map virtual to physical addresses.  The AFU and QLP interfaces are thus
@@ -47,8 +47,8 @@
 //   property of CCI.  If order is important in your memory subsystem then
 //   requests coming from an AFU should be filtered by address before
 //   reaching this module to guarantee order within a line.
-//   qa_shim_write_order.sv provides this function and is included in the
-//   reference memory subsystem composed in qa_drv_memory.sv.
+//   cci_mpf_shim_write_order.sv provides this function and is included in the
+//   reference memory subsystem.
 //
 //                             * * * * * * * *
 //
@@ -69,7 +69,7 @@ typedef logic [CCI_PT_LINE_IDX_BITS-1 : 0] t_PTE_IDX;
 // Address of a virtual page without the page offset bits
 typedef logic [CCI_PT_VA_TAG_BITS+CCI_PT_VA_IDX_BITS-1 : 0] t_TLB_VA_PAGE;
 
-module qa_shim_tlb_simple
+module cci_mpf_shim_vtp
   #(
     parameter CCI_DATA_WIDTH = 512,
     parameter CCI_QLP_RX_HDR_WIDTH = 18,
@@ -84,7 +84,7 @@ module qa_shim_tlb_simple
     // must be zero on all requests flowing in to the TLB through the
     // afu interface below.
     //
-    // Some shims (e.g. qa_shim_sort_responses) already manage Mdata and
+    // Some shims (e.g. cci_mpf_shim_sort_responses) already manage Mdata and
     // guarantee that some high bits will be zero.
     parameter RESERVED_MDATA_IDX = -1
     )
@@ -92,10 +92,10 @@ module qa_shim_tlb_simple
     input  logic clk,
 
     // Connection toward the QA platform.  Reset comes in here.
-    qlp_interface.to_qlp qlp,
+    cci_mpf_if.to_qlp qlp,
 
     // Connections toward user code.
-    qlp_interface.to_afu afu
+    cci_mpf_if.to_afu afu
     );
 
     logic resetb;
@@ -109,7 +109,7 @@ module qa_shim_tlb_simple
     //
     // ====================================================================
 
-    qlp_interface
+    cci_mpf_if
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
         .CCI_RX_HDR_WIDTH(CCI_AFU_RX_HDR_WIDTH),
@@ -122,7 +122,7 @@ module qa_shim_tlb_simple
     logic deqC0Tx;
     logic deqC1Tx;
 
-    qa_shim_buffer_afu
+    cci_mpf_shim_buffer_afu
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
         .CCI_RX_HDR_WIDTH(CCI_AFU_RX_HDR_WIDTH),
@@ -156,13 +156,13 @@ module qa_shim_tlb_simple
     always_ff @(posedge clk)
     begin
         assert ((RESERVED_MDATA_IDX > 0) && (RESERVED_MDATA_IDX < CCI_TAG_WIDTH)) else
-            $fatal("qa_sim_tlb_simple.sv: Illegal RESERVED_MDATA_IDX value: %d", RESERVED_MDATA_IDX);
+            $fatal("cci_mpf_shim_vtp.sv: Illegal RESERVED_MDATA_IDX value: %d", RESERVED_MDATA_IDX);
 
         if (resetb)
         begin
             assert((afu_buf.C0TxHdr[RESERVED_MDATA_IDX] == 0) ||
                    ! afu_buf.C0TxRdValid) else
-                $fatal("qa_shim_tlb_simple.sv: AFU C0 Mdata[%d] must be zero", RESERVED_MDATA_IDX);
+                $fatal("cci_mpf_shim_vtp.sv: AFU C0 Mdata[%d] must be zero", RESERVED_MDATA_IDX);
         end
     end
 
@@ -234,7 +234,7 @@ module qa_shim_tlb_simple
     logic [CCI_DATA_WIDTH-1 : 0] tlbReadData;
     logic tlbReadDataEn;
 
-    qa_shim_tlb_assoc
+    cci_mpf_shim_vtp_assoc
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH)
         )
@@ -289,7 +289,7 @@ module qa_shim_tlb_simple
         if (resetb)
         begin
             assert (! lookupNotPresent[0] && ! lookupNotPresent[1]) else
-                $fatal("qa_shim_tlb_simple: VA not present in page table");
+                $fatal("cci_mpf_shim_vtp: VA not present in page table");
         end
     end
 
@@ -561,7 +561,7 @@ module qa_shim_tlb_simple
     assign afu_buf.C1RxWrValid = qlp.C1RxWrValid;
     assign afu_buf.C1RxIrValid = qlp.C1RxIrValid;
 
-endmodule // qa_shim_tlb_simple
+endmodule // cci_mpf_shim_vtp
 
 
 //
@@ -575,7 +575,7 @@ endmodule // qa_shim_tlb_simple
 // is the software must guarantee that new page table entries are globally
 // visible in system memory before passing a new virtual address to the FPGA.
 //
-module qa_shim_tlb_assoc
+module cci_mpf_shim_vtp_assoc
   #(
     parameter CCI_DATA_WIDTH = 512,
     parameter DEBUG_MESSAGES = 0
@@ -665,7 +665,7 @@ module qa_shim_tlb_assoc
     generate
         for (w = 0; w < NUM_TLB_SET_WAYS; w = w + 1)
         begin: gen_tlb
-            qa_drv_prim_dualport_ram
+            cci_mpf_prim_dualport_ram
               #(
                 .N_ENTRIES(NUM_TLB_SETS),
                 .N_DATA_BITS($bits(t_TLB_ENTRY))
@@ -1147,7 +1147,7 @@ module qa_shim_tlb_assoc
                            (pte_num != PTES_PER_LINE'(0)) &&
                            (cur_pte.vTag == pte_va_tag);
 
-    qa_drv_prim_lru_pseudo
+    cci_mpf_prim_lru_pseudo
       #(
         .N_WAYS(NUM_TLB_SET_WAYS),
         .N_ENTRIES(NUM_TLB_SETS)
@@ -1169,4 +1169,4 @@ module qa_shim_tlb_assoc
          .refEn1(lookupValid[1])
          );
 
-endmodule // qa_shim_tlb_assoc
+endmodule // cci_mpf_shim_vtp_assoc

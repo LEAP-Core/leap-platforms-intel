@@ -64,7 +64,7 @@ module qa_drv_hc_fifo_to_host
     //
     // Buffer incoming messages in a FIFO.
     //
-    qa_drv_prim_fifo2
+    cci_mpf_prim_fifo2
       #(
         .N_DATA_BITS(CCI_DATA_WIDTH)
         )

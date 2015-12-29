@@ -28,6 +28,8 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
+`include "cci_mpf_if.vh"
+
 
 //
 // Consume control/status register writes from the host and broadcast
@@ -45,7 +47,7 @@ module qa_driver_csr
     input logic clk,
 
     // Incoming signals from platform
-    qlp_interface.to_qlp_snoop qlp,
+    cci_mpf_if.to_qlp_snoop qlp,
 
     // Parsed CSR messages and state
     output t_CSR_AFU_STATE csr

@@ -75,8 +75,8 @@ module cci_mpf_shim_mux
     localparam NUM_AFU_PORTS = 2;
     localparam AFU_PORTS_RADIX = $clog2(NUM_AFU_PORTS);
 
-    logic resetb;
-    assign resetb = qlp.resetb;
+    logic reset_n;
+    assign reset_n = qlp.reset_n;
 
 
     // ====================================================================
@@ -176,7 +176,7 @@ module cci_mpf_shim_mux
     // Record the winners
     always_ff @(posedge clk)
     begin
-        if (! resetb)
+        if (! reset_n)
         begin
             last_c0_winner_idx <= 0;
             last_c1_winner_idx <= 0;
@@ -285,7 +285,7 @@ module cci_mpf_shim_mux
     generate
         for (p = 0; p < NUM_AFU_PORTS; p = p + 1)
         begin : ctrlBlock
-            assign afu_buf[p].resetb = qlp.resetb;
+            assign afu_buf[p].reset_n = qlp.reset_n;
 
             // Dequeue if there was a request and the source won arbitration.
             assign deqC0Tx[p] = c0_request[p] && (c0_winner_idx == p) && ! qlp.C0TxAlmFull;

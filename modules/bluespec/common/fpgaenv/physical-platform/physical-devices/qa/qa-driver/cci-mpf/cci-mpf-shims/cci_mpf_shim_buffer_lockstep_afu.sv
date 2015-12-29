@@ -67,7 +67,7 @@ module cci_mpf_shim_buffer_lockstep_afu
     input logic deqTx
     );
 
-    assign afu_raw.resetb = afu_buf.resetb;
+    assign afu_raw.reset_n = afu_buf.reset_n;
 
     //
     // Rx wires pass through toward the AFU.  They are latency sensitive
@@ -143,7 +143,7 @@ module cci_mpf_shim_buffer_lockstep_afu
         .THRESHOLD(THRESHOLD)
         )
       c1_fifo(.clk,
-              .resetb(afu_buf.resetb),
+              .reset_n(afu_buf.reset_n),
 
               // The concatenated field order must match the use of c1_first above.
               .enq_data({ afu_raw.C0TxHdr,

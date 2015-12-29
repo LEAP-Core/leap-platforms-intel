@@ -42,7 +42,7 @@ module cci_mpf_prim_fifo_lutram
     )
    (
     input  logic clk,
-    input  logic resetb,
+    input  logic reset_n,
 
     input  logic [N_DATA_BITS-1 : 0] enq_data,
     input  logic                     enq_en,
@@ -73,7 +73,7 @@ module cci_mpf_prim_fifo_lutram
     // Write pointer advances on ENQ
     always_ff @(posedge clk)
     begin
-        if (! resetb)
+        if (! reset_n)
         begin
             wr_idx <= 1'b0;
         end
@@ -90,7 +90,7 @@ module cci_mpf_prim_fifo_lutram
     // Read pointer advances on DEQ
     always_ff @(posedge clk)
     begin
-        if (! resetb)
+        if (! reset_n)
         begin
             rd_idx <= 1'b0;
         end
@@ -106,7 +106,7 @@ module cci_mpf_prim_fifo_lutram
     // Update count of live values
     always_ff @(posedge clk)
     begin
-        if (! resetb)
+        if (! reset_n)
         begin
             valid_cnt <= t_COUNTER'(0);
             notFull <= 1'b1;

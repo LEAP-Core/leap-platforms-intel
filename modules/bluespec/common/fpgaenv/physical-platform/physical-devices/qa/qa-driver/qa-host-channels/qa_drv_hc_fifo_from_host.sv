@@ -42,7 +42,7 @@ module qa_drv_hc_fifo_from_host
     )
    (
     input logic clk,
-    input logic resetb,
+    input logic reset_n,
 
     input t_RX_C0 rx0,
 
@@ -72,7 +72,7 @@ module qa_drv_hc_fifo_from_host
       outQ
         (
          .clk,
-         .resetb,
+         .reset_n,
          .enq_data(outQ_enq_data),
          .enq_en(outQ_enq_en),
          .notFull(outQ_notFull),
@@ -143,7 +143,7 @@ module qa_drv_hc_fifo_from_host
     //
     always_ff @(posedge clk)
     begin
-        if (!resetb)
+        if (!reset_n)
         begin
             oldest_read_line_idx <= 0;
         end
@@ -164,7 +164,7 @@ module qa_drv_hc_fifo_from_host
       scoreboard
         (
          .clk,
-         .resetb,
+         .reset_n,
 
          .enq_en(read_grant.readerGrant),
          .enqMeta(2'b0),
@@ -230,7 +230,7 @@ module qa_drv_hc_fifo_from_host
     //
     always_ff @(posedge clk)
     begin
-        if (!resetb)
+        if (!reset_n)
         begin
             next_read_req_idx <= 0;
         end

@@ -196,7 +196,7 @@ module qa_driver
         )
       qlp(.clk);
 
-    assign qlp.resetb = ffs_vl_LP32ui_lp2sy_SoftReset_n &&
+    assign qlp.reset_n = ffs_vl_LP32ui_lp2sy_SoftReset_n &&
                         ffs_vl_LP32ui_lp2sy_InitDnForSys;
 
     //

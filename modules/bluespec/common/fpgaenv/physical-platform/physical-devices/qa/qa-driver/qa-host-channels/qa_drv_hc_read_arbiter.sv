@@ -34,7 +34,7 @@
 module qa_drv_hc_read_arbiter
   (
     input logic clk,
-    input logic resetb,
+    input logic reset_n,
 
     input   t_CSR_AFU_STATE        csr,
    
@@ -66,7 +66,7 @@ module qa_drv_hc_read_arbiter
    qa_drv_hc_can_issue issue_control
      (
       .clk(clk),
-      .resetb(resetb),
+      .reset_n(reset_n),
       .almostfull(tx0_almostfull),
       .can_issue(cci_can_issue),
       .issue(read_grant.readerGrant | read_grant.writerGrant)
@@ -74,7 +74,7 @@ module qa_drv_hc_read_arbiter
        
    // FSM state
    always_ff @(posedge clk) begin
-      if (!resetb) begin
+      if (!reset_n) begin
          state <= FAVOR_FRAME_READER;
       end else begin
          state <= next_state;
@@ -123,7 +123,7 @@ module qa_drv_hc_read_arbiter
    // Register outgoing control packet.
    always_ff @(posedge clk) begin      
       tx0.header      <= header;
-      tx0.rdvalid     <= rdvalid && resetb;
+      tx0.rdvalid     <= rdvalid && reset_n;
    end
   
 endmodule // cci_write_arbiter

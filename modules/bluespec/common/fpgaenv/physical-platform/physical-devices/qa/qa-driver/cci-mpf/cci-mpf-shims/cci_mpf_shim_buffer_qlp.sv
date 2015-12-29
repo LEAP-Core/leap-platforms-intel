@@ -69,7 +69,7 @@ module cci_mpf_shim_buffer_qlp
     cci_mpf_if.to_afu qlp_buf
     );
 
-    assign qlp_buf.resetb = qlp_raw.resetb;
+    assign qlp_buf.reset_n = qlp_raw.reset_n;
 
     //
     // Tx wires pass through toward the QLP. They are straight assignments

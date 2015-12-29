@@ -66,7 +66,7 @@ module qa_driver_csr
     end
 
     always_ff @(posedge clk) begin
-        if (~qlp.resetb) begin
+        if (~qlp.reset_n) begin
             csr.afu_dsm_base_valid <= 0;
         end
         else if (qlp.C0RxCgValid && csr_addr_matches(qlp.C0RxHdr, CSR_AFU_DSM_BASEL)) begin
@@ -87,7 +87,7 @@ module qa_driver_csr
     end
 
     always_ff @(posedge clk) begin
-        if (~qlp.resetb) begin
+        if (~qlp.reset_n) begin
            csr.afu_cntxt_base_valid <= 0;
         end
         else if (qlp.C0RxCgValid && csr_addr_matches(qlp.C0RxHdr, CSR_AFU_CNTXT_BASEL)) begin
@@ -102,7 +102,7 @@ module qa_driver_csr
     end
 
     always_ff @(posedge clk) begin
-        if (~qlp.resetb) begin
+        if (~qlp.reset_n) begin
             csr.afu_en <= 0;
             csr.afu_en_user_channel <= 0;
         end
@@ -113,7 +113,7 @@ module qa_driver_csr
     end
 
     always_ff @(posedge clk) begin
-        if (~qlp.resetb) begin
+        if (~qlp.reset_n) begin
             csr.afu_trigger_debug.idx <= 0;
         end
         else if (qlp.C0RxCgValid && csr_addr_matches(qlp.C0RxHdr, CSR_AFU_TRIGGER_DEBUG)) begin
@@ -128,7 +128,7 @@ module qa_driver_csr
     end
 
     always_ff @(posedge clk) begin
-        if (~qlp.resetb) begin
+        if (~qlp.reset_n) begin
             csr.afu_enable_test <= 0;
         end
         else if (qlp.C0RxCgValid && csr_addr_matches(qlp.C0RxHdr, CSR_AFU_ENABLE_TEST)) begin
@@ -141,7 +141,7 @@ module qa_driver_csr
     end
 
     always_ff @(posedge clk) begin
-        if (~qlp.resetb) begin
+        if (~qlp.reset_n) begin
             csr.afu_sreg_req.enable <= 0;
         end
         else if (qlp.C0RxCgValid && csr_addr_matches(qlp.C0RxHdr, CSR_AFU_SREG_READ)) begin

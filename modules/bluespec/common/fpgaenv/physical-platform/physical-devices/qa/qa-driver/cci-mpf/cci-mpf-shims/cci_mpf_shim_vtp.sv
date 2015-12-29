@@ -98,8 +98,8 @@ module cci_mpf_shim_vtp
     cci_mpf_if.to_afu afu
     );
 
-    logic resetb;
-    assign resetb = qlp.resetb;
+    logic reset_n;
+    assign reset_n = qlp.reset_n;
 
 
     // ====================================================================
@@ -139,7 +139,7 @@ module cci_mpf_shim_vtp
          .deqC1Tx
          );
 
-    assign afu_buf.resetb = qlp.resetb;
+    assign afu_buf.reset_n = qlp.reset_n;
 
     //
     // Almost full signals in the buffered input are ignored --
@@ -158,7 +158,7 @@ module cci_mpf_shim_vtp
         assert ((RESERVED_MDATA_IDX > 0) && (RESERVED_MDATA_IDX < CCI_TAG_WIDTH)) else
             $fatal("cci_mpf_shim_vtp.sv: Illegal RESERVED_MDATA_IDX value: %d", RESERVED_MDATA_IDX);
 
-        if (resetb)
+        if (reset_n)
         begin
             assert((afu_buf.C0TxHdr[RESERVED_MDATA_IDX] == 0) ||
                    ! afu_buf.C0TxRdValid) else
@@ -241,7 +241,7 @@ module cci_mpf_shim_vtp
       tlb
         (
          .clk,
-         .resetb,
+         .reset_n,
          .lookupPageVA,
          .lookupEn,
          .lookupRdy,
@@ -261,7 +261,7 @@ module cci_mpf_shim_vtp
 
     always_ff @(posedge clk)
     begin
-        if (! resetb)
+        if (! reset_n)
         begin
             tlbReadIdxRdy <= 0;
         end
@@ -286,7 +286,7 @@ module cci_mpf_shim_vtp
 
     always_ff @(posedge clk)
     begin
-        if (resetb)
+        if (reset_n)
         begin
             assert (! lookupNotPresent[0] && ! lookupNotPresent[1]) else
                 $fatal("cci_mpf_shim_vtp: VA not present in page table");
@@ -386,7 +386,7 @@ module cci_mpf_shim_vtp
     //
     always_ff @(posedge clk)
     begin
-        if (! resetb)
+        if (! reset_n)
         begin
             for (int i = 0; i <= AFU_PIPE_LAST_STAGE; i = i + 1)
             begin
@@ -582,7 +582,7 @@ module cci_mpf_shim_vtp_assoc
     )
    (
     input  logic clk,
-    input  logic resetb,
+    input  logic reset_n,
 
     //
     // There are two lookup ports, one for each CCI request channel.
@@ -694,7 +694,7 @@ module cci_mpf_shim_vtp_assoc
 
     always_ff @(posedge clk)
     begin
-        if (! resetb)
+        if (! reset_n)
         begin
             init_idx <= 0;
         end
@@ -785,7 +785,7 @@ module cci_mpf_shim_vtp_assoc
         begin
             lookup_page_va[p] <= lookupPageVA[p];
 
-            if (! resetb)
+            if (! reset_n)
             begin
                 did_lookup[p] <= 0;
             end
@@ -851,7 +851,7 @@ module cci_mpf_shim_vtp_assoc
 
     always_ff @(posedge clk)
     begin
-        if (! resetb)
+        if (! reset_n)
         begin
             state <= STATE_TLB_IDLE;
             last_miss_channel <= 0;
@@ -1155,7 +1155,7 @@ module cci_mpf_shim_vtp_assoc
       lru
         (
          .clk,
-         .resetb,
+         .reset_n,
          .rdy(),
          .lookupIdx(insert_idx),
          .lookupEn(lru_lookup_en),

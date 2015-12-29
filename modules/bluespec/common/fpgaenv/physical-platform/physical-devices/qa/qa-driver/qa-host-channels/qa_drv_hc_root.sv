@@ -92,8 +92,8 @@ module qa_drv_hc_root
     // The driver uses structures and shorter names to group the CCI.
     // Map names here.
     //
-    logic  resetb;
-    assign resetb = qlp.resetb;
+    logic  reset_n;
+    assign reset_n = qlp.reset_n;
 
     t_RX_C0 rx0;
     // Buffer incoming read responses for timing
@@ -143,7 +143,7 @@ module qa_drv_hc_root
     //
     always_ff @(posedge clk)
     begin
-        if (! resetb)
+        if (! reset_n)
         begin
             tx0_reg.rdvalid <= 0;
             tx1_reg.wrvalid <= 0;

@@ -49,7 +49,7 @@ module cci_mpf_prim_lru_pseudo
     )
    (
     input  logic clk,
-    input  logic resetb,
+    input  logic reset_n,
 
     // The entire module is ready after initialization.  Once ready, the
     // lookup function is always available.  The reference functions appear
@@ -149,7 +149,7 @@ module cci_mpf_prim_lru_pseudo
 
     always_ff @(posedge clk)
     begin
-        if (! resetb)
+        if (! reset_n)
         begin
             init_idx <= 0;
         end
@@ -204,7 +204,7 @@ module cci_mpf_prim_lru_pseudo
     //
     always_ff @(posedge clk)
     begin
-        if (! resetb)
+        if (! reset_n)
         begin
             update0 <= 0;
         end
@@ -290,7 +290,7 @@ module cci_mpf_prim_lru_pseudo
     //
     always_ff @(posedge clk)
     begin
-        if (! resetb)
+        if (! reset_n)
         begin
             update1 <= 0;
         end

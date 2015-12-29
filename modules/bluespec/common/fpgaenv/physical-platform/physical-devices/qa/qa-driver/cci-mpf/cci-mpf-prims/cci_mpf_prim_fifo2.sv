@@ -39,7 +39,7 @@ module cci_mpf_prim_fifo2
     )
    (
     input  logic clk,
-    input  logic resetb,
+    input  logic reset_n,
 
     input  logic [N_DATA_BITS-1 : 0] enq_data,
     input  logic                     enq_en,

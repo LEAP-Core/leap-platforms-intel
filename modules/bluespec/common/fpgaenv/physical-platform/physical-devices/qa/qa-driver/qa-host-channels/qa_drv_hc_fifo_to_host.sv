@@ -40,7 +40,7 @@ module qa_drv_hc_fifo_to_host
     )
    (
     input logic clk,
-    input logic resetb,
+    input logic reset_n,
 
     input  t_RX_C0 rx0,
 
@@ -71,7 +71,7 @@ module qa_drv_hc_fifo_to_host
       inBuf
        (
         .clk,
-        .resetb,
+        .reset_n,
         .enq_data(tx_data),
         .enq_en(tx_enable),
         .notFull(tx_rdy),
@@ -147,7 +147,7 @@ module qa_drv_hc_fifo_to_host
     //
     always_ff @(posedge clk)
     begin
-        if (!resetb)
+        if (!reset_n)
         begin
             flush_for_idle_hold <= 1'b0;
         end
@@ -164,7 +164,7 @@ module qa_drv_hc_fifo_to_host
     //
     always_ff @(posedge clk)
     begin
-        if (!resetb)
+        if (!reset_n)
         begin
             idle_cycles <= 0;
         end
@@ -193,7 +193,7 @@ module qa_drv_hc_fifo_to_host
     //
     always_ff @(posedge clk)
     begin
-        if (!resetb)
+        if (!reset_n)
         begin
             state <= STATE_WAIT_EMPTY;
             cur_data_idx <= 0;

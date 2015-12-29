@@ -112,8 +112,8 @@ module qa_drv_memory
     endgenerate
 
 
-    logic  resetb;
-    assign resetb = qlp.resetb;
+    logic  reset_n;
+    assign reset_n = qlp.reset_n;
 
     // ====================================================================
     //
@@ -291,7 +291,7 @@ module qa_drv_memory
 
     always_ff @(posedge clk)
     begin
-        if (! resetb)
+        if (! reset_n)
         begin
             // Nothing
         end

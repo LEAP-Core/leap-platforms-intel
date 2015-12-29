@@ -43,7 +43,7 @@ module cci_mpf_prim_scoreboard_dualport
     )
    (
     input  logic clk,
-    input  logic resetb,
+    input  logic reset_n,
 
     // Add a new entry to the scoreboard.  No payload, just control.
     // The scoreboard returns a handle -- the index where the payload should
@@ -101,7 +101,7 @@ module cci_mpf_prim_scoreboard_dualport
 
     always_ff @(posedge clk)
     begin
-        if (! resetb)
+        if (! reset_n)
         begin
             newest <= 0;
         end
@@ -128,7 +128,7 @@ module cci_mpf_prim_scoreboard_dualport
 
     always_ff @(posedge clk)
     begin
-        if (! resetb)
+        if (! reset_n)
             oldest <= 0;
         else
         begin
@@ -188,7 +188,7 @@ module cci_mpf_prim_scoreboard_dualport
     // Track valid data
     always_ff @(posedge clk)
     begin
-        if (! resetb)
+        if (! reset_n)
         begin
             dataValid <= 1'b0;
         end
@@ -225,7 +225,7 @@ module cci_mpf_prim_scoreboard_dualport
     // available to the client.
     always_ff @(posedge clk)
     begin
-        if (! resetb)
+        if (! reset_n)
         begin
             notEmpty[0] <= 1'b0;
             notEmpty[1] <= 1'b0;

@@ -19,7 +19,7 @@ interface cci_mpf_if
     );
 
     // Reset flows from QLP to AFU
-    logic                        resetb;
+    logic                        reset_n;
 
     // Requests to QLP.  All objects are outputs flowing toward QLP except
     // the almost full ports, which provide flow control.
@@ -51,7 +51,7 @@ interface cci_mpf_if
     // Port directions for connections in the direction of the QLP (platform)
     modport to_qlp
       (
-       input  resetb,
+       input  reset_n,
 
        output C0TxHdr,
        output C0TxRdValid,
@@ -79,7 +79,7 @@ interface cci_mpf_if
     // Port directions for connections in the direction of the AFU (user code)
     modport to_afu
       (
-       output resetb,
+       output reset_n,
 
        input  C0TxHdr,
        input  C0TxRdValid,
@@ -114,7 +114,7 @@ interface cci_mpf_if
 
     modport to_qlp_snoop
       (
-       input  resetb,
+       input  reset_n,
 
        input  C0TxAlmFull,
        input  C1TxAlmFull,

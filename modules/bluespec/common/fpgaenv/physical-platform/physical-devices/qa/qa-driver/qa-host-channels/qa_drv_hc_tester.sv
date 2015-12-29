@@ -46,7 +46,7 @@ module qa_drv_hc_tester
     )
    (
     input logic clk,
-    input logic resetb,
+    input logic reset_n,
 
     input   t_CSR_AFU_STATE        csr,
 
@@ -199,7 +199,7 @@ module qa_drv_hc_tester
     //
     always_ff @(posedge clk)
     begin
-        if (! resetb)
+        if (! reset_n)
         begin
             state <= NORMAL;
         end
@@ -227,7 +227,7 @@ module qa_drv_hc_tester
     //
     always_ff @(posedge clk)
     begin
-        if (! resetb)
+        if (! reset_n)
         begin
             tester_to_status.dbgTester <= 0;
         end

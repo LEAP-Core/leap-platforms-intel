@@ -58,9 +58,9 @@ module cci_mpf_shim_sort_write_rsp
     cci_mpf_if.to_afu afu
     );
 
-    logic resetb;
-    assign resetb = qlp.resetb;
-    assign afu.resetb = qlp.resetb;
+    logic reset_n;
+    assign reset_n = qlp.reset_n;
+    assign afu.reset_n = qlp.reset_n;
 
 
     // ====================================================================
@@ -108,7 +108,7 @@ module cci_mpf_shim_sort_write_rsp
         .MIN_FREE_SLOTS(ALM_FULL_THRESHOLD)
         )
       c1_scoreboard(.clk,
-                    .resetb,
+                    .reset_n,
 
                     .enq_en(afu.C1TxWrValid),
                     // Mdata field is in the low bits of the request header

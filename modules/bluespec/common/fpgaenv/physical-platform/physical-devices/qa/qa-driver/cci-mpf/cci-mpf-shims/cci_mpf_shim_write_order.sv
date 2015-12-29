@@ -61,8 +61,8 @@ module cci_mpf_shim_write_order
     cci_mpf_if.to_afu afu
     );
 
-    logic resetb;
-    assign resetb = qlp.resetb;
+    logic reset_n;
+    assign reset_n = qlp.reset_n;
 
     // ====================================================================
     //
@@ -119,7 +119,7 @@ module cci_mpf_shim_write_order
          .deqTx(afu_deq)
          );
 
-    assign afu_buf.resetb = qlp.resetb;
+    assign afu_buf.reset_n = qlp.reset_n;
 
     //
     // Almost full signals in the buffered input are ignored --
@@ -244,7 +244,7 @@ module cci_mpf_shim_write_order
         .BYPASS_INSERT_TO_TEST(1)
         )
       rdFilter(.clk,
-               .resetb,
+               .reset_n,
                // Only the write request channel checks against outstanding
                // reads. Multiple reads to the same address may be in flight
                // at the same time.
@@ -267,7 +267,7 @@ module cci_mpf_shim_write_order
         .BYPASS_INSERT_TO_TEST(1)
         )
       wrFilter(.clk,
-               .resetb,
+               .reset_n,
                .test_value(filter_test_req),
                .test_en(filter_test_req_en),
                .test_notPresent(),
@@ -323,7 +323,7 @@ module cci_mpf_shim_write_order
         .N_DATA_BITS($bits(t_C0_HEAP_ENTRY))
         )
       c0_heap(.clk,
-              .resetb,
+              .reset_n,
               .enq(qlp_buf.C0TxRdValid),
               .enqData(c0_heap_enqData),
               .notFull(c0_heap_notFull),
@@ -366,7 +366,7 @@ module cci_mpf_shim_write_order
         .N_READ_PORTS(2)
         )
       c1_heap(.clk,
-              .resetb,
+              .reset_n,
               .enq(qlp_buf.C1TxWrValid),
               .enqData(c1_heap_enqData),
               .notFull(c1_heap_notFull),
@@ -524,7 +524,7 @@ module cci_mpf_shim_write_order
 
     always_ff @(posedge clk)
     begin
-        if (! resetb)
+        if (! reset_n)
         begin
             for (int i = 0; i < 2; i = i + 1)
             begin
@@ -606,7 +606,7 @@ module cci_mpf_shim_write_order
 
     always_ff @(posedge clk)
     begin
-        if (! resetb)
+        if (! reset_n)
         begin
             filter_test_req_en <= 0;
             was_blocked <= 0;
@@ -785,7 +785,7 @@ module cci_mpf_shim_write_order
 
     always_ff @(posedge clk)
     begin
-        if (! resetb)
+        if (! reset_n)
         begin
             c0_prev_heap_allocIdx <= 0;
             c1_prev_heap_allocIdx <= 0;

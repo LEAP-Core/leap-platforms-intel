@@ -35,7 +35,7 @@ module qa_drv_hc_can_issue
   #(parameter CAN_ISSUE_FULL=4)
   (
     input  logic clk,
-    input  logic resetb,
+    input  logic reset_n,
     input  logic almostfull,
     input  logic issue,
     output logic can_issue

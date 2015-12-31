@@ -49,10 +49,6 @@
 
 module cci_mpf_shim_buffer_qlp
   #(
-    parameter CCI_DATA_WIDTH = 512,
-    parameter CCI_RX_HDR_WIDTH = 18,
-    parameter CCI_TX_HDR_WIDTH = 61,
-    parameter CCI_TAG_WIDTH = 13,
     // Register outbound signals if nonzero.
     parameter REGISTER_OUTBOUND = 0
     )

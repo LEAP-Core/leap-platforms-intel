@@ -32,13 +32,6 @@
 `include "cci_mpf_if.vh"
 
 module qa_drv_memory
-  #(
-    parameter CCI_ADDR_WIDTH = 56,
-    parameter CCI_DATA_WIDTH = 512,
-    parameter CCI_RX_HDR_WIDTH = 18,
-    parameter CCI_TX_HDR_WIDTH = 61,
-    parameter CCI_TAG_WIDTH = 13
-    )
    (
     input  logic                      clk,
 
@@ -56,61 +49,33 @@ module qa_drv_memory
     //
     // Memory read
     //
-    input  logic [CCI_ADDR_WIDTH-1:0] mem_read_req_addr,
+    input  t_cci_mpf_cl_vaddr mem_read_req_addr,
     // Use CCI's cache if true
-    input  logic                      mem_read_req_cached,
+    input  logic              mem_read_req_cached,
     // Enforce order of references to the same address?
-    input  logic                      mem_read_req_check_order,
-    output logic                      mem_read_req_rdy,
-    input  logic                      mem_read_req_enable,
+    input  logic              mem_read_req_check_order,
+    output logic              mem_read_req_rdy,
+    input  logic              mem_read_req_enable,
 
-    output logic [CCI_DATA_WIDTH-1:0] mem_read_rsp_data,
-    output logic                      mem_read_rsp_rdy,
+    output t_cci_cldata       mem_read_rsp_data,
+    output logic              mem_read_rsp_rdy,
 
     //
     // Memory write request
     //
-    input  logic [CCI_ADDR_WIDTH-1:0] mem_write_addr,
-    input  logic [CCI_DATA_WIDTH-1:0] mem_write_data,
+    input  t_cci_mpf_cl_vaddr mem_write_addr,
+    input  t_cci_cldata       mem_write_data,
     // Use CCI's cache if true
-    input  logic                      mem_write_req_cached,
+    input  logic              mem_write_req_cached,
     // Enforce order of references to the same address?
-    input  logic                      mem_write_req_check_order,
-    output logic                      mem_write_rdy,
-    input  logic                      mem_write_enable,
+    input  logic              mem_write_req_check_order,
+    output logic              mem_write_rdy,
+    input  logic              mem_write_enable,
 
     // Write ACK count.  Pulse with a count every time writes completes.
     // Multiple writes may complete in a single cycle.
-    output logic [1:0]                mem_write_ack
+    output logic [1:0]        mem_write_ack
     );
-
-
-    //
-    // Sanity checks on configuration parameters. This driver configuration
-    // maps a client interface that uses virtual addresses to a host interface
-    // that expects physical addresses. Multiple flavors of CCI thus appear.
-    //
-    generate
-        // Expose virtual addresses to the client
-        if (CCI_ADDR_WIDTH != 64 - $clog2(CCI_DATA_WIDTH / 8))
-        begin
-//            $error("qa_driver.sv expects CCI_ADDR_WIDTH %d but configured with %d",
-//                   64 - $clog2(CCI_DATA_WIDTH / 8), CCI_ADDR_WIDTH);
-        end
-
-        // Connect physical addresses to CCI
-        if (CCI_RX_HDR_WIDTH != `CCI_S_RX_HDR_WIDTH)
-        begin
-//            $error("qa_driver.sv expects CCI_RX_HDR_WIDTH %d but configured with %d",
-//                   `CCI_S_RX_HDR_WIDTH, CCI_RX_HDR_WIDTH);
-        end
-        if (CCI_TX_HDR_WIDTH != `CCI_S_TX_HDR_WIDTH)
-        begin
-//            $error("qa_driver.sv expects CCI_TX_HDR_WIDTH %d but configured with %d",
-//                   `CCI_S_TX_HDR_WIDTH, CCI_TX_HDR_WIDTH);
-        end
-    endgenerate
-
 
     logic  reset_n;
     assign reset_n = qlp.reset_n;
@@ -126,22 +91,10 @@ module qa_drv_memory
     // ====================================================================
 
     cci_mpf_if
-      #(
-        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_RX_HDR_WIDTH(CCI_RX_MEMHDR_WIDTH),
-        .CCI_TX_HDR_WIDTH(CCI_MPF_TX_MEMHDR_WIDTH),
-        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
-        )
       qlp_virtual (.clk);
 
     cci_mpf_shim_vtp
       #(
-        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_QLP_RX_HDR_WIDTH(CCI_RX_MEMHDR_WIDTH),
-        .CCI_QLP_TX_HDR_WIDTH(CCI_MPF_TX_MEMHDR_WIDTH),
-        .CCI_AFU_RX_HDR_WIDTH(CCI_RX_MEMHDR_WIDTH),
-        .CCI_AFU_TX_HDR_WIDTH(CCI_MPF_TX_MEMHDR_WIDTH),
-        .CCI_TAG_WIDTH(CCI_TAG_WIDTH),
         // VTP needs to generate loads internally in order to walk the
         // page table.  The reserved bit in Mdata is a location offered
         // to the page table walker to tag internal loads.  The Mdata location
@@ -149,7 +102,7 @@ module qa_drv_memory
         // from the AFU.  In the composition here, qa_shim_sort_responses
         // provides this guarantee by rewriting Mdata as requests and
         // responses as they flow in and out of the stack.
-        .RESERVED_MDATA_IDX(CCI_TAG_WIDTH-2)
+        .RESERVED_MDATA_IDX(CCI_MDATA_WIDTH-2)
         )
       v_to_p
        (
@@ -167,21 +120,9 @@ module qa_drv_memory
     // ====================================================================
 
     cci_mpf_if
-      #(
-        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_RX_HDR_WIDTH(CCI_RX_MEMHDR_WIDTH),
-        .CCI_TX_HDR_WIDTH(CCI_MPF_TX_MEMHDR_WIDTH),
-        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
-        )
       qlp_write_order (.clk);
 
     cci_mpf_shim_write_order
-      #(
-        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_RX_HDR_WIDTH(CCI_RX_MEMHDR_WIDTH),
-        .CCI_TX_HDR_WIDTH(CCI_MPF_TX_MEMHDR_WIDTH),
-        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
-        )
       filter
        (
         .clk,
@@ -200,21 +141,9 @@ module qa_drv_memory
     // ====================================================================
 
     cci_mpf_if
-      #(
-        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_RX_HDR_WIDTH(CCI_RX_MEMHDR_WIDTH),
-        .CCI_TX_HDR_WIDTH(CCI_MPF_TX_MEMHDR_WIDTH),
-        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
-        )
       qlp_rd_rsp_inorder (.clk);
 
     cci_mpf_shim_sort_read_rsp
-      #(
-        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_RX_HDR_WIDTH(CCI_RX_MEMHDR_WIDTH),
-        .CCI_TX_HDR_WIDTH(CCI_MPF_TX_MEMHDR_WIDTH),
-        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
-        )
       sortReads
        (
         .clk,
@@ -233,21 +162,9 @@ module qa_drv_memory
     // ====================================================================
 
     cci_mpf_if
-      #(
-        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_RX_HDR_WIDTH(CCI_RX_MEMHDR_WIDTH),
-        .CCI_TX_HDR_WIDTH(CCI_MPF_TX_MEMHDR_WIDTH),
-        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
-        )
       qlp_inorder (.clk);
 
     cci_mpf_shim_sort_write_rsp
-      #(
-        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_RX_HDR_WIDTH(CCI_RX_MEMHDR_WIDTH),
-        .CCI_TX_HDR_WIDTH(CCI_MPF_TX_MEMHDR_WIDTH),
-        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
-        )
       sortWrites
        (
         .clk,
@@ -267,7 +184,7 @@ module qa_drv_memory
     // a CCI-E header and truncate to the requested size, which may be CCI-S.
     assign qlp_inorder.C0TxHdr =
         genReqHeaderMPF(mem_read_req_cached ? eREQ_RDLINE_S : eREQ_RDLINE_I,
-                        t_cci_cl_vaddr'(mem_read_req_addr),
+                        mem_read_req_addr,
                         t_cci_mdata'(0),
                         mem_read_req_check_order);
     assign qlp_inorder.C0TxRdValid = mem_read_req_enable;
@@ -278,7 +195,7 @@ module qa_drv_memory
 
     assign qlp_inorder.C1TxHdr =
         genReqHeaderMPF(mem_write_req_cached ? eREQ_WRLINE_M : eREQ_WRLINE_I,
-                        t_cci_cl_vaddr'(mem_write_addr),
+                        mem_write_addr,
                         t_cci_mdata'(0),
                         mem_write_req_check_order);
     assign qlp_inorder.C1TxData = mem_write_data;

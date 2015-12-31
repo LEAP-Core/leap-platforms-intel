@@ -40,16 +40,9 @@
 
 module cci_mpf_shim_write_order
   #(
-    parameter CCI_DATA_WIDTH = 512,
-    parameter CCI_RX_HDR_WIDTH = 18,
-    parameter CCI_TX_HDR_WIDTH = 61,
-    parameter CCI_TAG_WIDTH = 13,
-
     // Size of the incoming buffer.  It must be at least as large as the
-    // threshold below.
-    parameter N_AFU_BUF_ENTRIES = 6,
-    // Threshold of free entries at which almost full is asserted.
-    parameter AFU_BUF_THRESHOLD = 4
+    // almost full threshold.
+    parameter N_AFU_BUF_ENTRIES = CCI_ALMOST_FULL_THRESHOLD + 2
     )
    (
     input  logic clk,
@@ -90,12 +83,6 @@ module cci_mpf_shim_write_order
     // ====================================================================
 
     cci_mpf_if
-      #(
-        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
-        .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
-        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
-        )
       afu_buf (.clk);
 
     // Latency-insensitive ports need explicit dequeue (enable).
@@ -104,12 +91,8 @@ module cci_mpf_shim_write_order
 
     cci_mpf_shim_buffer_lockstep_afu
       #(
-        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
-        .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
-        .CCI_TAG_WIDTH(CCI_TAG_WIDTH),
         .N_ENTRIES(N_AFU_BUF_ENTRIES),
-        .THRESHOLD(AFU_BUF_THRESHOLD)
+        .THRESHOLD(CCI_ALMOST_FULL_THRESHOLD)
         )
       bufafu
         (
@@ -139,21 +122,9 @@ module cci_mpf_shim_write_order
     // ====================================================================
 
     cci_mpf_if
-      #(
-        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
-        .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
-        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
-        )
       qlp_buf (.clk);
 
     cci_mpf_shim_buffer_qlp
-      #(
-        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
-        .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
-        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
-        )
       bufqlp
         (
          .clk,
@@ -684,7 +655,7 @@ module cci_mpf_shim_write_order
     // Forward requests toward the QLP.  Replace part of the Mdata entry
     // with the scoreboard index.  The original Mdata is saved in the
     // heap and restored when the response is returned.
-    assign qlp_buf.C0TxHdr = { afu_pipe[1].C0TxHdr[CCI_TX_HDR_WIDTH-1 : $bits(t_C0_REQ_IDX)],
+    assign qlp_buf.C0TxHdr = { afu_pipe[1].C0TxHdr[CCI_MPF_TX_MEMHDR_WIDTH-1 : $bits(t_C0_REQ_IDX)],
                                c0_heap_allocIdx };
     assign qlp_buf.C0TxRdValid = process_requests && c0_request_rdy;
 
@@ -707,12 +678,12 @@ module cci_mpf_shim_write_order
 
         if (qlp_buf.c0Rx.rdValid)
         begin
-            afu_buf.c0Rx.hdr = { qlp_buf.c0Rx.hdr[CCI_RX_HDR_WIDTH-1 : $bits(t_C0_REQ_IDX)], c0_heap_readRsp.mdata };
+            afu_buf.c0Rx.hdr = { qlp_buf.c0Rx.hdr[CCI_RX_MEMHDR_WIDTH-1 : $bits(t_C0_REQ_IDX)], c0_heap_readRsp.mdata };
         end
         else if (qlp_buf.c0Rx.wrValid)
         begin
             // This is a write response. The request came in on channel 1.
-            afu_buf.c0Rx.hdr = { qlp_buf.c0Rx.hdr[CCI_RX_HDR_WIDTH-1 : $bits(t_C1_REQ_IDX)], c1_heap_readRsp[0].mdata };
+            afu_buf.c0Rx.hdr = { qlp_buf.c0Rx.hdr[CCI_RX_MEMHDR_WIDTH-1 : $bits(t_C1_REQ_IDX)], c1_heap_readRsp[0].mdata };
         end
     end
 
@@ -727,7 +698,7 @@ module cci_mpf_shim_write_order
     // details.
     assign qlp_buf.C1TxHdr =
         afu_pipe[1].C1TxWrValid ?
-            { afu_pipe[1].C1TxHdr[CCI_TX_HDR_WIDTH-1 : $bits(t_C1_REQ_IDX)], c1_heap_allocIdx } :
+            { afu_pipe[1].C1TxHdr[CCI_MPF_TX_MEMHDR_WIDTH-1 : $bits(t_C1_REQ_IDX)], c1_heap_allocIdx } :
               afu_pipe[1].C1TxHdr;
 
     assign qlp_buf.C1TxData = afu_pipe[1].C1TxData;
@@ -757,7 +728,7 @@ module cci_mpf_shim_write_order
 
         if (qlp_buf.c1Rx.wrValid)
         begin
-            afu_buf.c1Rx.hdr = { qlp_buf.c1Rx.hdr[CCI_RX_HDR_WIDTH-1 : $bits(t_C1_REQ_IDX)], c1_heap_readRsp[1].mdata };
+            afu_buf.c1Rx.hdr = { qlp_buf.c1Rx.hdr[CCI_RX_MEMHDR_WIDTH-1 : $bits(t_C1_REQ_IDX)], c1_heap_readRsp[1].mdata };
         end
     end
 

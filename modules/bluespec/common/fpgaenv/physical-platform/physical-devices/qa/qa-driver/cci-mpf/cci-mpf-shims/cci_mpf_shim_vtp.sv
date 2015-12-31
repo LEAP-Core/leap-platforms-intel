@@ -71,13 +71,6 @@ typedef logic [CCI_PT_VA_TAG_BITS+CCI_PT_VA_IDX_BITS-1 : 0] t_TLB_VA_PAGE;
 
 module cci_mpf_shim_vtp
   #(
-    parameter CCI_DATA_WIDTH = 512,
-    parameter CCI_QLP_RX_HDR_WIDTH = 18,
-    parameter CCI_QLP_TX_HDR_WIDTH = 61,
-    parameter CCI_AFU_RX_HDR_WIDTH = 24,
-    parameter CCI_AFU_TX_HDR_WIDTH = 99,
-    parameter CCI_TAG_WIDTH = 13,
-
     // The TLB needs to generate loads internally in order to walk the
     // page table.  The reserved bit in Mdata is a location offered
     // to the page table walker to tag internal loads.  The Mdata location
@@ -110,12 +103,6 @@ module cci_mpf_shim_vtp
     // ====================================================================
 
     cci_mpf_if
-      #(
-        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_RX_HDR_WIDTH(CCI_AFU_RX_HDR_WIDTH),
-        .CCI_TX_HDR_WIDTH(CCI_AFU_TX_HDR_WIDTH),
-        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
-        )
       afu_buf (.clk);
 
     // Latency-insensitive ports need explicit dequeue (enable).
@@ -124,10 +111,6 @@ module cci_mpf_shim_vtp
 
     cci_mpf_shim_buffer_afu
       #(
-        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_RX_HDR_WIDTH(CCI_AFU_RX_HDR_WIDTH),
-        .CCI_TX_HDR_WIDTH(CCI_AFU_TX_HDR_WIDTH),
-        .CCI_TAG_WIDTH(CCI_TAG_WIDTH),
         .ENABLE_C0_BYPASS(1)
         )
       buffer
@@ -155,7 +138,7 @@ module cci_mpf_shim_vtp
     //
     always_ff @(posedge clk)
     begin
-        assert ((RESERVED_MDATA_IDX > 0) && (RESERVED_MDATA_IDX < CCI_TAG_WIDTH)) else
+        assert ((RESERVED_MDATA_IDX > 0) && (RESERVED_MDATA_IDX < CCI_MDATA_WIDTH)) else
             $fatal("cci_mpf_shim_vtp.sv: Illegal RESERVED_MDATA_IDX value: %d", RESERVED_MDATA_IDX);
 
         if (reset_n)
@@ -176,7 +159,7 @@ module cci_mpf_shim_vtp
     // Similar to CCI_PT_PAGE_OFFSET_BITS but with line-based instead
     // of byte-based addresses.
     localparam LINE_PAGE_OFFSET_BITS = CCI_PT_PAGE_OFFSET_BITS -
-                                       $clog2(CCI_DATA_WIDTH / 8);
+                                       $clog2(CCI_CLDATA_WIDTH / 8);
 
     // Virtual line address without the line offset bits
     typedef logic [CCI_PT_VA_IDX_BITS+CCI_PT_VA_TAG_BITS+LINE_PAGE_OFFSET_BITS-1 : 0]
@@ -231,13 +214,10 @@ module cci_mpf_shim_vtp
     logic tlbReadIdxRdy;
 
     // Response to page table read request
-    logic [CCI_DATA_WIDTH-1 : 0] tlbReadData;
+    t_cci_cldata tlbReadData;
     logic tlbReadDataEn;
 
     cci_mpf_shim_vtp_assoc
-      #(
-        .CCI_DATA_WIDTH(CCI_DATA_WIDTH)
-        )
       tlb
         (
          .clk,
@@ -486,7 +466,7 @@ module cci_mpf_shim_vtp
             // Read for TLB miss.
             //
             c0_req_hdr = genReqHeaderMPF(eREQ_RDLINE_S,
-                                         t_cci_cl_vaddr'(page_table_base + tlbReadIdx),
+                                         t_cci_mpf_cl_vaddr'(page_table_base + tlbReadIdx),
                                          t_cci_mdata'(0),
                                          0,
                                          0);
@@ -576,7 +556,6 @@ endmodule // cci_mpf_shim_vtp
 //
 module cci_mpf_shim_vtp_assoc
   #(
-    parameter CCI_DATA_WIDTH = 512,
     parameter DEBUG_MESSAGES = 0
     )
    (
@@ -612,7 +591,7 @@ module cci_mpf_shim_vtp_assoc
     input  logic tlbReadIdxRdy,
 
     // Response to page table read request
-    input logic [CCI_DATA_WIDTH-1 : 0] tlbReadData,
+    input t_cci_cldata tlbReadData,
     input logic tlbReadDataEn
     );
 
@@ -823,10 +802,10 @@ module cci_mpf_shim_vtp_assoc
     // Bytes to hold a page table pointer
     localparam PT_IDX_BYTES = (CCI_PT_PA_IDX_BITS + 7) / 8;
     // Number of page table entries in a line
-    localparam PTES_PER_LINE = ((CCI_DATA_WIDTH / 8) - PT_IDX_BYTES) / PTE_BYTES;
+    localparam PTES_PER_LINE = ((CCI_CLDATA_WIDTH / 8) - PT_IDX_BYTES) / PTE_BYTES;
 
     // Buffer for storing the line being searched in the page table
-    logic [CCI_DATA_WIDTH-1 : 0] pt_line;
+    t_cci_cldata pt_line;
     // Counter to track number of PTEs active in pt_line
     logic [PTES_PER_LINE : 0] pte_num;
 

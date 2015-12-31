@@ -32,12 +32,6 @@
 `include "qa_drv_hc.vh"
 
 module qa_drv_hc_fifo_to_host
-  #(
-    parameter CCI_DATA_WIDTH = 512,
-    parameter CCI_RX_HDR_WIDTH = 18,
-    parameter CCI_TX_HDR_WIDTH = 61,
-    parameter CCI_TAG_WIDTH = 13
-    )
    (
     input logic clk,
     input logic reset_n,
@@ -52,12 +46,12 @@ module qa_drv_hc_fifo_to_host
     output t_TO_STATUS_MGR_FIFO_TO_HOST     fifo_to_host_to_status,
 
     // LEAP-facing interface
-    input  logic [CCI_DATA_WIDTH-1:0] tx_data,
-    output logic                      tx_rdy,
-    input  logic                      tx_enable
+    input  t_cci_cldata tx_data,
+    output logic        tx_rdy,
+    input  logic        tx_enable
     );
 
-    logic [CCI_DATA_WIDTH-1:0] lineIn_data;
+    t_cci_cldata lineIn_data;
     logic lineIn_notEmpty;
     logic lineIn_deq;
 
@@ -66,7 +60,7 @@ module qa_drv_hc_fifo_to_host
     //
     cci_mpf_prim_fifo2
       #(
-        .N_DATA_BITS(CCI_DATA_WIDTH)
+        .N_DATA_BITS(CCI_CLDATA_WIDTH)
         )
       inBuf
        (

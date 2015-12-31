@@ -29,6 +29,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 `include "qa_drv_hc.vh"
+import qa_driver_csr_types::*;
 
 //
 // Test node that is always inserted between the driver top and the FIFO
@@ -38,42 +39,34 @@
 //
 
 module qa_drv_hc_tester
-  #(
-    parameter CCI_DATA_WIDTH = 512,
-    parameter CCI_RX_HDR_WIDTH = 18,
-    parameter CCI_TX_HDR_WIDTH = 61,
-    parameter CCI_TAG_WIDTH = 13
-    )
    (
     input logic clk,
     input logic reset_n,
 
-    input   t_CSR_AFU_STATE        csr,
+    input   t_CSR_AFU_STATE csr,
 
     // To-client FIFO
-    output logic [CCI_DATA_WIDTH-1:0] rx_fifo_data,
-    output logic                      rx_fifo_rdy,
-    input  logic                      rx_fifo_enable,
+    output t_cci_cldata rx_fifo_data,
+    output logic        rx_fifo_rdy,
+    input  logic        rx_fifo_enable,
 
     // From-client FIFO
-    input  logic [CCI_DATA_WIDTH-1:0] tx_fifo_data,
-    output logic                      tx_fifo_rdy,
-    input  logic                      tx_fifo_enable,
+    input  t_cci_cldata tx_fifo_data,
+    output logic        tx_fifo_rdy,
+    input  logic        tx_fifo_enable,
 
     // Internal wires for to-client FIFO
-    input  logic [CCI_DATA_WIDTH-1:0] rx_data,
-    input  logic                      rx_rdy,
-    output logic                      rx_enable,
+    input  t_cci_cldata rx_data,
+    input  logic        rx_rdy,
+    output logic        rx_enable,
 
     // Internal wires for from-client FIFO
-    output logic [CCI_DATA_WIDTH-1:0] tx_data,
-    input  logic                      tx_rdy,
-    output logic                      tx_enable,
+    output t_cci_cldata tx_data,
+    input  logic        tx_rdy,
+    output logic        tx_enable,
 
     output t_TO_STATUS_MGR_TESTER tester_to_status
     );
-
-    typedef logic [CCI_DATA_WIDTH-1:0] t_DATA;
 
     //
     // Test mode.

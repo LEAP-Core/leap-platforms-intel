@@ -29,17 +29,10 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-`include "qa_driver.vh"
 `include "qa_drv_hc.vh"
 `include "cci_mpf_if.vh"
 
 module qa_drv_hc_root
-  #(
-    parameter CCI_DATA_WIDTH = 512,
-    parameter CCI_RX_HDR_WIDTH = 18,
-    parameter CCI_TX_HDR_WIDTH = 61,
-    parameter CCI_TAG_WIDTH = 13
-    )
    (
     input  logic                 clk,
 
@@ -60,16 +53,16 @@ module qa_drv_hc_root
     //
     // To client FIFO
     //
-    output logic [CCI_DATA_WIDTH-1:0] rx_fifo_data,
-    output logic                      rx_fifo_rdy,
-    input  logic                      rx_fifo_enable,
+    output t_cci_cldata rx_fifo_data,
+    output logic        rx_fifo_rdy,
+    input  logic        rx_fifo_enable,
 
     //
     // From client FIFO
     //
-    input  logic [CCI_DATA_WIDTH-1:0] tx_fifo_data,
-    output logic                      tx_fifo_rdy,
-    input  logic                      tx_fifo_enable,
+    input  t_cci_cldata tx_fifo_data,
+    output logic        tx_fifo_rdy,
+    input  logic        tx_fifo_enable,
 
     //
     // Client status registers.  Mostly useful for debugging.
@@ -82,10 +75,10 @@ module qa_drv_hc_root
     // ReadStatusReg() method is never called.  In this case just
     // tie off sreg_rsp_enable.
     //
-    output t_SREG_ADDR           sreg_req_addr,
-    output logic                 sreg_req_rdy,
-    input  t_SREG                sreg_rsp,
-    input  logic                 sreg_rsp_enable
+    output t_SREG_ADDR  sreg_req_addr,
+    output logic        sreg_req_rdy,
+    input  t_SREG       sreg_rsp,
+    input  logic        sreg_rsp_enable
     );
 
     //
@@ -153,13 +146,13 @@ module qa_drv_hc_root
 
     // FIFO wires inside the driver.  They will be mapped to the wires
     // exported to the client in the qa_drv_tester module.
-    logic [CCI_DATA_WIDTH-1:0] rx_data;
-    logic                      rx_rdy;
-    logic                      rx_enable;
+    t_cci_cldata rx_data;
+    logic        rx_rdy;
+    logic        rx_enable;
 
-    logic [CCI_DATA_WIDTH-1:0] tx_data;
-    logic                      tx_rdy;
-    logic                      tx_enable;
+    t_cci_cldata tx_data;
+    logic        tx_rdy;
+    logic        tx_enable;
 
     t_FRAME_ARB            frame_writer;
     t_FRAME_ARB            frame_reader;
@@ -182,35 +175,17 @@ module qa_drv_hc_root
     // configured by CSR writes into a variety of loopback and traffic generator
     // modes.
     qa_drv_hc_tester
-      #(
-        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
-        .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
-        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
-        )
       qa_tester_inst(.*);
 
     // Manage memory-mapped FIFOs in each direction.
     qa_drv_hc_fifo_from_host
-      #(
-        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
-        .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
-        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
-        )
       fifo_from_host(.*);
 
     qa_drv_hc_fifo_to_host
-      #(
-        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
-        .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
-        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
-        )
       fifo_to_host(.*);
 
-    qa_drv_hc_status_manager                         status_manager(.*);
-    qa_drv_hc_read_arbiter                           read_arb(.*);
-    qa_drv_hc_write_arbiter                          write_arb(.*);
+    qa_drv_hc_status_manager  status_manager(.*);
+    qa_drv_hc_read_arbiter    read_arb(.*);
+    qa_drv_hc_write_arbiter   write_arb(.*);
     
 endmodule

@@ -40,10 +40,6 @@
 
 module cci_mpf_shim_mux
   #(
-    parameter CCI_DATA_WIDTH = 512,
-    parameter CCI_RX_HDR_WIDTH = 18,
-    parameter CCI_TX_HDR_WIDTH = 61,
-    parameter CCI_TAG_WIDTH = 13,
     //
     // This MUX requires that one bit be reserved for message routing in the
     // Mdata field.  This reserved bit allows the MUX to route responses with
@@ -87,12 +83,6 @@ module cci_mpf_shim_mux
     // ====================================================================
 
     cci_mpf_if
-      #(
-        .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
-        .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
-        .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
-        )
       afu_buf[0:1] (.clk);
 
     // Latency-insensitive ports need explicit dequeue (enable).
@@ -106,10 +96,6 @@ module cci_mpf_shim_mux
 
             cci_mpf_shim_buffer_afu
               #(
-                .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-                .CCI_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
-                .CCI_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
-                .CCI_TAG_WIDTH(CCI_TAG_WIDTH),
                 .ENABLE_C0_BYPASS(1)
                 )
               b
@@ -211,7 +197,7 @@ module cci_mpf_shim_mux
 
     always_ff @(posedge clk)
     begin
-        assert ((RESERVED_MDATA_IDX > 0) && (RESERVED_MDATA_IDX < CCI_TAG_WIDTH)) else
+        assert ((RESERVED_MDATA_IDX > 0) && (RESERVED_MDATA_IDX < CCI_MDATA_WIDTH)) else
             $fatal("cci_mpf_shim_mux.sv: Illegal RESERVED_MDATA_IDX value: %d", RESERVED_MDATA_IDX);
     end
 
@@ -220,12 +206,12 @@ module cci_mpf_shim_mux
     //   Update a request's Mdata field with the index of the AFU from which
     //   the request came.
     //
-    function automatic [CCI_TX_HDR_WIDTH-1:0] tagRequest;
-        input [CCI_TX_HDR_WIDTH-1:0] header;
+    function automatic t_cci_ReqMemHdr tagRequest;
+        input t_cci_ReqMemHdr header;
         input afu_idx;
 
         tagRequest = header;
-        tagRequest[RESERVED_MDATA_IDX] = afu_idx;
+        tagRequest.mdata[RESERVED_MDATA_IDX] = afu_idx;
     endfunction
 
     always_comb
@@ -305,14 +291,14 @@ module cci_mpf_shim_mux
     //   Restore the Mdata field used by this MUX before forwarding to the AFU.
     //   The field was required to be zero, so restoring it is easy.
     //
-    function automatic [CCI_RX_HDR_WIDTH-1:0] untagRequest;
-        input [CCI_RX_HDR_WIDTH-1:0] header;
+    function automatic t_cci_RspMemHdr untagRequest;
+        input t_cci_RspMemHdr header;
         input isResponse;
 
         untagRequest = header;
         if (isResponse)
         begin
-            untagRequest[RESERVED_MDATA_IDX] = 0;
+            untagRequest.mdata[RESERVED_MDATA_IDX] = 0;
         end
     endfunction
 

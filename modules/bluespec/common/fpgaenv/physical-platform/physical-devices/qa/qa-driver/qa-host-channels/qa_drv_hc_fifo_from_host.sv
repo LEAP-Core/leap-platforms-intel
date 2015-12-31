@@ -34,10 +34,6 @@
 
 module qa_drv_hc_fifo_from_host
   #(
-    parameter CCI_DATA_WIDTH = 512,
-    parameter CCI_RX_HDR_WIDTH = 18,
-    parameter CCI_TX_HDR_WIDTH = 61,
-    parameter CCI_TAG_WIDTH = 13,
     parameter N_SCOREBOARD_ENTRIES=256
     )
    (
@@ -50,15 +46,15 @@ module qa_drv_hc_fifo_from_host
     output t_FRAME_ARB         frame_reader,
     input  t_CHANNEL_GRANT_ARB read_grant,
 
-    output logic [CCI_DATA_WIDTH-1:0] rx_data,
-    output logic                      rx_rdy,
-    input  logic                      rx_enable,
+    output t_cci_cldata rx_data,
+    output logic        rx_rdy,
+    input  logic        rx_enable,
 
     output t_TO_STATUS_MGR_FIFO_FROM_HOST   fifo_from_host_to_status,
     input  t_FROM_STATUS_MGR_FIFO_FROM_HOST status_to_fifo_from_host
     );
 
-    logic [CCI_DATA_WIDTH-1 : 0] outQ_enq_data;
+    t_cci_cldata outQ_enq_data;
     logic outQ_enq_en;
     logic outQ_notFull;
 
@@ -67,7 +63,7 @@ module qa_drv_hc_fifo_from_host
     //
     cci_mpf_prim_fifo2
       #(
-        .N_DATA_BITS(CCI_DATA_WIDTH)
+        .N_DATA_BITS(CCI_CLDATA_WIDTH)
         )
       outQ
         (
@@ -158,7 +154,7 @@ module qa_drv_hc_fifo_from_host
     cci_mpf_prim_scoreboard
       #(
         .N_ENTRIES(N_SCOREBOARD_ENTRIES),
-        .N_DATA_BITS(CCI_DATA_WIDTH),
+        .N_DATA_BITS(CCI_CLDATA_WIDTH),
         .N_META_BITS(0)
         )
       scoreboard

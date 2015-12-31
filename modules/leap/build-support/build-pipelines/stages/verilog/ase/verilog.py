@@ -152,8 +152,10 @@ class Verilog():
     if (cci_type != None):
         vexe_gen_command += ' -Xv +define+USE_PLATFORM_' + string.replace(cci_type, '-', '_')
 
-    ## Enable simulation debugging
-    vexe_gen_command += ' -Xv +define+ENABLE_CCI_MPF_DEBUG'
+    ## Enable simulation mode
+    cci_sim = moduleList.getAWBParamSafe('qa_device', 'CCI_SIMULATION')
+    if (cci_sim):
+        vexe_gen_command += ' -Xv +define+CCI_SIMULATION=1'
 
     if (moduleList.getAWBParam('verilog_tool', 'VCS_ENABLE_LINT') != 0):
         vexe_gen_command += ' -Xv +lint=all,noVCDE'

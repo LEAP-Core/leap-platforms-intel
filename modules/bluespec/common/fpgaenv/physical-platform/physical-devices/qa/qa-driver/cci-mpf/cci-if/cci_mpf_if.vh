@@ -120,7 +120,7 @@ interface cci_mpf_if
        );
 
 
-`ifdef ENABLE_CCI_MPF_DEBUG
+`ifdef CCI_SIMULATION
     // ====================================================================
     //
     //   Debugging

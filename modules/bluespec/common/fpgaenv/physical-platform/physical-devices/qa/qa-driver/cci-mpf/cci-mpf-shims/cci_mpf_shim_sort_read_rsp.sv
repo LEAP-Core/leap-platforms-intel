@@ -39,11 +39,6 @@
 
 module cci_mpf_shim_sort_read_rsp
   #(
-    parameter CCI_DATA_WIDTH = 512,
-    parameter CCI_RX_HDR_WIDTH = 18,
-    parameter CCI_TX_HDR_WIDTH = 61,
-    parameter CCI_TAG_WIDTH = 13,
-
     parameter N_SCOREBOARD_ENTRIES = 256,
     // Synchronize request channels if non-zero. Channel synchronization is
     // required to preserve load/store ordering.
@@ -122,7 +117,7 @@ module cci_mpf_shim_sort_read_rsp
         .N_ENTRIES(N_SCOREBOARD_ENTRIES),
         .N_DATA_BITS(CCI_CLDATA_WIDTH),
         .N_META_BITS(CCI_MDATA_WIDTH),
-        .MIN_FREE_SLOTS(ALM_FULL_THRESHOLD)
+        .MIN_FREE_SLOTS(CCI_ALMOST_FULL_THRESHOLD)
         )
       c0_scoreboard(.clk,
                     .reset_n,
@@ -145,7 +140,7 @@ module cci_mpf_shim_sort_read_rsp
     // Forward requests toward the QLP.  Replace the Mdata entry with the
     // scoreboard index.  The original Mdata is saved in the scoreboard
     // and restored when the response is returned.
-    assign qlp.C0TxHdr = { afu.C0TxHdr[CCI_TX_HDR_WIDTH-1 : CCI_MDATA_WIDTH],
+    assign qlp.C0TxHdr = { afu.C0TxHdr[CCI_MPF_TX_MEMHDR_WIDTH-1 : CCI_MDATA_WIDTH],
                            t_cci_mdata'(c0_scoreboard_enqIdx) };
     assign qlp.C0TxRdValid = afu.C0TxRdValid;
 

@@ -14,6 +14,10 @@ parameter CCIP_MMIODATA_WIDTH    = 64;
 
 parameter CCIP_MDATA_WIDTH       = 16;
 
+// Number of requests that can be accepted after almost full is asserted.
+parameter CCIP_ALMOST_FULL_THRESHOLD = 4;
+
+
 // Base types
 //----------------------------------------------------------------------
 typedef logic [CCIP_CLADDR_WIDTH-1:0] t_ccip_claddr;

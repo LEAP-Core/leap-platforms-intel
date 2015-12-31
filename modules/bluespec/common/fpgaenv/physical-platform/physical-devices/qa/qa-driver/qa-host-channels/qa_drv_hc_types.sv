@@ -31,8 +31,6 @@
 `ifndef QA_DRV_HC_TYPES
 `define QA_DRV_HC_TYPES
 
-`include "qa_driver.vh"
-
 //
 // Main type definitions for the QA host channel driver.
 //
@@ -40,7 +38,6 @@
 package qa_drv_hc_types;
     localparam QA_DRIVER_DEBUG = 0;
 
-    import qa_driver_types::*;
     import qa_driver_csr_types::*;
     import cci_mpf_if_pkg::*;
 

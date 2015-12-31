@@ -227,10 +227,7 @@ module mkQADeviceImport#(Clock vl_clk_LPdomain_32ui,
     // Interface:
     (QA_DEVICE_IMPORT);
 
-    parameter CCI_ADDR_WIDTH   = `CCI_ADDR_WIDTH;
-    parameter CCI_DATA_WIDTH   = `CCI_DATA_WIDTH;
-    parameter CCI_RX_HDR_WIDTH = `CCI_RXHDR_WIDTH;
-    parameter CCI_TX_HDR_WIDTH = `CCI_TXHDR_WIDTH;
+    parameter CCI_ADDR_WIDTH = `CCI_ADDR_WIDTH;
 
     input_clock (vl_clk_LPdomain_32ui) = vl_clk_LPdomain_32ui;
     default_clock vl_clk_LPdomain_32ui;

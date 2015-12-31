@@ -41,12 +41,8 @@
 
 module cci_mpf_shim_buffer_afu
   #(
-    parameter CCI_DATA_WIDTH = 512,
-    parameter CCI_RX_HDR_WIDTH = 18,
-    parameter CCI_TX_HDR_WIDTH = 61,
-    parameter CCI_TAG_WIDTH = 13,
-    parameter N_ENTRIES = 6,
-    parameter THRESHOLD = 4,
+    parameter N_ENTRIES = CCI_ALMOST_FULL_THRESHOLD + 2,
+    parameter THRESHOLD = CCI_ALMOST_FULL_THRESHOLD,
     // If nonzero, incoming requests from afu_raw on channel 0 may bypass
     // the FIFO and be received in the same cycle through afu_buf.  This
     // is offered only on channel 0.  Bypassing is not offered on channel
@@ -160,7 +156,7 @@ module cci_mpf_shim_buffer_afu
     //
     // ====================================================================
 
-    localparam C1TX_BITS = CCI_MPF_TX_MEMHDR_WIDTH + CCI_DATA_WIDTH + 2;
+    localparam C1TX_BITS = CCI_MPF_TX_MEMHDR_WIDTH + CCI_CLDATA_WIDTH + 2;
 
     // Request payload exists when one of the valid bits is set.
     logic c1_enq_en;

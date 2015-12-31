@@ -28,8 +28,6 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-`ifndef QA_DRIVER_CSR_TYPES
-`define QA_DRIVER_CSR_TYPES
 
 //
 // FPGA-side control/status register definitions.
@@ -138,5 +136,3 @@ package qa_driver_csr_types;
     t_CSR_AFU_STATE;
 
 endpackage // qa_driver_csr_types
-
-`endif //  `ifndef QA_DRIVER_CSR_TYPES

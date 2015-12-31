@@ -10,6 +10,10 @@ parameter CCIS_CLADDR_WIDTH      = 32;
 parameter CCIS_CLDATA_WIDTH      = 512;
 parameter CCIS_MDATA_WIDTH       = 13;
 
+// Number of requests that can be accepted after almost full is asserted.
+parameter CCIS_ALMOST_FULL_THRESHOLD = 4;
+
+
 // Base types
 //----------------------------------------------------------------------
 typedef logic [CCIS_CLADDR_WIDTH-1:0] t_ccis_claddr;

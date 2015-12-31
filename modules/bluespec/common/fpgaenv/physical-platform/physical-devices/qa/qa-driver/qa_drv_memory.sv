@@ -33,12 +33,12 @@
 
 module qa_drv_memory
    (
-    input  logic                      clk,
+    input  logic              clk,
 
     //
     // Signals connecting to QA Platform
     //
-    cci_mpf_if.to_qlp                 qlp,
+    cci_mpf_if.to_qlp         qlp,
 
     // -------------------------------------------------------------------
     //
@@ -179,29 +179,29 @@ module qa_drv_memory
     //
     // ====================================================================
 
-    //
-    // The CCI-S and CCI-E headers share a base set of fields.  Construct
-    // a CCI-E header and truncate to the requested size, which may be CCI-S.
-    assign qlp_inorder.C0TxHdr =
-        genReqHeaderMPF(mem_read_req_cached ? eREQ_RDLINE_S : eREQ_RDLINE_I,
-                        mem_read_req_addr,
-                        t_cci_mdata'(0),
-                        mem_read_req_check_order);
-    assign qlp_inorder.C0TxRdValid = mem_read_req_enable;
+    assign qlp_inorder.c0Tx =
+        genC0TxReadReqMPF(
+            genReqHeaderMPF(mem_read_req_cached ? eREQ_RDLINE_S : eREQ_RDLINE_I,
+                            mem_read_req_addr,
+                            t_cci_mdata'(0),
+                            mem_read_req_check_order),
+            mem_read_req_enable);
+
     assign mem_read_req_rdy = ! qlp_inorder.c0TxAlmFull;
 
     assign mem_read_rsp_data = qlp_inorder.c0Rx.data;
     assign mem_read_rsp_rdy = qlp_inorder.c0Rx.rdValid;
 
-    assign qlp_inorder.C1TxHdr =
-        genReqHeaderMPF(mem_write_req_cached ? eREQ_WRLINE_M : eREQ_WRLINE_I,
-                        mem_write_addr,
-                        t_cci_mdata'(0),
-                        mem_write_req_check_order);
-    assign qlp_inorder.C1TxData = mem_write_data;
+    assign qlp_inorder.c1Tx =
+        genC1TxWriteReqMPF(
+            genReqHeaderMPF(mem_write_req_cached ? eREQ_WRLINE_M : eREQ_WRLINE_I,
+                            mem_write_addr,
+                            t_cci_mdata'(0),
+                            mem_write_req_check_order),
+            mem_write_data,
+            mem_write_enable);
+
     assign mem_write_rdy = ! qlp_inorder.c1TxAlmFull;
-    assign qlp_inorder.C1TxWrValid = mem_write_enable;
-    assign qlp_inorder.C1TxIrValid = 1'b0;
 
     assign mem_write_ack = 2'(qlp_inorder.c0Rx.wrValid) +
                            2'(qlp_inorder.c1Rx.wrValid);

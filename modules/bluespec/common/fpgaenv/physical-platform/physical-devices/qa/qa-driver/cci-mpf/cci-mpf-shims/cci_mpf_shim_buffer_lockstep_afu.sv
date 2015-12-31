@@ -85,15 +85,15 @@ module cci_mpf_shim_buffer_lockstep_afu
     //
     // ====================================================================
 
-    localparam C0TX_BITS = CCI_MPF_TX_MEMHDR_WIDTH + 1;
-    localparam C1TX_BITS = CCI_MPF_TX_MEMHDR_WIDTH + CCI_CLDATA_WIDTH + 2;
+    localparam C0TX_BITS = $bits(t_if_cci_mpf_c0_Tx);
+    localparam C1TX_BITS = $bits(t_if_cci_mpf_c1_Tx);
     localparam TX_BITS = C0TX_BITS + C1TX_BITS;
 
     // Request payload exists when one of the valid bits is set.
     logic c0_enq_en;
-    assign c0_enq_en = afu_raw.C0TxRdValid;
+    assign c0_enq_en = cci_c0TxIsValidMPF(afu_raw.c0Tx);
     logic c1_enq_en;
-    assign c1_enq_en = afu_raw.C1TxWrValid || afu_raw.C1TxIrValid;
+    assign c1_enq_en = cci_c1TxIsValidMPF(afu_raw.c1Tx);
     logic enq_en;
     assign enq_en = c0_enq_en || c1_enq_en;
 
@@ -101,22 +101,15 @@ module cci_mpf_shim_buffer_lockstep_afu
 
     // Pull request details out of the head of the FIFO.
     logic [TX_BITS-1 : 0] first;
+    always_comb
+    begin
+        { afu_buf.c0Tx, afu_buf.c1Tx } = first;
 
-    logic [C0TX_BITS-1 : 0] c0_first;
-    logic [C1TX_BITS-1 : 0] c1_first;
-    assign { c0_first, c1_first } = first;
-
-    logic c0_RdValid;
-    assign { afu_buf.C0TxHdr, c0_RdValid } = c0_first;
-
-    logic c1_WrValid;
-    logic c1_IrValid;
-    assign { afu_buf.C1TxHdr, afu_buf.C1TxData, c1_WrValid, c1_IrValid } = c1_first;
-
-    // Valid bits are only meaningful when the FIFO isn't empty.
-    assign afu_buf.C0TxRdValid = c0_RdValid && notEmpty;
-    assign afu_buf.C1TxWrValid = c1_WrValid && notEmpty;
-    assign afu_buf.C1TxIrValid = c1_IrValid && notEmpty;
+        // Valid bits are only meaningful when the FIFO isn't empty.
+        afu_buf.c0Tx.rdValid = afu_buf.c0Tx.rdValid && notEmpty;
+        afu_buf.c1Tx.wrValid = afu_buf.c1Tx.wrValid && notEmpty;
+        afu_buf.c1Tx.intrValid = afu_buf.c1Tx.intrValid && notEmpty;
+    end
 
     logic almostFull;
     assign afu_raw.c0TxAlmFull = almostFull;
@@ -133,12 +126,7 @@ module cci_mpf_shim_buffer_lockstep_afu
               .reset_n(afu_buf.reset_n),
 
               // The concatenated field order must match the use of c1_first above.
-              .enq_data({ afu_raw.C0TxHdr,
-                          afu_raw.C0TxRdValid,
-                          afu_raw.C1TxHdr,
-                          afu_raw.C1TxData,
-                          afu_raw.C1TxWrValid,
-                          afu_raw.C1TxIrValid }),
+              .enq_data({ afu_raw.c0Tx, afu_raw.c1Tx }),
               .enq_en,
               .notFull(),
               .almostFull,

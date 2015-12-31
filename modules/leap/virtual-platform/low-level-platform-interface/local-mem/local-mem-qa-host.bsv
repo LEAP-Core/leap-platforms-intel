@@ -179,7 +179,7 @@ module [CONNECTED_MODULE] mkLocalMem#(LOCAL_MEM_CONFIG conf)
 
         writeReqW.wset(QA_MEM_WRITE_REQ { addr: l_addr,
                                           data: data,
-                                          cached: True,
+                                          cached: False,
                                           checkLoadStoreOrder: checkLoadStoreOrder });
     endmethod
 

@@ -31,39 +31,31 @@ interface cci_mpf_if
     );
 
     // Reset flows from QLP to AFU
-    logic                        reset_n;
+    logic              reset_n;
 
     // Requests to QLP.  All objects are outputs flowing toward QLP except
     // the almost full ports, which provide flow control.
-    t_cci_mpf_ReqMemHdr          C0TxHdr;
-    logic                        C0TxRdValid;
-    logic                        c0TxAlmFull;
+    t_if_cci_mpf_c0_Tx c0Tx;
+    logic              c0TxAlmFull;
 
-    t_cci_mpf_ReqMemHdr          C1TxHdr;
-    t_cci_cldata                 C1TxData;
-    logic                        C1TxWrValid;
-    logic                        C1TxIrValid;
-    logic                        c1TxAlmFull;
+    t_if_cci_mpf_c1_Tx c1Tx;
+    logic              c1TxAlmFull;
 
     // Responses from QLP.  All objects are inputs from the QLP and flow
     // toward the AFU.  There is no flow control.  The AFU must be prepared
     // to receive responses for all in-flight requests.
-    t_if_cci_c0_Rx               c0Rx;
-    t_if_cci_c1_Rx               c1Rx;
+    t_if_cci_c0_Rx     c0Rx;
+    t_if_cci_c1_Rx     c1Rx;
 
     // Port directions for connections in the direction of the QLP (platform)
     modport to_qlp
       (
        input  reset_n,
 
-       output C0TxHdr,
-       output C0TxRdValid,
+       output c0Tx,
        input  c0TxAlmFull,
 
-       output C1TxHdr,
-       output C1TxData,
-       output C1TxWrValid,
-       output C1TxIrValid,
+       output c1Tx,
        input  c1TxAlmFull,
 
        input  c0Rx,
@@ -75,14 +67,10 @@ interface cci_mpf_if
       (
        output reset_n,
 
-       input  C0TxHdr,
-       input  C0TxRdValid,
+       input  c0Tx,
        output c0TxAlmFull,
 
-       input  C1TxHdr,
-       input  C1TxData,
-       input  C1TxWrValid,
-       input  C1TxIrValid,
+       input  c1Tx,
        output c1TxAlmFull,
 
        output c0Rx,
@@ -110,13 +98,10 @@ interface cci_mpf_if
 
     modport to_afu_snoop
       (
-       input  C0TxHdr,
-       input  C0TxRdValid,
+       input  reset_n,
 
-       input  C1TxHdr,
-       input  C1TxData,
-       input  C1TxWrValid,
-       input  C1TxIrValid
+       input  c0Tx,
+       input  c1Tx
        );
 
 
@@ -177,34 +162,34 @@ interface cci_mpf_if
             begin
                 // //////////////////////// C0 TX CHANNEL TRANSACTIONS //////////////////////////
                 /******************* AFU -> MEM Read Request ******************/
-                if (reset_n && C0TxRdValid)
+                if (reset_n && c0Tx.rdValid)
                 begin
                     $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%s\t%x\t%s %x\n",
                             $time,
-                            print_channel(0 /*C0TxHdr.vc*/),
-                            print_reqtype(C0TxHdr.base.req_type),
-                            C0TxHdr.base.mdata,
-                            (C0TxHdr.ext.addrIsVirtual ? "V" : "P"),
-                            (C0TxHdr.ext.addrIsVirtual ?
-                                getReqVAddrMPF(C0TxHdr) :
-                                C0TxHdr.base.address) );
+                            print_channel(0 /*c0Tx.hdr.vc*/),
+                            print_reqtype(c0Tx.hdr.base.req_type),
+                            c0Tx.hdr.base.mdata,
+                            (c0Tx.hdr.ext.addrIsVirtual ? "V" : "P"),
+                            (c0Tx.hdr.ext.addrIsVirtual ?
+                                getReqVAddrMPF(c0Tx.hdr) :
+                                c0Tx.hdr.base.address) );
 
                 end
 
                 //////////////////////// C1 TX CHANNEL TRANSACTIONS //////////////////////////
                 /******************* AFU -> MEM Write Request *****************/
-                if (reset_n && C1TxWrValid)
+                if (reset_n && c1Tx.wrValid)
                 begin
                     $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%s\t%x\t%s %x\t%x\n",
                             $time,
-                            print_channel(0 /*C1TxHdr.vc*/),
-                            print_reqtype(C1TxHdr.base.req_type),
-                            C1TxHdr.base.mdata,
-                            (C1TxHdr.ext.addrIsVirtual ? "V" : "P"),
-                            (C1TxHdr.ext.addrIsVirtual ?
-                                getReqVAddrMPF(C1TxHdr) :
-                                C1TxHdr.base.address),
-                            C1TxData);
+                            print_channel(0 /*c1Tx.hdr.vc*/),
+                            print_reqtype(c1Tx.hdr.base.req_type),
+                            c1Tx.hdr.base.mdata,
+                            (c1Tx.hdr.ext.addrIsVirtual ? "V" : "P"),
+                            (c1Tx.hdr.ext.addrIsVirtual ?
+                                getReqVAddrMPF(c1Tx.hdr) :
+                                c1Tx.hdr.base.address),
+                            c1Tx.data);
                 end
 
                 //////////////////////// C0 RX CHANNEL TRANSACTIONS //////////////////////////

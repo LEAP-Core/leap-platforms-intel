@@ -175,6 +175,20 @@ module qa_driver
 
     // ====================================================================
     //
+    // Make sure exposed interface matches the memory system!
+    //
+    // ====================================================================
+
+    // Virtual addresses exposed to the client
+    initial begin
+        assert (CCI_ADDR_WIDTH == CCI_MPF_CL_VADDR_WIDTH) else
+            $fatal("qa_driver.sv expects CCI_ADDR_WIDTH %d but configured with %d",
+                   CCI_MPF_CL_VADDR_WIDTH, CCI_ADDR_WIDTH);
+    end
+
+
+    // ====================================================================
+    //
     //   Map the CCI driver interface to the cci_mpf_if used by the
     //   composable components in the driver.  All I/O ports are
     //   registered here for timing.
@@ -192,14 +206,14 @@ module qa_driver
     //
     always_ff @(posedge clk)
     begin
-        ffs_vl61_LP32ui_sy2lp_C0TxHdr <= qlp.C0TxHdr;
-        ffs_vl_LP32ui_sy2lp_C0TxRdValid <= qlp.C0TxRdValid;
+        ffs_vl61_LP32ui_sy2lp_C0TxHdr <= qlp.c0Tx.hdr;
+        ffs_vl_LP32ui_sy2lp_C0TxRdValid <= qlp.c0Tx.rdValid;
         qlp.c0TxAlmFull <= ffs_vl_LP32ui_lp2sy_C0TxAlmFull;
 
-        ffs_vl61_LP32ui_sy2lp_C1TxHdr <= qlp.C1TxHdr;
-        ffs_vl512_LP32ui_sy2lp_C1TxData <= qlp.C1TxData;
-        ffs_vl_LP32ui_sy2lp_C1TxWrValid <= qlp.C1TxWrValid;
-        ffs_vl_LP32ui_sy2lp_C1TxIrValid <= qlp.C1TxIrValid;
+        ffs_vl61_LP32ui_sy2lp_C1TxHdr <= qlp.c1Tx.hdr;
+        ffs_vl512_LP32ui_sy2lp_C1TxData <= qlp.c1Tx.data;
+        ffs_vl_LP32ui_sy2lp_C1TxWrValid <= qlp.c1Tx.wrValid;
+        ffs_vl_LP32ui_sy2lp_C1TxIrValid <= qlp.c1Tx.intrValid;
         qlp.c1TxAlmFull <= ffs_vl_LP32ui_lp2sy_C1TxAlmFull;
     end
 
@@ -293,18 +307,6 @@ module qa_driver
         .mem_write_enable,
         .mem_write_ack
         );
-
-    // Make sure exposed interface matches the memory system!
-`ifdef CCI_SIMULATION
-    generate
-        // Virtual addresses exposed to the client
-        if (CCI_ADDR_WIDTH != CCI_MPF_CL_VADDR_WIDTH)
-        begin
-            $error("qa_driver.sv expects CCI_ADDR_WIDTH %d but configured with %d",
-                   CCI_MPF_CL_VADDR_WIDTH, CCI_ADDR_WIDTH);
-        end
-    endgenerate
-`endif
 
 
     // ====================================================================    

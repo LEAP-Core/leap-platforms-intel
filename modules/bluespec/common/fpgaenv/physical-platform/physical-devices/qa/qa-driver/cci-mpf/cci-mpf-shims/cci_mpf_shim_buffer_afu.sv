@@ -105,22 +105,24 @@ module cci_mpf_shim_buffer_afu
         if (ENABLE_C0_BYPASS == 0)
         begin
             // No bypass.  All messages flow through the FIFO.
-            assign afu_buf.C0TxRdValid = c0_fifo_notEmpty;
-            assign afu_buf.C0TxHdr = c0_fifo_first;
-            assign c0_fifo_enq = afu_raw.C0TxRdValid;
+            assign afu_buf.c0Tx =
+                genC0TxReadReqMPF(c0_fifo_first, c0_fifo_notEmpty);
+
+            assign c0_fifo_enq = afu_raw.c0Tx.rdValid;
             assign c0_fifo_deq = deqC0Tx;
         end
         else
         begin
             // Bypass FIFO when possible.
-            assign afu_buf.C0TxRdValid = c0_fifo_notEmpty || afu_raw.C0TxRdValid;
-            assign afu_buf.C0TxHdr =
-                c0_fifo_notEmpty ? c0_fifo_first : afu_raw.C0TxHdr;
+            assign afu_buf.c0Tx =
+                c0_fifo_notEmpty ?
+                    genC0TxReadReqMPF(c0_fifo_first, 1) :
+                    afu_raw.c0Tx;
 
             // Enq to the FIFO if a new request has arrived and it wasn't
             // consumed immediately through afu_buf.
             assign c0_fifo_enq =
-                afu_raw.C0TxRdValid && (c0_fifo_notEmpty || ! deqC0Tx);
+                afu_raw.c0Tx.rdValid && (c0_fifo_notEmpty || ! deqC0Tx);
 
             assign c0_fifo_deq = deqC0Tx && c0_fifo_notEmpty;
         end
@@ -135,8 +137,8 @@ module cci_mpf_shim_buffer_afu
       c0_fifo(.clk,
               .reset_n(afu_buf.reset_n),
 
-              .enq_data(afu_raw.C0TxHdr),
-              // C0TxRdValid is the only incoming valid bit.  Map it through
+              .enq_data(afu_raw.c0Tx.hdr),
+              // c0Tx.rdValid is the only incoming valid bit.  Map it through
               // as enq here and notEmpty below.
               .enq_en(c0_fifo_enq),
               .notFull(),
@@ -156,22 +158,25 @@ module cci_mpf_shim_buffer_afu
     //
     // ====================================================================
 
-    localparam C1TX_BITS = CCI_MPF_TX_MEMHDR_WIDTH + CCI_CLDATA_WIDTH + 2;
+    localparam C1TX_BITS = $bits(t_if_cci_mpf_c1_Tx);
 
     // Request payload exists when one of the valid bits is set.
     logic c1_enq_en;
-    assign c1_enq_en = afu_raw.C1TxWrValid || afu_raw.C1TxIrValid;
+    assign c1_enq_en = cci_c1TxIsValidMPF(afu_raw.c1Tx);
 
     logic c1_notEmpty;
 
     // Pull request details out of the head of the FIFO.
-    logic [C1TX_BITS-1 : 0] c1_first;
-    logic c1_WrValid;
-    logic c1_IrValid;
-    assign { afu_buf.C1TxHdr, afu_buf.C1TxData, c1_WrValid, c1_IrValid } = c1_first;
-    // Valid bits are only meaningful when the FIFO isn't empty.
-    assign afu_buf.C1TxWrValid = c1_WrValid && c1_notEmpty;
-    assign afu_buf.C1TxIrValid = c1_IrValid && c1_notEmpty;
+    t_if_cci_mpf_c1_Tx c1_first;
+
+    always_comb
+    begin
+        afu_buf.c1Tx = c1_first;
+
+        // Valid bits are only meaningful when the FIFO isn't empty.
+        afu_buf.c1Tx.wrValid = c1_first.wrValid && c1_notEmpty;
+        afu_buf.c1Tx.intrValid = c1_first.intrValid && c1_notEmpty;
+    end
 
     cci_mpf_prim_fifo_lutram
       #(
@@ -183,10 +188,7 @@ module cci_mpf_shim_buffer_afu
               .reset_n(afu_buf.reset_n),
 
               // The concatenated field order must match the use of c1_first above.
-              .enq_data({ afu_raw.C1TxHdr,
-                          afu_raw.C1TxData,
-                          afu_raw.C1TxWrValid,
-                          afu_raw.C1TxIrValid }),
+              .enq_data(afu_raw.c1Tx),
               .enq_en(c1_enq_en),
               .notFull(),
               .almostFull(afu_raw.c1TxAlmFull),

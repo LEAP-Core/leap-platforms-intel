@@ -158,6 +158,31 @@ package cci_mpf_if_pkg;
 
     // ====================================================================
     //
+    //   TX channels with MPF extension
+    //
+    // ====================================================================
+
+    //
+    // Rewrite the TX channel structs to include the MPF extended header.
+    //
+
+    // Channel 0 : Memory Reads
+    typedef struct packed {
+        t_cci_mpf_ReqMemHdr  hdr;            // Request Header
+        logic                rdValid;        // Request Rd Valid
+    } t_if_cci_mpf_c0_Tx;
+
+    // Channel 1 : Memory Writes
+    typedef struct packed {
+        t_cci_mpf_ReqMemHdr  hdr;            // Request Header
+        t_cci_cldata         data;           // Request Data
+        logic                wrValid;        // Request Wr Valid
+        logic                intrValid;      // Request Intr Valid
+    } t_if_cci_mpf_c1_Tx;
+
+
+    // ====================================================================
+    //
     //   Helper functions to hide the underlying data structures.
     //
     // ====================================================================
@@ -260,25 +285,129 @@ package cci_mpf_if_pkg;
     endfunction
 
 
-    // ====================================================================
-    //
-    //   Rewrite the channel request structures to incorporate the
-    //   extra MPF header fields.
-    //
-    // ====================================================================
+    // Generate an MPF C0 TX from a base struct
+    function automatic t_if_cci_mpf_c0_Tx genC0TxMPFFromBase(
+        input t_if_cci_c0_Tx b
+        );
 
-    // Channel 0 : Memory Reads
-    typedef struct packed {
-        t_cci_mpf_ReqMemHdr  hdr;            // Request Header
-        logic                rdValid;        // Request Rd Valid
-    } t_if_cci_mpf_c0_Tx;
+        t_if_cci_mpf_c0_Tx m;
 
-    // Channel 1 : Memory Writes
-    typedef struct packed {
-        t_cci_mpf_ReqMemHdr  hdr;            // Request Header
-        t_cci_cldata         data;           // Request Data
-        logic                wrValid;        // Request Wr Valid
-        logic                intrValid;      // Request Intr Valid
-    } t_if_cci_mpf_c1_Tx;
+        m.hdr = genReqHeaderMPFFromBase(b.hdr);
+        m.rdValid = b.rdValid;
+
+        return m;
+    endfunction
+
+
+    // Generate an MPF C1 TX from a base struct
+    function automatic t_if_cci_mpf_c1_Tx genC1TxMPFFromBase(
+        input t_if_cci_c1_Tx b
+        );
+
+        t_if_cci_mpf_c1_Tx m;
+
+        m.hdr = genReqHeaderMPFFromBase(b.hdr);
+        m.data = b.data;
+        m.wrValid = b.wrValid;
+        m.intrValid = b.intrValid;
+
+        return m;
+    endfunction
+
+
+    // Generate a base C0 TX from an MPF struct.
+    //  *** This only works if the address stored in the MPF header is
+    //  *** physical.
+    function automatic t_if_cci_c0_Tx genC0TxBaseFromMPF(
+        input t_if_cci_mpf_c0_Tx m
+        );
+
+        t_if_cci_c0_Tx b;
+
+        b.hdr = m.hdr.base;
+        b.rdValid = m.rdValid;
+
+        return b;
+    endfunction
+
+
+    // Generate a base C1 TX from an MPF struct.
+    //  *** This only works if the address stored in the MPF header is
+    //  *** physical.
+    function automatic t_if_cci_c1_Tx genC1TxBaseFromMPF(
+        input t_if_cci_mpf_c1_Tx m
+        );
+
+        t_if_cci_c1_Tx b;
+
+        b.hdr = m.hdr.base;
+        b.data = m.data;
+        b.wrValid = m.wrValid;
+        b.intrValid = m.intrValid;
+
+        return b;
+    endfunction
+
+
+    // Initialize an MPF C0 TX with all valid bits clear
+    function automatic t_if_cci_mpf_c0_Tx cci_c0TxClearValidsMPF();
+        t_if_cci_mpf_c0_Tx r = 'x;
+        r.rdValid = 0;
+        return r;
+    endfunction
+
+    // Initialize an MPF C1 TX with all valid bits clear
+    function automatic t_if_cci_mpf_c1_Tx cci_c1TxClearValidsMPF();
+        t_if_cci_mpf_c1_Tx r = 'x;
+        r.wrValid = 0;
+        r.intrValid = 0;
+        return r;
+    endfunction
+
+
+    // Does an MPF C0 TX have a valid request?
+    function automatic logic cci_c0TxIsValidMPF(
+        input t_if_cci_mpf_c0_Tx r
+        );
+
+        return r.rdValid;
+    endfunction
+
+    // Does an MPF C1 TX have a valid request?
+    function automatic logic cci_c1TxIsValidMPF(
+        input t_if_cci_mpf_c1_Tx r
+        );
+
+        return r.wrValid || r.intrValid;
+    endfunction
+
+
+    // Generate an MPF C0 TX read request given a header
+    function automatic t_if_cci_mpf_c0_Tx genC0TxReadReqMPF(
+        input t_cci_mpf_ReqMemHdr h,
+        input logic rdValid
+        );
+
+        t_if_cci_mpf_c0_Tx r = cci_c0TxClearValidsMPF();
+        r.hdr = h;
+        r.rdValid = rdValid;
+
+        return r;
+    endfunction
+
+    // Generate an MPF C1 TX write request given a header and data
+    function automatic t_if_cci_mpf_c1_Tx genC1TxWriteReqMPF(
+        input t_cci_mpf_ReqMemHdr h,
+        input t_cci_cldata data,
+        input logic wrValid
+        );
+
+        t_if_cci_mpf_c1_Tx r = cci_c1TxClearValidsMPF();
+        r.hdr = h;
+        r.data = data;
+        r.wrValid = wrValid;
+
+        return r;
+    endfunction
 
 endpackage // cci_mpf_if

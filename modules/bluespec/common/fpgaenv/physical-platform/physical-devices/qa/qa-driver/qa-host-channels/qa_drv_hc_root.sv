@@ -111,14 +111,8 @@ module qa_drv_hc_root
     t_if_cci_c1_Tx tx1;
     t_if_cci_c1_Tx tx1_q;
 
-    assign qlp.C0TxHdr = genReqHeaderMPFFromBase(tx0_q.hdr);
-    assign qlp.C0TxRdValid = tx0_q.rdValid;
-
-    assign qlp.C1TxHdr = genReqHeaderMPFFromBase(tx1_q.hdr);
-    assign qlp.C1TxData = tx1_q.data;
-    assign qlp.C1TxWrValid = tx1_q.wrValid;
-
-    assign qlp.C1TxIrValid = 1'b0;
+    assign qlp.c0Tx = genC0TxMPFFromBase(tx0_q);
+    assign qlp.c1Tx = genC1TxMPFFromBase(tx1_q);
 
     //
     // All signals to the host must come from registers.  Guarantee that here.
@@ -127,8 +121,8 @@ module qa_drv_hc_root
     begin
         if (! reset_n)
         begin
-            tx0_q.rdValid <= 0;
-            tx1_q.wrValid <= 0;
+            tx0_q <= cci_c0TxClearValids();
+            tx1_q <= cci_c1TxClearValids();
         end
         else
         begin

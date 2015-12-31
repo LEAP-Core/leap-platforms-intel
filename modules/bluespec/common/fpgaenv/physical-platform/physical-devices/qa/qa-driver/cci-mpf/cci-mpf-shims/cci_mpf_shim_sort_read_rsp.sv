@@ -122,9 +122,9 @@ module cci_mpf_shim_sort_read_rsp
       c0_scoreboard(.clk,
                     .reset_n,
 
-                    .enq_en(afu.C0TxRdValid),
+                    .enq_en(afu.c0Tx.rdValid),
                     // Mdata field is in the low bits of the request header
-                    .enqMeta(t_cci_mdata'(afu.C0TxHdr)),
+                    .enqMeta(afu.c0Tx.hdr.base.mdata),
                     .notFull(c0_scoreboard_notFull),
                     .enqIdx(c0_scoreboard_enqIdx),
 
@@ -140,9 +140,11 @@ module cci_mpf_shim_sort_read_rsp
     // Forward requests toward the QLP.  Replace the Mdata entry with the
     // scoreboard index.  The original Mdata is saved in the scoreboard
     // and restored when the response is returned.
-    assign qlp.C0TxHdr = { afu.C0TxHdr[CCI_MPF_TX_MEMHDR_WIDTH-1 : CCI_MDATA_WIDTH],
-                           t_cci_mdata'(c0_scoreboard_enqIdx) };
-    assign qlp.C0TxRdValid = afu.C0TxRdValid;
+    always_comb
+    begin
+        qlp.c0Tx = afu.c0Tx;
+        qlp.c0Tx.hdr.base.mdata = t_cci_mdata'(c0_scoreboard_enqIdx);
+    end
 
     logic c0_non_rd_valid;
 
@@ -179,14 +181,12 @@ module cci_mpf_shim_sort_read_rsp
 
     // ====================================================================
     //
-    //  Channel 1 (write).  Requests flow straight through.
+    //  Channel 1 (write) flows straight through.
     //
     // ====================================================================
 
-    assign qlp.C1TxHdr = afu.C1TxHdr;
-    assign qlp.C1TxData = afu.C1TxData;
-    assign qlp.C1TxWrValid = afu.C1TxWrValid;
-    assign qlp.C1TxIrValid = afu.C1TxIrValid;
+    // Requests
+    assign qlp.c1Tx = afu.c1Tx;
 
     // Responses
     assign afu.c1Rx = qlp.c1Rx;

@@ -154,10 +154,10 @@ module cci_mpf_shim_write_order
     // as the buffer in order to reduce timing pressure at the point the
     // filter is checked and updated.
     logic [63:0] c0_req_addr;
-    assign c0_req_addr = 64'(getReqVAddrMPF(afu_buf.C0TxHdr));
+    assign c0_req_addr = 64'(getReqVAddrMPF(afu_buf.c0Tx.hdr));
 
     logic [63:0] c1_req_addr;
-    assign c1_req_addr = 64'(getReqVAddrMPF(afu_buf.C1TxHdr));
+    assign c1_req_addr = 64'(getReqVAddrMPF(afu_buf.c1Tx.hdr));
 
     assign c0_hash_calc =
         t_HASH'(hash32(c0_req_addr[63:32] ^ c0_req_addr[31:0]));
@@ -225,7 +225,7 @@ module cci_mpf_shim_write_order
                .test_notPresent_reg(rd_filter_test_notPresent),
                .insert_idx(rd_filter_insert_idx),
                .insert_value(rd_filter_insert_hash),
-               .insert_en(qlp_buf.C0TxRdValid),
+               .insert_en(qlp_buf.c0Tx.rdValid),
                .remove_idx(rd_filter_remove_idx),
                .remove_en(rd_filter_remove_en));
 
@@ -245,7 +245,7 @@ module cci_mpf_shim_write_order
                .test_notPresent_reg(wr_filter_test_notPresent),
                .insert_idx(wr_filter_insert_idx),
                .insert_value(wr_filter_insert_hash),
-               .insert_en(qlp_buf.C1TxWrValid),
+               .insert_en(qlp_buf.c1Tx.wrValid),
                .remove_idx(wr_filter_remove_idx),
                .remove_en(wr_filter_remove_en));
 
@@ -295,7 +295,7 @@ module cci_mpf_shim_write_order
         )
       c0_heap(.clk,
               .reset_n,
-              .enq(qlp_buf.C0TxRdValid),
+              .enq(qlp_buf.c0Tx.rdValid),
               .enqData(c0_heap_enqData),
               .notFull(c0_heap_notFull),
               .allocIdx(c0_heap_allocIdx),
@@ -338,7 +338,7 @@ module cci_mpf_shim_write_order
         )
       c1_heap(.clk,
               .reset_n,
-              .enq(qlp_buf.C1TxWrValid),
+              .enq(qlp_buf.c1Tx.wrValid),
               .enqData(c1_heap_enqData),
               .notFull(c1_heap_notFull),
               .allocIdx(c1_heap_allocIdx),
@@ -372,17 +372,11 @@ module cci_mpf_shim_write_order
     //
     typedef struct packed
     {
-        t_cci_mpf_ReqMemHdr          C0TxHdr;
-        logic                        C0TxRdValid;
+        t_if_cci_mpf_c0_Tx c0Tx;
+        t_HASH             c0AddrHash;
 
-        t_HASH                       C0AddrHash;
-
-        t_cci_mpf_ReqMemHdr          C1TxHdr;
-        t_cci_cldata                 C1TxData;
-        logic                        C1TxWrValid;
-        logic                        C1TxIrValid;
-
-        t_HASH                       C1AddrHash;
+        t_if_cci_mpf_c1_Tx c1Tx;
+        t_HASH             c1AddrHash;
     }
     t_REQUEST_PIPE;
 
@@ -397,16 +391,16 @@ module cci_mpf_shim_write_order
 
     // Is either AFU making a request?
     logic c0_request_rdy;
-    assign c0_request_rdy = afu_pipe[1].C0TxRdValid;
+    assign c0_request_rdy = cci_c0TxIsValidMPF(afu_pipe[1].c0Tx);
 
     logic c1_request_rdy;
-    assign c1_request_rdy = afu_pipe[1].C1TxWrValid || afu_pipe[1].C1TxIrValid;
+    assign c1_request_rdy = cci_c1TxIsValidMPF(afu_pipe[1].c1Tx);
 
     // Does the request want order to be enforced?
     logic c0_enforce_order;
-    assign c0_enforce_order = getReqCheckOrderMPF(afu_pipe[1].C0TxHdr);
+    assign c0_enforce_order = getReqCheckOrderMPF(afu_pipe[1].c0Tx.hdr);
     logic c1_enforce_order;
-    assign c1_enforce_order = getReqCheckOrderMPF(afu_pipe[1].C1TxHdr);
+    assign c1_enforce_order = getReqCheckOrderMPF(afu_pipe[1].c1Tx.hdr);
 
     // Was the request pipeline stalled last cycle?  If yes then the
     // filter is a function of the request at the end of the afu_pipe.
@@ -458,9 +452,9 @@ module cci_mpf_shim_write_order
 
     // Set the hashed value to insert in the filter when requests are
     // processed.
-    assign rd_filter_insert_hash = afu_pipe[1].C0AddrHash;
+    assign rd_filter_insert_hash = afu_pipe[1].c0AddrHash;
     assign rd_filter_insert_idx = c0_heap_allocIdx;
-    assign wr_filter_insert_hash = afu_pipe[1].C1AddrHash;
+    assign wr_filter_insert_hash = afu_pipe[1].c1AddrHash;
     assign wr_filter_insert_idx = c1_heap_allocIdx;
 
     //
@@ -476,14 +470,13 @@ module cci_mpf_shim_write_order
     // Is the incoming pipeline moving?
     assign afu_deq = advance_pipeline &&
                      ! addr_conflict_incoming &&
-                     (afu_buf.C0TxRdValid ||
-                      afu_buf.C1TxWrValid ||
-                      afu_buf.C1TxIrValid);
+                     (cci_c0TxIsValidMPF(afu_buf.c0Tx) ||
+                      cci_c1TxIsValidMPF(afu_buf.c1Tx));
 
     // Does an incoming request have read and write to the same address?
     // Special case: delay the write.
     logic handled_addr_conflict;
-    assign addr_conflict_incoming = afu_buf.C0TxRdValid && afu_buf.C1TxWrValid &&
+    assign addr_conflict_incoming = afu_buf.c0Tx.rdValid && afu_buf.c1Tx.wrValid &&
                                     (c0_req_addr == c1_req_addr) &&
                                     ! handled_addr_conflict;
 
@@ -497,9 +490,8 @@ module cci_mpf_shim_write_order
         begin
             for (int i = 0; i < 2; i = i + 1)
             begin
-                afu_pipe[i].C0TxRdValid <= 0;
-                afu_pipe[i].C1TxWrValid <= 0;
-                afu_pipe[i].C1TxIrValid <= 0;
+                afu_pipe[i].c0Tx <= cci_c0TxClearValidsMPF();
+                afu_pipe[i].c1Tx <= cci_c1TxClearValidsMPF();
             end
 
             handled_addr_conflict <= 0;
@@ -527,23 +519,23 @@ module cci_mpf_shim_write_order
                 // Pipeline restarted after a bubble. Drop the request
                 // that left the pipeline but don't advance yet so the
                 // filter pipeline can catch up.
-                afu_pipe[1].C0TxRdValid <= 0;
-                afu_pipe[1].C1TxWrValid <= 0;
-                afu_pipe[1].C1TxIrValid <= 0;
+                afu_pipe[1].c0Tx <= cci_c0TxClearValidsMPF();
+                afu_pipe[1].c1Tx <= cci_c1TxClearValidsMPF();
             end
         end
     end
 
-    assign afu_pipe_init.C0TxHdr = afu_buf.C0TxHdr;
-    assign afu_pipe_init.C0TxRdValid = afu_buf.C0TxRdValid & ! handled_addr_conflict;
-    assign afu_pipe_init.C0AddrHash = c0_hash_calc;
-    assign afu_pipe_init.C1TxHdr = afu_buf.C1TxHdr;
-    assign afu_pipe_init.C1TxData = afu_buf.C1TxData;
-    // Process write later if it conflicts with the read.
-    assign afu_pipe_init.C1TxWrValid = afu_buf.C1TxWrValid & ! addr_conflict_incoming;
-    assign afu_pipe_init.C1TxIrValid = afu_buf.C1TxIrValid;
-    assign afu_pipe_init.C1AddrHash = c1_hash_calc;
+    always_comb
+    begin
+        afu_pipe_init.c0Tx = afu_buf.c0Tx;
+        afu_pipe_init.c0Tx.rdValid = afu_buf.c0Tx.rdValid & ! handled_addr_conflict;
+        afu_pipe_init.c0AddrHash = c0_hash_calc;
 
+        afu_pipe_init.c1Tx = afu_buf.c1Tx;
+        // Process write later if it conflicts with the read.
+        afu_pipe_init.c1Tx.wrValid = afu_buf.c1Tx.wrValid & ! addr_conflict_incoming;
+        afu_pipe_init.c1AddrHash = c1_hash_calc;
+    end
 
     //
     // Calculate whether the entries in the afu_pipe can be swapped when
@@ -552,12 +544,12 @@ module cci_mpf_shim_write_order
     logic can_swap_oldest;
     assign can_swap_oldest =
         // Write can't conflict with read or write of slot 0
-        (! afu_pipe[1].C1TxWrValid ||
-         ((! afu_pipe[0].C1TxWrValid || (afu_pipe[1].C1AddrHash != afu_pipe[0].C1AddrHash)) &&
-          (! afu_pipe[0].C0TxRdValid || (afu_pipe[1].C1AddrHash != afu_pipe[0].C0AddrHash))))
+        (! afu_pipe[1].c1Tx.wrValid ||
+         ((! afu_pipe[0].c1Tx.wrValid || (afu_pipe[1].c1AddrHash != afu_pipe[0].c1AddrHash)) &&
+          (! afu_pipe[0].c0Tx.rdValid || (afu_pipe[1].c1AddrHash != afu_pipe[0].c0AddrHash))))
         // Write in slot 0 can't conflict with read in slot 1
-        && (! afu_pipe[0].C1TxWrValid || ! afu_pipe[1].C0TxRdValid ||
-            (afu_pipe[1].C0AddrHash != afu_pipe[0].C1AddrHash));
+        && (! afu_pipe[0].c1Tx.wrValid || ! afu_pipe[1].c0Tx.rdValid ||
+            (afu_pipe[1].c0AddrHash != afu_pipe[0].c1AddrHash));
 
     //
     // Update the addresses being tested in the filter.  The test value
@@ -587,32 +579,32 @@ module cci_mpf_shim_write_order
             begin
                 // The pipeline advanced beyond the current test.  Restore
                 // the test of the blocked request.
-                filter_test_req[0] <= afu_pipe[1].C0AddrHash;
-                filter_test_req[1] <= afu_pipe[1].C1AddrHash;
+                filter_test_req[0] <= afu_pipe[1].c0AddrHash;
+                filter_test_req[1] <= afu_pipe[1].c1AddrHash;
 
-                filter_test_req_en[0] <= afu_pipe[1].C0TxRdValid;
-                filter_test_req_en[1] <= afu_pipe[1].C1TxWrValid;
+                filter_test_req_en[0] <= afu_pipe[1].c0Tx.rdValid;
+                filter_test_req_en[1] <= afu_pipe[1].c1Tx.wrValid;
             end
             else if (was_blocked)
             begin
                 // The pipeline was blocked by the filter in the previous
                 // cycle.  Now that the flow is resuming test the next
                 // value, already stored in the first stage of the pipeline.
-                filter_test_req[0] <= afu_pipe[0].C0AddrHash;
-                filter_test_req[1] <= afu_pipe[0].C1AddrHash;
+                filter_test_req[0] <= afu_pipe[0].c0AddrHash;
+                filter_test_req[1] <= afu_pipe[0].c1AddrHash;
 
-                filter_test_req_en[0] <= afu_pipe[0].C0TxRdValid;
-                filter_test_req_en[1] <= afu_pipe[0].C1TxWrValid;
+                filter_test_req_en[0] <= afu_pipe[0].c0Tx.rdValid;
+                filter_test_req_en[1] <= afu_pipe[0].c1Tx.wrValid;
             end
             else if (swap_entries)
             begin
                 // The oldest entry is moving to the position of the newest.
                 // Put its filtering request back in the pipeline.
-                filter_test_req[0] <= afu_pipe[1].C0AddrHash;
-                filter_test_req[1] <= afu_pipe[1].C1AddrHash;
+                filter_test_req[0] <= afu_pipe[1].c0AddrHash;
+                filter_test_req[1] <= afu_pipe[1].c1AddrHash;
 
-                filter_test_req_en[0] <= afu_pipe[1].C0TxRdValid;
-                filter_test_req_en[1] <= afu_pipe[1].C1TxWrValid;
+                filter_test_req_en[0] <= afu_pipe[1].c0Tx.rdValid;
+                filter_test_req_en[1] <= afu_pipe[1].c1Tx.wrValid;
             end
             else
             begin
@@ -621,8 +613,8 @@ module cci_mpf_shim_write_order
                 filter_test_req[0] <= c0_hash_calc;
                 filter_test_req[1] <= c1_hash_calc;
 
-                filter_test_req_en[0] <= afu_buf.C0TxRdValid & ! handled_addr_conflict;
-                filter_test_req_en[1] <= afu_buf.C1TxWrValid & ! addr_conflict_incoming;
+                filter_test_req_en[0] <= afu_buf.c0Tx.rdValid & ! handled_addr_conflict;
+                filter_test_req_en[1] <= afu_buf.c1Tx.wrValid & ! addr_conflict_incoming;
             end
 
             // Remember whether pipeline was blocked and whether a pipeline
@@ -636,10 +628,10 @@ module cci_mpf_shim_write_order
             //
             if (process_requests)
             begin
-                assert ((filter_verify_req[0] == afu_pipe[1].C0AddrHash) &&
-                        (filter_verify_req[1] == afu_pipe[1].C1AddrHash) &&
-                        (filter_verify_req_en[0] == afu_pipe[1].C0TxRdValid) &&
-                        (filter_verify_req_en[1] == afu_pipe[1].C1TxWrValid)) else
+                assert ((filter_verify_req[0] == afu_pipe[1].c0AddrHash) &&
+                        (filter_verify_req[1] == afu_pipe[1].c1AddrHash) &&
+                        (filter_verify_req_en[0] == afu_pipe[1].c0Tx.rdValid) &&
+                        (filter_verify_req_en[1] == afu_pipe[1].c1Tx.wrValid)) else
                     $fatal("cci_mpf_shim_write_order: Incorrect pipeline control");
             end
         end
@@ -655,12 +647,15 @@ module cci_mpf_shim_write_order
     // Forward requests toward the QLP.  Replace part of the Mdata entry
     // with the scoreboard index.  The original Mdata is saved in the
     // heap and restored when the response is returned.
-    assign qlp_buf.C0TxHdr = { afu_pipe[1].C0TxHdr[CCI_MPF_TX_MEMHDR_WIDTH-1 : $bits(t_C0_REQ_IDX)],
-                               c0_heap_allocIdx };
-    assign qlp_buf.C0TxRdValid = process_requests && c0_request_rdy;
+    always_comb
+    begin
+        qlp_buf.c0Tx = afu_pipe[1].c0Tx;
+        qlp_buf.c0Tx.hdr.base.mdata[$bits(c0_heap_allocIdx)-1 : 0] = c0_heap_allocIdx;
+        qlp_buf.c0Tx.rdValid = process_requests && c0_request_rdy;
+    end
 
     // Save state that will be used when the response is returned.
-    assign c0_heap_enqData.mdata = t_C0_REQ_IDX'(afu_pipe[1].C0TxHdr);
+    assign c0_heap_enqData.mdata = t_C0_REQ_IDX'(afu_pipe[1].c0Tx.hdr.base.mdata);
 
     // Request heap read as qlp responses arrive.  The heap's value will be
     // available the cycle qlp_buf is read.
@@ -696,17 +691,21 @@ module cci_mpf_shim_write_order
 
     // If request is a write update the Mdata with the index of the hash
     // details.
-    assign qlp_buf.C1TxHdr =
-        afu_pipe[1].C1TxWrValid ?
-            { afu_pipe[1].C1TxHdr[CCI_MPF_TX_MEMHDR_WIDTH-1 : $bits(t_C1_REQ_IDX)], c1_heap_allocIdx } :
-              afu_pipe[1].C1TxHdr;
+    always_comb
+    begin
+        qlp_buf.c1Tx = afu_pipe[1].c1Tx;
 
-    assign qlp_buf.C1TxData = afu_pipe[1].C1TxData;
-    assign qlp_buf.C1TxWrValid = afu_pipe[1].C1TxWrValid && process_requests;
-    assign qlp_buf.C1TxIrValid = afu_pipe[1].C1TxIrValid && process_requests;
+        if (afu_pipe[1].c1Tx.wrValid)
+        begin
+            qlp_buf.c1Tx.hdr.base.mdata[$bits(c1_heap_allocIdx)-1 : 0] = c1_heap_allocIdx;
+        end
+
+        qlp_buf.c1Tx.wrValid = afu_pipe[1].c1Tx.wrValid && process_requests;
+        qlp_buf.c1Tx.intrValid = afu_pipe[1].c1Tx.intrValid && process_requests;
+    end
 
     // Save state that will be used when the response is returned.
-    assign c1_heap_enqData.mdata = t_C1_REQ_IDX'(afu_pipe[1].C1TxHdr);
+    assign c1_heap_enqData.mdata = t_C1_REQ_IDX'(afu_pipe[1].c1Tx.hdr.base.mdata);
 
     // Request heap read as qlp responses arrive. The heap's value will be
     // available the cycle qlp_buf is read. Responses may arrive on either
@@ -760,18 +759,18 @@ module cci_mpf_shim_write_order
                 $display("C1 blocked %d", c1_heap_allocIdx);
             end
 
-            if (qlp_buf.C0TxRdValid)
+            if (qlp_buf.c0Tx.rdValid)
             begin
                 $display("XX A 0 %d %x %d",
                          c0_heap_allocIdx,
-                         getReqAddrMPF(qlp_buf.C0TxHdr),
+                         getReqAddrMPF(qlp_buf.c0Tx.hdr),
                          cycle);
             end
-            if (qlp_buf.C1TxWrValid)
+            if (qlp_buf.c1Tx.wrValid)
             begin
                 $display("XX A 1 %d %x %d",
                          c1_heap_allocIdx,
-                         getReqAddrMPF(qlp_buf.C1TxHdr),
+                         getReqAddrMPF(qlp_buf.c1Tx.hdr),
                          cycle);
             end
 

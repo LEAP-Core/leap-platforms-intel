@@ -138,11 +138,8 @@ module cci_mpf_shim_mux
             //
             // Are there incoming requests?
             //
-
-            assign c0_request[p] = afu_buf[p].C0TxRdValid;
-
-            assign c1_request[p] = (afu_buf[p].C1TxWrValid ||
-                                    afu_buf[p].C1TxIrValid);
+            assign c0_request[p] = cci_c0TxIsValidMPF(afu_buf[p].c0Tx);
+            assign c1_request[p] = cci_c1TxIsValidMPF(afu_buf[p].c1Tx);
         end
     endgenerate
 
@@ -201,69 +198,49 @@ module cci_mpf_shim_mux
             $fatal("cci_mpf_shim_mux.sv: Illegal RESERVED_MDATA_IDX value: %d", RESERVED_MDATA_IDX);
     end
 
-    //
-    // tagRequest --
-    //   Update a request's Mdata field with the index of the AFU from which
-    //   the request came.
-    //
-    function automatic t_cci_ReqMemHdr tagRequest;
-        input t_cci_ReqMemHdr header;
-        input afu_idx;
-
-        tagRequest = header;
-        tagRequest.mdata[RESERVED_MDATA_IDX] = afu_idx;
-    endfunction
-
     always_comb
     begin
         if (qlp.c0TxAlmFull || ! (|c0_request))
         begin
             // No request
-            qlp.C0TxHdr = 'x;
-            qlp.C0TxRdValid = 1'b0;
+            qlp.c0Tx = cci_c0TxClearValidsMPF();
             check_hdr0 = 'x;
         end
         else if (c0_winner_idx == 0)
         begin
             // Mux port 0 wins
-            qlp.C0TxHdr = tagRequest(afu_buf[0].C0TxHdr, 0);
-            qlp.C0TxRdValid = afu_buf[0].C0TxRdValid;
-            check_hdr0 = afu_buf[0].C0TxHdr[RESERVED_MDATA_IDX];
+            qlp.c0Tx = afu_buf[0].c0Tx;
+            // Tag mdata with winning port for response routing
+            qlp.c0Tx.hdr.base.mdata[RESERVED_MDATA_IDX] = 0;
+            check_hdr0 = afu_buf[0].c0Tx.hdr.base.mdata[RESERVED_MDATA_IDX];
         end
         else
         begin
             // Mux port 1 wins
-            qlp.C0TxHdr = tagRequest(afu_buf[1].C0TxHdr, 1);
-            qlp.C0TxRdValid = afu_buf[1].C0TxRdValid;
-            check_hdr0 = afu_buf[1].C0TxHdr[RESERVED_MDATA_IDX];
+            qlp.c0Tx = afu_buf[1].c0Tx;
+            qlp.c0Tx.hdr.base.mdata[RESERVED_MDATA_IDX] = 1;
+            check_hdr0 = afu_buf[1].c0Tx.hdr.base.mdata[RESERVED_MDATA_IDX];
         end
 
         if (qlp.c1TxAlmFull || ! (|c1_request))
         begin
             // No request
-            qlp.C1TxHdr = 'x;
-            qlp.C1TxData = 'x;
-            qlp.C1TxWrValid = 1'b0;
-            qlp.C1TxIrValid = 1'b0;
+            qlp.c1Tx = cci_c1TxClearValidsMPF();
             check_hdr1 = 'x;
         end
         else if (c1_winner_idx == 0)
         begin
             // Mux port 0 wins
-            qlp.C1TxHdr = tagRequest(afu_buf[0].C1TxHdr, 0);
-            qlp.C1TxData = afu_buf[0].C1TxData;
-            qlp.C1TxWrValid = afu_buf[0].C1TxWrValid;
-            qlp.C1TxIrValid = afu_buf[0].C1TxIrValid;
-            check_hdr1 = afu_buf[0].C1TxHdr[RESERVED_MDATA_IDX];
+            qlp.c1Tx = afu_buf[0].c1Tx;
+            qlp.c1Tx.hdr.base.mdata[RESERVED_MDATA_IDX] = 0;
+            check_hdr1 = afu_buf[0].c1Tx.hdr.base.mdata[RESERVED_MDATA_IDX];
         end
         else
         begin
             // Mux port 1 wins
-            qlp.C1TxHdr = tagRequest(afu_buf[1].C1TxHdr, 1);
-            qlp.C1TxData = afu_buf[1].C1TxData;
-            qlp.C1TxWrValid = afu_buf[1].C1TxWrValid;
-            qlp.C1TxIrValid = afu_buf[1].C1TxIrValid;
-            check_hdr1 = afu_buf[1].C1TxHdr[RESERVED_MDATA_IDX];
+            qlp.c1Tx = afu_buf[1].c1Tx;
+            qlp.c1Tx.hdr.base.mdata[RESERVED_MDATA_IDX] = 1;
+            check_hdr1 = afu_buf[1].c1Tx.hdr.base.mdata[RESERVED_MDATA_IDX];
         end
     end
 

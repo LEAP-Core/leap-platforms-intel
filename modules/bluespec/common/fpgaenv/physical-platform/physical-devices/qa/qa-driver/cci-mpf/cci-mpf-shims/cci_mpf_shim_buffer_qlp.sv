@@ -76,14 +76,10 @@ module cci_mpf_shim_buffer_qlp
         begin
             always_comb
             begin
-                qlp_raw.C0TxHdr = qlp_buf.C0TxHdr;
-                qlp_raw.C0TxRdValid = qlp_buf.C0TxRdValid;
+                qlp_raw.c0Tx = qlp_buf.c0Tx;
                 qlp_buf.c0TxAlmFull = qlp_raw.c0TxAlmFull;
 
-                qlp_raw.C1TxHdr = qlp_buf.C1TxHdr;
-                qlp_raw.C1TxData = qlp_buf.C1TxData;
-                qlp_raw.C1TxWrValid = qlp_buf.C1TxWrValid;
-                qlp_raw.C1TxIrValid = qlp_buf.C1TxIrValid;
+                qlp_raw.c1Tx = qlp_buf.c1Tx;
                 qlp_buf.c1TxAlmFull = qlp_raw.c1TxAlmFull;
             end
         end
@@ -91,14 +87,10 @@ module cci_mpf_shim_buffer_qlp
         begin
             always_ff @(posedge clk)
             begin
-                qlp_raw.C0TxHdr <= qlp_buf.C0TxHdr;
-                qlp_raw.C0TxRdValid <= qlp_buf.C0TxRdValid;
+                qlp_raw.c0Tx <= qlp_buf.c0Tx;
                 qlp_buf.c0TxAlmFull <= qlp_raw.c0TxAlmFull;
 
-                qlp_raw.C1TxHdr <= qlp_buf.C1TxHdr;
-                qlp_raw.C1TxData <= qlp_buf.C1TxData;
-                qlp_raw.C1TxWrValid <= qlp_buf.C1TxWrValid;
-                qlp_raw.C1TxIrValid <= qlp_buf.C1TxIrValid;
+                qlp_raw.c1Tx <= qlp_buf.c1Tx;
                 qlp_buf.c1TxAlmFull <= qlp_raw.c1TxAlmFull;
             end
         end

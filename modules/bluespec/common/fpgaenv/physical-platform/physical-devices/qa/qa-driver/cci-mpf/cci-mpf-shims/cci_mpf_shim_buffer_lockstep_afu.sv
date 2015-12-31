@@ -73,17 +73,8 @@ module cci_mpf_shim_buffer_lockstep_afu
     // Rx wires pass through toward the AFU.  They are latency sensitive
     // since the CCI provides no back pressure.
     //
-    assign afu_raw.C0RxHdr = afu_buf.C0RxHdr;
-    assign afu_raw.C0RxData = afu_buf.C0RxData;
-    assign afu_raw.C0RxWrValid = afu_buf.C0RxWrValid;
-    assign afu_raw.C0RxRdValid = afu_buf.C0RxRdValid;
-    assign afu_raw.C0RxCgValid = afu_buf.C0RxCgValid;
-    assign afu_raw.C0RxUgValid = afu_buf.C0RxUgValid;
-    assign afu_raw.C0RxIrValid = afu_buf.C0RxIrValid;
-
-    assign afu_raw.C1RxHdr = afu_buf.C1RxHdr;
-    assign afu_raw.C1RxWrValid = afu_buf.C1RxWrValid;
-    assign afu_raw.C1RxIrValid = afu_buf.C1RxIrValid;
+    assign afu_raw.c0Rx = afu_buf.c0Rx;
+    assign afu_raw.c1Rx = afu_buf.c1Rx;
 
 
     // ====================================================================
@@ -98,8 +89,8 @@ module cci_mpf_shim_buffer_lockstep_afu
     //
     // ====================================================================
 
-    localparam C0TX_BITS = CCI_TX_HDR_WIDTH + 1;
-    localparam C1TX_BITS = CCI_TX_HDR_WIDTH + CCI_DATA_WIDTH + 2;
+    localparam C0TX_BITS = CCI_MPF_TX_MEMHDR_WIDTH + 1;
+    localparam C1TX_BITS = CCI_MPF_TX_MEMHDR_WIDTH + CCI_DATA_WIDTH + 2;
     localparam TX_BITS = C0TX_BITS + C1TX_BITS;
 
     // Request payload exists when one of the valid bits is set.
@@ -132,8 +123,8 @@ module cci_mpf_shim_buffer_lockstep_afu
     assign afu_buf.C1TxIrValid = c1_IrValid && notEmpty;
 
     logic almostFull;
-    assign afu_raw.C0TxAlmFull = almostFull;
-    assign afu_raw.C1TxAlmFull = almostFull;
+    assign afu_raw.c0TxAlmFull = almostFull;
+    assign afu_raw.c1TxAlmFull = almostFull;
 
 
     cci_mpf_prim_fifo_lutram

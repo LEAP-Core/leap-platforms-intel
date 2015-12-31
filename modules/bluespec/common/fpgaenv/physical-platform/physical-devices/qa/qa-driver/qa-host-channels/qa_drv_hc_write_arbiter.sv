@@ -32,7 +32,7 @@
 `include "qa_drv_hc.vh"
 
 module qa_drv_hc_write_arbiter
-  (
+   (
     input logic clk,
     input logic reset_n,
 
@@ -43,104 +43,114 @@ module qa_drv_hc_write_arbiter
     input  t_FRAME_ARB            status_mgr_req,
     output t_CHANNEL_GRANT_ARB    write_grant,
    
-    output t_TX_C1                 tx1,
-    input  logic                   tx1_almostfull
+    output t_if_cci_c1_Tx         tx1,
+    input  logic                  tx1_almostfull
+    );
 
-   );
+    // The reader gates can issue with csr.afu_en.  The writer can't do this
+    // since the FPGA must write the AFU ID to DSM[0].
+    logic can_issue;
 
+    t_cci_ReqMemHdr header;
+    t_cci_cldata data;   
+    logic wrvalid;
+    
+    typedef enum logic {FAVOR_FRAME_READER, FAVOR_FRAME_WRITER} state_t;
+    
+    state_t state;
+    state_t next_state;
 
-   // The reader gates can issue with csr.afu_en.  The writer can't do this
-   // since the FPGA must write the AFU ID to DSM[0].
-   logic         can_issue;
+    // Issue control FSM
+    qa_drv_hc_can_issue issue_control
+       (
+        .clk(clk),
+        .reset_n(reset_n),
+        .almostfull(tx1_almostfull),
+        .can_issue(can_issue),
+        .issue(write_grant.readerGrant | write_grant.writerGrant)
+        );
 
-   t_TX_HEADER   header;
-   logic [511:0] data;   
-   logic         wrvalid;
-      
-   typedef enum logic {FAVOR_FRAME_READER, FAVOR_FRAME_WRITER} state_t;
-   
-   state_t state;
-   state_t next_state;
+    // FSM state
+    always_ff @(posedge clk)
+    begin
+        if (!reset_n)
+        begin
+            state <= FAVOR_FRAME_READER;
+        end
+        else
+        begin
+            state <= next_state;
+        end
+    end
 
-   // Issue control FSM
-   qa_drv_hc_can_issue issue_control
-     (
-      .clk(clk),
-      .reset_n(reset_n),
-      .almostfull(tx1_almostfull),
-      .can_issue(can_issue),
-      .issue(write_grant.readerGrant | write_grant.writerGrant)
-      );
-
-
-   // FSM state
-   always_ff @(posedge clk) begin
-      if (!reset_n) begin
-         state <= FAVOR_FRAME_READER;
-      end else begin
-         state <= next_state;
-      end
-   end
-
-   always_comb begin
-      if(write_grant.writerGrant)
+    always_comb
+    begin
+        if(write_grant.writerGrant)
           next_state = FAVOR_FRAME_WRITER;
-      else
+        else
           next_state = FAVOR_FRAME_READER;
-   end // always_comb begin
+    end
 
 
-   // Set outgoing write control packet.
-   always_comb begin
-      write_grant.canIssue = can_issue;
-      write_grant.readerGrant = 0;
-      write_grant.writerGrant = 0;
-      write_grant.statusGrant = 0;                                           
+    // Set outgoing write control packet.
+    always_comb
+    begin
+        write_grant.canIssue = can_issue;
+        write_grant.readerGrant = 0;
+        write_grant.writerGrant = 0;
+        write_grant.statusGrant = 0;                                           
 
-      header  = status_mgr_req.writeHeader;
-      data    = status_mgr_req.data;
-      
-      if(status_mgr_req.write.request)
+        header  = status_mgr_req.writeHeader;
+        data    = status_mgr_req.data;
+        
+        if (status_mgr_req.write.request)
         begin
             write_grant.statusGrant = can_issue;
         end                                           
-      else if(frame_reader.write.request && (state == FAVOR_FRAME_READER || !frame_writer.write.request))
-         begin
+        else if (frame_reader.write.request &&
+                 (state == FAVOR_FRAME_READER || !frame_writer.write.request))
+        begin
             header  = frame_reader.writeHeader;
             data    = frame_reader.data;
             
             write_grant.readerGrant = can_issue;                                           
-         end
-      else if(frame_writer.write.request)
+        end
+        else if (frame_writer.write.request)
         begin
             header  = frame_writer.writeHeader;
             data    = frame_writer.data;
             write_grant.writerGrant = can_issue;                                           
         end
 
-      wrvalid = (frame_reader.write.request || frame_writer.write.request || status_mgr_req.write.request) && can_issue;   
-   end
+        wrvalid = (frame_reader.write.request || frame_writer.write.request ||
+                   status_mgr_req.write.request) && can_issue;   
+    end
 
-   // Register outgoing control packet.
-   always_ff @(posedge clk) begin      
-      tx1.header      <= header;
-      // Should we be setting this while in reset? Who knows...
-      tx1.wrvalid <= wrvalid;
-      tx1.data    <= data;
-   end
+    // Register outgoing control packet.
+    t_if_cci_c1_Tx tx1_upd;
+    always_ff @(posedge clk)
+    begin
+        tx1 <= tx1_upd;
+    end
 
-   // Some assertions
-   always_comb begin
-      if(write_grant.writerGrant && write_grant.readerGrant && reset_n && ~clk)
+    always_comb
+    begin
+        tx1_upd = cci_c1TxClearValids();
+        tx1_upd.hdr = header;
+        tx1_upd.data = data;
+        tx1_upd.wrValid = wrvalid;
+    end
+
+
+    // Some assertions
+    always_comb
+    begin
+        if (write_grant.writerGrant && write_grant.readerGrant && reset_n && ~clk)
         begin
-           $display("Double grant of reader %d %d.", write_grant.readerGrant, write_grant.writerGrant);        
-           $finish;           
+            $display("Double grant of reader %d %d.", write_grant.readerGrant, write_grant.writerGrant);        
+            $finish;           
         end
-   end
-   
-endmodule // cci_write_arbiter
-
-
-
-
+    end
+    
+endmodule // qa_drv_hc_write_arbiter
 

@@ -126,8 +126,8 @@ module cci_mpf_shim_mux
             // replaced by deq signals and the buffer state.  Set them
             // to 1 to be sure they are ignored.
             //
-            assign afu_buf[p].C0TxAlmFull = 1'b1;
-            assign afu_buf[p].C1TxAlmFull = 1'b1;
+            assign afu_buf[p].c0TxAlmFull = 1'b1;
+            assign afu_buf[p].c1TxAlmFull = 1'b1;
         end
     endgenerate
 
@@ -184,7 +184,7 @@ module cci_mpf_shim_mux
         else
         begin
             // Only update the winner if there was a request.
-            if (|c0_request && ! qlp.C0TxAlmFull)
+            if (|c0_request && ! qlp.c0TxAlmFull)
             begin
                 last_c0_winner_idx <= c0_winner_idx;
 
@@ -192,7 +192,7 @@ module cci_mpf_shim_mux
                     $fatal("cci_mpf_shim_mux.sv: AFU C0 Mdata[%d] must be zero", RESERVED_MDATA_IDX);
             end
 
-            if (|c1_request && ! qlp.C1TxAlmFull)
+            if (|c1_request && ! qlp.c1TxAlmFull)
             begin
                 last_c1_winner_idx <= c1_winner_idx;
 
@@ -230,7 +230,7 @@ module cci_mpf_shim_mux
 
     always_comb
     begin
-        if (qlp.C0TxAlmFull || ! (|c0_request))
+        if (qlp.c0TxAlmFull || ! (|c0_request))
         begin
             // No request
             qlp.C0TxHdr = 'x;
@@ -252,7 +252,7 @@ module cci_mpf_shim_mux
             check_hdr0 = afu_buf[1].C0TxHdr[RESERVED_MDATA_IDX];
         end
 
-        if (qlp.C1TxAlmFull || ! (|c1_request))
+        if (qlp.c1TxAlmFull || ! (|c1_request))
         begin
             // No request
             qlp.C1TxHdr = 'x;
@@ -288,8 +288,8 @@ module cci_mpf_shim_mux
             assign afu_buf[p].reset_n = qlp.reset_n;
 
             // Dequeue if there was a request and the source won arbitration.
-            assign deqC0Tx[p] = c0_request[p] && (c0_winner_idx == p) && ! qlp.C0TxAlmFull;
-            assign deqC1Tx[p] = c1_request[p] && (c1_winner_idx == p) && ! qlp.C1TxAlmFull;
+            assign deqC0Tx[p] = c0_request[p] && (c0_winner_idx == p) && ! qlp.c0TxAlmFull;
+            assign deqC1Tx[p] = c1_request[p] && (c1_winner_idx == p) && ! qlp.c1TxAlmFull;
         end
     endgenerate
 
@@ -320,30 +320,31 @@ module cci_mpf_shim_mux
     // data and header to both unconditionally and use the control bits
     // to control destination.
     logic c0_rsp_idx;
-    assign c0_rsp_idx = qlp.C0RxHdr[RESERVED_MDATA_IDX];
+    assign c0_rsp_idx = qlp.c0Rx.hdr[RESERVED_MDATA_IDX];
     logic c1_rsp_idx;
-    assign c1_rsp_idx = qlp.C1RxHdr[RESERVED_MDATA_IDX];
+    assign c1_rsp_idx = qlp.c1Rx.hdr[RESERVED_MDATA_IDX];
 
     generate
         for (p = 0; p < NUM_AFU_PORTS; p = p + 1)
         begin : respRouting
-            assign afu_buf[p].C0RxHdr = untagRequest(qlp.C0RxHdr,
-                                                     qlp.C0RxWrValid ||
-                                                     qlp.C0RxRdValid);
+            always_comb
+            begin
+                // Generic fields are broadcasts
+                afu_buf[p].c0Rx = qlp.c0Rx;
+                afu_buf[p].c1Rx = qlp.c1Rx;
 
-            assign afu_buf[p].C0RxData = qlp.C0RxData;
-            assign afu_buf[p].C0RxWrValid = qlp.C0RxWrValid && (p[0] == c0_rsp_idx);
-            assign afu_buf[p].C0RxRdValid = qlp.C0RxRdValid && (p[0] == c0_rsp_idx);
-            // Host-generated requests are broadcasts
-            assign afu_buf[p].C0RxCgValid = qlp.C0RxCgValid;
-            assign afu_buf[p].C0RxUgValid = qlp.C0RxUgValid;
-            assign afu_buf[p].C0RxIrValid = qlp.C0RxIrValid;
+                afu_buf[p].c0Rx.hdr = untagRequest(qlp.c0Rx.hdr,
+                                                   qlp.c0Rx.wrValid ||
+                                                   qlp.c0Rx.rdValid);
 
-            assign afu_buf[p].C1RxHdr = untagRequest(qlp.C1RxHdr,
-                                                     qlp.C1RxWrValid);
+                afu_buf[p].c0Rx.wrValid = qlp.c0Rx.wrValid && (p[0] == c0_rsp_idx);
+                afu_buf[p].c0Rx.rdValid = qlp.c0Rx.rdValid && (p[0] == c0_rsp_idx);
 
-            assign afu_buf[p].C1RxWrValid = qlp.C1RxWrValid && (p[0] == c1_rsp_idx);
-            assign afu_buf[p].C1RxIrValid = qlp.C1RxIrValid;
+                afu_buf[p].c1Rx.hdr = untagRequest(qlp.c1Rx.hdr,
+                                                   qlp.c1Rx.wrValid);
+
+                afu_buf[p].c1Rx.wrValid = qlp.c1Rx.wrValid && (p[0] == c1_rsp_idx);
+            end
         end
     endgenerate
 

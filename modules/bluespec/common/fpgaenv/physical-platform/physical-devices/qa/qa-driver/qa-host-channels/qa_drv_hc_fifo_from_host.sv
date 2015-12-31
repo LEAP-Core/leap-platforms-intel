@@ -44,7 +44,7 @@ module qa_drv_hc_fifo_from_host
     input logic clk,
     input logic reset_n,
 
-    input t_RX_C0 rx0,
+    input  t_if_cci_c0_Rx rx0,
 
     input  t_CSR_AFU_STATE     csr,
     output t_FRAME_ARB         frame_reader,
@@ -124,10 +124,10 @@ module qa_drv_hc_fifo_from_host
 
     // Is the incoming read a FIFO read response?
     t_READ_METADATA response_read_metadata;
-    assign response_read_metadata = unpack_read_metadata(rx0.header);
+    assign response_read_metadata = unpack_read_metadata(rx0.hdr);
 
     logic incoming_read_valid;
-    assign incoming_read_valid = rx0.rdvalid &&
+    assign incoming_read_valid = rx0.rdValid &&
                                  response_read_metadata.isRead &&
                                  ! response_read_metadata.isHeader;
 
@@ -192,7 +192,7 @@ module qa_drv_hc_fifo_from_host
     t_CACHE_LINE_ADDR buffer_base_addr;
     assign buffer_base_addr = t_CACHE_LINE_ADDR'(csr.afu_read_frame);
 
-    t_TX_HEADER read_header;
+    t_cci_ReqMemHdr read_header;
     t_READ_METADATA data_read_metadata;
 
     always_comb
@@ -206,7 +206,7 @@ module qa_drv_hc_fifo_from_host
                                     scoreboard_slot_rdy;
 
         read_header = 0;
-        read_header.requestType = RdLine_I;
+        read_header.req_type = eREQ_RDLINE_I;
 
         // Read metadata
         data_read_metadata.reserved = 1'b0;

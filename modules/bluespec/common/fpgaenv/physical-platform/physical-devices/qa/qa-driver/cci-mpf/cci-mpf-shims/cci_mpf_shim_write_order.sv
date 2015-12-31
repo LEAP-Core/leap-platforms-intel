@@ -126,8 +126,8 @@ module cci_mpf_shim_write_order
     // replaced by deq signals and the buffer state.  Set them
     // to 1 to be sure they are ignored.
     //
-    assign afu_buf.C0TxAlmFull = 1'b1;
-    assign afu_buf.C1TxAlmFull = 1'b1;
+    assign afu_buf.c0TxAlmFull = 1'b1;
+    assign afu_buf.c1TxAlmFull = 1'b1;
 
 
     // ====================================================================
@@ -183,10 +183,10 @@ module cci_mpf_shim_write_order
     // as the buffer in order to reduce timing pressure at the point the
     // filter is checked and updated.
     logic [63:0] c0_req_addr;
-    assign c0_req_addr = 64'(getReqAddrCCIE(t_TX_HEADER_CCI_E'(afu_buf.C0TxHdr)));
+    assign c0_req_addr = 64'(getReqVAddrMPF(afu_buf.C0TxHdr));
 
     logic [63:0] c1_req_addr;
-    assign c1_req_addr = 64'(getReqAddrCCIE(t_TX_HEADER_CCI_E'(afu_buf.C1TxHdr)));
+    assign c1_req_addr = 64'(getReqVAddrMPF(afu_buf.C1TxHdr));
 
     assign c0_hash_calc =
         t_HASH'(hash32(c0_req_addr[63:32] ^ c0_req_addr[31:0]));
@@ -401,13 +401,13 @@ module cci_mpf_shim_write_order
     //
     typedef struct packed
     {
-        logic [CCI_TX_HDR_WIDTH-1:0] C0TxHdr;
+        t_cci_mpf_ReqMemHdr          C0TxHdr;
         logic                        C0TxRdValid;
 
         t_HASH                       C0AddrHash;
 
-        logic [CCI_TX_HDR_WIDTH-1:0] C1TxHdr;
-        logic [CCI_DATA_WIDTH-1:0]   C1TxData;
+        t_cci_mpf_ReqMemHdr          C1TxHdr;
+        t_cci_cldata                 C1TxData;
         logic                        C1TxWrValid;
         logic                        C1TxIrValid;
 
@@ -433,11 +433,9 @@ module cci_mpf_shim_write_order
 
     // Does the request want order to be enforced?
     logic c0_enforce_order;
-    assign c0_enforce_order =
-        getReqCheckOrderCCIE(t_TX_HEADER_CCI_E'(afu_pipe[1].C0TxHdr));
+    assign c0_enforce_order = getReqCheckOrderMPF(afu_pipe[1].C0TxHdr);
     logic c1_enforce_order;
-    assign c1_enforce_order =
-        getReqCheckOrderCCIE(t_TX_HEADER_CCI_E'(afu_pipe[1].C1TxHdr));
+    assign c1_enforce_order = getReqCheckOrderMPF(afu_pipe[1].C1TxHdr);
 
     // Was the request pipeline stalled last cycle?  If yes then the
     // filter is a function of the request at the end of the afu_pipe.
@@ -468,13 +466,13 @@ module cci_mpf_shim_write_order
     // conflict?
     logic c0_blocked;
     assign c0_blocked = c0_request_rdy &&
-                        (qlp_buf.C0TxAlmFull ||
+                        (qlp_buf.c0TxAlmFull ||
                          ! c0_heap_notFull ||
                          ! c0_filter_may_insert);
 
     logic c1_blocked;
     assign c1_blocked = c1_request_rdy &&
-                        (qlp_buf.C1TxAlmFull ||
+                        (qlp_buf.c1TxAlmFull ||
                          ! c1_heap_notFull ||
                          ! c1_filter_may_insert);
 
@@ -695,35 +693,26 @@ module cci_mpf_shim_write_order
 
     // Request heap read as qlp responses arrive.  The heap's value will be
     // available the cycle qlp_buf is read.
-    assign c0_heap_readReq = t_C0_REQ_IDX'(qlp.C0RxHdr);
+    assign c0_heap_readReq = t_C0_REQ_IDX'(qlp.c0Rx.hdr);
 
     // Free heap entries as read responses arrive.
-    assign c0_heap_freeIdx = t_C0_REQ_IDX'(qlp.C0RxHdr);
-    assign c0_heap_free = qlp.C0RxRdValid;
-
-    assign afu_buf.C0RxData    = qlp_buf.C0RxData;
-    assign afu_buf.C0RxWrValid = qlp_buf.C0RxWrValid;
-    assign afu_buf.C0RxRdValid = qlp_buf.C0RxRdValid;
-    assign afu_buf.C0RxCgValid = qlp_buf.C0RxCgValid;
-    assign afu_buf.C0RxUgValid = qlp_buf.C0RxUgValid;
-    assign afu_buf.C0RxIrValid = qlp_buf.C0RxIrValid;
+    assign c0_heap_freeIdx = t_C0_REQ_IDX'(qlp.c0Rx.hdr);
+    assign c0_heap_free = qlp.c0Rx.rdValid;
 
     // Either forward the header from the QLP for non-read responses or
     // reconstruct the read response header.
     always_comb
     begin
-        if (qlp_buf.C0RxRdValid)
+        afu_buf.c0Rx = qlp_buf.c0Rx;
+
+        if (qlp_buf.c0Rx.rdValid)
         begin
-            afu_buf.C0RxHdr = { qlp_buf.C0RxHdr[CCI_RX_HDR_WIDTH-1 : $bits(t_C0_REQ_IDX)], c0_heap_readRsp.mdata };
+            afu_buf.c0Rx.hdr = { qlp_buf.c0Rx.hdr[CCI_RX_HDR_WIDTH-1 : $bits(t_C0_REQ_IDX)], c0_heap_readRsp.mdata };
         end
-        else if (qlp_buf.C0RxWrValid)
+        else if (qlp_buf.c0Rx.wrValid)
         begin
             // This is a write response. The request came in on channel 1.
-            afu_buf.C0RxHdr = { qlp_buf.C0RxHdr[CCI_RX_HDR_WIDTH-1 : $bits(t_C1_REQ_IDX)], c1_heap_readRsp[0].mdata };
-        end
-        else
-        begin
-            afu_buf.C0RxHdr = qlp_buf.C0RxHdr;
+            afu_buf.c0Rx.hdr = { qlp_buf.c0Rx.hdr[CCI_RX_HDR_WIDTH-1 : $bits(t_C1_REQ_IDX)], c1_heap_readRsp[0].mdata };
         end
     end
 
@@ -751,30 +740,24 @@ module cci_mpf_shim_write_order
     // Request heap read as qlp responses arrive. The heap's value will be
     // available the cycle qlp_buf is read. Responses may arrive on either
     // channel!
-    assign c1_heap_readReq[0] = t_C1_REQ_IDX'(qlp.C0RxHdr);
-    assign c1_heap_readReq[1] = t_C1_REQ_IDX'(qlp.C1RxHdr);
+    assign c1_heap_readReq[0] = t_C1_REQ_IDX'(qlp.c0Rx.hdr);
+    assign c1_heap_readReq[1] = t_C1_REQ_IDX'(qlp.c1Rx.hdr);
 
     // Free heap entries as read responses arrive.
-    assign c1_heap_freeIdx[0] = t_C1_REQ_IDX'(qlp.C0RxHdr);
-    assign c1_heap_free[0] = qlp.C0RxWrValid;
-    assign c1_heap_freeIdx[1] = t_C1_REQ_IDX'(qlp.C1RxHdr);
-    assign c1_heap_free[1] = qlp.C1RxWrValid;
-
-    // Responses
-    assign afu_buf.C1RxWrValid = qlp_buf.C1RxWrValid;
-    assign afu_buf.C1RxIrValid = qlp_buf.C1RxIrValid;
+    assign c1_heap_freeIdx[0] = t_C1_REQ_IDX'(qlp.c0Rx.hdr);
+    assign c1_heap_free[0] = qlp.c0Rx.wrValid;
+    assign c1_heap_freeIdx[1] = t_C1_REQ_IDX'(qlp.c1Rx.hdr);
+    assign c1_heap_free[1] = qlp.c1Rx.wrValid;
 
     // Either forward the header from the QLP for non-read responses or
     // reconstruct the read response header.
     always_comb
     begin
-        if (qlp_buf.C1RxWrValid)
+        afu_buf.c1Rx = qlp_buf.c1Rx;
+
+        if (qlp_buf.c1Rx.wrValid)
         begin
-            afu_buf.C1RxHdr = { qlp_buf.C1RxHdr[CCI_RX_HDR_WIDTH-1 : $bits(t_C1_REQ_IDX)], c1_heap_readRsp[1].mdata };
-        end
-        else
-        begin
-            afu_buf.C1RxHdr = qlp_buf.C1RxHdr;
+            afu_buf.c1Rx.hdr = { qlp_buf.c1Rx.hdr[CCI_RX_HDR_WIDTH-1 : $bits(t_C1_REQ_IDX)], c1_heap_readRsp[1].mdata };
         end
     end
 
@@ -810,14 +793,14 @@ module cci_mpf_shim_write_order
             begin
                 $display("XX A 0 %d %x %d",
                          c0_heap_allocIdx,
-                         getReqAddrCCIE(t_TX_HEADER_CCI_E'(qlp_buf.C0TxHdr)),
+                         getReqAddrMPF(qlp_buf.C0TxHdr),
                          cycle);
             end
             if (qlp_buf.C1TxWrValid)
             begin
                 $display("XX A 1 %d %x %d",
                          c1_heap_allocIdx,
-                         getReqAddrCCIE(t_TX_HEADER_CCI_E'(qlp_buf.C1TxHdr)),
+                         getReqAddrMPF(qlp_buf.C1TxHdr),
                          cycle);
             end
 

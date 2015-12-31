@@ -42,8 +42,7 @@ package qa_drv_hc_types;
 
     import qa_driver_types::*;
     import qa_driver_csr_types::*;
-
-    typedef t_TX_HEADER_CCI_S t_TX_HEADER;
+    import cci_mpf_if_pkg::*;
 
     //
     // Cache line data types.
@@ -122,44 +121,12 @@ package qa_drv_hc_types;
     typedef struct
     {
         t_CHANNEL_REQ_ARB read;
-        t_TX_HEADER   readHeader;  
+        t_cci_ReqMemHdr   readHeader;  
         t_CHANNEL_REQ_ARB write;
-        t_TX_HEADER   writeHeader;
-        logic [511:0] data;
+        t_cci_ReqMemHdr   writeHeader;
+        t_cci_cldata      data;
     }
     t_FRAME_ARB;
-
-    typedef struct
-    {
-        t_TX_HEADER  header;
-        logic        rdvalid;
-    }
-    t_TX_C0;
-
-    typedef struct
-    {
-        t_TX_HEADER   header;
-        logic [511:0] data;
-        logic         wrvalid;
-    }
-    t_TX_C1;
-
-    typedef struct
-    {
-        logic [17:0]  header;
-        logic [511:0] data;
-        logic         wrvalid;
-        logic         rdvalid;
-        logic         cfgvalid;
-    }
-    t_RX_C0;
-
-    typedef struct
-    {
-        logic [17:0]  header;
-        logic         wrvalid;
-    }
-    t_RX_C1;
 
 
     //

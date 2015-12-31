@@ -146,8 +146,8 @@ module cci_mpf_shim_vtp
     // replaced by deq signals and the buffer state.  Set them
     // to 1 to be sure they are ignored.
     //
-    assign afu_buf.C0TxAlmFull = 1'b1;
-    assign afu_buf.C1TxAlmFull = 1'b1;
+    assign afu_buf.c0TxAlmFull = 1'b1;
+    assign afu_buf.c1TxAlmFull = 1'b1;
 
     //
     // Validate parameter settings and that the Mdata reserved bit is 0
@@ -257,7 +257,7 @@ module cci_mpf_shim_vtp
 
 
     // Base address of the page table
-    t_LINE_ADDR_CCI_S page_table_base;
+    t_cci_cl_paddr page_table_base;
 
     always_ff @(posedge clk)
     begin
@@ -267,15 +267,15 @@ module cci_mpf_shim_vtp
         end
         else
         begin
-            if (qlp.C0RxCgValid &&
-                (csr_addr_matches(qlp.C0RxHdr, CSR_AFU_PAGE_TABLE_BASEL) ||
-                 csr_addr_matches(qlp.C0RxHdr, CSR_AFU_PAGE_TABLE_BASEH)))
+            if (qlp.c0Rx.cfgValid &&
+                (csr_addr_matches(qlp.c0Rx.hdr, CSR_AFU_PAGE_TABLE_BASEL) ||
+                 csr_addr_matches(qlp.c0Rx.hdr, CSR_AFU_PAGE_TABLE_BASEH)))
             begin
                 // Shift address into page_table_base
                 page_table_base <=
-                    t_LINE_ADDR_CCI_S'({ page_table_base, qlp.C0RxData[31:0]});
+                    t_cci_cl_paddr'({ page_table_base, qlp.c0Rx.data[31:0]});
 
-                if (csr_addr_matches(qlp.C0RxHdr, CSR_AFU_PAGE_TABLE_BASEL))
+                if (csr_addr_matches(qlp.c0Rx.hdr, CSR_AFU_PAGE_TABLE_BASEL))
                 begin
                     tlbReadIdxRdy <= 1;
                 end
@@ -304,17 +304,17 @@ module cci_mpf_shim_vtp
     //
     typedef struct packed
     {
-        logic [CCI_AFU_TX_HDR_WIDTH-1:0] C0TxHdr;
-        logic                            C0TxRdValid;
+        t_cci_mpf_ReqMemHdr C0TxHdr;
+        logic               C0TxRdValid;
     }
     t_C0_REQUEST_PIPE;
 
     typedef struct packed
     {
-        logic [CCI_AFU_TX_HDR_WIDTH-1:0] C1TxHdr;
-        logic [CCI_DATA_WIDTH-1:0]       C1TxData;
-        logic                            C1TxWrValid;
-        logic                            C1TxIrValid;
+        t_cci_mpf_ReqMemHdr C1TxHdr;
+        t_cci_cldata        C1TxData;
+        logic               C1TxWrValid;
+        logic               C1TxIrValid;
     }
     t_C1_REQUEST_PIPE;
 
@@ -344,8 +344,8 @@ module cci_mpf_shim_vtp
     logic c0_fwd_req;
     assign c0_fwd_req =
         c0_request_rdy &&
-        (lookupValid[0] || ! getReqAddrIsVirtualCCIE(c0_afu_pipe[AFU_PIPE_LAST_STAGE].C0TxHdr)) &&
-        ! qlp.C0TxAlmFull &&
+        (lookupValid[0] || ! getReqAddrIsVirtualMPF(c0_afu_pipe[AFU_PIPE_LAST_STAGE].C0TxHdr)) &&
+        ! qlp.c0TxAlmFull &&
         ! tlbReadIdxEn;
 
     logic c1_fwd_req;
@@ -353,8 +353,8 @@ module cci_mpf_shim_vtp
         c1_request_rdy &&
         (lookupValid[1] ||
          c1_afu_pipe[AFU_PIPE_LAST_STAGE].C1TxIrValid ||
-         ! getReqAddrIsVirtualCCIE(c1_afu_pipe[AFU_PIPE_LAST_STAGE].C1TxHdr)) &&
-        ! qlp.C1TxAlmFull;
+         ! getReqAddrIsVirtualMPF(c1_afu_pipe[AFU_PIPE_LAST_STAGE].C1TxHdr)) &&
+        ! qlp.c1TxAlmFull;
 
     // Did a request miss in the TLB or fail arbitration?  It will be rotated
     // back to the head of afu_pipe.
@@ -438,18 +438,18 @@ module cci_mpf_shim_vtp
     // skilled if the incoming request already has a physical address.
     //
     assign lookupPageVA[0] =
-        pageFromVA(getReqAddrCCIE(c0_afu_pipe[AFU_PIPE_LAST_STAGE-1].C0TxHdr));
+        pageFromVA(getReqVAddrMPF(c0_afu_pipe[AFU_PIPE_LAST_STAGE-1].C0TxHdr));
     assign lookupEn[0] =
         lookupRdy[0] &&
         c0_afu_pipe[AFU_PIPE_LAST_STAGE-1].C0TxRdValid &&
-        getReqAddrIsVirtualCCIE(c0_afu_pipe[AFU_PIPE_LAST_STAGE-1].C0TxHdr);
+        getReqAddrIsVirtualMPF(c0_afu_pipe[AFU_PIPE_LAST_STAGE-1].C0TxHdr);
 
     assign lookupPageVA[1] =
-        pageFromVA(getReqAddrCCIE(c1_afu_pipe[AFU_PIPE_LAST_STAGE-1].C1TxHdr));
+        pageFromVA(getReqVAddrMPF(c1_afu_pipe[AFU_PIPE_LAST_STAGE-1].C1TxHdr));
     assign lookupEn[1] =
         lookupRdy[1] &&
         c1_afu_pipe[AFU_PIPE_LAST_STAGE-1].C1TxWrValid &&
-        getReqAddrIsVirtualCCIE(c1_afu_pipe[AFU_PIPE_LAST_STAGE-1].C1TxHdr);
+        getReqAddrIsVirtualMPF(c1_afu_pipe[AFU_PIPE_LAST_STAGE-1].C1TxHdr);
 
 
     // ====================================================================
@@ -459,7 +459,7 @@ module cci_mpf_shim_vtp
     // ====================================================================
 
     // Construct the read request header.
-    logic [CCI_QLP_TX_HDR_WIDTH-1 : 0] c0_req_hdr;
+    t_cci_mpf_ReqMemHdr c0_req_hdr;
 
     always_comb
     begin
@@ -471,13 +471,13 @@ module cci_mpf_shim_vtp
             c0_req_hdr = c0_afu_pipe[AFU_PIPE_LAST_STAGE].C0TxHdr;
 
             // Replace the address with the physical address
-            if (getReqAddrIsVirtualCCIE(c0_afu_pipe[AFU_PIPE_LAST_STAGE].C0TxHdr))
+            if (getReqAddrIsVirtualMPF(c0_afu_pipe[AFU_PIPE_LAST_STAGE].C0TxHdr))
             begin
-                c0_req_hdr =
-                    setReqAddrCCIS(c0_req_hdr,
-                                   { lookupRspPagePA[0],
-                                     // Page offset remains the same in VA and PA
-                                     pageOffsetFromVA(getReqAddrCCIS(c0_req_hdr)) });
+                // Page offset remains the same in VA and PA
+                c0_req_hdr.base.address =
+                    { lookupRspPagePA[0],
+                      pageOffsetFromVA(c0_req_hdr.base.address) };
+                c0_req_hdr.ext.addrIsVirtual = 0;
             end
         end
         else
@@ -485,9 +485,11 @@ module cci_mpf_shim_vtp
             //
             // Read for TLB miss.
             //
-            c0_req_hdr = genReqHeaderCCIS(RdLine,
-                                          page_table_base + tlbReadIdx,
-                                          t_MDATA'(0));
+            c0_req_hdr = genReqHeaderMPF(eREQ_RDLINE_S,
+                                         t_cci_cl_vaddr'(page_table_base + tlbReadIdx),
+                                         t_cci_mdata'(0),
+                                         0,
+                                         0);
 
             // Tag the request as a local page table walk
             c0_req_hdr[RESERVED_MDATA_IDX] = 1'b1;
@@ -500,7 +502,7 @@ module cci_mpf_shim_vtp
 
 
     // Channel 1 request logic
-    logic [CCI_QLP_TX_HDR_WIDTH-1 : 0] c1_req_hdr;
+    t_cci_mpf_ReqMemHdr c1_req_hdr;
     t_VA_PAGE_OFFSET c1_req_offset;
 
     always_comb
@@ -508,13 +510,13 @@ module cci_mpf_shim_vtp
         c1_req_hdr = c1_afu_pipe[AFU_PIPE_LAST_STAGE].C1TxHdr;
 
         // Request's line offset within the page.
-        c1_req_offset = pageOffsetFromVA(getReqAddrCCIS(c1_req_hdr));
+        c1_req_offset = pageOffsetFromVA(c1_req_hdr.base.address);
 
         // Replace the address with the physical address
-        if (getReqAddrIsVirtualCCIE(c1_afu_pipe[AFU_PIPE_LAST_STAGE].C1TxHdr))
+        if (getReqAddrIsVirtualMPF(c1_afu_pipe[AFU_PIPE_LAST_STAGE].C1TxHdr))
         begin
-            c1_req_hdr = setReqAddrCCIS(c1_req_hdr,
-                                        { lookupRspPagePA[1], c1_req_offset });
+            c1_req_hdr.base.address = { lookupRspPagePA[1], c1_req_offset };
+            c1_req_hdr.ext.addrIsVirtual = 0;
         end
     end
 
@@ -523,7 +525,7 @@ module cci_mpf_shim_vtp
     assign qlp.C1TxHdr =
         c1_afu_pipe[AFU_PIPE_LAST_STAGE].C1TxWrValid ?
             c1_req_hdr :
-            CCI_QLP_TX_HDR_WIDTH'(c1_afu_pipe[AFU_PIPE_LAST_STAGE].C1TxHdr);
+            c1_afu_pipe[AFU_PIPE_LAST_STAGE].C1TxHdr;
 
     assign qlp.C1TxData = c1_afu_pipe[AFU_PIPE_LAST_STAGE].C1TxData;
     assign qlp.C1TxWrValid = c1_afu_pipe[AFU_PIPE_LAST_STAGE].C1TxWrValid &&
@@ -540,26 +542,23 @@ module cci_mpf_shim_vtp
 
     // Is the read response an internal page table reference?
     logic is_pt_rsp;
-    assign is_pt_rsp = qlp.C0RxHdr[RESERVED_MDATA_IDX];
+    assign is_pt_rsp = qlp.c0Rx.hdr[RESERVED_MDATA_IDX];
 
-    assign afu_buf.C0RxHdr     = qlp.C0RxHdr;
-    assign afu_buf.C0RxData    = qlp.C0RxData;
-    assign afu_buf.C0RxWrValid = qlp.C0RxWrValid;
-    // Only forward client-generated read responses
-    assign afu_buf.C0RxRdValid = qlp.C0RxRdValid && ! is_pt_rsp;
-    assign afu_buf.C0RxCgValid = qlp.C0RxCgValid;
-    assign afu_buf.C0RxUgValid = qlp.C0RxUgValid;
-    assign afu_buf.C0RxIrValid = qlp.C0RxIrValid;
+    always_comb
+    begin
+        afu_buf.c0Rx = qlp.c0Rx;
 
-    // Connect read responses to the TLB management code
-    assign tlbReadData = qlp.C0RxData;
-    assign tlbReadDataEn = qlp.C0RxRdValid && is_pt_rsp;
+        // Only forward client-generated read responses
+        afu_buf.c0Rx.rdValid = qlp.c0Rx.rdValid && ! is_pt_rsp;
 
-    // Channel 1 (write) responses can flow directly from the QLP port since
-    // there is no processing needed here.
-    assign afu_buf.C1RxHdr = CCI_AFU_RX_HDR_WIDTH'(qlp.C1RxHdr);
-    assign afu_buf.C1RxWrValid = qlp.C1RxWrValid;
-    assign afu_buf.C1RxIrValid = qlp.C1RxIrValid;
+        // Connect read responses to the TLB management code
+        tlbReadData = qlp.c0Rx.data;
+        tlbReadDataEn = qlp.c0Rx.rdValid && is_pt_rsp;
+
+        // Channel 1 (write) responses can flow directly from the QLP
+        // port since there is no processing needed here.
+        afu_buf.c1Rx = qlp.c1Rx;
+    end
 
 endmodule // cci_mpf_shim_vtp
 

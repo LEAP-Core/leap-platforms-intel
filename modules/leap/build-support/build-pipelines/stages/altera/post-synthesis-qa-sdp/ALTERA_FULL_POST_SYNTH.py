@@ -51,7 +51,7 @@ class PostSynthesize():
         ##
         cci_type = moduleList.getAWBParamSafe('qa_cci_if', 'CCI_TYPE')
         if (cci_type != None):
-            prjFile.write('set_global_assignment -name VERILOG_MACRO "USE_' + string.replace(cci_type, '-', '_') + '=1"\n')
+            prjFile.write('set_global_assignment -name VERILOG_MACRO "USE_PLATFORM_' + string.replace(cci_type, '-', '_') + '=1"\n')
 
         prjFile.write('source ' + rel_qsf_src_dir + '/ome2_ivt.qsf\n')
         prjFile.write('source ' + rel_qsf_src_dir + '/qsf_env_settings.qsf\n')

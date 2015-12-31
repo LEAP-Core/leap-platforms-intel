@@ -55,13 +55,13 @@ module qa_driver_csr
 
     always_comb
     begin
-        if (qlp.C0RxCgValid)
-            $display("SETTING CONFIG 0x%h 0x%h", {qlp.C0RxHdr[13:0], 2'b0}, qlp.C0RxData[31:0]);
+        if (qlp.c0Rx.cfgValid)
+            $display("SETTING CONFIG 0x%h 0x%h", {qlp.c0Rx.hdr[13:0], 2'b0}, qlp.c0Rx.data[31:0]);
     end
 
     always_ff @(posedge clk) begin
-        if (qlp.C0RxCgValid && csr_addr_matches(qlp.C0RxHdr, CSR_AFU_DSM_BASEL)) begin
-            csr.afu_dsm_base[31:0] <= qlp.C0RxData[31:0];
+        if (qlp.c0Rx.cfgValid && csr_addr_matches(qlp.c0Rx.hdr, CSR_AFU_DSM_BASEL)) begin
+            csr.afu_dsm_base[31:0] <= qlp.c0Rx.data[31:0];
         end
     end
 
@@ -69,20 +69,20 @@ module qa_driver_csr
         if (~qlp.reset_n) begin
             csr.afu_dsm_base_valid <= 0;
         end
-        else if (qlp.C0RxCgValid && csr_addr_matches(qlp.C0RxHdr, CSR_AFU_DSM_BASEL)) begin
+        else if (qlp.c0Rx.cfgValid && csr_addr_matches(qlp.c0Rx.hdr, CSR_AFU_DSM_BASEL)) begin
             csr.afu_dsm_base_valid <= 1;
         end
     end
 
     always_ff @(posedge clk) begin
-        if (qlp.C0RxCgValid && csr_addr_matches(qlp.C0RxHdr, CSR_AFU_DSM_BASEH)) begin
-            csr.afu_dsm_base[63:32] <= qlp.C0RxData[31:0];
+        if (qlp.c0Rx.cfgValid && csr_addr_matches(qlp.c0Rx.hdr, CSR_AFU_DSM_BASEH)) begin
+            csr.afu_dsm_base[63:32] <= qlp.c0Rx.data[31:0];
         end
     end
 
     always_ff @(posedge clk) begin
-        if (qlp.C0RxCgValid && csr_addr_matches(qlp.C0RxHdr, CSR_AFU_CNTXT_BASEL)) begin
-            csr.afu_cntxt_base[31:0] <= qlp.C0RxData[31:0];
+        if (qlp.c0Rx.cfgValid && csr_addr_matches(qlp.c0Rx.hdr, CSR_AFU_CNTXT_BASEL)) begin
+            csr.afu_cntxt_base[31:0] <= qlp.c0Rx.data[31:0];
         end
     end
 
@@ -90,14 +90,14 @@ module qa_driver_csr
         if (~qlp.reset_n) begin
            csr.afu_cntxt_base_valid <= 0;
         end
-        else if (qlp.C0RxCgValid && csr_addr_matches(qlp.C0RxHdr, CSR_AFU_CNTXT_BASEL)) begin
+        else if (qlp.c0Rx.cfgValid && csr_addr_matches(qlp.c0Rx.hdr, CSR_AFU_CNTXT_BASEL)) begin
             csr.afu_cntxt_base_valid <= 1;
         end
     end
 
     always_ff @(posedge clk) begin
-        if (qlp.C0RxCgValid && csr_addr_matches(qlp.C0RxHdr, CSR_AFU_CNTXT_BASEH)) begin
-            csr.afu_cntxt_base[63:32] <= qlp.C0RxData[31:0];
+        if (qlp.c0Rx.cfgValid && csr_addr_matches(qlp.c0Rx.hdr, CSR_AFU_CNTXT_BASEH)) begin
+            csr.afu_cntxt_base[63:32] <= qlp.c0Rx.data[31:0];
         end
     end
 
@@ -106,9 +106,9 @@ module qa_driver_csr
             csr.afu_en <= 0;
             csr.afu_en_user_channel <= 0;
         end
-        else if (qlp.C0RxCgValid && csr_addr_matches(qlp.C0RxHdr, CSR_AFU_EN)) begin
-            csr.afu_en <= qlp.C0RxData[0];
-            csr.afu_en_user_channel <= qlp.C0RxData[1];
+        else if (qlp.c0Rx.cfgValid && csr_addr_matches(qlp.c0Rx.hdr, CSR_AFU_EN)) begin
+            csr.afu_en <= qlp.c0Rx.data[0];
+            csr.afu_en_user_channel <= qlp.c0Rx.data[1];
         end
     end
 
@@ -116,8 +116,8 @@ module qa_driver_csr
         if (~qlp.reset_n) begin
             csr.afu_trigger_debug.idx <= 0;
         end
-        else if (qlp.C0RxCgValid && csr_addr_matches(qlp.C0RxHdr, CSR_AFU_TRIGGER_DEBUG)) begin
-            csr.afu_trigger_debug <= qlp.C0RxData[$bits(t_AFU_DEBUG_REQ)-1 : 0];
+        else if (qlp.c0Rx.cfgValid && csr_addr_matches(qlp.c0Rx.hdr, CSR_AFU_TRIGGER_DEBUG)) begin
+            csr.afu_trigger_debug <= qlp.c0Rx.data[$bits(t_AFU_DEBUG_REQ)-1 : 0];
         end
         else begin
             // Hold request for only one cycle.  Only the idx is cleared.
@@ -131,8 +131,8 @@ module qa_driver_csr
         if (~qlp.reset_n) begin
             csr.afu_enable_test <= 0;
         end
-        else if (qlp.C0RxCgValid && csr_addr_matches(qlp.C0RxHdr, CSR_AFU_ENABLE_TEST)) begin
-            csr.afu_enable_test <= qlp.C0RxData[$bits(t_AFU_ENABLE_TEST)-1 : 0];
+        else if (qlp.c0Rx.cfgValid && csr_addr_matches(qlp.c0Rx.hdr, CSR_AFU_ENABLE_TEST)) begin
+            csr.afu_enable_test <= qlp.c0Rx.data[$bits(t_AFU_ENABLE_TEST)-1 : 0];
         end
         else begin
             // Hold request for only one cycle
@@ -144,9 +144,9 @@ module qa_driver_csr
         if (~qlp.reset_n) begin
             csr.afu_sreg_req.enable <= 0;
         end
-        else if (qlp.C0RxCgValid && csr_addr_matches(qlp.C0RxHdr, CSR_AFU_SREG_READ)) begin
+        else if (qlp.c0Rx.cfgValid && csr_addr_matches(qlp.c0Rx.hdr, CSR_AFU_SREG_READ)) begin
             csr.afu_sreg_req.enable <= 1;
-            csr.afu_sreg_req.addr <= qlp.C0RxData[$bits(t_SREG_ADDR)-1 : 0];
+            csr.afu_sreg_req.addr <= qlp.c0Rx.data[$bits(t_SREG_ADDR)-1 : 0];
         end
         else begin
             // Hold request for only one cycle
@@ -155,27 +155,27 @@ module qa_driver_csr
     end
 
     always_ff @(posedge clk) begin
-        if (qlp.C0RxCgValid && csr_addr_matches(qlp.C0RxHdr, CSR_AFU_READ_FRAME_BASEL)) begin
-            csr.afu_read_frame[31:0] <= qlp.C0RxData[31:0];
+        if (qlp.c0Rx.cfgValid && csr_addr_matches(qlp.c0Rx.hdr, CSR_AFU_READ_FRAME_BASEL)) begin
+            csr.afu_read_frame[31:0] <= qlp.c0Rx.data[31:0];
         end
     end
 
     always_ff @(posedge clk) begin
-        if (qlp.C0RxCgValid && csr_addr_matches(qlp.C0RxHdr, CSR_AFU_READ_FRAME_BASEH)) begin
-           csr.afu_read_frame[63:32] <= qlp.C0RxData[31:0];
+        if (qlp.c0Rx.cfgValid && csr_addr_matches(qlp.c0Rx.hdr, CSR_AFU_READ_FRAME_BASEH)) begin
+           csr.afu_read_frame[63:32] <= qlp.c0Rx.data[31:0];
 
         end
     end
 
     always_ff @(posedge clk) begin
-        if (qlp.C0RxCgValid && csr_addr_matches(qlp.C0RxHdr, CSR_AFU_WRITE_FRAME_BASEL)) begin
-            csr.afu_write_frame[31:0] <= qlp.C0RxData[31:0];
+        if (qlp.c0Rx.cfgValid && csr_addr_matches(qlp.c0Rx.hdr, CSR_AFU_WRITE_FRAME_BASEL)) begin
+            csr.afu_write_frame[31:0] <= qlp.c0Rx.data[31:0];
         end
     end
 
     always_ff @(posedge clk) begin
-        if (qlp.C0RxCgValid && csr_addr_matches(qlp.C0RxHdr, CSR_AFU_WRITE_FRAME_BASEH)) begin
-            csr.afu_write_frame[63:32] <= qlp.C0RxData[31:0];
+        if (qlp.c0Rx.cfgValid && csr_addr_matches(qlp.c0Rx.hdr, CSR_AFU_WRITE_FRAME_BASEH)) begin
+            csr.afu_write_frame[63:32] <= qlp.c0Rx.data[31:0];
         end
     end
 endmodule

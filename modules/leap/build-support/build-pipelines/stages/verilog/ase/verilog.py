@@ -150,7 +150,10 @@ class Verilog():
     ##
     cci_type = moduleList.getAWBParamSafe('qa_cci_if', 'CCI_TYPE')
     if (cci_type != None):
-        vexe_gen_command += ' -Xv +define+USE_' + string.replace(cci_type, '-', '_')
+        vexe_gen_command += ' -Xv +define+USE_PLATFORM_' + string.replace(cci_type, '-', '_')
+
+    ## Enable simulation debugging
+    vexe_gen_command += ' -Xv +define+ENABLE_CCI_MPF_DEBUG'
 
     if (moduleList.getAWBParam('verilog_tool', 'VCS_ENABLE_LINT') != 0):
         vexe_gen_command += ' -Xv +lint=all,noVCDE'
@@ -176,14 +179,14 @@ class Verilog():
     vexe_gen_command += ' -verilog -e qa_sim_top_level ' +\
                         moduleList.env['DEFS']['BDPI_CS']
 
-    vexe_gen_command += ' ' + ' '.join(moduleList.getAllDependencies('VERILOG_PKG'))
+    vexe_gen_command += ' ' + ' '.join(model.sortPkgList(moduleList.getAllDependencies('VERILOG_PKG')))
     vexe_gen_command += ' ' + ' '.join(moduleList.getAllDependencies('VERILOG'))
     vexe_gen_command += ' ' + ' '.join(moduleList.getAllDependencies('VHDL'))
 
     if (model.getBuildPipelineDebug(moduleList) != 0):
         for m in moduleList.getAllDependencies('BA'):
             print 'BA dep: ' + str(m)
-        for m in moduleList.getAllDependencies('VERILOG_PKG'):
+        for m in model.sortPkgList(moduleList.getAllDependencies('VERILOG_PKG')):
             print 'VPKG dep: ' + str(m)
         for m in moduleList.getAllDependencies('VERILOG'):
             print 'VL dep: ' + str(m)

@@ -82,29 +82,29 @@ module cci_mpf_shim_sort_write_rsp
     // Coalesce write responses into vectors directed to the scoreboard
     //
     logic rx_wr_valid[0 : 1];
-    assign rx_wr_valid[0] = qlp.C0RxWrValid;
-    assign rx_wr_valid[1] = qlp.C1RxWrValid;
+    assign rx_wr_valid[0] = qlp.c0Rx.wrValid;
+    assign rx_wr_valid[1] = qlp.c1Rx.wrValid;
 
     t_SCOREBOARD_IDX rx_wr_idx[0 : 1];
-    assign rx_wr_idx[0] = t_SCOREBOARD_IDX'(qlp.C0RxHdr);
-    assign rx_wr_idx[1] = t_SCOREBOARD_IDX'(qlp.C1RxHdr);
+    assign rx_wr_idx[0] = t_SCOREBOARD_IDX'(qlp.c0Rx.hdr);
+    assign rx_wr_idx[1] = t_SCOREBOARD_IDX'(qlp.c1Rx.hdr);
 
     //
     // Sorted write responses
     //
     logic scoreboard_notEmpty[0 : 1];
-    t_MDATA scoreboard_mdata[0 : 1];
+    t_cci_mdata scoreboard_mdata[0 : 1];
 
     logic scoreboard_deq[0 : 1];
-    assign scoreboard_deq[0] = afu.C0RxWrValid;
-    assign scoreboard_deq[1] = afu.C1RxWrValid;
+    assign scoreboard_deq[0] = afu.c0Rx.wrValid;
+    assign scoreboard_deq[1] = afu.c1Rx.wrValid;
 
 
     cci_mpf_prim_scoreboard_dualport
       #(
         .N_ENTRIES(N_SCOREBOARD_ENTRIES),
         .N_DATA_BITS(0),
-        .N_META_BITS($bits(t_MDATA)),
+        .N_META_BITS(CCI_MDATA_WIDTH),
         .MIN_FREE_SLOTS(ALM_FULL_THRESHOLD)
         )
       c1_scoreboard(.clk,
@@ -112,7 +112,7 @@ module cci_mpf_shim_sort_write_rsp
 
                     .enq_en(afu.C1TxWrValid),
                     // Mdata field is in the low bits of the request header
-                    .enqMeta(t_MDATA'(afu.C1TxHdr)),
+                    .enqMeta(t_cci_mdata'(afu.C1TxHdr)),
                     .notFull(c1_scoreboard_notFull),
                     .enqIdx(c1_scoreboard_enqIdx),
 
@@ -139,21 +139,21 @@ module cci_mpf_shim_sort_write_rsp
     // ====================================================================
 
     logic c0_TxAlmFull;
-    assign c0_TxAlmFull = qlp.C0TxAlmFull;
+    assign c0_TxAlmFull = qlp.c0TxAlmFull;
 
     logic c1_TxAlmFull;
-    assign c1_TxAlmFull = qlp.C1TxAlmFull || ! c1_scoreboard_notFull;
+    assign c1_TxAlmFull = qlp.c1TxAlmFull || ! c1_scoreboard_notFull;
 
     generate
         if (SYNC_REQ_CHANNELS == 0)
         begin
-            assign afu.C0TxAlmFull = c0_TxAlmFull;
-            assign afu.C1TxAlmFull = c1_TxAlmFull;
+            assign afu.c0TxAlmFull = c0_TxAlmFull;
+            assign afu.c1TxAlmFull = c1_TxAlmFull;
         end
         else
         begin
-            assign afu.C0TxAlmFull = c0_TxAlmFull || c1_TxAlmFull;
-            assign afu.C1TxAlmFull = c0_TxAlmFull || c1_TxAlmFull;
+            assign afu.c0TxAlmFull = c0_TxAlmFull || c1_TxAlmFull;
+            assign afu.c1TxAlmFull = c0_TxAlmFull || c1_TxAlmFull;
         end
     endgenerate
 
@@ -169,25 +169,23 @@ module cci_mpf_shim_sort_write_rsp
 
     // Most responses are direct from the QLP.  Write responses flow
     // through the scoreboard.
-    assign afu.C0RxHdr =
-        afu.C0RxWrValid ?
-            CCI_RX_HDR_WIDTH'(genRspHeaderCCIE(WrLineRsp, scoreboard_mdata[0])) :
-            qlp.C0RxHdr;
+    always_comb
+    begin
+        afu.c0Rx = qlp.c0Rx;
 
-    assign afu.C0RxData = qlp.C0RxData;
-    assign afu.C0RxRdValid = qlp.C0RxRdValid;
-    assign afu.C0RxCgValid = qlp.C0RxCgValid;
-    assign afu.C0RxUgValid = qlp.C0RxUgValid;
-    assign afu.C0RxIrValid = qlp.C0RxIrValid;
+        // Write responses come from the scoreboard, though other responses
+        // have priority since only the scoreboard is buffered.
+        afu.c0Rx.wrValid = scoreboard_notEmpty[0] &&
+                           ! qlp.c0Rx.rdValid &&
+                           ! qlp.c0Rx.cfgValid &&
+                           ! qlp.c0Rx.umsgValid &&
+                           ! qlp.c0Rx.intrValid;
 
-    // Write responses come from the scoreboard, though other responses
-    // have priority since only the scoreboard is buffered.
-    assign afu.C0RxWrValid = scoreboard_notEmpty[0] &&
-                             ! qlp.C0RxRdValid &&
-                             ! qlp.C0RxCgValid &&
-                             ! qlp.C0RxUgValid &&
-                             ! qlp.C0RxIrValid;
-
+        afu.c0Rx.hdr =
+            afu.c0Rx.wrValid ?
+                genRspHeaderMPF(eRSP_WRLINE, scoreboard_mdata[0]) :
+                qlp.c0Rx.hdr;
+    end
 
     // ====================================================================
     //
@@ -200,8 +198,8 @@ module cci_mpf_shim_sort_write_rsp
     // saved in the scoreboard and restored when the response is returned.
     assign qlp.C1TxHdr =
         afu.C1TxWrValid ?
-            { afu.C1TxHdr[CCI_TX_HDR_WIDTH-1 : $bits(t_MDATA)],
-              t_MDATA'(c1_scoreboard_enqIdx) } :
+            { afu.C1TxHdr[CCI_TX_HDR_WIDTH-1 : CCI_MDATA_WIDTH],
+              t_cci_mdata'(c1_scoreboard_enqIdx) } :
             afu.C1TxHdr;
 
     assign qlp.C1TxData = afu.C1TxData;
@@ -212,17 +210,20 @@ module cci_mpf_shim_sort_write_rsp
     // Responses.  Forward non-write responses directly.  Write responses
     // come from the scoreboard.
     //
-    assign afu.C1RxHdr =
-        afu.C1RxWrValid ?
-            CCI_RX_HDR_WIDTH'(genRspHeaderCCIE(WrLineRsp, scoreboard_mdata[1])) :
-            qlp.C1RxHdr;
+    always_comb
+    begin
+        afu.c1Rx = qlp.c1Rx;
 
-    assign afu.C1RxIrValid = qlp.C1RxIrValid;
+        // Write responses come from the scoreboard, though other responses
+        // have priority since only the scoreboard is buffered.
+        afu.c1Rx.wrValid = scoreboard_notEmpty[1] &&
+                           ! qlp.c1Rx.intrValid;
 
-    // Write responses come from the scoreboard, though other responses
-    // have priority since only the scoreboard is buffered.
-    assign afu.C1RxWrValid = scoreboard_notEmpty[1] &&
-                             ! qlp.C1RxIrValid;
+        afu.c1Rx.hdr =
+            afu.c1Rx.wrValid ?
+                genRspHeaderMPF(eRSP_WRLINE, scoreboard_mdata[1]) :
+                qlp.c1Rx.hdr;
+    end
 
 endmodule // cci_mpf_shim_sort_write_rsp
 

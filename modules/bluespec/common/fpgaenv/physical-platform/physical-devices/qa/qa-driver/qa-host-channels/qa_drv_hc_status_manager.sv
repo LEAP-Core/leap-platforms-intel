@@ -35,7 +35,7 @@ module qa_drv_hc_status_manager
     (input logic clk,
      input logic reset_n,
 
-     input  t_RX_C0              rx0,
+     input  t_if_cci_c0_Rx rx0,
 
      input  t_CSR_AFU_STATE      csr,
      output t_FRAME_ARB          status_mgr_req,
@@ -147,11 +147,11 @@ module qa_drv_hc_status_manager
 
     // Unpack read response metadata
     t_READ_METADATA reader_meta_rsp;
-    assign reader_meta_rsp = unpack_read_metadata(rx0.header);
+    assign reader_meta_rsp = unpack_read_metadata(rx0.hdr);
 
     // Compute when a read response is available
     logic reader_data_rdy;
-    assign reader_data_rdy = rx0.rdvalid &&
+    assign reader_data_rdy = rx0.rdValid &&
                              reader_meta_rsp.isRead &&
                              reader_meta_rsp.isHeader;
 
@@ -203,7 +203,7 @@ module qa_drv_hc_status_manager
         // Poll the DSM line holding the read head pointer and write credits.
         //
         status_mgr_req.readHeader = 0;
-        status_mgr_req.readHeader.requestType = RdLine;
+        status_mgr_req.readHeader.req_type = eREQ_RDLINE_S;
         status_mgr_req.readHeader.address =
             dsm_line_offset_to_addr(DSM_OFFSET_POLL_STATE, csr.afu_dsm_base);
 
@@ -410,7 +410,7 @@ module qa_drv_hc_status_manager
         end
 
         status_mgr_req.writeHeader = 0;
-        status_mgr_req.writeHeader.requestType = WrThru;
+        status_mgr_req.writeHeader.req_type = eREQ_WRLINE_I;
         status_mgr_req.writeHeader.address =
             dsm_line_offset_to_addr(offset, csr.afu_dsm_base);
         status_mgr_req.data = data;

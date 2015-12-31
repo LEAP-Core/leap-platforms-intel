@@ -79,24 +79,15 @@ module cci_mpf_shim_buffer_afu
     // Rx wires pass through toward the AFU.  They are latency sensitive
     // since the CCI provides no back pressure.
     //
-    assign afu_raw.C0RxHdr = afu_buf.C0RxHdr;
-    assign afu_raw.C0RxData = afu_buf.C0RxData;
-    assign afu_raw.C0RxWrValid = afu_buf.C0RxWrValid;
-    assign afu_raw.C0RxRdValid = afu_buf.C0RxRdValid;
-    assign afu_raw.C0RxCgValid = afu_buf.C0RxCgValid;
-    assign afu_raw.C0RxUgValid = afu_buf.C0RxUgValid;
-    assign afu_raw.C0RxIrValid = afu_buf.C0RxIrValid;
-
-    assign afu_raw.C1RxHdr = afu_buf.C1RxHdr;
-    assign afu_raw.C1RxWrValid = afu_buf.C1RxWrValid;
-    assign afu_raw.C1RxIrValid = afu_buf.C1RxIrValid;
+    assign afu_raw.c0Rx = afu_buf.c0Rx;
+    assign afu_raw.c1Rx = afu_buf.c1Rx;
 
 
     // ====================================================================
     //
     // Channel 0 Tx buffer.
     //
-    //   The buffer triggers C0TxAlmFull when there are 4 or fewer slots
+    //   The buffer triggers c0TxAlmFull when there are 4 or fewer slots
     //   available, as required by the CCI specification.  Unlike the
     //   usual CCI request interface, movement through the pipeline is
     //   explicit.  The code that instantiates this buffer must dequeue
@@ -104,9 +95,9 @@ module cci_mpf_shim_buffer_afu
     //
     // ====================================================================
 
-    localparam C0TX_BITS = CCI_TX_HDR_WIDTH;
+    localparam C0TX_BITS = CCI_MPF_TX_MEMHDR_WIDTH;
 
-    logic [CCI_TX_HDR_WIDTH-1 : 0] c0_fifo_first;
+    t_cci_mpf_ReqMemHdr c0_fifo_first;
     logic c0_fifo_notEmpty;
     logic c0_fifo_enq;
     logic c0_fifo_deq;
@@ -128,7 +119,7 @@ module cci_mpf_shim_buffer_afu
             // Bypass FIFO when possible.
             assign afu_buf.C0TxRdValid = c0_fifo_notEmpty || afu_raw.C0TxRdValid;
             assign afu_buf.C0TxHdr =
-                c0_fifo_notEmpty ?  c0_fifo_first : afu_raw.C0TxHdr;
+                c0_fifo_notEmpty ? c0_fifo_first : afu_raw.C0TxHdr;
 
             // Enq to the FIFO if a new request has arrived and it wasn't
             // consumed immediately through afu_buf.
@@ -153,7 +144,7 @@ module cci_mpf_shim_buffer_afu
               // as enq here and notEmpty below.
               .enq_en(c0_fifo_enq),
               .notFull(),
-              .almostFull(afu_raw.C0TxAlmFull),
+              .almostFull(afu_raw.c0TxAlmFull),
 
               .first(c0_fifo_first),
               .deq_en(c0_fifo_deq),
@@ -169,7 +160,7 @@ module cci_mpf_shim_buffer_afu
     //
     // ====================================================================
 
-    localparam C1TX_BITS = CCI_TX_HDR_WIDTH + CCI_DATA_WIDTH + 2;
+    localparam C1TX_BITS = CCI_MPF_TX_MEMHDR_WIDTH + CCI_DATA_WIDTH + 2;
 
     // Request payload exists when one of the valid bits is set.
     logic c1_enq_en;
@@ -202,7 +193,7 @@ module cci_mpf_shim_buffer_afu
                           afu_raw.C1TxIrValid }),
               .enq_en(c1_enq_en),
               .notFull(),
-              .almostFull(afu_raw.C1TxAlmFull),
+              .almostFull(afu_raw.c1TxAlmFull),
 
               .first(c1_first),
               .deq_en(deqC1Tx),

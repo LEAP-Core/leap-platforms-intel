@@ -128,7 +128,6 @@ typedef struct packed {
 
 // Channel 0: Memory Reads, Mmio
 typedef struct packed {
-    logic                txAlmFull;      //  C0 Request Channel Almost Full
     t_ccip_RspMemHdr     hdr;            //  Response/Request Header
     t_ccip_cldata        data;           //  Response Data
     logic                wrValid;        //  Response Wr Valid
@@ -140,7 +139,6 @@ typedef struct packed {
 
 // Channel 1: Memory Writes
 typedef struct packed {
-    logic                txAlmFull;      //  C1 Request Channel Almost Full
     t_ccip_RspMemHdr     hdr;            //  Response Header
     logic                wrValid;        //  Response Wr Valid
     logic                intrValid;      //  Response Interrupt Valid
@@ -148,8 +146,52 @@ typedef struct packed {
 
 // Wrap all channels
 typedef struct packed {
+    logic                c0TxAlmFull;    //  C0 Request Channel Almost Full
+    logic                c1TxAlmFull;    //  C1 Request Channel Almost Full
+
     t_if_ccip_c0_Rx      c0;
     t_if_ccip_c1_Rx      c1;
 } t_if_ccip_Rx;
+
+
+//------------------------------------------------------------------------
+// Functions that operate on CCI structures.
+//------------------------------------------------------------------------
+
+function automatic t_if_ccip_c0_Tx ccip_c0TxClearValids();
+    t_if_ccip_c0_Tx r = 'x;
+    r.rdValid = 0;
+    return r;
+endfunction
+
+function automatic t_if_ccip_c1_Tx ccip_c1TxClearValids();
+    t_if_ccip_c1_Tx r = 'x;
+    r.wrValid = 0;
+    r.intrValid = 0;
+    return r;
+endfunction
+
+function automatic t_if_ccip_c2_Tx ccip_c2TxClearValids();
+    t_if_ccip_c2_Tx r = 'x;
+    r.mmioRdValid = 0;
+    return r;
+endfunction
+
+function automatic t_if_ccip_c0_Rx ccip_c0RxClearValids();
+    t_if_ccip_c0_Rx r = 'x;
+    r.wrValid = 0;
+    r.rdValid = 0;
+    r.umsgValid = 0;
+    r.mmioRdValid = 0;
+    r.mmioWrValid = 0;
+    return r;
+endfunction
+
+function automatic t_if_ccip_c1_Rx ccip_c1RxClearValids();
+    t_if_ccip_c1_Rx r = 'x;
+    r.wrValid = 0;
+    r.intrValid = 0;
+    return r;
+endfunction
 
 endpackage

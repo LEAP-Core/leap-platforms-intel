@@ -41,11 +41,6 @@
 `define CCI_E_RX_HDR_WIDTH 24
 `define CCI_E_TX_HDR_WIDTH 99
 
-
-// Included because VCS fails to detect packages correctly.
-`include "qa_driver_types.sv"
-
-
 import qa_driver_types::*;
 import qa_driver_csr_types::*;
 

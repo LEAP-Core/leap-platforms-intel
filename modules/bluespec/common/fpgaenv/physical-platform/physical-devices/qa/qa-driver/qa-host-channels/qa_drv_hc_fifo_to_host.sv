@@ -42,7 +42,7 @@ module qa_drv_hc_fifo_to_host
     input logic clk,
     input logic reset_n,
 
-    input  t_RX_C0 rx0,
+    input  t_if_cci_c0_Rx rx0,
 
     input  t_CSR_AFU_STATE     csr,
     output t_FRAME_ARB         frame_writer,
@@ -273,12 +273,12 @@ module qa_drv_hc_fifo_to_host
         case (state)
           STATE_EMIT_FENCE:
             begin
-                frame_writer.writeHeader.requestType = WrFence;
+                frame_writer.writeHeader.req_type = eREQ_WRFENCE;
                 frame_writer.writeHeader.address = 0;
             end
           default:
             begin
-                frame_writer.writeHeader.requestType = WrThru;
+                frame_writer.writeHeader.req_type = eREQ_WRLINE_I;
                 frame_writer.writeHeader.address = buffer_base_addr +
                                                    cur_data_idx;
             end

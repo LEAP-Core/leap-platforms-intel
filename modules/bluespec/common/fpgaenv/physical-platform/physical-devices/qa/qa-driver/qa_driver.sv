@@ -206,13 +206,13 @@ module qa_driver
     begin
         ffs_vl61_LP32ui_sy2lp_C0TxHdr <= qlp.C0TxHdr;
         ffs_vl_LP32ui_sy2lp_C0TxRdValid <= qlp.C0TxRdValid;
-        qlp.C0TxAlmFull <= ffs_vl_LP32ui_lp2sy_C0TxAlmFull;
+        qlp.c0TxAlmFull <= ffs_vl_LP32ui_lp2sy_C0TxAlmFull;
 
         ffs_vl61_LP32ui_sy2lp_C1TxHdr <= qlp.C1TxHdr;
         ffs_vl512_LP32ui_sy2lp_C1TxData <= qlp.C1TxData;
         ffs_vl_LP32ui_sy2lp_C1TxWrValid <= qlp.C1TxWrValid;
         ffs_vl_LP32ui_sy2lp_C1TxIrValid <= qlp.C1TxIrValid;
-        qlp.C1TxAlmFull <= ffs_vl_LP32ui_lp2sy_C1TxAlmFull;
+        qlp.c1TxAlmFull <= ffs_vl_LP32ui_lp2sy_C1TxAlmFull;
     end
 
     //
@@ -220,17 +220,17 @@ module qa_driver
     //
     always_ff @(posedge clk)
     begin
-        qlp.C0RxHdr     <= ffs_vl18_LP32ui_lp2sy_C0RxHdr;
-        qlp.C0RxData    <= ffs_vl512_LP32ui_lp2sy_C0RxData;
-        qlp.C0RxWrValid <= ffs_vl_LP32ui_lp2sy_C0RxWrValid;
-        qlp.C0RxRdValid <= ffs_vl_LP32ui_lp2sy_C0RxRdValid;
-        qlp.C0RxCgValid <= ffs_vl_LP32ui_lp2sy_C0RxCgValid;
-        qlp.C0RxUgValid <= ffs_vl_LP32ui_lp2sy_C0RxUgValid;
-        qlp.C0RxIrValid <= ffs_vl_LP32ui_lp2sy_C0RxIrValid;
+        qlp.c0Rx.hdr       <= ffs_vl18_LP32ui_lp2sy_C0RxHdr;
+        qlp.c0Rx.data      <= ffs_vl512_LP32ui_lp2sy_C0RxData;
+        qlp.c0Rx.wrValid   <= ffs_vl_LP32ui_lp2sy_C0RxWrValid;
+        qlp.c0Rx.rdValid   <= ffs_vl_LP32ui_lp2sy_C0RxRdValid;
+        qlp.c0Rx.cfgValid  <= ffs_vl_LP32ui_lp2sy_C0RxCgValid;
+        qlp.c0Rx.umsgValid <= ffs_vl_LP32ui_lp2sy_C0RxUgValid;
+        qlp.c0Rx.intrValid <= ffs_vl_LP32ui_lp2sy_C0RxIrValid;
 
-        qlp.C1RxHdr     <= ffs_vl18_LP32ui_lp2sy_C1RxHdr;
-        qlp.C1RxWrValid <= ffs_vl_LP32ui_lp2sy_C1RxWrValid;
-        qlp.C1RxIrValid <= ffs_vl_LP32ui_lp2sy_C1RxIrValid;
+        qlp.c1Rx.hdr       <= ffs_vl18_LP32ui_lp2sy_C1RxHdr;
+        qlp.c1Rx.wrValid   <= ffs_vl_LP32ui_lp2sy_C1RxWrValid;
+        qlp.c1Rx.intrValid <= ffs_vl_LP32ui_lp2sy_C1RxIrValid;
     end
 
 

@@ -82,13 +82,13 @@ module cci_mpf_shim_buffer_qlp
             begin
                 qlp_raw.C0TxHdr = qlp_buf.C0TxHdr;
                 qlp_raw.C0TxRdValid = qlp_buf.C0TxRdValid;
-                qlp_buf.C0TxAlmFull = qlp_raw.C0TxAlmFull;
+                qlp_buf.c0TxAlmFull = qlp_raw.c0TxAlmFull;
 
                 qlp_raw.C1TxHdr = qlp_buf.C1TxHdr;
                 qlp_raw.C1TxData = qlp_buf.C1TxData;
                 qlp_raw.C1TxWrValid = qlp_buf.C1TxWrValid;
                 qlp_raw.C1TxIrValid = qlp_buf.C1TxIrValid;
-                qlp_buf.C1TxAlmFull = qlp_raw.C1TxAlmFull;
+                qlp_buf.c1TxAlmFull = qlp_raw.c1TxAlmFull;
             end
         end
         else
@@ -97,13 +97,13 @@ module cci_mpf_shim_buffer_qlp
             begin
                 qlp_raw.C0TxHdr <= qlp_buf.C0TxHdr;
                 qlp_raw.C0TxRdValid <= qlp_buf.C0TxRdValid;
-                qlp_buf.C0TxAlmFull <= qlp_raw.C0TxAlmFull;
+                qlp_buf.c0TxAlmFull <= qlp_raw.c0TxAlmFull;
 
                 qlp_raw.C1TxHdr <= qlp_buf.C1TxHdr;
                 qlp_raw.C1TxData <= qlp_buf.C1TxData;
                 qlp_raw.C1TxWrValid <= qlp_buf.C1TxWrValid;
                 qlp_raw.C1TxIrValid <= qlp_buf.C1TxIrValid;
-                qlp_buf.C1TxAlmFull <= qlp_raw.C1TxAlmFull;
+                qlp_buf.c1TxAlmFull <= qlp_raw.c1TxAlmFull;
             end
         end
     endgenerate
@@ -113,17 +113,8 @@ module cci_mpf_shim_buffer_qlp
     //
     always_ff @(posedge clk)
     begin
-        qlp_buf.C0RxHdr <= qlp_raw.C0RxHdr;
-        qlp_buf.C0RxData <= qlp_raw.C0RxData;
-        qlp_buf.C0RxWrValid <= qlp_raw.C0RxWrValid;
-        qlp_buf.C0RxRdValid <= qlp_raw.C0RxRdValid;
-        qlp_buf.C0RxCgValid <= qlp_raw.C0RxCgValid;
-        qlp_buf.C0RxUgValid <= qlp_raw.C0RxUgValid;
-        qlp_buf.C0RxIrValid <= qlp_raw.C0RxIrValid;
-
-        qlp_buf.C1RxHdr <= qlp_raw.C1RxHdr;
-        qlp_buf.C1RxWrValid <= qlp_raw.C1RxWrValid;
-        qlp_buf.C1RxIrValid <= qlp_raw.C1RxIrValid;
+        qlp_buf.c0Rx <= qlp_raw.c0Rx;
+        qlp_buf.c1Rx <= qlp_raw.c1Rx;
     end
 
 endmodule // cci_mpf_shim_buffer_qlp

@@ -128,8 +128,8 @@ module qa_drv_memory
     cci_mpf_if
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_RX_HDR_WIDTH($bits(t_RX_HEADER_CCI_E)),
-        .CCI_TX_HDR_WIDTH($bits(t_TX_HEADER_CCI_E)),
+        .CCI_RX_HDR_WIDTH(CCI_RX_MEMHDR_WIDTH),
+        .CCI_TX_HDR_WIDTH(CCI_MPF_TX_MEMHDR_WIDTH),
         .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
         )
       qlp_virtual (.clk);
@@ -137,10 +137,10 @@ module qa_drv_memory
     cci_mpf_shim_vtp
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_QLP_RX_HDR_WIDTH(CCI_RX_HDR_WIDTH),
-        .CCI_QLP_TX_HDR_WIDTH(CCI_TX_HDR_WIDTH),
-        .CCI_AFU_RX_HDR_WIDTH($bits(t_RX_HEADER_CCI_E)),
-        .CCI_AFU_TX_HDR_WIDTH($bits(t_TX_HEADER_CCI_E)),
+        .CCI_QLP_RX_HDR_WIDTH(CCI_RX_MEMHDR_WIDTH),
+        .CCI_QLP_TX_HDR_WIDTH(CCI_MPF_TX_MEMHDR_WIDTH),
+        .CCI_AFU_RX_HDR_WIDTH(CCI_RX_MEMHDR_WIDTH),
+        .CCI_AFU_TX_HDR_WIDTH(CCI_MPF_TX_MEMHDR_WIDTH),
         .CCI_TAG_WIDTH(CCI_TAG_WIDTH),
         // VTP needs to generate loads internally in order to walk the
         // page table.  The reserved bit in Mdata is a location offered
@@ -169,8 +169,8 @@ module qa_drv_memory
     cci_mpf_if
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_RX_HDR_WIDTH($bits(t_RX_HEADER_CCI_E)),
-        .CCI_TX_HDR_WIDTH($bits(t_TX_HEADER_CCI_E)),
+        .CCI_RX_HDR_WIDTH(CCI_RX_MEMHDR_WIDTH),
+        .CCI_TX_HDR_WIDTH(CCI_MPF_TX_MEMHDR_WIDTH),
         .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
         )
       qlp_write_order (.clk);
@@ -178,8 +178,8 @@ module qa_drv_memory
     cci_mpf_shim_write_order
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_RX_HDR_WIDTH($bits(t_RX_HEADER_CCI_E)),
-        .CCI_TX_HDR_WIDTH($bits(t_TX_HEADER_CCI_E)),
+        .CCI_RX_HDR_WIDTH(CCI_RX_MEMHDR_WIDTH),
+        .CCI_TX_HDR_WIDTH(CCI_MPF_TX_MEMHDR_WIDTH),
         .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
         )
       filter
@@ -202,8 +202,8 @@ module qa_drv_memory
     cci_mpf_if
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_RX_HDR_WIDTH($bits(t_RX_HEADER_CCI_E)),
-        .CCI_TX_HDR_WIDTH($bits(t_TX_HEADER_CCI_E)),
+        .CCI_RX_HDR_WIDTH(CCI_RX_MEMHDR_WIDTH),
+        .CCI_TX_HDR_WIDTH(CCI_MPF_TX_MEMHDR_WIDTH),
         .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
         )
       qlp_rd_rsp_inorder (.clk);
@@ -211,8 +211,8 @@ module qa_drv_memory
     cci_mpf_shim_sort_read_rsp
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_RX_HDR_WIDTH($bits(t_RX_HEADER_CCI_E)),
-        .CCI_TX_HDR_WIDTH($bits(t_TX_HEADER_CCI_E)),
+        .CCI_RX_HDR_WIDTH(CCI_RX_MEMHDR_WIDTH),
+        .CCI_TX_HDR_WIDTH(CCI_MPF_TX_MEMHDR_WIDTH),
         .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
         )
       sortReads
@@ -235,8 +235,8 @@ module qa_drv_memory
     cci_mpf_if
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_RX_HDR_WIDTH($bits(t_RX_HEADER_CCI_E)),
-        .CCI_TX_HDR_WIDTH($bits(t_TX_HEADER_CCI_E)),
+        .CCI_RX_HDR_WIDTH(CCI_RX_MEMHDR_WIDTH),
+        .CCI_TX_HDR_WIDTH(CCI_MPF_TX_MEMHDR_WIDTH),
         .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
         )
       qlp_inorder (.clk);
@@ -244,8 +244,8 @@ module qa_drv_memory
     cci_mpf_shim_sort_write_rsp
       #(
         .CCI_DATA_WIDTH(CCI_DATA_WIDTH),
-        .CCI_RX_HDR_WIDTH($bits(t_RX_HEADER_CCI_E)),
-        .CCI_TX_HDR_WIDTH($bits(t_TX_HEADER_CCI_E)),
+        .CCI_RX_HDR_WIDTH(CCI_RX_MEMHDR_WIDTH),
+        .CCI_TX_HDR_WIDTH(CCI_MPF_TX_MEMHDR_WIDTH),
         .CCI_TAG_WIDTH(CCI_TAG_WIDTH)
         )
       sortWrites
@@ -266,28 +266,28 @@ module qa_drv_memory
     // The CCI-S and CCI-E headers share a base set of fields.  Construct
     // a CCI-E header and truncate to the requested size, which may be CCI-S.
     assign qlp_inorder.C0TxHdr =
-        genReqHeaderCCIE(mem_read_req_cached ? RdLine : RdLine_I,
-                         t_LINE_ADDR_CCI_E'(mem_read_req_addr),
-                         t_MDATA'(0),
-                         mem_read_req_check_order);
+        genReqHeaderMPF(mem_read_req_cached ? eREQ_RDLINE_S : eREQ_RDLINE_I,
+                        t_cci_cl_vaddr'(mem_read_req_addr),
+                        t_cci_mdata'(0),
+                        mem_read_req_check_order);
     assign qlp_inorder.C0TxRdValid = mem_read_req_enable;
-    assign mem_read_req_rdy = ! qlp_inorder.C0TxAlmFull;
+    assign mem_read_req_rdy = ! qlp_inorder.c0TxAlmFull;
 
-    assign mem_read_rsp_data = qlp_inorder.C0RxData;
-    assign mem_read_rsp_rdy = qlp_inorder.C0RxRdValid;
+    assign mem_read_rsp_data = qlp_inorder.c0Rx.data;
+    assign mem_read_rsp_rdy = qlp_inorder.c0Rx.rdValid;
 
     assign qlp_inorder.C1TxHdr =
-        genReqHeaderCCIE(mem_write_req_cached ? WrLine : WrThru,
-                         t_LINE_ADDR_CCI_E'(mem_write_addr),
-                         t_MDATA'(0),
-                         mem_write_req_check_order);
+        genReqHeaderMPF(mem_write_req_cached ? eREQ_WRLINE_M : eREQ_WRLINE_I,
+                        t_cci_cl_vaddr'(mem_write_addr),
+                        t_cci_mdata'(0),
+                        mem_write_req_check_order);
     assign qlp_inorder.C1TxData = mem_write_data;
-    assign mem_write_rdy = ! qlp_inorder.C1TxAlmFull;
+    assign mem_write_rdy = ! qlp_inorder.c1TxAlmFull;
     assign qlp_inorder.C1TxWrValid = mem_write_enable;
     assign qlp_inorder.C1TxIrValid = 1'b0;
 
-    assign mem_write_ack = 2'(qlp_inorder.C0RxWrValid) +
-                           2'(qlp_inorder.C1RxWrValid);
+    assign mem_write_ack = 2'(qlp_inorder.c0Rx.wrValid) +
+                           2'(qlp_inorder.c1Rx.wrValid);
 
     always_ff @(posedge clk)
     begin

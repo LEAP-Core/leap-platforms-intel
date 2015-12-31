@@ -95,46 +95,35 @@ module qa_drv_hc_root
     logic  reset_n;
     assign reset_n = qlp.reset_n;
 
-    t_RX_C0 rx0;
+    t_if_cci_c0_Rx rx0;
     // Buffer incoming read responses for timing
     always_ff @(posedge clk)
     begin
-        rx0.header     <= qlp.C0RxHdr;
-        rx0.data       <= qlp.C0RxData;
-        rx0.wrvalid    <= qlp.C0RxWrValid;
-        rx0.rdvalid    <= qlp.C0RxRdValid;
-        rx0.cfgvalid   <= qlp.C0RxCgValid;
-    end
-
-    t_RX_C1 rx1;
-    always_ff @(posedge clk)
-    begin
-        rx1.header     <= qlp.C1RxHdr;
-        rx1.wrvalid    <= qlp.C1RxWrValid;
+        rx0 <= qlp.c0Rx;
     end
 
     logic  tx0_almostfull;
     logic  tx1_almostfull;
     always_ff @(posedge clk)
     begin
-        tx0_almostfull <= qlp.C0TxAlmFull;
-        tx1_almostfull <= qlp.C1TxAlmFull;
+        tx0_almostfull <= qlp.c0TxAlmFull;
+        tx1_almostfull <= qlp.c1TxAlmFull;
     end
 
     //
     // Outputs are registered, as required by the CCI specification.
     //
-    t_TX_C0 tx0;
-    t_TX_C0 tx0_reg;
-    t_TX_C1 tx1;
-    t_TX_C1 tx1_reg;
+    t_if_cci_c0_Tx tx0;
+    t_if_cci_c0_Tx tx0_q;
+    t_if_cci_c1_Tx tx1;
+    t_if_cci_c1_Tx tx1_q;
 
-    assign qlp.C0TxHdr = tx0_reg.header;
-    assign qlp.C0TxRdValid = tx0_reg.rdvalid;
+    assign qlp.C0TxHdr = genReqHeaderMPFFromBase(tx0_q.hdr);
+    assign qlp.C0TxRdValid = tx0_q.rdValid;
 
-    assign qlp.C1TxHdr = tx1_reg.header;
-    assign qlp.C1TxData = tx1_reg.data;
-    assign qlp.C1TxWrValid = tx1_reg.wrvalid;
+    assign qlp.C1TxHdr = genReqHeaderMPFFromBase(tx1_q.hdr);
+    assign qlp.C1TxData = tx1_q.data;
+    assign qlp.C1TxWrValid = tx1_q.wrValid;
 
     assign qlp.C1TxIrValid = 1'b0;
 
@@ -145,13 +134,13 @@ module qa_drv_hc_root
     begin
         if (! reset_n)
         begin
-            tx0_reg.rdvalid <= 0;
-            tx1_reg.wrvalid <= 0;
+            tx0_q.rdValid <= 0;
+            tx1_q.wrValid <= 0;
         end
         else
         begin
-            tx0_reg <= tx0;
-            tx1_reg <= tx1;
+            tx0_q <= tx0;
+            tx1_q <= tx1;
         end
     end
 

@@ -365,6 +365,28 @@ package cci_mpf_if_pkg;
     endfunction
 
 
+    // Mask the valid bits in an MPF C0 TX
+    function automatic t_if_cci_mpf_c0_Tx cci_c0TxMaskValidsMPF(
+        input t_if_cci_mpf_c0_Tx r,
+        input logic mask
+        );
+
+        r.rdValid = r.rdValid && mask;
+        return r;
+    endfunction
+
+    // Mask the valid bits in an MPF C1 TX
+    function automatic t_if_cci_mpf_c1_Tx cci_c1TxMaskValidsMPF(
+        input t_if_cci_mpf_c1_Tx r,
+        input logic mask
+        );
+
+        r.wrValid = r.wrValid && mask;
+        r.intrValid = r.intrValid && mask;
+        return r;
+    endfunction
+
+
     // Does an MPF C0 TX have a valid request?
     function automatic logic cci_c0TxIsValidMPF(
         input t_if_cci_mpf_c0_Tx r

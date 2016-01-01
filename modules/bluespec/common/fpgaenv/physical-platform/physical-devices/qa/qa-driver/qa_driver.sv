@@ -206,11 +206,11 @@ module qa_driver
     //
     always_ff @(posedge clk)
     begin
-        ffs_vl61_LP32ui_sy2lp_C0TxHdr <= qlp.c0Tx.hdr;
+        ffs_vl61_LP32ui_sy2lp_C0TxHdr <= qlp.c0Tx.hdr.base;
         ffs_vl_LP32ui_sy2lp_C0TxRdValid <= qlp.c0Tx.rdValid;
         qlp.c0TxAlmFull <= ffs_vl_LP32ui_lp2sy_C0TxAlmFull;
 
-        ffs_vl61_LP32ui_sy2lp_C1TxHdr <= qlp.c1Tx.hdr;
+        ffs_vl61_LP32ui_sy2lp_C1TxHdr <= qlp.c1Tx.hdr.base;
         ffs_vl512_LP32ui_sy2lp_C1TxData <= qlp.c1Tx.data;
         ffs_vl_LP32ui_sy2lp_C1TxWrValid <= qlp.c1Tx.wrValid;
         ffs_vl_LP32ui_sy2lp_C1TxIrValid <= qlp.c1Tx.intrValid;

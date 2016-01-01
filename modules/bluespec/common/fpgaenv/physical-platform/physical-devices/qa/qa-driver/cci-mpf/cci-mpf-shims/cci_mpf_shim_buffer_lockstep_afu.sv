@@ -106,9 +106,8 @@ module cci_mpf_shim_buffer_lockstep_afu
         { afu_buf.c0Tx, afu_buf.c1Tx } = first;
 
         // Valid bits are only meaningful when the FIFO isn't empty.
-        afu_buf.c0Tx.rdValid = afu_buf.c0Tx.rdValid && notEmpty;
-        afu_buf.c1Tx.wrValid = afu_buf.c1Tx.wrValid && notEmpty;
-        afu_buf.c1Tx.intrValid = afu_buf.c1Tx.intrValid && notEmpty;
+        afu_buf.c0Tx = cci_c0TxMaskValidsMPF(afu_buf.c0Tx, notEmpty);
+        afu_buf.c1Tx = cci_c1TxMaskValidsMPF(afu_buf.c1Tx, notEmpty);
     end
 
     logic almostFull;

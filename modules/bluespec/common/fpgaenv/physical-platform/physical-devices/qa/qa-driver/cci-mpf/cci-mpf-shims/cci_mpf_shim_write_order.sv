@@ -693,15 +693,12 @@ module cci_mpf_shim_write_order
     // details.
     always_comb
     begin
-        qlp_buf.c1Tx = afu_pipe[1].c1Tx;
+        qlp_buf.c1Tx = cci_c1TxMaskValidsMPF(afu_pipe[1].c1Tx, process_requests);
 
         if (afu_pipe[1].c1Tx.wrValid)
         begin
             qlp_buf.c1Tx.hdr.base.mdata[$bits(c1_heap_allocIdx)-1 : 0] = c1_heap_allocIdx;
         end
-
-        qlp_buf.c1Tx.wrValid = afu_pipe[1].c1Tx.wrValid && process_requests;
-        qlp_buf.c1Tx.intrValid = afu_pipe[1].c1Tx.intrValid && process_requests;
     end
 
     // Save state that will be used when the response is returned.

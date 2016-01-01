@@ -169,14 +169,9 @@ module cci_mpf_shim_buffer_afu
     // Pull request details out of the head of the FIFO.
     t_if_cci_mpf_c1_Tx c1_first;
 
-    always_comb
-    begin
-        afu_buf.c1Tx = c1_first;
-
-        // Valid bits are only meaningful when the FIFO isn't empty.
-        afu_buf.c1Tx.wrValid = c1_first.wrValid && c1_notEmpty;
-        afu_buf.c1Tx.intrValid = c1_first.intrValid && c1_notEmpty;
-    end
+    // Forward the FIFO to the buffered output.  The valid bits are
+    // only meaningful when the FIFO isn't empty.
+    assign afu_buf.c1Tx = cci_c1TxMaskValidsMPF(c1_first, c1_notEmpty);
 
     cci_mpf_prim_fifo_lutram
       #(

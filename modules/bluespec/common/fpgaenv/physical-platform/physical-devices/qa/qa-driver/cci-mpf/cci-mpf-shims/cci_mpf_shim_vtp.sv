@@ -482,16 +482,14 @@ module cci_mpf_shim_vtp
     // through original request (interrupt).
     always_comb
     begin
-        qlp.c1Tx = c1_afu_pipe[AFU_PIPE_LAST_STAGE];
+        qlp.c1Tx = cci_c1TxMaskValidsMPF(c1_afu_pipe[AFU_PIPE_LAST_STAGE],
+                                         c1_fwd_req);
 
         // Is the header rewritten for a virtually address write?
-        if (qlp.c1Tx.wrValid)
+        if (c1_afu_pipe[AFU_PIPE_LAST_STAGE].wrValid)
         begin
             qlp.c1Tx.hdr = c1_req_hdr;
         end
-
-        qlp.c1Tx.wrValid = qlp.c1Tx.wrValid && c1_fwd_req;
-        qlp.c1Tx.intrValid = qlp.c1Tx.intrValid && c1_fwd_req;
     end
 
 

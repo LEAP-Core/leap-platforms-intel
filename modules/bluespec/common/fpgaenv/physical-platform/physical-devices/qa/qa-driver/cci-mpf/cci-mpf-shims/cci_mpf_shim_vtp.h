@@ -143,9 +143,15 @@ class CCI_MPF_SHIM_VTP_CLASS : public CAASBase
     const size_t pageSize = MB(2);
     const size_t pageMask = ~(pageSize - 1);
 
+    // Number of tag bits for a VA.  Tags are the VA bits not covered by
+    // the page offset and the hash table index.
+    const uint32_t vaTagBits = CCI_PT_VA_BITS -
+                               CCI_PT_VA_IDX_BITS -
+                               CCI_PT_PAGE_OFFSET_BITS;
+
     // Size of a single PTE.  PTE is a tuple: VA tag and PA page index.
     // The size is rounded up to a multiple of bytes.
-    const uint32_t pteBytes = (CCI_PT_VA_TAG_BITS + CCI_PT_PA_IDX_BITS + 7) / 8;
+    const uint32_t pteBytes = (vaTagBits + CCI_PT_PA_IDX_BITS + 7) / 8;
 
     // Size of a page table pointer rounded up to a multiple of bytes
     const uint32_t ptIdxBytes = (CCI_PT_PA_IDX_BITS + 7) / 8;
@@ -180,8 +186,20 @@ CCI_MPF_SHIM_VTP_CLASS::AddrComponentsFromVA(
     idx = v & ((1LL << CCI_PT_VA_IDX_BITS) - 1);
     v >>= CCI_PT_VA_IDX_BITS;
 
-    tag = v;
+    tag = v & ((1LL << vaTagBits) - 1);
+
+    // Make sure no address bits were lost in the conversion.  The high bits
+    // beyond CCI_PT_VA_BITS are sign extended.
+    if (CCI_PT_VA_BITS != 64)
+    {
+        int64_t va_check = va;
+        // Shift all but the high bit of the VA range to the right.  All the
+        // resulting bits must match.
+        va_check >>= (CCI_PT_VA_BITS - 1);
+        assert((va_check == 0) || (va_check == -1));
+    }
 }
+
 
 inline void
 CCI_MPF_SHIM_VTP_CLASS::AddrComponentsFromVA(

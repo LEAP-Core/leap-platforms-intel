@@ -43,9 +43,6 @@
 CCI_MPF_SHIM_VTP_CLASS::CCI_MPF_SHIM_VTP_CLASS(AFU_CLIENT afuClient) :
     m_afuClient(afuClient)
 {
-    // The three VA fields must fill a 64 bit virtual address
-    assert(CCI_PT_VA_TAG_BITS + CCI_PT_VA_IDX_BITS + CCI_PT_PAGE_OFFSET_BITS == 64);
-
     // There must be overflow space in the page table
     assert(CCI_PT_VA_IDX_BITS < CCI_PT_LINE_IDX_BITS);
 
@@ -289,8 +286,16 @@ CCI_MPF_SHIM_VTP_CLASS::ReadPTE(
     paIdx = e & ((1LL << CCI_PT_PA_IDX_BITS) - 1);
 
     vaTag = e >> CCI_PT_PA_IDX_BITS;
-    vaTag &= (1LL << CCI_PT_VA_TAG_BITS) - 1;
+    vaTag &= (1LL << vaTagBits) - 1;
+
+    // VA is sign extended from its size to 64 bits
+    if (CCI_PT_VA_BITS != 64)
+    {
+        vaTag <<= (64 - vaTagBits);
+        vaTag = uint64_t(int64_t(vaTag) >> (64 - vaTagBits));
+    }
 }
+
 
 uint64_t
 CCI_MPF_SHIM_VTP_CLASS::ReadTableIdx(
@@ -422,7 +427,7 @@ CCI_MPF_SHIM_VTP_CLASS::DumpPageTable()
                 printf("    %d/%d:\t\tVA 0x%016llx -> PA 0x%016llx\n",
                        hash_idx, cur_idx,
                        (va_tag << (CCI_PT_VA_IDX_BITS + CCI_PT_PAGE_OFFSET_BITS)) |
-                       (hash_idx << CCI_PT_PAGE_OFFSET_BITS),
+                       (uint64_t(hash_idx) << CCI_PT_PAGE_OFFSET_BITS),
                        pa_idx << CCI_PT_PAGE_OFFSET_BITS);
 
                 pte += pteBytes;

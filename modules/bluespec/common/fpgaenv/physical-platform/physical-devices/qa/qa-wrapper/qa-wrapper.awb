@@ -16,6 +16,6 @@
 
 %generated -t VERILOG mkQADeviceSynth.v
 
-%param CCI_ADDR_WIDTH   58     "Address bits (cache line granularity)"
+%param CCI_ADDR_WIDTH   42     "Address bits (cache line granularity)"
 %param CCI_DATA_WIDTH   512    "Cache line width"
 %param CCI_SIMULATION   0      "Is the CCI implementation actually a simulator?"

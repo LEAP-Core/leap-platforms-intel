@@ -76,30 +76,6 @@ package cci_mpf_if_pkg;
 
     // ====================================================================
     //
-    //   Re-define some common enumerations in the MPF package space.
-    //
-    // ====================================================================
-
-/*
-    typedef enum logic [3:0] {
-        eREQ_WRLINE_I  = 4'h1,      // Memory Write with FPGA Cache Hint=Invalid
-        eREQ_WRLINE_M  = 4'h2,      // Memory Write with FPGA Cache Hint=Modified
-        eREQ_WRFENCE   = 4'h5,      // Memory Write Fence ** NOT SUPPORTED FOR VC_VA channel **
-        eREQ_RDLINE_S  = 4'h4,      // Memory Read with FPGA Cache Hint=Shared
-        eREQ_RDLINE_I  = 4'h6,      // Memory Read with FPGA Cache Hint=Invalid
-        eREQ_INTR      = 4'h8       // Interrupt the CPU ** NOT SUPPORTED CURRENTLY **
-    } t_cci_req;
-
-    typedef enum logic [3:0] {
-        eRSP_WRLINE = 4'h1,         // Memory Write
-        eRSP_RDLINE = 4'h4,         // Memory Read
-        eRSP_INTR   = 4'h8,         // Interrupt delivered to the CPU ** NOT SUPPORTED CURRENTLY **
-        eRSP_UMSG   = 4'hF          // UMsg received ** NOT SUPPORTED CURRENTLY **
-    } t_cci_rsp;
-*/
-
-    // ====================================================================
-    //
     //   MPF-specific header.
     //
     // ====================================================================
@@ -114,9 +90,10 @@ package cci_mpf_if_pkg;
     // memory ordering controls.
     //
 
-    // Bits in a VA to address a cache line is 64 minus the byte-level
-    // address bits internal to a single cache line.
-    parameter CCI_MPF_CL_VADDR_WIDTH = 64 - $clog2(CCI_CLDATA_WIDTH >> 3);
+    // Bits in a VA to address a cache line. The number of bits in a VA
+    // is typically not a full 64 bit word since the x86 hardware page
+    // table doesn't support the full word.
+    parameter CCI_MPF_CL_VADDR_WIDTH = 48 - $clog2(CCI_CLDATA_WIDTH >> 3);
     typedef logic [CCI_MPF_CL_VADDR_WIDTH-1:0] t_cci_mpf_cl_vaddr;
 
     // Difference in size between PADDR and VADDR.

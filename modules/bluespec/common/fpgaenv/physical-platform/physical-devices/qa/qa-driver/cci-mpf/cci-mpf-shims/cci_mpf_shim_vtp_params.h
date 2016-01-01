@@ -38,16 +38,21 @@
 
 typedef enum
 {
+    // Width of a virtual address (byte addresses).  This value must match
+    // the width of the CCI request header defined in the base CCI structures.
+    CCI_PT_VA_BITS          = 48,
+
     //
-    // A virtual address is broken down into three regions:
+    // Components of a virtual address:
     //
 
     // Low order zero bits in both VA and PA of a page
     CCI_PT_PAGE_OFFSET_BITS = 21,   // 21 == 2MB pages
     // VA bits used as an index into the shared page table
     CCI_PT_VA_IDX_BITS      = 14,   // 14 == 16K buckets in the hash table
-    // Remaining VA bits (should total 64)
-    CCI_PT_VA_TAG_BITS      = 29,
+    // The final component of a VA is the tag, used to determine whether
+    // an address in the table matches given a matching IDX.  The size
+    // of the tag is computed from CCI_PT_VA_BITS and the fields above.
 
     // Physical page index size.  A physical address is the concatenation
     // of a page index and a page offset, defined above.  NOTE: While

@@ -59,15 +59,11 @@ typedef logic [CCI_PT_PA_IDX_BITS-1 : 0] t_TLB_PHYSICAL_IDX;
 // Address hash index in the host memory page table
 typedef logic [CCI_PT_VA_IDX_BITS-1 : 0] t_PTE_VA_HASH_IDX;
 
-// Address tag in the page table (tag concatenated with hash index is
-// the virtual page.
-typedef logic [CCI_PT_VA_TAG_BITS-1 : 0] t_PTE_VA_TAG;
-
 // Index (pointer) to line in the page table
 typedef logic [CCI_PT_LINE_IDX_BITS-1 : 0] t_PTE_IDX;
 
 // Address of a virtual page without the page offset bits
-typedef logic [CCI_PT_VA_TAG_BITS+CCI_PT_VA_IDX_BITS-1 : 0] t_TLB_VA_PAGE;
+typedef logic [CCI_PT_VA_BITS-CCI_PT_PAGE_OFFSET_BITS-1 : 0] t_TLB_VA_PAGE;
 
 module cci_mpf_shim_vtp
   #(
@@ -161,16 +157,12 @@ module cci_mpf_shim_vtp
     localparam LINE_PAGE_OFFSET_BITS = CCI_PT_PAGE_OFFSET_BITS -
                                        $clog2(CCI_CLDATA_WIDTH / 8);
 
-    // Virtual line address without the line offset bits
-    typedef logic [CCI_PT_VA_IDX_BITS+CCI_PT_VA_TAG_BITS+LINE_PAGE_OFFSET_BITS-1 : 0]
-        t_VA_LINE;
-
     // Offset of a line within a page
     typedef logic [LINE_PAGE_OFFSET_BITS-1 : 0] t_VA_PAGE_OFFSET;
 
     // Given the virtual address of a line return the shortened VA of a page
     function automatic t_TLB_VA_PAGE pageFromVA;
-        input t_VA_LINE addr;
+        input t_cci_mpf_cl_vaddr addr;
 
         return addr[$high(addr) : LINE_PAGE_OFFSET_BITS];
     endfunction
@@ -178,7 +170,7 @@ module cci_mpf_shim_vtp
     // Given the virtual address of a line return the offset of the line from
     // the containing page.
     function automatic t_VA_PAGE_OFFSET pageOffsetFromVA;
-        input t_VA_LINE addr;
+        input t_cci_mpf_cl_vaddr addr;
 
         return addr[LINE_PAGE_OFFSET_BITS-1 : 0];
     endfunction
@@ -600,6 +592,21 @@ module cci_mpf_shim_vtp_assoc
     }
     t_TLB_ENTRY;
 
+    // Address tag in the page table (tag concatenated with hash index is
+    // the virtual page.
+    localparam CCI_PT_VA_TAG_BITS = CCI_PT_VA_BITS -
+                                    CCI_PT_VA_IDX_BITS -
+                                    CCI_PT_PAGE_OFFSET_BITS;
+
+    typedef logic [CCI_PT_VA_TAG_BITS-1 : 0] t_PTE_VA_TAG;
+
+    initial begin
+        // Confirm that the VA size specified in VTP matches CCI.  The CCI
+        // version is line addresses, so the units must be converted.
+        assert (CCI_MPF_CL_VADDR_WIDTH + $clog2(CCI_CLDATA_WIDTH >> 3) ==
+                CCI_PT_VA_BITS) else
+            $fatal("cci_mpf_shim_vtp.sv: VA address size mismatch!");
+    end
 
     // ====================================================================
     //
@@ -922,7 +929,7 @@ module cci_mpf_shim_vtp_assoc
                     end
                     else
                     begin
-                        if (cur_pte.vTag == CCI_PT_VA_TAG_BITS'(0))
+                        if (cur_pte.vTag == t_PTE_VA_TAG'(0))
                         begin
                             // NULL VA tag -- no more translations
                             state <= STATE_TLB_ERROR;

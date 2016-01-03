@@ -75,6 +75,23 @@ module cci_mpf
 
     // ====================================================================
     //
+    //  Canonicalize requests on exit toward the QLP.
+    //
+    // ====================================================================
+
+    cci_mpf_if qlp_canonical (.clk);
+
+    cci_mpf_shim_canonicalize_to_qlp
+      canonicalize
+       (
+        .clk,
+        .qlp,
+        .afu(qlp_canonical)
+        );
+
+
+    // ====================================================================
+    //
     //  Virtual to physical translation. This is the lowest level of
     //  the hierarchy, nearest the QLP connection. The translation layer
     //  can thus depend on a few properties, such as that only one
@@ -99,7 +116,7 @@ module cci_mpf
       v_to_p
        (
         .clk,
-        .qlp,
+        .qlp(qlp_canonical),
         .afu(qlp_virtual)
         );
 

@@ -347,7 +347,7 @@ module cci_mpf_shim_rsp_order
         // in CCI-S mode.
         if (afu.c0Rx.rdValid && SORT_READ_RESPONSES)
         begin
-            afu.c0Rx.hdr = genRspHeaderMPF(eRSP_RDLINE, rd_scoreboard_mdata);
+            afu.c0Rx.hdr = cci_genRspHdr(eRSP_RDLINE, rd_scoreboard_mdata);
         end
         else
         begin

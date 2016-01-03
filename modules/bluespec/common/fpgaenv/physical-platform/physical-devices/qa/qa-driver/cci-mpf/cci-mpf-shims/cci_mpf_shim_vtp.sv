@@ -290,11 +290,11 @@ module cci_mpf_shim_vtp
     // Is either AFU making a request?
     logic c0_request_rdy;
     assign c0_request_rdy =
-        cci_c0TxIsValidMPF(c0_afu_pipe[AFU_PIPE_LAST_STAGE]);
+        cci_mpf_c0TxIsValid(c0_afu_pipe[AFU_PIPE_LAST_STAGE]);
 
     logic c1_request_rdy;
     assign c1_request_rdy =
-        cci_c1TxIsValidMPF(c1_afu_pipe[AFU_PIPE_LAST_STAGE]);
+        cci_mpf_c1TxIsValid(c1_afu_pipe[AFU_PIPE_LAST_STAGE]);
 
     // Given a request, is the translation ready and can the request be
     // forwarded toward the QLP? TLB miss handler read requests have priority
@@ -302,7 +302,7 @@ module cci_mpf_shim_vtp
     logic c0_fwd_req;
     assign c0_fwd_req =
         c0_request_rdy &&
-        (lookupValid[0] || ! getReqAddrIsVirtualMPF(c0_afu_pipe[AFU_PIPE_LAST_STAGE].hdr)) &&
+        (lookupValid[0] || ! cci_mpf_getReqAddrIsVirtual(c0_afu_pipe[AFU_PIPE_LAST_STAGE].hdr)) &&
         ! qlp.c0TxAlmFull &&
         ! tlbReadIdxEn;
 
@@ -311,7 +311,7 @@ module cci_mpf_shim_vtp
         c1_request_rdy &&
         (lookupValid[1] ||
          c1_afu_pipe[AFU_PIPE_LAST_STAGE].intrValid ||
-         ! getReqAddrIsVirtualMPF(c1_afu_pipe[AFU_PIPE_LAST_STAGE].hdr)) &&
+         ! cci_mpf_getReqAddrIsVirtual(c1_afu_pipe[AFU_PIPE_LAST_STAGE].hdr)) &&
         ! qlp.c1TxAlmFull;
 
     // Did a request miss in the TLB or fail arbitration?  It will be rotated
@@ -328,10 +328,10 @@ module cci_mpf_shim_vtp
     //
 
     logic c0_new_req;
-    assign c0_new_req = cci_c0TxIsValidMPF(afu_buf.c0Tx);
+    assign c0_new_req = cci_mpf_c0TxIsValid(afu_buf.c0Tx);
 
     logic c1_new_req;
-    assign c1_new_req = cci_c1TxIsValidMPF(afu_buf.c1Tx);
+    assign c1_new_req = cci_mpf_c1TxIsValid(afu_buf.c1Tx);
 
     // Pass new requests to the afu_pipe?  Old retries have priority over
     // new requests.
@@ -348,8 +348,8 @@ module cci_mpf_shim_vtp
         begin
             for (int i = 0; i <= AFU_PIPE_LAST_STAGE; i = i + 1)
             begin
-                c0_afu_pipe[i] <= cci_c0TxClearValidsMPF();
-                c1_afu_pipe[i] <= cci_c1TxClearValidsMPF();
+                c0_afu_pipe[i] <= cci_mpf_c0TxClearValids();
+                c1_afu_pipe[i] <= cci_mpf_c1TxClearValids();
             end
         end
         else
@@ -390,18 +390,18 @@ module cci_mpf_shim_vtp
     // skilled if the incoming request already has a physical address.
     //
     assign lookupPageVA[0] =
-        pageFromVA(getReqVAddrMPF(c0_afu_pipe[AFU_PIPE_LAST_STAGE-1].hdr));
+        pageFromVA(cci_mpf_getReqVAddr(c0_afu_pipe[AFU_PIPE_LAST_STAGE-1].hdr));
     assign lookupEn[0] =
         lookupRdy[0] &&
         c0_afu_pipe[AFU_PIPE_LAST_STAGE-1].rdValid &&
-        getReqAddrIsVirtualMPF(c0_afu_pipe[AFU_PIPE_LAST_STAGE-1].hdr);
+        cci_mpf_getReqAddrIsVirtual(c0_afu_pipe[AFU_PIPE_LAST_STAGE-1].hdr);
 
     assign lookupPageVA[1] =
-        pageFromVA(getReqVAddrMPF(c1_afu_pipe[AFU_PIPE_LAST_STAGE-1].hdr));
+        pageFromVA(cci_mpf_getReqVAddr(c1_afu_pipe[AFU_PIPE_LAST_STAGE-1].hdr));
     assign lookupEn[1] =
         lookupRdy[1] &&
         c1_afu_pipe[AFU_PIPE_LAST_STAGE-1].wrValid &&
-        getReqAddrIsVirtualMPF(c1_afu_pipe[AFU_PIPE_LAST_STAGE-1].hdr);
+        cci_mpf_getReqAddrIsVirtual(c1_afu_pipe[AFU_PIPE_LAST_STAGE-1].hdr);
 
 
     // ====================================================================
@@ -423,7 +423,7 @@ module cci_mpf_shim_vtp
             c0_req_hdr = c0_afu_pipe[AFU_PIPE_LAST_STAGE].hdr;
 
             // Replace the address with the physical address
-            if (getReqAddrIsVirtualMPF(c0_req_hdr))
+            if (cci_mpf_getReqAddrIsVirtual(c0_req_hdr))
             begin
                 // Page offset remains the same in VA and PA
                 c0_req_hdr.base.address =
@@ -437,7 +437,7 @@ module cci_mpf_shim_vtp
             //
             // Read for TLB miss.
             //
-            c0_req_hdr = genReqHeaderMPF(eREQ_RDLINE_S,
+            c0_req_hdr = cci_mpf_genReqHdr(eREQ_RDLINE_S,
                                          t_cci_mpf_cl_vaddr'(page_table_base + tlbReadIdx),
                                          t_cci_mdata'(0),
                                          0,
@@ -449,7 +449,7 @@ module cci_mpf_shim_vtp
     end
 
     // Channel 0 (read) is either client requests or reads for TLB misses
-    assign qlp.c0Tx = genC0TxReadReqMPF(c0_req_hdr, c0_fwd_req || tlbReadIdxEn);
+    assign qlp.c0Tx = cci_mpf_genC0TxReadReq(c0_req_hdr, c0_fwd_req || tlbReadIdxEn);
 
     // Channel 1 request logic
     t_cci_mpf_ReqMemHdr c1_req_hdr;
@@ -463,7 +463,7 @@ module cci_mpf_shim_vtp
         c1_req_offset = pageOffsetFromVA(c1_req_hdr.base.address);
 
         // Replace the address with the physical address
-        if (getReqAddrIsVirtualMPF(c1_req_hdr))
+        if (cci_mpf_getReqAddrIsVirtual(c1_req_hdr))
         begin
             c1_req_hdr.base.address = { lookupRspPagePA[1], c1_req_offset };
             c1_req_hdr.ext.addrIsVirtual = 0;
@@ -474,7 +474,7 @@ module cci_mpf_shim_vtp
     // through original request (interrupt).
     always_comb
     begin
-        qlp.c1Tx = cci_c1TxMaskValidsMPF(c1_afu_pipe[AFU_PIPE_LAST_STAGE],
+        qlp.c1Tx = cci_mpf_c1TxMaskValids(c1_afu_pipe[AFU_PIPE_LAST_STAGE],
                                          c1_fwd_req);
 
         // Is the header rewritten for a virtually address write?

@@ -119,6 +119,18 @@ typedef struct packed {
 // Functions that operate on CCI structures.
 //------------------------------------------------------------------------
 
+function automatic t_ccis_ReqMemHdr ccis_updMemReqHdrRsvd(
+    input t_ccis_ReqMemHdr h
+    );
+
+    t_ccis_ReqMemHdr h_out = h;
+    h_out.rsvd2 = 0;
+    h_out.rsvd1 = 0;
+    h_out.rsvd0 = 0;
+
+    return h_out;
+endfunction
+
 function automatic t_if_ccis_c0_Tx ccis_c0TxClearValids();
     t_if_ccis_c0_Tx r = 'x;
     r.rdValid = 0;

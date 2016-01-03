@@ -111,8 +111,8 @@ module qa_drv_hc_root
     t_if_cci_c1_Tx tx1;
     t_if_cci_c1_Tx tx1_q;
 
-    assign qlp.c0Tx = genC0TxMPFFromBase(tx0_q);
-    assign qlp.c1Tx = genC1TxMPFFromBase(tx1_q);
+    assign qlp.c0Tx = cci_mpf_cvtC0TxFromBase(tx0_q);
+    assign qlp.c1Tx = cci_mpf_cvtC1TxFromBase(tx1_q);
 
     //
     // All signals to the host must come from registers.  Guarantee that here.

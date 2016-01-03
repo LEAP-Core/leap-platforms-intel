@@ -72,7 +72,7 @@
                             c0Tx.hdr.base.mdata,
                             (c0Tx.hdr.ext.addrIsVirtual ? "V" : "P"),
                             (c0Tx.hdr.ext.addrIsVirtual ?
-                                getReqVAddrMPF(c0Tx.hdr) :
+                                cci_mpf_getReqVAddr(c0Tx.hdr) :
                                 c0Tx.hdr.base.address) );
 
                 end
@@ -88,7 +88,7 @@
                             c1Tx.hdr.base.mdata,
                             (c1Tx.hdr.ext.addrIsVirtual ? "V" : "P"),
                             (c1Tx.hdr.ext.addrIsVirtual ?
-                                getReqVAddrMPF(c1Tx.hdr) :
+                                cci_mpf_getReqVAddr(c1Tx.hdr) :
                                 c1Tx.hdr.base.address),
                             c1Tx.data);
                 end

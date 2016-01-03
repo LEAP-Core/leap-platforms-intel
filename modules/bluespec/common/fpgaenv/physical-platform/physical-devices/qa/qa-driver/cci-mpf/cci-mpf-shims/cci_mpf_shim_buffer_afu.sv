@@ -106,7 +106,7 @@ module cci_mpf_shim_buffer_afu
         begin
             // No bypass.  All messages flow through the FIFO.
             assign afu_buf.c0Tx =
-                genC0TxReadReqMPF(c0_fifo_first, c0_fifo_notEmpty);
+                cci_mpf_genC0TxReadReq(c0_fifo_first, c0_fifo_notEmpty);
 
             assign c0_fifo_enq = afu_raw.c0Tx.rdValid;
             assign c0_fifo_deq = deqC0Tx;
@@ -116,7 +116,7 @@ module cci_mpf_shim_buffer_afu
             // Bypass FIFO when possible.
             assign afu_buf.c0Tx =
                 c0_fifo_notEmpty ?
-                    genC0TxReadReqMPF(c0_fifo_first, 1) :
+                    cci_mpf_genC0TxReadReq(c0_fifo_first, 1) :
                     afu_raw.c0Tx;
 
             // Enq to the FIFO if a new request has arrived and it wasn't
@@ -162,7 +162,7 @@ module cci_mpf_shim_buffer_afu
 
     // Request payload exists when one of the valid bits is set.
     logic c1_enq_en;
-    assign c1_enq_en = cci_c1TxIsValidMPF(afu_raw.c1Tx);
+    assign c1_enq_en = cci_mpf_c1TxIsValid(afu_raw.c1Tx);
 
     logic c1_notEmpty;
 
@@ -171,7 +171,7 @@ module cci_mpf_shim_buffer_afu
 
     // Forward the FIFO to the buffered output.  The valid bits are
     // only meaningful when the FIFO isn't empty.
-    assign afu_buf.c1Tx = cci_c1TxMaskValidsMPF(c1_first, c1_notEmpty);
+    assign afu_buf.c1Tx = cci_mpf_c1TxMaskValids(c1_first, c1_notEmpty);
 
     cci_mpf_prim_fifo_lutram
       #(

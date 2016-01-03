@@ -6,6 +6,15 @@
 // for virtual memory addresses as well as control of memory protocol
 // factory (MPF) features such as enabling or disabling memory ordering.
 //
+// Naming:
+//
+//   - This module imports data structures from the base interface
+//     (e.g. CCI-P) and renames the underlying data structures as
+//     t_cci_... from the version-specific names, e.g. t_ccip_....
+//
+//   - MPF-specific data structures are extensions of t_cci structures
+//     and are named t_cci_mpf_....
+//
 
 // ========================================================================
 //
@@ -22,6 +31,16 @@ package cci_mpf_if_pkg;
     // CL_PADDR in order to differentiate between physical and virtual
     // addresses inside MPF.
     //
+
+
+    // Unlike base CCI, MPF supports virtual addresses.
+    //
+    // Bits in a VA to address a cache line. The number of bits in a VA
+    // is typically not a full 64 bit word since the x86 hardware page
+    // table doesn't support the full word.
+    parameter CCI_MPF_CL_VADDR_WIDTH = 48 - $clog2(CCI_CLDATA_WIDTH >> 3);
+    typedef logic [CCI_MPF_CL_VADDR_WIDTH-1:0] t_cci_mpf_cl_vaddr;
+
 
 `ifdef USE_PLATFORM_CCI_P
     import ccip_if_pkg::*;
@@ -45,6 +64,9 @@ package cci_mpf_if_pkg;
     typedef t_ccis_ReqMemHdr t_cci_ReqMemHdr;
     parameter CCI_TX_MEMHDR_WIDTH = CCIS_TX_MEMHDR_WIDTH;
 
+    // CCI-S has too few address bits to support virtual addressing.
+    `define CCI_MPF_NEED_ADDR_EXT 1
+
     typedef t_ccis_RspMemHdr t_cci_RspMemHdr;
     parameter CCI_RX_MEMHDR_WIDTH = CCIS_RX_MEMHDR_WIDTH;
 
@@ -55,6 +77,12 @@ package cci_mpf_if_pkg;
     typedef t_if_ccis_c0_Rx t_if_cci_c0_Rx;
     typedef t_if_ccis_c1_Rx t_if_cci_c1_Rx;
     typedef t_if_ccis_Rx t_if_cci_Rx;
+
+    function automatic t_cci_ReqMemHdr cci_updMemReqHdrRsvd(
+        input t_cci_ReqMemHdr h
+        );
+        return ccis_updMemReqHdrRsvd(h);
+    endfunction
 
     function automatic t_if_cci_c0_Tx cci_c0TxClearValids();
         return ccis_c0TxClearValids();
@@ -90,15 +118,11 @@ package cci_mpf_if_pkg;
     // memory ordering controls.
     //
 
-    // Bits in a VA to address a cache line. The number of bits in a VA
-    // is typically not a full 64 bit word since the x86 hardware page
-    // table doesn't support the full word.
-    parameter CCI_MPF_CL_VADDR_WIDTH = 48 - $clog2(CCI_CLDATA_WIDTH >> 3);
-    typedef logic [CCI_MPF_CL_VADDR_WIDTH-1:0] t_cci_mpf_cl_vaddr;
-
     // Difference in size between PADDR and VADDR.
+`ifdef CCI_MPF_NEED_ADDR_EXT
     parameter CCI_MPF_CL_VADDR_EXT_WIDTH = CCI_MPF_CL_VADDR_WIDTH - CCI_CL_PADDR_WIDTH;
     typedef logic [CCI_MPF_CL_VADDR_EXT_WIDTH-1:0] t_cci_mpf_cl_vaddr_ext;
+`endif
 
     //
     // Extension to the request header exposed in the MPF interface to
@@ -106,8 +130,10 @@ package cci_mpf_if_pkg;
     // requests reach the QLP.
     //
     typedef struct packed {
+`ifdef CCI_MPF_NEED_ADDR_EXT
         // Extra bits required to hold a virtual address
         t_cci_mpf_cl_vaddr_ext addressExt;
+`endif
 
         // Enforce load/store and store/store ordering within lines?
         // Setting this to zero bypasses ordering logic for this request.
@@ -166,15 +192,19 @@ package cci_mpf_if_pkg;
 
     // Virtual address is stored in a pair of fields: the field that
     // will ultimately hold the physical address and an overflow field.
-    function automatic t_cci_mpf_cl_vaddr getReqVAddrMPF(
+    function automatic t_cci_mpf_cl_vaddr cci_mpf_getReqVAddr(
         input t_cci_mpf_ReqMemHdr h
         );
 
+`ifdef CCI_MPF_NEED_ADDR_EXT
         return {h.ext.addressExt, h.base.address};
+`else
+        return h.base.address;
+`endif
     endfunction
 
 
-    function automatic logic getReqCheckOrderMPF(
+    function automatic logic cci_mpf_getReqCheckOrder(
         input t_cci_mpf_ReqMemHdr h
         );
 
@@ -182,7 +212,7 @@ package cci_mpf_if_pkg;
     endfunction
 
 
-    function automatic logic getReqAddrIsVirtualMPF(
+    function automatic logic cci_mpf_getReqAddrIsVirtual(
         input t_cci_mpf_ReqMemHdr h
         );
 
@@ -191,12 +221,14 @@ package cci_mpf_if_pkg;
 
 
     // Update an existing request header with a new virtual address.
-    function automatic t_cci_mpf_ReqMemHdr updReqVAddrMPF(
+    function automatic t_cci_mpf_ReqMemHdr cci_mpf_updReqVAddr(
         input t_cci_mpf_ReqMemHdr h,
         input t_cci_mpf_cl_vaddr  address
         );
 
+`ifdef CCI_MPF_NEED_ADDR_EXT
         h.ext.addressExt = address[CCI_MPF_CL_VADDR_WIDTH-1 : CCI_CL_PADDR_WIDTH];
+`endif
         h.base.address = address[CCI_CL_PADDR_WIDTH-1:0];
 
         return h;
@@ -204,7 +236,7 @@ package cci_mpf_if_pkg;
 
 
     // Generate a new request header
-    function automatic t_cci_mpf_ReqMemHdr genReqHeaderMPF(
+    function automatic t_cci_mpf_ReqMemHdr cci_mpf_genReqHdr(
         input t_cci_req          requestType,
         input t_cci_mpf_cl_vaddr address,
         input t_cci_mdata        mdata,
@@ -215,7 +247,7 @@ package cci_mpf_if_pkg;
         t_cci_mpf_ReqMemHdr h;
 
         h.base = t_cci_ReqMemHdr'(0);
-        h = updReqVAddrMPF(h, address);
+        h = cci_mpf_updReqVAddr(h, address);
 
         h.ext.checkLoadStoreOrder = checkLoadStoreOrder;
         h.ext.addrIsVirtual = addrIsVirtual;
@@ -228,7 +260,7 @@ package cci_mpf_if_pkg;
 
 
     // Generate a new request header from a base CCI header
-    function automatic t_cci_mpf_ReqMemHdr genReqHeaderMPFFromBase(
+    function automatic t_cci_mpf_ReqMemHdr cci_mpf_cvtReqHdrFromBase(
         input t_cci_ReqMemHdr baseHdr
         );
 
@@ -247,7 +279,7 @@ package cci_mpf_if_pkg;
 
 
     // Generate a new response header
-    function automatic t_cci_RspMemHdr genRspHeaderMPF(
+    function automatic t_cci_RspMemHdr cci_genRspHdr(
         input t_cci_rsp     responseType,
         input t_cci_mdata   mdata
         );
@@ -263,13 +295,13 @@ package cci_mpf_if_pkg;
 
 
     // Generate an MPF C0 TX from a base struct
-    function automatic t_if_cci_mpf_c0_Tx genC0TxMPFFromBase(
+    function automatic t_if_cci_mpf_c0_Tx cci_mpf_cvtC0TxFromBase(
         input t_if_cci_c0_Tx b
         );
 
         t_if_cci_mpf_c0_Tx m;
 
-        m.hdr = genReqHeaderMPFFromBase(b.hdr);
+        m.hdr = cci_mpf_cvtReqHdrFromBase(b.hdr);
         m.rdValid = b.rdValid;
 
         return m;
@@ -277,13 +309,13 @@ package cci_mpf_if_pkg;
 
 
     // Generate an MPF C1 TX from a base struct
-    function automatic t_if_cci_mpf_c1_Tx genC1TxMPFFromBase(
+    function automatic t_if_cci_mpf_c1_Tx cci_mpf_cvtC1TxFromBase(
         input t_if_cci_c1_Tx b
         );
 
         t_if_cci_mpf_c1_Tx m;
 
-        m.hdr = genReqHeaderMPFFromBase(b.hdr);
+        m.hdr = cci_mpf_cvtReqHdrFromBase(b.hdr);
         m.data = b.data;
         m.wrValid = b.wrValid;
         m.intrValid = b.intrValid;
@@ -295,7 +327,7 @@ package cci_mpf_if_pkg;
     // Generate a base C0 TX from an MPF struct.
     //  *** This only works if the address stored in the MPF header is
     //  *** physical.
-    function automatic t_if_cci_c0_Tx genC0TxBaseFromMPF(
+    function automatic t_if_cci_c0_Tx cci_mpf_cvtC0TxToBase(
         input t_if_cci_mpf_c0_Tx m
         );
 
@@ -311,7 +343,7 @@ package cci_mpf_if_pkg;
     // Generate a base C1 TX from an MPF struct.
     //  *** This only works if the address stored in the MPF header is
     //  *** physical.
-    function automatic t_if_cci_c1_Tx genC1TxBaseFromMPF(
+    function automatic t_if_cci_c1_Tx cci_mpf_cvtC1TxToBase(
         input t_if_cci_mpf_c1_Tx m
         );
 
@@ -327,14 +359,14 @@ package cci_mpf_if_pkg;
 
 
     // Initialize an MPF C0 TX with all valid bits clear
-    function automatic t_if_cci_mpf_c0_Tx cci_c0TxClearValidsMPF();
+    function automatic t_if_cci_mpf_c0_Tx cci_mpf_c0TxClearValids();
         t_if_cci_mpf_c0_Tx r = 'x;
         r.rdValid = 0;
         return r;
     endfunction
 
     // Initialize an MPF C1 TX with all valid bits clear
-    function automatic t_if_cci_mpf_c1_Tx cci_c1TxClearValidsMPF();
+    function automatic t_if_cci_mpf_c1_Tx cci_mpf_c1TxClearValids();
         t_if_cci_mpf_c1_Tx r = 'x;
         r.wrValid = 0;
         r.intrValid = 0;
@@ -343,7 +375,7 @@ package cci_mpf_if_pkg;
 
 
     // Mask the valid bits in an MPF C0 TX
-    function automatic t_if_cci_mpf_c0_Tx cci_c0TxMaskValidsMPF(
+    function automatic t_if_cci_mpf_c0_Tx cci_mpf_c0TxMaskValids(
         input t_if_cci_mpf_c0_Tx r,
         input logic mask
         );
@@ -353,7 +385,7 @@ package cci_mpf_if_pkg;
     endfunction
 
     // Mask the valid bits in an MPF C1 TX
-    function automatic t_if_cci_mpf_c1_Tx cci_c1TxMaskValidsMPF(
+    function automatic t_if_cci_mpf_c1_Tx cci_mpf_c1TxMaskValids(
         input t_if_cci_mpf_c1_Tx r,
         input logic mask
         );
@@ -365,7 +397,7 @@ package cci_mpf_if_pkg;
 
 
     // Does an MPF C0 TX have a valid request?
-    function automatic logic cci_c0TxIsValidMPF(
+    function automatic logic cci_mpf_c0TxIsValid(
         input t_if_cci_mpf_c0_Tx r
         );
 
@@ -373,7 +405,7 @@ package cci_mpf_if_pkg;
     endfunction
 
     // Does an MPF C1 TX have a valid request?
-    function automatic logic cci_c1TxIsValidMPF(
+    function automatic logic cci_mpf_c1TxIsValid(
         input t_if_cci_mpf_c1_Tx r
         );
 
@@ -382,12 +414,12 @@ package cci_mpf_if_pkg;
 
 
     // Generate an MPF C0 TX read request given a header
-    function automatic t_if_cci_mpf_c0_Tx genC0TxReadReqMPF(
+    function automatic t_if_cci_mpf_c0_Tx cci_mpf_genC0TxReadReq(
         input t_cci_mpf_ReqMemHdr h,
         input logic rdValid
         );
 
-        t_if_cci_mpf_c0_Tx r = cci_c0TxClearValidsMPF();
+        t_if_cci_mpf_c0_Tx r = cci_mpf_c0TxClearValids();
         r.hdr = h;
         r.rdValid = rdValid;
 
@@ -395,18 +427,58 @@ package cci_mpf_if_pkg;
     endfunction
 
     // Generate an MPF C1 TX write request given a header and data
-    function automatic t_if_cci_mpf_c1_Tx genC1TxWriteReqMPF(
+    function automatic t_if_cci_mpf_c1_Tx cci_mpf_genC1TxWriteReq(
         input t_cci_mpf_ReqMemHdr h,
         input t_cci_cldata data,
         input logic wrValid
         );
 
-        t_if_cci_mpf_c1_Tx r = cci_c1TxClearValidsMPF();
+        t_if_cci_mpf_c1_Tx r = cci_mpf_c1TxClearValids();
         r.hdr = h;
         r.data = data;
         r.wrValid = wrValid;
 
         return r;
+    endfunction
+
+
+    // Canonicalize an MPF C0 TX request
+    function automatic t_if_cci_mpf_c0_Tx cci_mpf_updC0TxCanonical(
+        input t_if_cci_mpf_c0_Tx r
+        );
+
+        t_if_cci_mpf_c0_Tx r_out = r;
+        t_cci_ReqMemHdr h = r.hdr.base;
+
+        // Make sure req_type matches one-hot flags
+        if (! cci_mpf_c0TxIsValid(r))
+        begin
+            h.req_type = t_cci_req'(0);
+        end
+
+        r_out.hdr.base = h;
+
+        return r_out;
+    endfunction
+
+    // Canonicalize an MPF C1 TX request
+    function automatic t_if_cci_mpf_c1_Tx cci_mpf_updC1TxCanonical(
+        input t_if_cci_mpf_c1_Tx r
+        );
+
+
+        t_if_cci_mpf_c1_Tx r_out = r;
+        t_cci_ReqMemHdr h = r.hdr.base;
+
+        // Make sure req_type matches one-hot flags
+        if (! cci_mpf_c1TxIsValid(r))
+        begin
+            h.req_type = t_cci_req'(0);
+        end
+
+        r_out.hdr.base = cci_updMemReqHdrRsvd(h);
+
+        return r_out;
     endfunction
 
 endpackage // cci_mpf_if

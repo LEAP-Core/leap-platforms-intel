@@ -177,7 +177,7 @@ module cci_mpf_shim_sort_write_rsp
 
         afu.c0Rx.hdr =
             afu.c0Rx.wrValid ?
-                genRspHeaderMPF(eRSP_WRLINE, scoreboard_mdata[0]) :
+                cci_genRspHdr(eRSP_WRLINE, scoreboard_mdata[0]) :
                 qlp.c0Rx.hdr;
     end
 
@@ -215,7 +215,7 @@ module cci_mpf_shim_sort_write_rsp
 
         afu.c1Rx.hdr =
             afu.c1Rx.wrValid ?
-                genRspHeaderMPF(eRSP_WRLINE, scoreboard_mdata[1]) :
+                cci_genRspHdr(eRSP_WRLINE, scoreboard_mdata[1]) :
                 qlp.c1Rx.hdr;
     end
 

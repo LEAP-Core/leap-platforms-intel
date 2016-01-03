@@ -138,8 +138,8 @@ module cci_mpf_shim_mux
             //
             // Are there incoming requests?
             //
-            assign c0_request[p] = cci_c0TxIsValidMPF(afu_buf[p].c0Tx);
-            assign c1_request[p] = cci_c1TxIsValidMPF(afu_buf[p].c1Tx);
+            assign c0_request[p] = cci_mpf_c0TxIsValid(afu_buf[p].c0Tx);
+            assign c1_request[p] = cci_mpf_c1TxIsValid(afu_buf[p].c1Tx);
         end
     endgenerate
 
@@ -203,7 +203,7 @@ module cci_mpf_shim_mux
         if (qlp.c0TxAlmFull || ! (|c0_request))
         begin
             // No request
-            qlp.c0Tx = cci_c0TxClearValidsMPF();
+            qlp.c0Tx = cci_mpf_c0TxClearValids();
             check_hdr0 = 'x;
         end
         else if (c0_winner_idx == 0)
@@ -225,7 +225,7 @@ module cci_mpf_shim_mux
         if (qlp.c1TxAlmFull || ! (|c1_request))
         begin
             // No request
-            qlp.c1Tx = cci_c1TxClearValidsMPF();
+            qlp.c1Tx = cci_mpf_c1TxClearValids();
             check_hdr1 = 'x;
         end
         else if (c1_winner_idx == 0)

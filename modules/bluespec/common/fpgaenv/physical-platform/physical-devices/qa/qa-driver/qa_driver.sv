@@ -190,50 +190,18 @@ module qa_driver
     // ====================================================================
     //
     //   Map the CCI driver interface to the cci_mpf_if used by the
-    //   composable components in the driver.  All I/O ports are
-    //   registered here for timing.
+    //   composable components in the driver.
     //
     // ====================================================================
 
-    cci_mpf_if
-      qlp(.clk);
+    cci_mpf_if qlp(.clk);
 
-    assign qlp.reset_n = ffs_vl_LP32ui_lp2sy_SoftReset_n &&
-                         ffs_vl_LP32ui_lp2sy_InitDnForSys;
-
-    //
-    // Buffer outgoing write requests for timing
-    //
-    always_ff @(posedge clk)
-    begin
-        ffs_vl61_LP32ui_sy2lp_C0TxHdr <= qlp.c0Tx.hdr.base;
-        ffs_vl_LP32ui_sy2lp_C0TxRdValid <= qlp.c0Tx.rdValid;
-        qlp.c0TxAlmFull <= ffs_vl_LP32ui_lp2sy_C0TxAlmFull;
-
-        ffs_vl61_LP32ui_sy2lp_C1TxHdr <= qlp.c1Tx.hdr.base;
-        ffs_vl512_LP32ui_sy2lp_C1TxData <= qlp.c1Tx.data;
-        ffs_vl_LP32ui_sy2lp_C1TxWrValid <= qlp.c1Tx.wrValid;
-        ffs_vl_LP32ui_sy2lp_C1TxIrValid <= qlp.c1Tx.intrValid;
-        qlp.c1TxAlmFull <= ffs_vl_LP32ui_lp2sy_C1TxAlmFull;
-    end
-
-    //
-    // Buffer incoming read responses for timing
-    //
-    always_ff @(posedge clk)
-    begin
-        qlp.c0Rx.hdr       <= ffs_vl18_LP32ui_lp2sy_C0RxHdr;
-        qlp.c0Rx.data      <= ffs_vl512_LP32ui_lp2sy_C0RxData;
-        qlp.c0Rx.wrValid   <= ffs_vl_LP32ui_lp2sy_C0RxWrValid;
-        qlp.c0Rx.rdValid   <= ffs_vl_LP32ui_lp2sy_C0RxRdValid;
-        qlp.c0Rx.cfgValid  <= ffs_vl_LP32ui_lp2sy_C0RxCgValid;
-        qlp.c0Rx.umsgValid <= ffs_vl_LP32ui_lp2sy_C0RxUgValid;
-        qlp.c0Rx.intrValid <= ffs_vl_LP32ui_lp2sy_C0RxIrValid;
-
-        qlp.c1Rx.hdr       <= ffs_vl18_LP32ui_lp2sy_C1RxHdr;
-        qlp.c1Rx.wrValid   <= ffs_vl_LP32ui_lp2sy_C1RxWrValid;
-        qlp.c1Rx.intrValid <= ffs_vl_LP32ui_lp2sy_C1RxIrValid;
-    end
+    ccis_wires_to_mpf
+      #(
+        .REGISTER_INPUTS(0),
+        .REGISTER_OUTPUTS(1)
+        )
+      map_ifc(.*);
 
 
     // ====================================================================    

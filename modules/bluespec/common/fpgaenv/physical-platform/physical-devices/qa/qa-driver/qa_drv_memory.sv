@@ -89,8 +89,8 @@ module qa_drv_memory
     cci_mpf_if#(.ENABLE_LOG(1)) afu_if(.clk);
 
     assign afu_if.c0Tx =
-        genC0TxReadReqMPF(
-            genReqHeaderMPF(mem_read_req_cached ? eREQ_RDLINE_S : eREQ_RDLINE_I,
+        cci_mpf_genC0TxReadReq(
+            cci_mpf_genReqHdr(mem_read_req_cached ? eREQ_RDLINE_S : eREQ_RDLINE_I,
                             mem_read_req_addr,
                             t_cci_mdata'(0),
                             mem_read_req_check_order),
@@ -102,8 +102,8 @@ module qa_drv_memory
     assign mem_read_rsp_rdy = afu_if.c0Rx.rdValid;
 
     assign afu_if.c1Tx =
-        genC1TxWriteReqMPF(
-            genReqHeaderMPF(mem_write_req_cached ? eREQ_WRLINE_M : eREQ_WRLINE_I,
+        cci_mpf_genC1TxWriteReq(
+            cci_mpf_genReqHdr(mem_write_req_cached ? eREQ_WRLINE_M : eREQ_WRLINE_I,
                             mem_write_addr,
                             t_cci_mdata'(0),
                             mem_write_req_check_order),

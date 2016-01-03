@@ -154,10 +154,10 @@ module cci_mpf_shim_write_order
     // as the buffer in order to reduce timing pressure at the point the
     // filter is checked and updated.
     logic [63:0] c0_req_addr;
-    assign c0_req_addr = 64'(getReqVAddrMPF(afu_buf.c0Tx.hdr));
+    assign c0_req_addr = 64'(cci_mpf_getReqVAddr(afu_buf.c0Tx.hdr));
 
     logic [63:0] c1_req_addr;
-    assign c1_req_addr = 64'(getReqVAddrMPF(afu_buf.c1Tx.hdr));
+    assign c1_req_addr = 64'(cci_mpf_getReqVAddr(afu_buf.c1Tx.hdr));
 
     assign c0_hash_calc =
         t_HASH'(hash32(c0_req_addr[63:32] ^ c0_req_addr[31:0]));
@@ -391,16 +391,16 @@ module cci_mpf_shim_write_order
 
     // Is either AFU making a request?
     logic c0_request_rdy;
-    assign c0_request_rdy = cci_c0TxIsValidMPF(afu_pipe[1].c0Tx);
+    assign c0_request_rdy = cci_mpf_c0TxIsValid(afu_pipe[1].c0Tx);
 
     logic c1_request_rdy;
-    assign c1_request_rdy = cci_c1TxIsValidMPF(afu_pipe[1].c1Tx);
+    assign c1_request_rdy = cci_mpf_c1TxIsValid(afu_pipe[1].c1Tx);
 
     // Does the request want order to be enforced?
     logic c0_enforce_order;
-    assign c0_enforce_order = getReqCheckOrderMPF(afu_pipe[1].c0Tx.hdr);
+    assign c0_enforce_order = cci_mpf_getReqCheckOrder(afu_pipe[1].c0Tx.hdr);
     logic c1_enforce_order;
-    assign c1_enforce_order = getReqCheckOrderMPF(afu_pipe[1].c1Tx.hdr);
+    assign c1_enforce_order = cci_mpf_getReqCheckOrder(afu_pipe[1].c1Tx.hdr);
 
     // Was the request pipeline stalled last cycle?  If yes then the
     // filter is a function of the request at the end of the afu_pipe.
@@ -470,8 +470,8 @@ module cci_mpf_shim_write_order
     // Is the incoming pipeline moving?
     assign afu_deq = advance_pipeline &&
                      ! addr_conflict_incoming &&
-                     (cci_c0TxIsValidMPF(afu_buf.c0Tx) ||
-                      cci_c1TxIsValidMPF(afu_buf.c1Tx));
+                     (cci_mpf_c0TxIsValid(afu_buf.c0Tx) ||
+                      cci_mpf_c1TxIsValid(afu_buf.c1Tx));
 
     // Does an incoming request have read and write to the same address?
     // Special case: delay the write.
@@ -490,8 +490,8 @@ module cci_mpf_shim_write_order
         begin
             for (int i = 0; i < 2; i = i + 1)
             begin
-                afu_pipe[i].c0Tx <= cci_c0TxClearValidsMPF();
-                afu_pipe[i].c1Tx <= cci_c1TxClearValidsMPF();
+                afu_pipe[i].c0Tx <= cci_mpf_c0TxClearValids();
+                afu_pipe[i].c1Tx <= cci_mpf_c1TxClearValids();
             end
 
             handled_addr_conflict <= 0;
@@ -519,8 +519,8 @@ module cci_mpf_shim_write_order
                 // Pipeline restarted after a bubble. Drop the request
                 // that left the pipeline but don't advance yet so the
                 // filter pipeline can catch up.
-                afu_pipe[1].c0Tx <= cci_c0TxClearValidsMPF();
-                afu_pipe[1].c1Tx <= cci_c1TxClearValidsMPF();
+                afu_pipe[1].c0Tx <= cci_mpf_c0TxClearValids();
+                afu_pipe[1].c1Tx <= cci_mpf_c1TxClearValids();
             end
         end
     end
@@ -693,7 +693,7 @@ module cci_mpf_shim_write_order
     // details.
     always_comb
     begin
-        qlp_buf.c1Tx = cci_c1TxMaskValidsMPF(afu_pipe[1].c1Tx, process_requests);
+        qlp_buf.c1Tx = cci_mpf_c1TxMaskValids(afu_pipe[1].c1Tx, process_requests);
 
         if (afu_pipe[1].c1Tx.wrValid)
         begin

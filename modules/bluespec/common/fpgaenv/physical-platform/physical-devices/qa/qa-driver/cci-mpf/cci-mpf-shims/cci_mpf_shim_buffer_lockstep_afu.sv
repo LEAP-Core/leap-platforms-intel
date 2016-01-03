@@ -91,9 +91,9 @@ module cci_mpf_shim_buffer_lockstep_afu
 
     // Request payload exists when one of the valid bits is set.
     logic c0_enq_en;
-    assign c0_enq_en = cci_c0TxIsValidMPF(afu_raw.c0Tx);
+    assign c0_enq_en = cci_mpf_c0TxIsValid(afu_raw.c0Tx);
     logic c1_enq_en;
-    assign c1_enq_en = cci_c1TxIsValidMPF(afu_raw.c1Tx);
+    assign c1_enq_en = cci_mpf_c1TxIsValid(afu_raw.c1Tx);
     logic enq_en;
     assign enq_en = c0_enq_en || c1_enq_en;
 
@@ -106,8 +106,8 @@ module cci_mpf_shim_buffer_lockstep_afu
         { afu_buf.c0Tx, afu_buf.c1Tx } = first;
 
         // Valid bits are only meaningful when the FIFO isn't empty.
-        afu_buf.c0Tx = cci_c0TxMaskValidsMPF(afu_buf.c0Tx, notEmpty);
-        afu_buf.c1Tx = cci_c1TxMaskValidsMPF(afu_buf.c1Tx, notEmpty);
+        afu_buf.c0Tx = cci_mpf_c0TxMaskValids(afu_buf.c0Tx, notEmpty);
+        afu_buf.c1Tx = cci_mpf_c1TxMaskValids(afu_buf.c1Tx, notEmpty);
     end
 
     logic almostFull;

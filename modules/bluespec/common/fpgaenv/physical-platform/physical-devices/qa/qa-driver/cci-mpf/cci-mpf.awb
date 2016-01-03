@@ -5,3 +5,5 @@
 %requires qa_cci_if
 %requires qa_cci_mpf_shims
 %requires qa_cci_mpf_prims
+
+%sources -t VERILOG    -v PRIVATE cci_mpf.sv

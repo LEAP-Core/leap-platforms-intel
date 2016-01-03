@@ -82,104 +82,13 @@ module qa_drv_memory
 
     // ====================================================================
     //
-    //  Virtual to physical translation. This is the lowest level of
-    //  the hierarchy, nearest the QLP connection. The translation layer
-    //  can thus depend on a few properties, such as that only one
-    //  request is outstanding to a given line. The virtual to physical
-    //  translator is thus free to reorder any requests.
+    //   Map client memory interface to the MPF interface.
     //
     // ====================================================================
 
-    cci_mpf_if
-      qlp_virtual (.clk);
+    cci_mpf_if#(.ENABLE_LOG(1)) afu_if(.clk);
 
-    cci_mpf_shim_vtp
-      #(
-        // VTP needs to generate loads internally in order to walk the
-        // page table.  The reserved bit in Mdata is a location offered
-        // to the page table walker to tag internal loads.  The Mdata location
-        // is guaranteed to be zero on all requests flowing in to VTP
-        // from the AFU.  In the composition here, qa_shim_sort_responses
-        // provides this guarantee by rewriting Mdata as requests and
-        // responses as they flow in and out of the stack.
-        .RESERVED_MDATA_IDX(CCI_MDATA_WIDTH-2)
-        )
-      v_to_p
-       (
-        .clk,
-        .qlp,
-        .afu(qlp_virtual)
-        );
-
-
-    // ====================================================================
-    //
-    //  Maintain read/write and write/write order to matching addresses.
-    //  This level of the hierarchy operates on virtual addresses.
-    //
-    // ====================================================================
-
-    cci_mpf_if
-      qlp_write_order (.clk);
-
-    cci_mpf_shim_write_order
-      filter
-       (
-        .clk,
-        .qlp(qlp_virtual),
-        .afu(qlp_write_order)
-        );
-
-
-    // ====================================================================
-    //
-    //  Sort read responses so they arrive in the order they were
-    //  requested.
-    //
-    //  Operates on virtual addresses.
-    //
-    // ====================================================================
-
-    cci_mpf_if
-      qlp_rd_rsp_inorder (.clk);
-
-    cci_mpf_shim_sort_read_rsp
-      sortReads
-       (
-        .clk,
-        .qlp(qlp_write_order),
-        .afu(qlp_rd_rsp_inorder)
-        );
-
-
-    // ====================================================================
-    //
-    //  Sort write responses so they arrive in the order they were
-    //  requested.
-    //
-    //  Operates on virtual addresses.
-    //
-    // ====================================================================
-
-    cci_mpf_if
-      qlp_inorder (.clk);
-
-    cci_mpf_shim_sort_write_rsp
-      sortWrites
-       (
-        .clk,
-        .qlp(qlp_rd_rsp_inorder),
-        .afu(qlp_inorder)
-        );
-
-
-    // ====================================================================
-    //
-    //  Connect client requests to the QLP.
-    //
-    // ====================================================================
-
-    assign qlp_inorder.c0Tx =
+    assign afu_if.c0Tx =
         genC0TxReadReqMPF(
             genReqHeaderMPF(mem_read_req_cached ? eREQ_RDLINE_S : eREQ_RDLINE_I,
                             mem_read_req_addr,
@@ -187,12 +96,12 @@ module qa_drv_memory
                             mem_read_req_check_order),
             mem_read_req_enable);
 
-    assign mem_read_req_rdy = ! qlp_inorder.c0TxAlmFull;
+    assign mem_read_req_rdy = ! afu_if.c0TxAlmFull;
 
-    assign mem_read_rsp_data = qlp_inorder.c0Rx.data;
-    assign mem_read_rsp_rdy = qlp_inorder.c0Rx.rdValid;
+    assign mem_read_rsp_data = afu_if.c0Rx.data;
+    assign mem_read_rsp_rdy = afu_if.c0Rx.rdValid;
 
-    assign qlp_inorder.c1Tx =
+    assign afu_if.c1Tx =
         genC1TxWriteReqMPF(
             genReqHeaderMPF(mem_write_req_cached ? eREQ_WRLINE_M : eREQ_WRLINE_I,
                             mem_write_addr,
@@ -201,10 +110,10 @@ module qa_drv_memory
             mem_write_data,
             mem_write_enable);
 
-    assign mem_write_rdy = ! qlp_inorder.c1TxAlmFull;
+    assign mem_write_rdy = ! afu_if.c1TxAlmFull;
 
-    assign mem_write_ack = 2'(qlp_inorder.c0Rx.wrValid) +
-                           2'(qlp_inorder.c1Rx.wrValid);
+    assign mem_write_ack = 2'(afu_if.c0Rx.wrValid) +
+                           2'(afu_if.c1Rx.wrValid);
 
     always_ff @(posedge clk)
     begin
@@ -220,5 +129,24 @@ module qa_drv_memory
                 $fatal("qa_drv_memory: Memory write not ready!");
         end
     end
+
+
+    // ====================================================================
+    //
+    //  Connect client requests to the QLP.
+    //
+    // ====================================================================
+
+    cci_mpf
+      #(
+        .SORT_READ_RESPONSES(1),
+        .PRESERVE_WRITE_MDATA(0)
+        )
+      mpf
+       (
+        .clk,
+        .qlp(qlp),
+        .afu(afu_if)
+        );
 
 endmodule

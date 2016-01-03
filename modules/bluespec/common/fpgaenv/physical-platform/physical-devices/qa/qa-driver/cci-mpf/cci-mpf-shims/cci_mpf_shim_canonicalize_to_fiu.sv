@@ -36,27 +36,27 @@
 // the system interface.
 //
 
-module cci_mpf_shim_canonicalize_to_qlp
+module cci_mpf_shim_canonicalize_to_fiu
    (
     input  logic clk,
 
     // Connection toward the QA platform.  Reset comes in here.
-    cci_mpf_if.to_qlp qlp,
+    cci_mpf_if.to_fiu fiu,
 
     // Connections toward user code.
     cci_mpf_if.to_afu afu
     );
 
-    assign reset_n = qlp.reset_n;
-    assign afu.reset_n = qlp.reset_n;
+    assign reset_n = fiu.reset_n;
+    assign afu.reset_n = fiu.reset_n;
 
-    assign qlp.c0Tx = cci_mpf_updC0TxCanonical(afu.c0Tx);
-    assign qlp.c1Tx = cci_mpf_updC1TxCanonical(afu.c1Tx);
+    assign fiu.c0Tx = cci_mpf_updC0TxCanonical(afu.c0Tx);
+    assign fiu.c1Tx = cci_mpf_updC1TxCanonical(afu.c1Tx);
 
-    assign afu.c0TxAlmFull = qlp.c0TxAlmFull;
-    assign afu.c1TxAlmFull = qlp.c1TxAlmFull;
+    assign afu.c0TxAlmFull = fiu.c0TxAlmFull;
+    assign afu.c1TxAlmFull = fiu.c1TxAlmFull;
 
-    assign afu.c0Rx = qlp.c0Rx;
-    assign afu.c1Rx = qlp.c1Rx;
+    assign afu.c0Rx = fiu.c0Rx;
+    assign afu.c1Rx = fiu.c1Rx;
 
-endmodule // cci_mpf_shim_canonicalize_to_qlp
+endmodule // cci_mpf_shim_canonicalize_to_fiu

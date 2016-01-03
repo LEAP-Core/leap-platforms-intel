@@ -39,7 +39,7 @@ module qa_drv_hc_root
     //
     // Signals connecting to QA Platform
     //
-    cci_mpf_if.to_qlp            qlp,
+    cci_mpf_if.to_fiu            fiu,
 
     // CSR updates and state
     input t_CSR_AFU_STATE        csr,
@@ -86,21 +86,21 @@ module qa_drv_hc_root
     // Map names here.
     //
     logic  reset_n;
-    assign reset_n = qlp.reset_n;
+    assign reset_n = fiu.reset_n;
 
     t_if_cci_c0_Rx rx0;
     // Buffer incoming read responses for timing
     always_ff @(posedge clk)
     begin
-        rx0 <= qlp.c0Rx;
+        rx0 <= fiu.c0Rx;
     end
 
     logic  tx0_almostfull;
     logic  tx1_almostfull;
     always_ff @(posedge clk)
     begin
-        tx0_almostfull <= qlp.c0TxAlmFull;
-        tx1_almostfull <= qlp.c1TxAlmFull;
+        tx0_almostfull <= fiu.c0TxAlmFull;
+        tx1_almostfull <= fiu.c1TxAlmFull;
     end
 
     //
@@ -111,8 +111,8 @@ module qa_drv_hc_root
     t_if_cci_c1_Tx tx1;
     t_if_cci_c1_Tx tx1_q;
 
-    assign qlp.c0Tx = cci_mpf_cvtC0TxFromBase(tx0_q);
-    assign qlp.c1Tx = cci_mpf_cvtC1TxFromBase(tx1_q);
+    assign fiu.c0Tx = cci_mpf_cvtC0TxFromBase(tx0_q);
+    assign fiu.c1Tx = cci_mpf_cvtC1TxFromBase(tx1_q);
 
     //
     // All signals to the host must come from registers.  Guarantee that here.

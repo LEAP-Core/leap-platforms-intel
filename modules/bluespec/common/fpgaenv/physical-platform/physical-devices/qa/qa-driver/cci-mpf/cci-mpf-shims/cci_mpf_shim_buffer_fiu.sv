@@ -33,13 +33,13 @@
 
 //
 // This is more a primitive shim than a full fledged shim.  It takes a
-// QLP-side raw connection (wires) and adds one cycle of buffering to
+// FIU-side raw connection (wires) and adds one cycle of buffering to
 // all the RX signals that flow toward the AFU.  The TX signals flowing
-// toward the QLP pass through as wires.
+// toward the FIU pass through as wires.
 //
 // This structure is useful when a shim needs to look up some data
 // associated with a response that is stored in block RAM.  The RAM read
-// request can be triggered when the response arrives from the QLP and
+// request can be triggered when the response arrives from the FIU and
 // the RAM response is then available when the response exits the
 // buffer built here.
 //
@@ -47,7 +47,7 @@
 // interface does not provide for back pressure on the flow of responses.
 //
 
-module cci_mpf_shim_buffer_qlp
+module cci_mpf_shim_buffer_fiu
   #(
     // Register outbound signals if nonzero.
     parameter REGISTER_OUTBOUND = 0
@@ -55,20 +55,20 @@ module cci_mpf_shim_buffer_qlp
    (
     input  logic clk,
 
-    // Raw unbuffered connection.  This is the QLP-side connection of the
+    // Raw unbuffered connection.  This is the FIU-side connection of the
     // parent module.
-    cci_mpf_if.to_qlp qlp_raw,
+    cci_mpf_if.to_fiu fiu_raw,
 
     // Generated buffered connection.  The confusing interface direction
-    // arises because the shim is an interposer on the QLP side of a
+    // arises because the shim is an interposer on the FIU side of a
     // standard shim.
-    cci_mpf_if.to_afu qlp_buf
+    cci_mpf_if.to_afu fiu_buf
     );
 
-    assign qlp_buf.reset_n = qlp_raw.reset_n;
+    assign fiu_buf.reset_n = fiu_raw.reset_n;
 
     //
-    // Tx wires pass through toward the QLP. They are straight assignments
+    // Tx wires pass through toward the FIU. They are straight assignments
     // if REGISTER_OUTBOUND is 0.
     //
     generate
@@ -76,22 +76,22 @@ module cci_mpf_shim_buffer_qlp
         begin
             always_comb
             begin
-                qlp_raw.c0Tx = qlp_buf.c0Tx;
-                qlp_buf.c0TxAlmFull = qlp_raw.c0TxAlmFull;
+                fiu_raw.c0Tx = fiu_buf.c0Tx;
+                fiu_buf.c0TxAlmFull = fiu_raw.c0TxAlmFull;
 
-                qlp_raw.c1Tx = qlp_buf.c1Tx;
-                qlp_buf.c1TxAlmFull = qlp_raw.c1TxAlmFull;
+                fiu_raw.c1Tx = fiu_buf.c1Tx;
+                fiu_buf.c1TxAlmFull = fiu_raw.c1TxAlmFull;
             end
         end
         else
         begin
             always_ff @(posedge clk)
             begin
-                qlp_raw.c0Tx <= qlp_buf.c0Tx;
-                qlp_buf.c0TxAlmFull <= qlp_raw.c0TxAlmFull;
+                fiu_raw.c0Tx <= fiu_buf.c0Tx;
+                fiu_buf.c0TxAlmFull <= fiu_raw.c0TxAlmFull;
 
-                qlp_raw.c1Tx <= qlp_buf.c1Tx;
-                qlp_buf.c1TxAlmFull <= qlp_raw.c1TxAlmFull;
+                fiu_raw.c1Tx <= fiu_buf.c1Tx;
+                fiu_buf.c1TxAlmFull <= fiu_raw.c1TxAlmFull;
             end
         end
     endgenerate
@@ -101,9 +101,9 @@ module cci_mpf_shim_buffer_qlp
     //
     always_ff @(posedge clk)
     begin
-        qlp_buf.c0Rx <= qlp_raw.c0Rx;
-        qlp_buf.c1Rx <= qlp_raw.c1Rx;
+        fiu_buf.c0Rx <= fiu_raw.c0Rx;
+        fiu_buf.c1Rx <= fiu_raw.c1Rx;
     end
 
-endmodule // cci_mpf_shim_buffer_qlp
+endmodule // cci_mpf_shim_buffer_fiu
 

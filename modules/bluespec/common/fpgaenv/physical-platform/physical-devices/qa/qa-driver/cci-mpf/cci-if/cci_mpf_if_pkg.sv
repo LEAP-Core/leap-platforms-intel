@@ -127,7 +127,7 @@ package cci_mpf_if_pkg;
     //
     // Extension to the request header exposed in the MPF interface to
     // the AFU and used inside MPF.  The extension is dropped before
-    // requests reach the QLP.
+    // requests reach the FIU.
     //
     typedef struct packed {
 `ifdef CCI_MPF_NEED_ADDR_EXT

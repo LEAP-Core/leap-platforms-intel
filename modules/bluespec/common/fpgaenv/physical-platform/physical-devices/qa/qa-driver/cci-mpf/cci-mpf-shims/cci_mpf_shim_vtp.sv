@@ -32,12 +32,12 @@
 `include "cci_mpf_shim_vtp_params.h"
 
 //
-// Map virtual to physical addresses.  The AFU and QLP interfaces are thus
+// Map virtual to physical addresses.  The AFU and FIU interfaces are thus
 // different widths.
 //
 // Requests coming from the AFU can be tagged as containing either virtual
 // or physical addresses.  Physical addresses are passed directly to the
-// QLP without translation here.  The tag is accessed with the
+// FIU without translation here.  The tag is accessed with the
 // getReqAddrIsVirtual() function.
 //
 //                             * * * * * * * *
@@ -81,14 +81,14 @@ module cci_mpf_shim_vtp
     input  logic clk,
 
     // Connection toward the QA platform.  Reset comes in here.
-    cci_mpf_if.to_qlp qlp,
+    cci_mpf_if.to_fiu fiu,
 
     // Connections toward user code.
     cci_mpf_if.to_afu afu
     );
 
     logic reset_n;
-    assign reset_n = qlp.reset_n;
+    assign reset_n = fiu.reset_n;
 
 
     // ====================================================================
@@ -118,7 +118,7 @@ module cci_mpf_shim_vtp
          .deqC1Tx
          );
 
-    assign afu_buf.reset_n = qlp.reset_n;
+    assign afu_buf.reset_n = fiu.reset_n;
 
     //
     // Almost full signals in the buffered input are ignored --
@@ -239,15 +239,15 @@ module cci_mpf_shim_vtp
         end
         else
         begin
-            if (qlp.c0Rx.cfgValid &&
-                (csr_addr_matches(qlp.c0Rx.hdr, CSR_AFU_PAGE_TABLE_BASEL) ||
-                 csr_addr_matches(qlp.c0Rx.hdr, CSR_AFU_PAGE_TABLE_BASEH)))
+            if (fiu.c0Rx.cfgValid &&
+                (csr_addr_matches(fiu.c0Rx.hdr, CSR_AFU_PAGE_TABLE_BASEL) ||
+                 csr_addr_matches(fiu.c0Rx.hdr, CSR_AFU_PAGE_TABLE_BASEH)))
             begin
                 // Shift address into page_table_base
                 page_table_base <=
-                    t_cci_cl_paddr'({ page_table_base, qlp.c0Rx.data[31:0]});
+                    t_cci_cl_paddr'({ page_table_base, fiu.c0Rx.data[31:0]});
 
-                if (csr_addr_matches(qlp.c0Rx.hdr, CSR_AFU_PAGE_TABLE_BASEL))
+                if (csr_addr_matches(fiu.c0Rx.hdr, CSR_AFU_PAGE_TABLE_BASEL))
                 begin
                     tlbReadIdxRdy <= 1;
                 end
@@ -297,13 +297,13 @@ module cci_mpf_shim_vtp
         cci_mpf_c1TxIsValid(c1_afu_pipe[AFU_PIPE_LAST_STAGE]);
 
     // Given a request, is the translation ready and can the request be
-    // forwarded toward the QLP? TLB miss handler read requests have priority
+    // forwarded toward the FIU? TLB miss handler read requests have priority
     // on channel 0. lookupValid will only be set if there was a request.
     logic c0_fwd_req;
     assign c0_fwd_req =
         c0_request_rdy &&
         (lookupValid[0] || ! cci_mpf_getReqAddrIsVirtual(c0_afu_pipe[AFU_PIPE_LAST_STAGE].hdr)) &&
-        ! qlp.c0TxAlmFull &&
+        ! fiu.c0TxAlmFull &&
         ! tlbReadIdxEn;
 
     logic c1_fwd_req;
@@ -312,7 +312,7 @@ module cci_mpf_shim_vtp
         (lookupValid[1] ||
          c1_afu_pipe[AFU_PIPE_LAST_STAGE].intrValid ||
          ! cci_mpf_getReqAddrIsVirtual(c1_afu_pipe[AFU_PIPE_LAST_STAGE].hdr)) &&
-        ! qlp.c1TxAlmFull;
+        ! fiu.c1TxAlmFull;
 
     // Did a request miss in the TLB or fail arbitration?  It will be rotated
     // back to the head of afu_pipe.
@@ -449,7 +449,7 @@ module cci_mpf_shim_vtp
     end
 
     // Channel 0 (read) is either client requests or reads for TLB misses
-    assign qlp.c0Tx = cci_mpf_genC0TxReadReq(c0_req_hdr, c0_fwd_req || tlbReadIdxEn);
+    assign fiu.c0Tx = cci_mpf_genC0TxReadReq(c0_req_hdr, c0_fwd_req || tlbReadIdxEn);
 
     // Channel 1 request logic
     t_cci_mpf_ReqMemHdr c1_req_hdr;
@@ -474,13 +474,13 @@ module cci_mpf_shim_vtp
     // through original request (interrupt).
     always_comb
     begin
-        qlp.c1Tx = cci_mpf_c1TxMaskValids(c1_afu_pipe[AFU_PIPE_LAST_STAGE],
+        fiu.c1Tx = cci_mpf_c1TxMaskValids(c1_afu_pipe[AFU_PIPE_LAST_STAGE],
                                          c1_fwd_req);
 
         // Is the header rewritten for a virtually address write?
         if (c1_afu_pipe[AFU_PIPE_LAST_STAGE].wrValid)
         begin
-            qlp.c1Tx.hdr = c1_req_hdr;
+            fiu.c1Tx.hdr = c1_req_hdr;
         end
     end
 
@@ -493,22 +493,22 @@ module cci_mpf_shim_vtp
 
     // Is the read response an internal page table reference?
     logic is_pt_rsp;
-    assign is_pt_rsp = qlp.c0Rx.hdr[RESERVED_MDATA_IDX];
+    assign is_pt_rsp = fiu.c0Rx.hdr[RESERVED_MDATA_IDX];
 
     always_comb
     begin
-        afu_buf.c0Rx = qlp.c0Rx;
+        afu_buf.c0Rx = fiu.c0Rx;
 
         // Only forward client-generated read responses
-        afu_buf.c0Rx.rdValid = qlp.c0Rx.rdValid && ! is_pt_rsp;
+        afu_buf.c0Rx.rdValid = fiu.c0Rx.rdValid && ! is_pt_rsp;
 
         // Connect read responses to the TLB management code
-        tlbReadData = qlp.c0Rx.data;
-        tlbReadDataEn = qlp.c0Rx.rdValid && is_pt_rsp;
+        tlbReadData = fiu.c0Rx.data;
+        tlbReadDataEn = fiu.c0Rx.rdValid && is_pt_rsp;
 
-        // Channel 1 (write) responses can flow directly from the QLP
+        // Channel 1 (write) responses can flow directly from the FIU
         // port since there is no processing needed here.
-        afu_buf.c1Rx = qlp.c1Rx;
+        afu_buf.c1Rx = fiu.c1Rx;
     end
 
 endmodule // cci_mpf_shim_vtp

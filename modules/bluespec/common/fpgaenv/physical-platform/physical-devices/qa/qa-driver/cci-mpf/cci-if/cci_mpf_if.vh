@@ -27,10 +27,10 @@ interface cci_mpf_if
     input logic clk
     );
 
-    // Reset flows from QLP to AFU
+    // Reset flows from FIU to AFU
     logic              reset_n;
 
-    // Requests to QLP.  All objects are outputs flowing toward QLP except
+    // Requests to FIU.  All objects are outputs flowing toward FIU except
     // the almost full ports, which provide flow control.
     t_if_cci_mpf_c0_Tx c0Tx;
     logic              c0TxAlmFull;
@@ -38,14 +38,14 @@ interface cci_mpf_if
     t_if_cci_mpf_c1_Tx c1Tx;
     logic              c1TxAlmFull;
 
-    // Responses from QLP.  All objects are inputs from the QLP and flow
+    // Responses from FIU.  All objects are inputs from the FIU and flow
     // toward the AFU.  There is no flow control.  The AFU must be prepared
     // to receive responses for all in-flight requests.
     t_if_cci_c0_Rx     c0Rx;
     t_if_cci_c1_Rx     c1Rx;
 
-    // Port directions for connections in the direction of the QLP (platform)
-    modport to_qlp
+    // Port directions for connections in the direction of the FIU (platform)
+    modport to_fiu
       (
        input  reset_n,
 
@@ -82,7 +82,7 @@ interface cci_mpf_if
     //
     // ====================================================================
 
-    modport to_qlp_snoop
+    modport to_fiu_snoop
       (
        input  reset_n,
 

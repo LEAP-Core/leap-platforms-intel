@@ -82,15 +82,15 @@ module cci_mpf_shim_rsp_order
     input  logic clk,
 
     // Connection toward the QA platform.  Reset comes in here.
-    cci_mpf_if.to_qlp qlp,
+    cci_mpf_if.to_fiu fiu,
 
     // Connections toward user code.
     cci_mpf_if.to_afu afu
     );
 
     logic reset_n;
-    assign reset_n = qlp.reset_n;
-    assign afu.reset_n = qlp.reset_n;
+    assign reset_n = fiu.reset_n;
+    assign afu.reset_n = fiu.reset_n;
 
     // Index of a scoreboard entry
     localparam N_SCOREBOARD_IDX_BITS = $clog2(N_SCOREBOARD_ENTRIES);
@@ -117,10 +117,10 @@ module cci_mpf_shim_rsp_order
     // ====================================================================
 
     logic c0_TxAlmFull;
-    assign c0_TxAlmFull = qlp.c0TxAlmFull || ! rd_scoreboard_notFull;
+    assign c0_TxAlmFull = fiu.c0TxAlmFull || ! rd_scoreboard_notFull;
 
     logic c1_TxAlmFull;
-    assign c1_TxAlmFull = qlp.c1TxAlmFull || ! wr_heap_notFull;
+    assign c1_TxAlmFull = fiu.c1TxAlmFull || ! wr_heap_notFull;
 
     generate
         if (SYNC_REQ_CHANNELS == 0)
@@ -203,8 +203,8 @@ module cci_mpf_shim_rsp_order
     //
     // ====================================================================
 
-    cci_mpf_if qlp_buf (.clk);
-    assign qlp_buf.reset_n = qlp.reset_n;
+    cci_mpf_if fiu_buf (.clk);
+    assign fiu_buf.reset_n = fiu.reset_n;
 
     generate
         //
@@ -212,19 +212,19 @@ module cci_mpf_shim_rsp_order
         // reads?
         //
         if ((SORT_READ_RESPONSES == 0) || PRESERVE_WRITE_MDATA)
-        begin : gen_qlp_buf
+        begin : gen_fiu_buf
             always_ff @(posedge clk)
             begin
-                qlp_buf.c0Rx <= qlp.c0Rx;
-                qlp_buf.c1Rx <= qlp.c1Rx;
+                fiu_buf.c0Rx <= fiu.c0Rx;
+                fiu_buf.c1Rx <= fiu.c1Rx;
             end
         end
         else
-        begin : no_qlp_buf
+        begin : no_fiu_buf
             always_comb
             begin
-                qlp_buf.c0Rx = qlp.c0Rx;
-                qlp_buf.c1Rx = qlp.c1Rx;
+                fiu_buf.c0Rx = fiu.c0Rx;
+                fiu_buf.c1Rx = fiu.c1Rx;
             end
         end
     endgenerate
@@ -268,9 +268,9 @@ module cci_mpf_shim_rsp_order
                 .notFull(rd_scoreboard_notFull),
                 .enqIdx(rd_scoreboard_enqIdx),
 
-                .enqData_en(qlp.c0Rx.rdValid),
-                .enqDataIdx(t_scoreboard_idx'(qlp.c0Rx.hdr.mdata)),
-                .enqData(qlp.c0Rx.data),
+                .enqData_en(fiu.c0Rx.rdValid),
+                .enqDataIdx(t_scoreboard_idx'(fiu.c0Rx.hdr.mdata)),
+                .enqData(fiu.c0Rx.data),
 
                 .deq_en(afu.c0Rx.rdValid),
                 .notEmpty(rd_scoreboard_notEmpty),
@@ -300,21 +300,21 @@ module cci_mpf_shim_rsp_order
                 .notFull(rd_scoreboard_notFull),
                 .allocIdx(rd_scoreboard_enqIdx),
 
-                .readReq(t_scoreboard_idx'(qlp.c0Rx.hdr.mdata)),
+                .readReq(t_scoreboard_idx'(fiu.c0Rx.hdr.mdata)),
                 .readRsp(rd_heap_readMdata),
-                .free(qlp.c0Rx.rdValid),
-                .freeIdx(t_scoreboard_idx'(qlp.c0Rx.hdr.mdata))
+                .free(fiu.c0Rx.rdValid),
+                .freeIdx(t_scoreboard_idx'(fiu.c0Rx.hdr.mdata))
                 );
         end
     endgenerate
 
-    // Forward requests toward the QLP.  Replace the Mdata entry with the
+    // Forward requests toward the FIU.  Replace the Mdata entry with the
     // scoreboard index.  The original Mdata is saved in the scoreboard
     // and restored when the response is returned.
     always_comb
     begin
-        qlp.c0Tx = afu.c0Tx;
-        qlp.c0Tx.hdr.base.mdata = t_cci_mdata'(rd_scoreboard_enqIdx);
+        fiu.c0Tx = afu.c0Tx;
+        fiu.c0Tx.hdr.base.mdata = t_cci_mdata'(rd_scoreboard_enqIdx);
     end
 
     logic c0_non_rd_valid;
@@ -324,13 +324,13 @@ module cci_mpf_shim_rsp_order
     //
     always_comb
     begin
-        afu.c0Rx = qlp_buf.c0Rx;
+        afu.c0Rx = fiu_buf.c0Rx;
 
         // Is there a non-read response active?
-        c0_non_rd_valid = qlp_buf.c0Rx.wrValid ||
-                          qlp_buf.c0Rx.cfgValid ||
-                          qlp_buf.c0Rx.umsgValid ||
-                          qlp_buf.c0Rx.intrValid;
+        c0_non_rd_valid = fiu_buf.c0Rx.wrValid ||
+                          fiu_buf.c0Rx.cfgValid ||
+                          fiu_buf.c0Rx.umsgValid ||
+                          fiu_buf.c0Rx.intrValid;
 
         // Forward responses toward AFU as they become available in sorted order.
         // Non-read responses on the channel have priority since they are
@@ -341,7 +341,7 @@ module cci_mpf_shim_rsp_order
             afu.c0Rx.rdValid = rd_scoreboard_notEmpty && ! c0_non_rd_valid;
         end
 
-        // Either forward the header from the QLP for non-read responses or
+        // Either forward the header from the FIU for non-read responses or
         // reconstruct the read response header.  The CCI-E header has the same
         // low bits as CCI-S so we always construct CCI-E and truncate when
         // in CCI-S mode.
@@ -351,7 +351,7 @@ module cci_mpf_shim_rsp_order
         end
         else
         begin
-            afu.c0Rx.hdr = qlp_buf.c0Rx.hdr;
+            afu.c0Rx.hdr = fiu_buf.c0Rx.hdr;
 
             // Return preserved Mdata
             if (afu.c0Rx.rdValid)
@@ -367,8 +367,8 @@ module cci_mpf_shim_rsp_order
     end
 
     // Lookup write heap to restore Mdata
-    assign wr_heap_readIdx[0] = t_heap_idx'(qlp.c0Rx.hdr.mdata);
-    assign wr_heap_free[0] = qlp.c0Rx.wrValid;
+    assign wr_heap_readIdx[0] = t_heap_idx'(fiu.c0Rx.hdr.mdata);
+    assign wr_heap_free[0] = fiu.c0Rx.wrValid;
 
 
     // ====================================================================
@@ -383,14 +383,14 @@ module cci_mpf_shim_rsp_order
     // that increments the heap index.
     always_comb
     begin
-        qlp.c1Tx = afu.c1Tx;
-        qlp.c1Tx.hdr.base.mdata = t_cci_mdata'(wr_heap_allocIdx);
+        fiu.c1Tx = afu.c1Tx;
+        fiu.c1Tx.hdr.base.mdata = t_cci_mdata'(wr_heap_allocIdx);
     end
 
     // Responses
     always_comb
     begin
-        afu.c1Rx = qlp_buf.c1Rx;
+        afu.c1Rx = fiu_buf.c1Rx;
 
         // If a write response return the preserved Mdata
         if (afu.c1Rx.wrValid)
@@ -400,8 +400,8 @@ module cci_mpf_shim_rsp_order
     end
 
     // Lookup write heap to restore Mdata
-    assign wr_heap_readIdx[1] = t_heap_idx'(qlp.c1Rx.hdr.mdata);
-    assign wr_heap_free[1] = qlp.c1Rx.wrValid;
+    assign wr_heap_readIdx[1] = t_heap_idx'(fiu.c1Rx.hdr.mdata);
+    assign wr_heap_free[1] = fiu.c1Rx.wrValid;
 
 endmodule // cci_mpf_shim_rsp_order
 

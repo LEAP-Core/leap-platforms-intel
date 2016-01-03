@@ -104,15 +104,15 @@ module qa_driver
     input  logic [CCI_ADDR_WIDTH-1:0] mem_write_addr,
     input  t_cci_cldata mem_write_data,
     // Use CCI's cache if true
-    input  logic                      mem_write_req_cached,
+    input  logic        mem_write_req_cached,
     // Enforce order of references to the same address?
-    input  logic                      mem_write_req_check_order,
-    output logic                      mem_write_rdy,
-    input  logic                      mem_write_enable,
+    input  logic        mem_write_req_check_order,
+    output logic        mem_write_rdy,
+    input  logic        mem_write_enable,
 
     // Write ACK count.  Pulse with a count every time writes completes.
     // Multiple writes may complete in a single cycle.
-    output logic [1:0]                mem_write_ack,
+    output logic [1:0]  mem_write_ack,
 
     //
     // Client status registers.  Mostly useful for debugging.
@@ -125,10 +125,10 @@ module qa_driver
     // ReadStatusReg() method is never called.  In this case just
     // tie off sreg_rsp_enable.
     //
-    output [31:0]                sreg_req_addr,
-    output logic                 sreg_req_rdy,
-    input  [63:0]                sreg_rsp,
-    input  logic                 sreg_rsp_enable,
+    output [31:0]       sreg_req_addr,
+    output logic        sreg_req_rdy,
+    input  [63:0]       sreg_rsp,
+    input  logic        sreg_rsp_enable,
 
     // -------------------------------------------------------------------
     //
@@ -194,7 +194,7 @@ module qa_driver
     //
     // ====================================================================
 
-    cci_mpf_if qlp(.clk);
+    cci_mpf_if fiu(.clk);
 
     ccis_wires_to_mpf
       #(
@@ -214,7 +214,7 @@ module qa_driver
     qa_driver_csr
       csr_mgr
         (.clk,
-         .qlp,
+         .fiu,
          .csr);
 
 
@@ -232,7 +232,7 @@ module qa_driver
     localparam MUX_IDX_CHANNELS = 1;
 
     cci_mpf_if
-      qlp_mux[0:1] (.clk);
+      fiu_mux[0:1] (.clk);
 
     cci_mpf_shim_mux
       #(
@@ -244,8 +244,8 @@ module qa_driver
       mux
        (
         .clk,
-        .qlp,
-        .afus(qlp_mux)
+        .fiu,
+        .afus(fiu_mux)
         );
 
 
@@ -259,7 +259,7 @@ module qa_driver
       host_memory
        (
         .clk,
-        .qlp(qlp_mux[MUX_IDX_MEMORY]),
+        .fiu(fiu_mux[MUX_IDX_MEMORY]),
         .mem_read_req_addr,
         .mem_read_req_cached,
         .mem_read_req_check_order,
@@ -287,7 +287,7 @@ module qa_driver
       host_channel
        (
         .clk,
-        .qlp(qlp_mux[MUX_IDX_CHANNELS]),
+        .fiu(fiu_mux[MUX_IDX_CHANNELS]),
         .csr,
         .rx_fifo_data,
         .rx_fifo_rdy,

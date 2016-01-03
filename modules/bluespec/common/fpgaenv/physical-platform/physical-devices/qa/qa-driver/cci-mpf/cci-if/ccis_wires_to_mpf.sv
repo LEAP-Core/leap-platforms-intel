@@ -59,13 +59,13 @@ module ccis_wires_to_mpf
     //
     // -------------------------------------------------------------------
 
-    cci_mpf_if qlp
+    cci_mpf_if fiu
     );
 
     logic  clk;
     assign clk = vl_clk_LPdomain_32ui;
 
-    assign qlp.reset_n = ffs_vl_LP32ui_lp2sy_SoftReset_n &&
+    assign fiu.reset_n = ffs_vl_LP32ui_lp2sy_SoftReset_n &&
                          ffs_vl_LP32ui_lp2sy_InitDnForSys;
 
     generate
@@ -73,30 +73,30 @@ module ccis_wires_to_mpf
         begin : reg_out
             always_ff @(posedge clk)
             begin
-                ffs_vl61_LP32ui_sy2lp_C0TxHdr <= qlp.c0Tx.hdr.base;
-                ffs_vl_LP32ui_sy2lp_C0TxRdValid <= qlp.c0Tx.rdValid;
-                qlp.c0TxAlmFull <= ffs_vl_LP32ui_lp2sy_C0TxAlmFull;
+                ffs_vl61_LP32ui_sy2lp_C0TxHdr <= fiu.c0Tx.hdr.base;
+                ffs_vl_LP32ui_sy2lp_C0TxRdValid <= fiu.c0Tx.rdValid;
+                fiu.c0TxAlmFull <= ffs_vl_LP32ui_lp2sy_C0TxAlmFull;
 
-                ffs_vl61_LP32ui_sy2lp_C1TxHdr <= qlp.c1Tx.hdr.base;
-                ffs_vl512_LP32ui_sy2lp_C1TxData <= qlp.c1Tx.data;
-                ffs_vl_LP32ui_sy2lp_C1TxWrValid <= qlp.c1Tx.wrValid;
-                ffs_vl_LP32ui_sy2lp_C1TxIrValid <= qlp.c1Tx.intrValid;
-                qlp.c1TxAlmFull <= ffs_vl_LP32ui_lp2sy_C1TxAlmFull;
+                ffs_vl61_LP32ui_sy2lp_C1TxHdr <= fiu.c1Tx.hdr.base;
+                ffs_vl512_LP32ui_sy2lp_C1TxData <= fiu.c1Tx.data;
+                ffs_vl_LP32ui_sy2lp_C1TxWrValid <= fiu.c1Tx.wrValid;
+                ffs_vl_LP32ui_sy2lp_C1TxIrValid <= fiu.c1Tx.intrValid;
+                fiu.c1TxAlmFull <= ffs_vl_LP32ui_lp2sy_C1TxAlmFull;
             end
         end
         else
         begin : wire_out
             always_comb
             begin
-                ffs_vl61_LP32ui_sy2lp_C0TxHdr = qlp.c0Tx.hdr.base;
-                ffs_vl_LP32ui_sy2lp_C0TxRdValid = qlp.c0Tx.rdValid;
-                qlp.c0TxAlmFull = ffs_vl_LP32ui_lp2sy_C0TxAlmFull;
+                ffs_vl61_LP32ui_sy2lp_C0TxHdr = fiu.c0Tx.hdr.base;
+                ffs_vl_LP32ui_sy2lp_C0TxRdValid = fiu.c0Tx.rdValid;
+                fiu.c0TxAlmFull = ffs_vl_LP32ui_lp2sy_C0TxAlmFull;
 
-                ffs_vl61_LP32ui_sy2lp_C1TxHdr = qlp.c1Tx.hdr.base;
-                ffs_vl512_LP32ui_sy2lp_C1TxData = qlp.c1Tx.data;
-                ffs_vl_LP32ui_sy2lp_C1TxWrValid = qlp.c1Tx.wrValid;
-                ffs_vl_LP32ui_sy2lp_C1TxIrValid = qlp.c1Tx.intrValid;
-                qlp.c1TxAlmFull = ffs_vl_LP32ui_lp2sy_C1TxAlmFull;
+                ffs_vl61_LP32ui_sy2lp_C1TxHdr = fiu.c1Tx.hdr.base;
+                ffs_vl512_LP32ui_sy2lp_C1TxData = fiu.c1Tx.data;
+                ffs_vl_LP32ui_sy2lp_C1TxWrValid = fiu.c1Tx.wrValid;
+                ffs_vl_LP32ui_sy2lp_C1TxIrValid = fiu.c1Tx.intrValid;
+                fiu.c1TxAlmFull = ffs_vl_LP32ui_lp2sy_C1TxAlmFull;
             end
         end
     endgenerate
@@ -109,34 +109,34 @@ module ccis_wires_to_mpf
         begin : reg_in
             always_ff @(posedge clk)
             begin
-                qlp.c0Rx.hdr       <= ffs_vl18_LP32ui_lp2sy_C0RxHdr;
-                qlp.c0Rx.data      <= ffs_vl512_LP32ui_lp2sy_C0RxData;
-                qlp.c0Rx.wrValid   <= ffs_vl_LP32ui_lp2sy_C0RxWrValid;
-                qlp.c0Rx.rdValid   <= ffs_vl_LP32ui_lp2sy_C0RxRdValid;
-                qlp.c0Rx.cfgValid  <= ffs_vl_LP32ui_lp2sy_C0RxCgValid;
-                qlp.c0Rx.umsgValid <= ffs_vl_LP32ui_lp2sy_C0RxUgValid;
-                qlp.c0Rx.intrValid <= ffs_vl_LP32ui_lp2sy_C0RxIrValid;
+                fiu.c0Rx.hdr       <= ffs_vl18_LP32ui_lp2sy_C0RxHdr;
+                fiu.c0Rx.data      <= ffs_vl512_LP32ui_lp2sy_C0RxData;
+                fiu.c0Rx.wrValid   <= ffs_vl_LP32ui_lp2sy_C0RxWrValid;
+                fiu.c0Rx.rdValid   <= ffs_vl_LP32ui_lp2sy_C0RxRdValid;
+                fiu.c0Rx.cfgValid  <= ffs_vl_LP32ui_lp2sy_C0RxCgValid;
+                fiu.c0Rx.umsgValid <= ffs_vl_LP32ui_lp2sy_C0RxUgValid;
+                fiu.c0Rx.intrValid <= ffs_vl_LP32ui_lp2sy_C0RxIrValid;
 
-                qlp.c1Rx.hdr       <= ffs_vl18_LP32ui_lp2sy_C1RxHdr;
-                qlp.c1Rx.wrValid   <= ffs_vl_LP32ui_lp2sy_C1RxWrValid;
-                qlp.c1Rx.intrValid <= ffs_vl_LP32ui_lp2sy_C1RxIrValid;
+                fiu.c1Rx.hdr       <= ffs_vl18_LP32ui_lp2sy_C1RxHdr;
+                fiu.c1Rx.wrValid   <= ffs_vl_LP32ui_lp2sy_C1RxWrValid;
+                fiu.c1Rx.intrValid <= ffs_vl_LP32ui_lp2sy_C1RxIrValid;
             end
         end
         else
         begin : wire_in
             always_comb
             begin
-                qlp.c0Rx.hdr       = ffs_vl18_LP32ui_lp2sy_C0RxHdr;
-                qlp.c0Rx.data      = ffs_vl512_LP32ui_lp2sy_C0RxData;
-                qlp.c0Rx.wrValid   = ffs_vl_LP32ui_lp2sy_C0RxWrValid;
-                qlp.c0Rx.rdValid   = ffs_vl_LP32ui_lp2sy_C0RxRdValid;
-                qlp.c0Rx.cfgValid  = ffs_vl_LP32ui_lp2sy_C0RxCgValid;
-                qlp.c0Rx.umsgValid = ffs_vl_LP32ui_lp2sy_C0RxUgValid;
-                qlp.c0Rx.intrValid = ffs_vl_LP32ui_lp2sy_C0RxIrValid;
+                fiu.c0Rx.hdr       = ffs_vl18_LP32ui_lp2sy_C0RxHdr;
+                fiu.c0Rx.data      = ffs_vl512_LP32ui_lp2sy_C0RxData;
+                fiu.c0Rx.wrValid   = ffs_vl_LP32ui_lp2sy_C0RxWrValid;
+                fiu.c0Rx.rdValid   = ffs_vl_LP32ui_lp2sy_C0RxRdValid;
+                fiu.c0Rx.cfgValid  = ffs_vl_LP32ui_lp2sy_C0RxCgValid;
+                fiu.c0Rx.umsgValid = ffs_vl_LP32ui_lp2sy_C0RxUgValid;
+                fiu.c0Rx.intrValid = ffs_vl_LP32ui_lp2sy_C0RxIrValid;
 
-                qlp.c1Rx.hdr       = ffs_vl18_LP32ui_lp2sy_C1RxHdr;
-                qlp.c1Rx.wrValid   = ffs_vl_LP32ui_lp2sy_C1RxWrValid;
-                qlp.c1Rx.intrValid = ffs_vl_LP32ui_lp2sy_C1RxIrValid;
+                fiu.c1Rx.hdr       = ffs_vl18_LP32ui_lp2sy_C1RxHdr;
+                fiu.c1Rx.wrValid   = ffs_vl_LP32ui_lp2sy_C1RxWrValid;
+                fiu.c1Rx.intrValid = ffs_vl_LP32ui_lp2sy_C1RxIrValid;
             end
         end
     endgenerate

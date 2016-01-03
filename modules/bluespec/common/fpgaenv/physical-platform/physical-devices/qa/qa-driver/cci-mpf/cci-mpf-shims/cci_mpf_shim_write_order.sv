@@ -48,14 +48,14 @@ module cci_mpf_shim_write_order
     input  logic clk,
 
     // Connection toward the QA platform.  Reset comes in here.
-    cci_mpf_if.to_qlp qlp,
+    cci_mpf_if.to_fiu fiu,
 
     // Connections toward user code.
     cci_mpf_if.to_afu afu
     );
 
     logic reset_n;
-    assign reset_n = qlp.reset_n;
+    assign reset_n = fiu.reset_n;
 
     // ====================================================================
     //
@@ -102,7 +102,7 @@ module cci_mpf_shim_write_order
          .deqTx(afu_deq)
          );
 
-    assign afu_buf.reset_n = qlp.reset_n;
+    assign afu_buf.reset_n = fiu.reset_n;
 
     //
     // Almost full signals in the buffered input are ignored --
@@ -115,21 +115,21 @@ module cci_mpf_shim_write_order
 
     // ====================================================================
     //
-    //  Instantiate a buffer on the QLP response port to give time to
+    //  Instantiate a buffer on the FIU response port to give time to
     //  read local state in block RAMs before forwarding the response
     //  toward the AFU.
     //
     // ====================================================================
 
     cci_mpf_if
-      qlp_buf (.clk);
+      fiu_buf (.clk);
 
-    cci_mpf_shim_buffer_qlp
-      bufqlp
+    cci_mpf_shim_buffer_fiu
+      buffiu
         (
          .clk,
-         .qlp_raw(qlp),
-         .qlp_buf(qlp_buf)
+         .fiu_raw(fiu),
+         .fiu_buf(fiu_buf)
          );
 
 
@@ -225,7 +225,7 @@ module cci_mpf_shim_write_order
                .test_notPresent_reg(rd_filter_test_notPresent),
                .insert_idx(rd_filter_insert_idx),
                .insert_value(rd_filter_insert_hash),
-               .insert_en(qlp_buf.c0Tx.rdValid),
+               .insert_en(fiu_buf.c0Tx.rdValid),
                .remove_idx(rd_filter_remove_idx),
                .remove_en(rd_filter_remove_en));
 
@@ -245,7 +245,7 @@ module cci_mpf_shim_write_order
                .test_notPresent_reg(wr_filter_test_notPresent),
                .insert_idx(wr_filter_insert_idx),
                .insert_value(wr_filter_insert_hash),
-               .insert_en(qlp_buf.c1Tx.wrValid),
+               .insert_en(fiu_buf.c1Tx.wrValid),
                .remove_idx(wr_filter_remove_idx),
                .remove_en(wr_filter_remove_en));
 
@@ -295,7 +295,7 @@ module cci_mpf_shim_write_order
         )
       c0_heap(.clk,
               .reset_n,
-              .enq(qlp_buf.c0Tx.rdValid),
+              .enq(fiu_buf.c0Tx.rdValid),
               .enqData(c0_heap_enqData),
               .notFull(c0_heap_notFull),
               .allocIdx(c0_heap_allocIdx),
@@ -338,7 +338,7 @@ module cci_mpf_shim_write_order
         )
       c1_heap(.clk,
               .reset_n,
-              .enq(qlp_buf.c1Tx.wrValid),
+              .enq(fiu_buf.c1Tx.wrValid),
               .enqData(c1_heap_enqData),
               .notFull(c1_heap_notFull),
               .allocIdx(c1_heap_allocIdx),
@@ -427,17 +427,17 @@ module cci_mpf_shim_write_order
                                    wr_filter_test_notPresent[1]) ||
                                   ! c1_enforce_order;
 
-    // Is a request blocked by inability to forward it to the QLP or a
+    // Is a request blocked by inability to forward it to the FIU or a
     // conflict?
     logic c0_blocked;
     assign c0_blocked = c0_request_rdy &&
-                        (qlp_buf.c0TxAlmFull ||
+                        (fiu_buf.c0TxAlmFull ||
                          ! c0_heap_notFull ||
                          ! c0_filter_may_insert);
 
     logic c1_blocked;
     assign c1_blocked = c1_request_rdy &&
-                        (qlp_buf.c1TxAlmFull ||
+                        (fiu_buf.c1TxAlmFull ||
                          ! c1_heap_notFull ||
                          ! c1_filter_may_insert);
 
@@ -644,41 +644,41 @@ module cci_mpf_shim_write_order
     //
     // ====================================================================
 
-    // Forward requests toward the QLP.  Replace part of the Mdata entry
+    // Forward requests toward the FIU.  Replace part of the Mdata entry
     // with the scoreboard index.  The original Mdata is saved in the
     // heap and restored when the response is returned.
     always_comb
     begin
-        qlp_buf.c0Tx = afu_pipe[1].c0Tx;
-        qlp_buf.c0Tx.hdr.base.mdata[$bits(c0_heap_allocIdx)-1 : 0] = c0_heap_allocIdx;
-        qlp_buf.c0Tx.rdValid = process_requests && c0_request_rdy;
+        fiu_buf.c0Tx = afu_pipe[1].c0Tx;
+        fiu_buf.c0Tx.hdr.base.mdata[$bits(c0_heap_allocIdx)-1 : 0] = c0_heap_allocIdx;
+        fiu_buf.c0Tx.rdValid = process_requests && c0_request_rdy;
     end
 
     // Save state that will be used when the response is returned.
     assign c0_heap_enqData.mdata = t_C0_REQ_IDX'(afu_pipe[1].c0Tx.hdr.base.mdata);
 
-    // Request heap read as qlp responses arrive.  The heap's value will be
-    // available the cycle qlp_buf is read.
-    assign c0_heap_readReq = t_C0_REQ_IDX'(qlp.c0Rx.hdr);
+    // Request heap read as fiu responses arrive.  The heap's value will be
+    // available the cycle fiu_buf is read.
+    assign c0_heap_readReq = t_C0_REQ_IDX'(fiu.c0Rx.hdr);
 
     // Free heap entries as read responses arrive.
-    assign c0_heap_freeIdx = t_C0_REQ_IDX'(qlp.c0Rx.hdr);
-    assign c0_heap_free = qlp.c0Rx.rdValid;
+    assign c0_heap_freeIdx = t_C0_REQ_IDX'(fiu.c0Rx.hdr);
+    assign c0_heap_free = fiu.c0Rx.rdValid;
 
-    // Either forward the header from the QLP for non-read responses or
+    // Either forward the header from the FIU for non-read responses or
     // reconstruct the read response header.
     always_comb
     begin
-        afu_buf.c0Rx = qlp_buf.c0Rx;
+        afu_buf.c0Rx = fiu_buf.c0Rx;
 
-        if (qlp_buf.c0Rx.rdValid)
+        if (fiu_buf.c0Rx.rdValid)
         begin
-            afu_buf.c0Rx.hdr = { qlp_buf.c0Rx.hdr[CCI_RX_MEMHDR_WIDTH-1 : $bits(t_C0_REQ_IDX)], c0_heap_readRsp.mdata };
+            afu_buf.c0Rx.hdr = { fiu_buf.c0Rx.hdr[CCI_RX_MEMHDR_WIDTH-1 : $bits(t_C0_REQ_IDX)], c0_heap_readRsp.mdata };
         end
-        else if (qlp_buf.c0Rx.wrValid)
+        else if (fiu_buf.c0Rx.wrValid)
         begin
             // This is a write response. The request came in on channel 1.
-            afu_buf.c0Rx.hdr = { qlp_buf.c0Rx.hdr[CCI_RX_MEMHDR_WIDTH-1 : $bits(t_C1_REQ_IDX)], c1_heap_readRsp[0].mdata };
+            afu_buf.c0Rx.hdr = { fiu_buf.c0Rx.hdr[CCI_RX_MEMHDR_WIDTH-1 : $bits(t_C1_REQ_IDX)], c1_heap_readRsp[0].mdata };
         end
     end
 
@@ -693,38 +693,38 @@ module cci_mpf_shim_write_order
     // details.
     always_comb
     begin
-        qlp_buf.c1Tx = cci_mpf_c1TxMaskValids(afu_pipe[1].c1Tx, process_requests);
+        fiu_buf.c1Tx = cci_mpf_c1TxMaskValids(afu_pipe[1].c1Tx, process_requests);
 
         if (afu_pipe[1].c1Tx.wrValid)
         begin
-            qlp_buf.c1Tx.hdr.base.mdata[$bits(c1_heap_allocIdx)-1 : 0] = c1_heap_allocIdx;
+            fiu_buf.c1Tx.hdr.base.mdata[$bits(c1_heap_allocIdx)-1 : 0] = c1_heap_allocIdx;
         end
     end
 
     // Save state that will be used when the response is returned.
     assign c1_heap_enqData.mdata = t_C1_REQ_IDX'(afu_pipe[1].c1Tx.hdr.base.mdata);
 
-    // Request heap read as qlp responses arrive. The heap's value will be
-    // available the cycle qlp_buf is read. Responses may arrive on either
+    // Request heap read as fiu responses arrive. The heap's value will be
+    // available the cycle fiu_buf is read. Responses may arrive on either
     // channel!
-    assign c1_heap_readReq[0] = t_C1_REQ_IDX'(qlp.c0Rx.hdr);
-    assign c1_heap_readReq[1] = t_C1_REQ_IDX'(qlp.c1Rx.hdr);
+    assign c1_heap_readReq[0] = t_C1_REQ_IDX'(fiu.c0Rx.hdr);
+    assign c1_heap_readReq[1] = t_C1_REQ_IDX'(fiu.c1Rx.hdr);
 
     // Free heap entries as read responses arrive.
-    assign c1_heap_freeIdx[0] = t_C1_REQ_IDX'(qlp.c0Rx.hdr);
-    assign c1_heap_free[0] = qlp.c0Rx.wrValid;
-    assign c1_heap_freeIdx[1] = t_C1_REQ_IDX'(qlp.c1Rx.hdr);
-    assign c1_heap_free[1] = qlp.c1Rx.wrValid;
+    assign c1_heap_freeIdx[0] = t_C1_REQ_IDX'(fiu.c0Rx.hdr);
+    assign c1_heap_free[0] = fiu.c0Rx.wrValid;
+    assign c1_heap_freeIdx[1] = t_C1_REQ_IDX'(fiu.c1Rx.hdr);
+    assign c1_heap_free[1] = fiu.c1Rx.wrValid;
 
-    // Either forward the header from the QLP for non-read responses or
+    // Either forward the header from the FIU for non-read responses or
     // reconstruct the read response header.
     always_comb
     begin
-        afu_buf.c1Rx = qlp_buf.c1Rx;
+        afu_buf.c1Rx = fiu_buf.c1Rx;
 
-        if (qlp_buf.c1Rx.wrValid)
+        if (fiu_buf.c1Rx.wrValid)
         begin
-            afu_buf.c1Rx.hdr = { qlp_buf.c1Rx.hdr[CCI_RX_MEMHDR_WIDTH-1 : $bits(t_C1_REQ_IDX)], c1_heap_readRsp[1].mdata };
+            afu_buf.c1Rx.hdr = { fiu_buf.c1Rx.hdr[CCI_RX_MEMHDR_WIDTH-1 : $bits(t_C1_REQ_IDX)], c1_heap_readRsp[1].mdata };
         end
     end
 
@@ -756,18 +756,18 @@ module cci_mpf_shim_write_order
                 $display("C1 blocked %d", c1_heap_allocIdx);
             end
 
-            if (qlp_buf.c0Tx.rdValid)
+            if (fiu_buf.c0Tx.rdValid)
             begin
                 $display("XX A 0 %d %x %d",
                          c0_heap_allocIdx,
-                         getReqAddrMPF(qlp_buf.c0Tx.hdr),
+                         getReqAddrMPF(fiu_buf.c0Tx.hdr),
                          cycle);
             end
-            if (qlp_buf.c1Tx.wrValid)
+            if (fiu_buf.c1Tx.wrValid)
             begin
                 $display("XX A 1 %d %x %d",
                          c1_heap_allocIdx,
-                         getReqAddrMPF(qlp_buf.c1Tx.hdr),
+                         getReqAddrMPF(fiu_buf.c1Tx.hdr),
                          cycle);
             end
 

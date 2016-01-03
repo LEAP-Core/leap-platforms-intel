@@ -62,7 +62,7 @@ module cci_mpf
     //
     // Signals connecting to QA Platform
     //
-    cci_mpf_if.to_qlp qlp,
+    cci_mpf_if.to_fiu fiu,
 
     //
     // Signals connecting to AFU, the client code
@@ -71,36 +71,36 @@ module cci_mpf
     );
 
     logic  reset_n;
-    assign reset_n = qlp.reset_n;
+    assign reset_n = fiu.reset_n;
 
     // ====================================================================
     //
-    //  Canonicalize requests on exit toward the QLP.
+    //  Canonicalize requests on exit toward the FIU.
     //
     // ====================================================================
 
-    cci_mpf_if qlp_canonical (.clk);
+    cci_mpf_if fiu_canonical (.clk);
 
-    cci_mpf_shim_canonicalize_to_qlp
+    cci_mpf_shim_canonicalize_to_fiu
       canonicalize
        (
         .clk,
-        .qlp,
-        .afu(qlp_canonical)
+        .fiu,
+        .afu(fiu_canonical)
         );
 
 
     // ====================================================================
     //
     //  Virtual to physical translation. This is the lowest level of
-    //  the hierarchy, nearest the QLP connection. The translation layer
+    //  the hierarchy, nearest the FIU connection. The translation layer
     //  can thus depend on a few properties, such as that only one
     //  request is outstanding to a given line. The virtual to physical
     //  translator is thus free to reorder any requests.
     //
     // ====================================================================
 
-    cci_mpf_if qlp_virtual (.clk);
+    cci_mpf_if fiu_virtual (.clk);
 
     cci_mpf_shim_vtp
       #(
@@ -116,8 +116,8 @@ module cci_mpf
       v_to_p
        (
         .clk,
-        .qlp(qlp_canonical),
-        .afu(qlp_virtual)
+        .fiu(fiu_canonical),
+        .afu(fiu_virtual)
         );
 
 
@@ -128,14 +128,14 @@ module cci_mpf
     //
     // ====================================================================
 
-    cci_mpf_if qlp_write_order (.clk);
+    cci_mpf_if fiu_write_order (.clk);
 
     cci_mpf_shim_write_order
       filter
        (
         .clk,
-        .qlp(qlp_virtual),
-        .afu(qlp_write_order)
+        .fiu(fiu_virtual),
+        .afu(fiu_write_order)
         );
 
 
@@ -156,7 +156,7 @@ module cci_mpf
       rspOrder
        (
         .clk,
-        .qlp(qlp_write_order),
+        .fiu(fiu_write_order),
         .afu(afu)
         );
 

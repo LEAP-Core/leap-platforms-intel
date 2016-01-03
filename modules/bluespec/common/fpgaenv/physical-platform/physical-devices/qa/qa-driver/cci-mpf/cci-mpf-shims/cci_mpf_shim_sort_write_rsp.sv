@@ -32,7 +32,7 @@
 
 
 //
-// Convert an unordered QLP interface port into a port with write responses
+// Convert an unordered FIU interface port into a port with write responses
 // coming in the same order as the original requests.
 //
 
@@ -47,15 +47,15 @@ module cci_mpf_shim_sort_write_rsp
     input  logic clk,
 
     // Connection toward the QA platform.  Reset comes in here.
-    cci_mpf_if.to_qlp qlp,
+    cci_mpf_if.to_fiu fiu,
 
     // Connections toward user code.
     cci_mpf_if.to_afu afu
     );
 
     logic reset_n;
-    assign reset_n = qlp.reset_n;
-    assign afu.reset_n = qlp.reset_n;
+    assign reset_n = fiu.reset_n;
+    assign afu.reset_n = fiu.reset_n;
 
 
     // ====================================================================
@@ -77,12 +77,12 @@ module cci_mpf_shim_sort_write_rsp
     // Coalesce write responses into vectors directed to the scoreboard
     //
     logic rx_wr_valid[0 : 1];
-    assign rx_wr_valid[0] = qlp.c0Rx.wrValid;
-    assign rx_wr_valid[1] = qlp.c1Rx.wrValid;
+    assign rx_wr_valid[0] = fiu.c0Rx.wrValid;
+    assign rx_wr_valid[1] = fiu.c1Rx.wrValid;
 
     t_SCOREBOARD_IDX rx_wr_idx[0 : 1];
-    assign rx_wr_idx[0] = t_SCOREBOARD_IDX'(qlp.c0Rx.hdr);
-    assign rx_wr_idx[1] = t_SCOREBOARD_IDX'(qlp.c1Rx.hdr);
+    assign rx_wr_idx[0] = t_SCOREBOARD_IDX'(fiu.c0Rx.hdr);
+    assign rx_wr_idx[1] = t_SCOREBOARD_IDX'(fiu.c1Rx.hdr);
 
     //
     // Sorted write responses
@@ -134,10 +134,10 @@ module cci_mpf_shim_sort_write_rsp
     // ====================================================================
 
     logic c0_TxAlmFull;
-    assign c0_TxAlmFull = qlp.c0TxAlmFull;
+    assign c0_TxAlmFull = fiu.c0TxAlmFull;
 
     logic c1_TxAlmFull;
-    assign c1_TxAlmFull = qlp.c1TxAlmFull || ! c1_scoreboard_notFull;
+    assign c1_TxAlmFull = fiu.c1TxAlmFull || ! c1_scoreboard_notFull;
 
     generate
         if (SYNC_REQ_CHANNELS == 0)
@@ -159,26 +159,26 @@ module cci_mpf_shim_sort_write_rsp
     //
     // ====================================================================
 
-    assign qlp.c0Tx = afu.c0Tx;
+    assign fiu.c0Tx = afu.c0Tx;
 
-    // Most responses are direct from the QLP.  Write responses flow
+    // Most responses are direct from the FIU.  Write responses flow
     // through the scoreboard.
     always_comb
     begin
-        afu.c0Rx = qlp.c0Rx;
+        afu.c0Rx = fiu.c0Rx;
 
         // Write responses come from the scoreboard, though other responses
         // have priority since only the scoreboard is buffered.
         afu.c0Rx.wrValid = scoreboard_notEmpty[0] &&
-                           ! qlp.c0Rx.rdValid &&
-                           ! qlp.c0Rx.cfgValid &&
-                           ! qlp.c0Rx.umsgValid &&
-                           ! qlp.c0Rx.intrValid;
+                           ! fiu.c0Rx.rdValid &&
+                           ! fiu.c0Rx.cfgValid &&
+                           ! fiu.c0Rx.umsgValid &&
+                           ! fiu.c0Rx.intrValid;
 
         afu.c0Rx.hdr =
             afu.c0Rx.wrValid ?
                 cci_genRspHdr(eRSP_WRLINE, scoreboard_mdata[0]) :
-                qlp.c0Rx.hdr;
+                fiu.c0Rx.hdr;
     end
 
     // ====================================================================
@@ -187,16 +187,16 @@ module cci_mpf_shim_sort_write_rsp
     //
     // ====================================================================
 
-    // Forward requests toward the QLP.  Replace the Mdata entry with the
+    // Forward requests toward the FIU.  Replace the Mdata entry with the
     // scoreboard index if the request is a write.  The original Mdata is
     // saved in the scoreboard and restored when the response is returned.
     always_comb
     begin
-        qlp.c1Tx = afu.c1Tx;
+        fiu.c1Tx = afu.c1Tx;
 
         if (afu.c1Tx.wrValid)
         begin
-            qlp.c1Tx.hdr.base.mdata = c1_scoreboard_enqIdx;
+            fiu.c1Tx.hdr.base.mdata = c1_scoreboard_enqIdx;
         end
     end
 
@@ -206,17 +206,17 @@ module cci_mpf_shim_sort_write_rsp
     //
     always_comb
     begin
-        afu.c1Rx = qlp.c1Rx;
+        afu.c1Rx = fiu.c1Rx;
 
         // Write responses come from the scoreboard, though other responses
         // have priority since only the scoreboard is buffered.
         afu.c1Rx.wrValid = scoreboard_notEmpty[1] &&
-                           ! qlp.c1Rx.intrValid;
+                           ! fiu.c1Rx.intrValid;
 
         afu.c1Rx.hdr =
             afu.c1Rx.wrValid ?
                 cci_genRspHdr(eRSP_WRLINE, scoreboard_mdata[1]) :
-                qlp.c1Rx.hdr;
+                fiu.c1Rx.hdr;
     end
 
 endmodule // cci_mpf_shim_sort_write_rsp

@@ -32,7 +32,7 @@
 
 
 //
-// Convert a single QLP interface port into a multiplexed pair of ports
+// Convert a single FIU interface port into a multiplexed pair of ports
 // with round-robin arbitration on the requests.  Responses are routed
 // back to the port that generated the request.
 //
@@ -56,7 +56,7 @@ module cci_mpf_shim_mux
     input  logic clk,
 
     // Connection toward the QA platform.  Reset comes in here.
-    cci_mpf_if.to_qlp qlp,
+    cci_mpf_if.to_fiu fiu,
 
     // Connections toward user code.
     cci_mpf_if.to_afu afus[0:1]
@@ -72,7 +72,7 @@ module cci_mpf_shim_mux
     localparam AFU_PORTS_RADIX = $clog2(NUM_AFU_PORTS);
 
     logic reset_n;
-    assign reset_n = qlp.reset_n;
+    assign reset_n = fiu.reset_n;
 
 
     // ====================================================================
@@ -167,7 +167,7 @@ module cci_mpf_shim_mux
         else
         begin
             // Only update the winner if there was a request.
-            if (|c0_request && ! qlp.c0TxAlmFull)
+            if (|c0_request && ! fiu.c0TxAlmFull)
             begin
                 last_c0_winner_idx <= c0_winner_idx;
 
@@ -175,7 +175,7 @@ module cci_mpf_shim_mux
                     $fatal("cci_mpf_shim_mux.sv: AFU C0 Mdata[%d] must be zero", RESERVED_MDATA_IDX);
             end
 
-            if (|c1_request && ! qlp.c1TxAlmFull)
+            if (|c1_request && ! fiu.c1TxAlmFull)
             begin
                 last_c1_winner_idx <= c1_winner_idx;
 
@@ -188,7 +188,7 @@ module cci_mpf_shim_mux
 
     // ====================================================================
     //
-    //  Route the chosen AFU request toward the QLP port.
+    //  Route the chosen AFU request toward the FIU port.
     //
     // ====================================================================
 
@@ -200,46 +200,46 @@ module cci_mpf_shim_mux
 
     always_comb
     begin
-        if (qlp.c0TxAlmFull || ! (|c0_request))
+        if (fiu.c0TxAlmFull || ! (|c0_request))
         begin
             // No request
-            qlp.c0Tx = cci_mpf_c0TxClearValids();
+            fiu.c0Tx = cci_mpf_c0TxClearValids();
             check_hdr0 = 'x;
         end
         else if (c0_winner_idx == 0)
         begin
             // Mux port 0 wins
-            qlp.c0Tx = afu_buf[0].c0Tx;
+            fiu.c0Tx = afu_buf[0].c0Tx;
             // Tag mdata with winning port for response routing
-            qlp.c0Tx.hdr.base.mdata[RESERVED_MDATA_IDX] = 0;
+            fiu.c0Tx.hdr.base.mdata[RESERVED_MDATA_IDX] = 0;
             check_hdr0 = afu_buf[0].c0Tx.hdr.base.mdata[RESERVED_MDATA_IDX];
         end
         else
         begin
             // Mux port 1 wins
-            qlp.c0Tx = afu_buf[1].c0Tx;
-            qlp.c0Tx.hdr.base.mdata[RESERVED_MDATA_IDX] = 1;
+            fiu.c0Tx = afu_buf[1].c0Tx;
+            fiu.c0Tx.hdr.base.mdata[RESERVED_MDATA_IDX] = 1;
             check_hdr0 = afu_buf[1].c0Tx.hdr.base.mdata[RESERVED_MDATA_IDX];
         end
 
-        if (qlp.c1TxAlmFull || ! (|c1_request))
+        if (fiu.c1TxAlmFull || ! (|c1_request))
         begin
             // No request
-            qlp.c1Tx = cci_mpf_c1TxClearValids();
+            fiu.c1Tx = cci_mpf_c1TxClearValids();
             check_hdr1 = 'x;
         end
         else if (c1_winner_idx == 0)
         begin
             // Mux port 0 wins
-            qlp.c1Tx = afu_buf[0].c1Tx;
-            qlp.c1Tx.hdr.base.mdata[RESERVED_MDATA_IDX] = 0;
+            fiu.c1Tx = afu_buf[0].c1Tx;
+            fiu.c1Tx.hdr.base.mdata[RESERVED_MDATA_IDX] = 0;
             check_hdr1 = afu_buf[0].c1Tx.hdr.base.mdata[RESERVED_MDATA_IDX];
         end
         else
         begin
             // Mux port 1 wins
-            qlp.c1Tx = afu_buf[1].c1Tx;
-            qlp.c1Tx.hdr.base.mdata[RESERVED_MDATA_IDX] = 1;
+            fiu.c1Tx = afu_buf[1].c1Tx;
+            fiu.c1Tx.hdr.base.mdata[RESERVED_MDATA_IDX] = 1;
             check_hdr1 = afu_buf[1].c1Tx.hdr.base.mdata[RESERVED_MDATA_IDX];
         end
     end
@@ -248,18 +248,18 @@ module cci_mpf_shim_mux
     generate
         for (p = 0; p < NUM_AFU_PORTS; p = p + 1)
         begin : ctrlBlock
-            assign afu_buf[p].reset_n = qlp.reset_n;
+            assign afu_buf[p].reset_n = fiu.reset_n;
 
             // Dequeue if there was a request and the source won arbitration.
-            assign deqC0Tx[p] = c0_request[p] && (c0_winner_idx == p) && ! qlp.c0TxAlmFull;
-            assign deqC1Tx[p] = c1_request[p] && (c1_winner_idx == p) && ! qlp.c1TxAlmFull;
+            assign deqC0Tx[p] = c0_request[p] && (c0_winner_idx == p) && ! fiu.c0TxAlmFull;
+            assign deqC1Tx[p] = c1_request[p] && (c1_winner_idx == p) && ! fiu.c1TxAlmFull;
         end
     endgenerate
 
 
     // ====================================================================
     //
-    //  Route the QLP responses back to the proper AFU port
+    //  Route the FIU responses back to the proper AFU port
     //
     // ====================================================================
 
@@ -283,9 +283,9 @@ module cci_mpf_shim_mux
     // data and header to both unconditionally and use the control bits
     // to control destination.
     logic c0_rsp_idx;
-    assign c0_rsp_idx = qlp.c0Rx.hdr[RESERVED_MDATA_IDX];
+    assign c0_rsp_idx = fiu.c0Rx.hdr[RESERVED_MDATA_IDX];
     logic c1_rsp_idx;
-    assign c1_rsp_idx = qlp.c1Rx.hdr[RESERVED_MDATA_IDX];
+    assign c1_rsp_idx = fiu.c1Rx.hdr[RESERVED_MDATA_IDX];
 
     generate
         for (p = 0; p < NUM_AFU_PORTS; p = p + 1)
@@ -293,20 +293,20 @@ module cci_mpf_shim_mux
             always_comb
             begin
                 // Generic fields are broadcasts
-                afu_buf[p].c0Rx = qlp.c0Rx;
-                afu_buf[p].c1Rx = qlp.c1Rx;
+                afu_buf[p].c0Rx = fiu.c0Rx;
+                afu_buf[p].c1Rx = fiu.c1Rx;
 
-                afu_buf[p].c0Rx.hdr = untagRequest(qlp.c0Rx.hdr,
-                                                   qlp.c0Rx.wrValid ||
-                                                   qlp.c0Rx.rdValid);
+                afu_buf[p].c0Rx.hdr = untagRequest(fiu.c0Rx.hdr,
+                                                   fiu.c0Rx.wrValid ||
+                                                   fiu.c0Rx.rdValid);
 
-                afu_buf[p].c0Rx.wrValid = qlp.c0Rx.wrValid && (p[0] == c0_rsp_idx);
-                afu_buf[p].c0Rx.rdValid = qlp.c0Rx.rdValid && (p[0] == c0_rsp_idx);
+                afu_buf[p].c0Rx.wrValid = fiu.c0Rx.wrValid && (p[0] == c0_rsp_idx);
+                afu_buf[p].c0Rx.rdValid = fiu.c0Rx.rdValid && (p[0] == c0_rsp_idx);
 
-                afu_buf[p].c1Rx.hdr = untagRequest(qlp.c1Rx.hdr,
-                                                   qlp.c1Rx.wrValid);
+                afu_buf[p].c1Rx.hdr = untagRequest(fiu.c1Rx.hdr,
+                                                   fiu.c1Rx.wrValid);
 
-                afu_buf[p].c1Rx.wrValid = qlp.c1Rx.wrValid && (p[0] == c1_rsp_idx);
+                afu_buf[p].c1Rx.wrValid = fiu.c1Rx.wrValid && (p[0] == c1_rsp_idx);
             end
         end
     endgenerate

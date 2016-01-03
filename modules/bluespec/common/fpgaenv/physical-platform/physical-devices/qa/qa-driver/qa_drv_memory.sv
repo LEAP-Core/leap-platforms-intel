@@ -38,7 +38,7 @@ module qa_drv_memory
     //
     // Signals connecting to QA Platform
     //
-    cci_mpf_if.to_qlp         qlp,
+    cci_mpf_if.to_fiu         fiu,
 
     // -------------------------------------------------------------------
     //
@@ -78,7 +78,7 @@ module qa_drv_memory
     );
 
     logic  reset_n;
-    assign reset_n = qlp.reset_n;
+    assign reset_n = fiu.reset_n;
 
     // ====================================================================
     //
@@ -133,7 +133,7 @@ module qa_drv_memory
 
     // ====================================================================
     //
-    //  Connect client requests to the QLP.
+    //  Connect client requests to the FIU.
     //
     // ====================================================================
 
@@ -145,7 +145,7 @@ module qa_drv_memory
       mpf
        (
         .clk,
-        .qlp(qlp),
+        .fiu(fiu),
         .afu(afu_if)
         );
 

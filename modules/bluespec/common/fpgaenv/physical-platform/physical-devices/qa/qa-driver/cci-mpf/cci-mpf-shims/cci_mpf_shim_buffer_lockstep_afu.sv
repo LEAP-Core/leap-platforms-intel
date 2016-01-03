@@ -52,7 +52,7 @@ module cci_mpf_shim_buffer_lockstep_afu
     // Generated buffered connection.  The confusing interface direction
     // arises because the shim is an interposer on the AFU side of a
     // standard shim.
-    cci_mpf_if.to_qlp afu_buf,
+    cci_mpf_if.to_fiu afu_buf,
 
     // Dequeue signal combined with the buffering make the buffered interface
     // latency insensitive.  Requests sit in the buffers unless explicitly

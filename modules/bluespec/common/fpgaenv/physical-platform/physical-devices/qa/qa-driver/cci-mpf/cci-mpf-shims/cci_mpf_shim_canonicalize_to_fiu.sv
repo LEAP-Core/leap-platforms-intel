@@ -47,6 +47,7 @@ module cci_mpf_shim_canonicalize_to_fiu
     cci_mpf_if.to_afu afu
     );
 
+    logic reset_n;
     assign reset_n = fiu.reset_n;
     assign afu.reset_n = fiu.reset_n;
 

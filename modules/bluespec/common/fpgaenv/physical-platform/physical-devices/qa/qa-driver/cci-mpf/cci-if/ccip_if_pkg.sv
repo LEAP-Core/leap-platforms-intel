@@ -33,7 +33,7 @@ typedef logic [CCIP_MDATA_WIDTH-1:0] t_ccip_mdata;
 typedef enum logic [3:0] {
     eREQ_WRLINE_I  = 4'h1,      // Memory Write with FPGA Cache Hint=Invalid
     eREQ_WRLINE_M  = 4'h2,      // Memory Write with FPGA Cache Hint=Modified
-    eREQ_WRFENCE   = 4'h5,      // Memory Write Fence ** NOT SUPPORTED FOR VC_VA channel **
+    eREQ_WRFENCE   = 4'h5,      // Memory Write Fence
     eREQ_RDLINE_S  = 4'h4,      // Memory Read with FPGA Cache Hint=Shared
     eREQ_RDLINE_I  = 4'h6,      // Memory Read with FPGA Cache Hint=Invalid
     eREQ_INTR      = 4'h8       // Interrupt the CPU ** NOT SUPPORTED CURRENTLY **
@@ -56,13 +56,17 @@ typedef enum logic [1:0] {
     eVC_VH1 = 2'b11
 } t_ccip_vc;
 //
+// Cache line number for multi-line requests and responses
+//----------------------------------------------------------------------
+typedef logic [1:0] t_ccip_cl_num;
+//
 // Structures for Request and Response headers
 //----------------------------------------------------------------------
 typedef struct packed {
     t_ccip_vc       vc_sel;
     logic           sop;
     logic           rsvd1;
-    logic [1:0]     length;
+    t_ccip_cl_num   cl_num;
     t_ccip_req      req_type;
     logic [5:0]     rsvd0;
     t_ccip_claddr   address;
@@ -76,7 +80,7 @@ typedef struct packed {
     logic           hit_miss;
     logic           fmt;
     logic           rsvd0;
-    logic [1:0]     cl_num;
+    t_ccip_cl_num   cl_num;
     t_ccip_rsp      resp_type;
     t_ccip_mdata    mdata;
 } t_ccip_RspMemHdr;
@@ -207,6 +211,23 @@ function automatic t_if_ccip_c1_Rx ccip_c1RxClearValids();
     r.wrValid = 0;
     r.intrValid = 0;
     return r;
+endfunction
+
+function automatic logic ccip_c0RxIsValid(
+    input t_if_ccip_c0_Rx r
+    );
+    return r.wrValid ||
+           r.rdValid ||
+           r.umsgValid ||
+           r.mmioRdValid ||
+           r.mmioWrValid;
+endfunction
+
+function automatic logic ccip_c1RxIsValid(
+    input t_if_ccip_c1_Rx r
+    );
+    return r.wrValid ||
+           r.intrValid;
 endfunction
 
 endpackage

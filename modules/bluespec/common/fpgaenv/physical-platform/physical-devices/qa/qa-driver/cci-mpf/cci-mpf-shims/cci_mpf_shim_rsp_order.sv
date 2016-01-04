@@ -327,10 +327,8 @@ module cci_mpf_shim_rsp_order
         afu.c0Rx = fiu_buf.c0Rx;
 
         // Is there a non-read response active?
-        c0_non_rd_valid = fiu_buf.c0Rx.wrValid ||
-                          fiu_buf.c0Rx.cfgValid ||
-                          fiu_buf.c0Rx.umsgValid ||
-                          fiu_buf.c0Rx.intrValid;
+        c0_non_rd_valid = cci_c0RxIsValid(fiu_buf.c0Rx) &&
+                          ! fiu_buf.c0Rx.rdValid;
 
         // Forward responses toward AFU as they become available in sorted order.
         // Non-read responses on the channel have priority since they are

@@ -58,6 +58,14 @@ package cci_mpf_if_pkg;
     typedef t_ccis_cldata t_cci_cldata;
     typedef t_ccis_mdata t_cci_mdata;
 
+    // Use a few types from CCI-P that aren't in CCI-S
+    import ccip_if_pkg::eVC_VA;
+    import ccip_if_pkg::eVC_VL0;
+    import ccip_if_pkg::eVC_VH0;
+    import ccip_if_pkg::eVC_VH1;
+    typedef ccip_if_pkg::t_ccip_vc t_cci_vc;
+    typedef ccip_if_pkg::t_ccip_cl_num t_cci_cl_num;
+
     typedef t_ccis_req t_cci_req;
     typedef t_ccis_rsp t_cci_rsp;
 
@@ -98,6 +106,18 @@ package cci_mpf_if_pkg;
 
     function automatic t_if_cci_c1_Rx cci_c1RxClearValids();
         return ccis_c1RxClearValids();
+    endfunction
+
+    function automatic logic cci_c0RxIsValid(
+        input t_if_cci_c0_Rx r
+        );
+        return ccis_c0RxIsValid(r);
+    endfunction
+
+    function automatic logic cci_c1RxIsValid(
+        input t_if_cci_c1_Rx r
+        );
+        return ccis_c1RxIsValid(r);
     endfunction
 
 `endif
@@ -235,13 +255,29 @@ package cci_mpf_if_pkg;
     endfunction
 
 
-    // Generate a new request header
+    // Generate a new request header.  With so many parameters and defaults
+    // we use a struct to pass non-basic parameters.
+    typedef struct {
+        logic         checkLoadStoreOrder;
+        logic         addrIsVirtual;
+        t_cci_vc      vc_sel;
+        t_cci_cl_num  cl_num;
+    } t_cci_mpf_ReqMemHdrParams;
+
+    function automatic t_cci_mpf_ReqMemHdrParams cci_mpf_defaultReqHdrParams();
+        t_cci_mpf_ReqMemHdrParams p;
+        p.checkLoadStoreOrder = 1'b1;
+        p.addrIsVirtual = 1'b1;
+        p.vc_sel = eVC_VL0;            // Default to low latency channel
+        p.cl_num = 0;
+        return p;
+    endfunction
+
     function automatic t_cci_mpf_ReqMemHdr cci_mpf_genReqHdr(
-        input t_cci_req          requestType,
-        input t_cci_mpf_cl_vaddr address,
-        input t_cci_mdata        mdata,
-        input logic              checkLoadStoreOrder = 1'b1,
-        input logic              addrIsVirtual = 1'b1
+        input t_cci_req                 requestType,
+        input t_cci_mpf_cl_vaddr        address,
+        input t_cci_mdata               mdata,
+        input t_cci_mpf_ReqMemHdrParams params
         );
 
         t_cci_mpf_ReqMemHdr h;
@@ -249,8 +285,8 @@ package cci_mpf_if_pkg;
         h.base = t_cci_ReqMemHdr'(0);
         h = cci_mpf_updReqVAddr(h, address);
 
-        h.ext.checkLoadStoreOrder = checkLoadStoreOrder;
-        h.ext.addrIsVirtual = addrIsVirtual;
+        h.ext.checkLoadStoreOrder = params.checkLoadStoreOrder;
+        h.ext.addrIsVirtual = params.addrIsVirtual;
 
         h.base.req_type = requestType;
         h.base.mdata = mdata;

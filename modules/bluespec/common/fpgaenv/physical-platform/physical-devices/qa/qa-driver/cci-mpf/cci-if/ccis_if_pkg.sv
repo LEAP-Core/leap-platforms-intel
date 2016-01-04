@@ -161,4 +161,21 @@ function automatic t_if_ccis_c1_Rx ccis_c1RxClearValids();
     return r;
 endfunction
 
+function automatic logic ccis_c0RxIsValid(
+    input t_if_ccis_c0_Rx r
+    );
+    return r.wrValid ||
+           r.rdValid ||
+           r.cfgValid ||
+           r.umsgValid ||
+           r.intrValid;
+endfunction
+
+function automatic logic ccis_c1RxIsValid(
+    input t_if_ccis_c1_Rx r
+    );
+    return r.wrValid ||
+           r.intrValid;
+endfunction
+
 endpackage

@@ -88,12 +88,21 @@ module qa_drv_memory
 
     cci_mpf_if#(.ENABLE_LOG(1)) afu_if(.clk);
 
+
+    t_cci_mpf_ReqMemHdrParams rd_req_params;
+    always_comb
+    begin
+        rd_req_params = cci_mpf_defaultReqHdrParams();
+        rd_req_params.checkLoadStoreOrder = mem_read_req_check_order;
+        rd_req_params.addrIsVirtual = 1'b1;
+    end
+
     assign afu_if.c0Tx =
         cci_mpf_genC0TxReadReq(
             cci_mpf_genReqHdr(mem_read_req_cached ? eREQ_RDLINE_S : eREQ_RDLINE_I,
-                            mem_read_req_addr,
-                            t_cci_mdata'(0),
-                            mem_read_req_check_order),
+                              mem_read_req_addr,
+                              t_cci_mdata'(0),
+                              rd_req_params),
             mem_read_req_enable);
 
     assign mem_read_req_rdy = ! afu_if.c0TxAlmFull;
@@ -101,12 +110,21 @@ module qa_drv_memory
     assign mem_read_rsp_data = afu_if.c0Rx.data;
     assign mem_read_rsp_rdy = afu_if.c0Rx.rdValid;
 
+
+    t_cci_mpf_ReqMemHdrParams wr_req_params;
+    always_comb
+    begin
+        wr_req_params = cci_mpf_defaultReqHdrParams();
+        wr_req_params.checkLoadStoreOrder = mem_write_req_check_order;
+        wr_req_params.addrIsVirtual = 1'b1;
+    end
+
     assign afu_if.c1Tx =
         cci_mpf_genC1TxWriteReq(
             cci_mpf_genReqHdr(mem_write_req_cached ? eREQ_WRLINE_M : eREQ_WRLINE_I,
-                            mem_write_addr,
-                            t_cci_mdata'(0),
-                            mem_write_req_check_order),
+                              mem_write_addr,
+                              t_cci_mdata'(0),
+                              wr_req_params),
             mem_write_data,
             mem_write_enable);
 

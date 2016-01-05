@@ -28,9 +28,6 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-`ifndef QA_DRV_HC_TYPES
-`define QA_DRV_HC_TYPES
-
 //
 // Main type definitions for the QA host channel driver.
 //
@@ -42,32 +39,10 @@ package qa_drv_hc_types;
     import cci_mpf_if_pkg::*;
 
     //
-    // Cache line data types.
-    //
-    localparam QA_ADDR_SZ = 32;
-    localparam QA_CACHE_LINE_SZ = 512;
-
-    typedef logic [QA_CACHE_LINE_SZ-1 : 0] t_CACHE_LINE;
-
-    // Most memory accesses use the address of a line
-    typedef logic [QA_ADDR_SZ-1 : 0] t_CACHE_LINE_ADDR;
-
-    // Cache line as a vector of 8 bit objects
-    localparam N_BIT8_PER_CACHE_LINE = QA_CACHE_LINE_SZ / 8;
-    typedef logic [N_BIT8_PER_CACHE_LINE-1 : 0][7:0] t_CACHE_LINE_VEC8;
-    localparam N_BYTES_PER_CACHE_LINE = N_BIT8_PER_CACHE_LINE;
-
-    // Cache line as a vector of 16 bit objects
-    localparam N_BIT16_PER_CACHE_LINE = QA_CACHE_LINE_SZ / 16;
-    typedef logic [N_BIT16_PER_CACHE_LINE-1 : 0][15:0] t_CACHE_LINE_VEC16;
-
     // Cache line as a vector of 32 bit objects
-    localparam N_BIT32_PER_CACHE_LINE = QA_CACHE_LINE_SZ / 32;
-    typedef logic [N_BIT32_PER_CACHE_LINE-1 : 0][31:0] t_CACHE_LINE_VEC32;
-
-    // Cache line as a vector of 64 bit objects
-    localparam N_BIT64_PER_CACHE_LINE = QA_CACHE_LINE_SZ / 64;
-    typedef logic [N_BIT64_PER_CACHE_LINE-1 : 0][31:0] t_CACHE_LINE_VEC64;
+    //
+    localparam N_BIT32_PER_CACHE_LINE = CCI_CLDATA_WIDTH / 32;
+    typedef logic [N_BIT32_PER_CACHE_LINE-1 : 0][31:0] t_cci_cldata_vec32;
 
 
     //
@@ -78,8 +53,8 @@ package qa_drv_hc_types;
     // Indices indicate the line within a buffer relative to a buffer's
     // base address.
     //
-    typedef logic [12:0] t_FIFO_TO_HOST_IDX;
-    typedef logic [12:0] t_FIFO_FROM_HOST_IDX;
+    typedef logic [12:0] t_fifo_to_host_idx;
+    typedef logic [12:0] t_fifo_from_host_idx;
 
 
     //
@@ -94,13 +69,13 @@ package qa_drv_hc_types;
         logic isRead;               // Target of read response
         logic [9:0] robAddr;        // ROB address (data reads)
     }
-    t_READ_METADATA;
+    t_read_metadata;
 
     typedef struct
     {
         logic request;  
     }
-    t_CHANNEL_REQ_ARB;
+    t_channel_req_arb;
 
     typedef struct
     {
@@ -113,27 +88,27 @@ package qa_drv_hc_types;
         // is false, though clients are not obligated to check this field.
         logic canIssue;
     }
-    t_CHANNEL_GRANT_ARB;
+    t_channel_grant_arb;
 
     typedef struct
     {
-        t_CHANNEL_REQ_ARB read;
+        t_channel_req_arb read;
         t_cci_ReqMemHdr   readHeader;  
-        t_CHANNEL_REQ_ARB write;
+        t_channel_req_arb write;
         t_cci_ReqMemHdr   writeHeader;
         t_cci_cldata      data;
     }
-    t_FRAME_ARB;
+    t_frame_arb;
 
 
     //
     // DSM addressing.
     //
-    typedef logic [3:0] t_DSM_LINE_OFFSET;
+    typedef logic [3:0] t_dsm_line_offset;
 
     // Function: Returns physical address for a DSM register
     function automatic [31:0] dsm_line_offset_to_addr;
-        input    t_DSM_LINE_OFFSET offset_l;
+        input    t_dsm_line_offset offset_l;
         input    [63:0] base_b;
         begin
             dsm_line_offset_to_addr = base_b[37:6] + offset_l;
@@ -143,7 +118,7 @@ package qa_drv_hc_types;
 
     // Function: Packs read metadata 
     function automatic [12:0] pack_read_metadata;
-        input    t_READ_METADATA metadata;
+        input    t_read_metadata metadata;
         begin
             pack_read_metadata = { metadata.reserved,
                                    metadata.isHeader,
@@ -153,7 +128,7 @@ package qa_drv_hc_types;
     endfunction
 
     // Function: Packs read metadata 
-    function automatic t_READ_METADATA unpack_read_metadata;
+    function automatic t_read_metadata unpack_read_metadata;
         input    [17:0] metadata;
         begin
             unpack_read_metadata.reserved = metadata[12];
@@ -177,10 +152,10 @@ package qa_drv_hc_types;
     //
     // ========================================================================
 
-    localparam AFU_DEBUG_REQ_SZ = $bits(t_AFU_DEBUG_REQ);
+    localparam AFU_DEBUG_REQ_SZ = $bits(t_afu_debug_req);
     localparam AFU_DEBUG_RSP_SZ = 512 - AFU_DEBUG_REQ_SZ;
 
-    typedef logic [AFU_DEBUG_RSP_SZ - 1 : 0] t_AFU_DEBUG_RSP;
+    typedef logic [AFU_DEBUG_RSP_SZ - 1 : 0] t_afu_debug_rsp;
 
 
     // ========================================================================
@@ -196,8 +171,8 @@ package qa_drv_hc_types;
     
     // Status registers, exposed as a debugging interface to read status
     // from the FPGA-side client.
-    typedef logic [31:0] t_SREG_ADDR;
-    typedef logic [63:0] t_SREG;
+    typedef logic [31:0] t_sreg_addr;
+    typedef logic [63:0] t_sreg;
 
     //
     // FIFO from host status.  All fields must be valid every cycle.
@@ -205,19 +180,19 @@ package qa_drv_hc_types;
     typedef struct
     {
         // Index of the next line the FPGA will read when data is present.
-        t_FIFO_FROM_HOST_IDX oldestReadLineIdx;
+        t_fifo_from_host_idx oldestReadLineIdx;
 
         // Debugging state
-        t_AFU_DEBUG_RSP dbgFIFOState;
+        t_afu_debug_rsp dbgFIFOState;
     }
-    t_TO_STATUS_MGR_FIFO_FROM_HOST;
+    t_to_status_mgr_fifo_from_host;
     
     typedef struct
     {
         // Index of the most recent line written by the host.
-        t_FIFO_FROM_HOST_IDX newestReadLineIdx;
+        t_fifo_from_host_idx newestReadLineIdx;
     }
-    t_FROM_STATUS_MGR_FIFO_FROM_HOST;
+    t_from_status_mgr_fifo_from_host;
 
 
     //
@@ -226,16 +201,16 @@ package qa_drv_hc_types;
     typedef struct
     {
         // Index of the next ring buffer position that will be written by the FPGA.
-        t_FIFO_TO_HOST_IDX nextWriteIdx;
+        t_fifo_to_host_idx nextWriteIdx;
     }
-    t_TO_STATUS_MGR_FIFO_TO_HOST;
+    t_to_status_mgr_fifo_to_host;
 
     typedef struct
     {
         // Index of the oldest position still unread by the host.
-        t_FIFO_TO_HOST_IDX oldestWriteIdx;
+        t_fifo_to_host_idx oldestWriteIdx;
     }
-    t_FROM_STATUS_MGR_FIFO_TO_HOST;
+    t_from_status_mgr_fifo_to_host;
 
 
     //
@@ -244,10 +219,9 @@ package qa_drv_hc_types;
     typedef struct
     {
         // Debugging state
-        t_AFU_DEBUG_RSP dbgTester;
+        t_afu_debug_rsp dbgTester;
     }
-    t_TO_STATUS_MGR_TESTER;
+    t_to_status_mgr_tester;
 
-endpackage // qa_drv_types
+endpackage // qa_drv_hc_types
 
-`endif //  `ifndef QA_DRV_HC_TYPES

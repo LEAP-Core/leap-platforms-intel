@@ -29,7 +29,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-`include "qa_drv_hc.vh"
+import qa_drv_hc_types::*;
 
 module qa_drv_hc_can_issue
   #(parameter CAN_ISSUE_FULL=4)

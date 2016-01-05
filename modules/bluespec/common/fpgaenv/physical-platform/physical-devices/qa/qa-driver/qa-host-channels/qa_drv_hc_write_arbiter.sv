@@ -29,7 +29,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-`include "qa_drv_hc.vh"
+import qa_drv_hc_types::*;
 
 module qa_drv_hc_write_arbiter
    (
@@ -38,10 +38,10 @@ module qa_drv_hc_write_arbiter
 
     input  t_CSR_AFU_STATE        csr,
    
-    input  t_FRAME_ARB            frame_writer,
-    input  t_FRAME_ARB            frame_reader,
-    input  t_FRAME_ARB            status_mgr_req,
-    output t_CHANNEL_GRANT_ARB    write_grant,
+    input  t_frame_arb            frame_writer,
+    input  t_frame_arb            frame_reader,
+    input  t_frame_arb            status_mgr_req,
+    output t_channel_grant_arb    write_grant,
    
     output t_if_cci_c1_Tx         tx1,
     input  logic                  tx1_almostfull

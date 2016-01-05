@@ -86,7 +86,7 @@ package qa_driver_csr_types;
         // See qa_drv_status_maanger.
         logic [7:0]  idx;
     }
-    t_AFU_DEBUG_REQ;
+    t_afu_debug_req;
 
     // CSR_AFU_ENABLE_TEST passes a tag that may trigger a test in the
     // driver.
@@ -125,7 +125,7 @@ package qa_driver_csr_types;
         // Debug request.  The manager will hold the idx field in this
         // register for one cycle after a request is received and
         // then reset it to 0.
-        t_AFU_DEBUG_REQ afu_trigger_debug;
+        t_afu_debug_req afu_trigger_debug;
 
         // Test request.  Held for one cycle, similar to afu_trigger_debug.
         t_AFU_ENABLE_TEST afu_enable_test;

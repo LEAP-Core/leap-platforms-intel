@@ -112,7 +112,7 @@ module qa_driver_csr
             csr.afu_trigger_debug.idx <= 0;
         end
         else if (fiu.c0Rx.cfgValid && csr_addr_matches(fiu.c0Rx.hdr, CSR_AFU_TRIGGER_DEBUG)) begin
-            csr.afu_trigger_debug <= fiu.c0Rx.data[$bits(t_AFU_DEBUG_REQ)-1 : 0];
+            csr.afu_trigger_debug <= fiu.c0Rx.data[$bits(t_afu_debug_req)-1 : 0];
         end
         else begin
             // Hold request for only one cycle.  Only the idx is cleared.
@@ -141,7 +141,7 @@ module qa_driver_csr
         end
         else if (fiu.c0Rx.cfgValid && csr_addr_matches(fiu.c0Rx.hdr, CSR_AFU_SREG_READ)) begin
             csr.afu_sreg_req.enable <= 1;
-            csr.afu_sreg_req.addr <= fiu.c0Rx.data[$bits(t_SREG_ADDR)-1 : 0];
+            csr.afu_sreg_req.addr <= fiu.c0Rx.data[$bits(t_sreg_addr)-1 : 0];
         end
         else begin
             // Hold request for only one cycle

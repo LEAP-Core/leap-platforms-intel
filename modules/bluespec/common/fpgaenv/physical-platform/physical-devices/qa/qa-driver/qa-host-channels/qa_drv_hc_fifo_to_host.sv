@@ -29,7 +29,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-`include "qa_drv_hc.vh"
+import qa_drv_hc_types::*;
 
 module qa_drv_hc_fifo_to_host
    (
@@ -39,11 +39,11 @@ module qa_drv_hc_fifo_to_host
     input  t_if_cci_c0_Rx rx0,
 
     input  t_CSR_AFU_STATE     csr,
-    output t_FRAME_ARB         frame_writer,
-    input  t_CHANNEL_GRANT_ARB write_grant,
+    output t_frame_arb         frame_writer,
+    input  t_channel_grant_arb write_grant,
 
-    input  t_FROM_STATUS_MGR_FIFO_TO_HOST   status_to_fifo_to_host,
-    output t_TO_STATUS_MGR_FIFO_TO_HOST     fifo_to_host_to_status,
+    input  t_from_status_mgr_fifo_to_host   status_to_fifo_to_host,
+    output t_to_status_mgr_fifo_to_host     fifo_to_host_to_status,
 
     // LEAP-facing interface
     input  t_cci_cldata tx_data,
@@ -82,31 +82,31 @@ module qa_drv_hc_fifo_to_host
     //=====================================================================
 
     // Base address of the ring buffer
-    t_CACHE_LINE_ADDR buffer_base_addr;
-    assign buffer_base_addr = t_CACHE_LINE_ADDR'(csr.afu_write_frame);
+    t_cci_cl_paddr buffer_base_addr;
+    assign buffer_base_addr = t_cci_cl_paddr'(csr.afu_write_frame);
 
     // Pointer to the oldest live entry in the ring buffer.  This pointer
     // determines whether the the buffer is full, waiting for the host to
     // consume the existing messages.  The pointer is updated by the host
     // as messages are consumed and updated in the FPGA by the status
     // manager.
-    t_FIFO_TO_HOST_IDX oldest_write_idx;
+    t_fifo_to_host_idx oldest_write_idx;
     assign oldest_write_idx = status_to_fifo_to_host.oldestWriteIdx;
 
     // Index of the next ring buffer entry to write
-    t_FIFO_TO_HOST_IDX cur_data_idx;
+    t_fifo_to_host_idx cur_data_idx;
 
     // Index of ring buffer before which data has been safely written and
     // protected by a memory fence.  This is the pointer passed to the host
     // to indicate the availability of new entries.  It tracks cur_data_idx
     // once pending writes have been committed, using a fence.
-    t_FIFO_TO_HOST_IDX written_data_idx;
+    t_fifo_to_host_idx written_data_idx;
     assign fifo_to_host_to_status.nextWriteIdx = written_data_idx;
 
     // Force a fence/flush after writing 25% of the buffer
     logic flush_for_writes;
-    assign flush_for_writes = (cur_data_idx[$bits(t_FIFO_TO_HOST_IDX)-2] !=
-                               written_data_idx[$bits(t_FIFO_TO_HOST_IDX)-2]);
+    assign flush_for_writes = (cur_data_idx[$bits(t_fifo_to_host_idx)-2] !=
+                               written_data_idx[$bits(t_fifo_to_host_idx)-2]);
 
 
     //=====================================================================
@@ -202,7 +202,7 @@ module qa_drv_hc_fifo_to_host
                     if (write_grant.writerGrant)
                     begin
                         state <= STATE_WAIT_DATA;
-                        cur_data_idx <= cur_data_idx + t_FIFO_TO_HOST_IDX'(1);
+                        cur_data_idx <= cur_data_idx + t_fifo_to_host_idx'(1);
                     end
                 end
 
@@ -211,7 +211,7 @@ module qa_drv_hc_fifo_to_host
                     // New line written?
                     if (write_grant.writerGrant)
                     begin
-                        cur_data_idx <= cur_data_idx + t_FIFO_TO_HOST_IDX'(1);
+                        cur_data_idx <= cur_data_idx + t_fifo_to_host_idx'(1);
                     end
 
                     // Time to make the writes visible to the host?
@@ -247,7 +247,7 @@ module qa_drv_hc_fifo_to_host
 
     // Write only allowed if space is available in the shared memory buffer
     logic allow_write;
-    assign allow_write = (cur_data_idx + t_FIFO_TO_HOST_IDX'(1) != oldest_write_idx);
+    assign allow_write = (cur_data_idx + t_fifo_to_host_idx'(1) != oldest_write_idx);
 
     assign frame_writer.write.request = csr.afu_en &&
                                         allow_write &&

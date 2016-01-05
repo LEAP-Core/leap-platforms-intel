@@ -29,8 +29,8 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-`include "qa_drv_hc.vh"
 `include "cci_mpf_if.vh"
+import qa_drv_hc_types::*;
 
 module qa_drv_hc_root
    (
@@ -75,9 +75,9 @@ module qa_drv_hc_root
     // ReadStatusReg() method is never called.  In this case just
     // tie off sreg_rsp_enable.
     //
-    output t_SREG_ADDR  sreg_req_addr,
+    output t_sreg_addr  sreg_req_addr,
     output logic        sreg_req_rdy,
-    input  t_SREG       sreg_rsp,
+    input  t_sreg       sreg_rsp,
     input  logic        sreg_rsp_enable
     );
 
@@ -148,20 +148,20 @@ module qa_drv_hc_root
     logic        tx_rdy;
     logic        tx_enable;
 
-    t_FRAME_ARB            frame_writer;
-    t_FRAME_ARB            frame_reader;
-    t_FRAME_ARB            status_mgr_req;
-    t_CHANNEL_GRANT_ARB    write_grant;
-    t_CHANNEL_GRANT_ARB    read_grant;
+    t_frame_arb            frame_writer;
+    t_frame_arb            frame_reader;
+    t_frame_arb            status_mgr_req;
+    t_channel_grant_arb    write_grant;
+    t_channel_grant_arb    read_grant;
     
     // Modules communicating state to the status manager
-    t_TO_STATUS_MGR_FIFO_FROM_HOST   fifo_from_host_to_status;
-    t_FROM_STATUS_MGR_FIFO_FROM_HOST status_to_fifo_from_host;
+    t_to_status_mgr_fifo_from_host   fifo_from_host_to_status;
+    t_from_status_mgr_fifo_from_host status_to_fifo_from_host;
 
-    t_TO_STATUS_MGR_FIFO_TO_HOST     fifo_to_host_to_status;
-    t_FROM_STATUS_MGR_FIFO_TO_HOST   status_to_fifo_to_host;
+    t_to_status_mgr_fifo_to_host     fifo_to_host_to_status;
+    t_from_status_mgr_fifo_to_host   status_to_fifo_to_host;
 
-    t_TO_STATUS_MGR_TESTER           tester_to_status;
+    t_to_status_mgr_tester           tester_to_status;
 
 
     // Map FIFO wires exported by the driver to the driver's internal wiring.

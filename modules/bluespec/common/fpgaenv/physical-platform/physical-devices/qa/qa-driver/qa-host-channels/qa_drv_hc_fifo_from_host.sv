@@ -30,7 +30,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-`include "qa_drv_hc.vh"
+import qa_drv_hc_types::*;
 
 module qa_drv_hc_fifo_from_host
   #(
@@ -43,15 +43,15 @@ module qa_drv_hc_fifo_from_host
     input  t_if_cci_c0_Rx rx0,
 
     input  t_CSR_AFU_STATE     csr,
-    output t_FRAME_ARB         frame_reader,
-    input  t_CHANNEL_GRANT_ARB read_grant,
+    output t_frame_arb         frame_reader,
+    input  t_channel_grant_arb read_grant,
 
     output t_cci_cldata rx_data,
     output logic        rx_rdy,
     input  logic        rx_enable,
 
-    output t_TO_STATUS_MGR_FIFO_FROM_HOST   fifo_from_host_to_status,
-    input  t_FROM_STATUS_MGR_FIFO_FROM_HOST status_to_fifo_from_host
+    output t_to_status_mgr_fifo_from_host   fifo_from_host_to_status,
+    input  t_from_status_mgr_fifo_from_host status_to_fifo_from_host
     );
 
     t_cci_cldata outQ_enq_data;
@@ -85,17 +85,17 @@ module qa_drv_hc_fifo_from_host
     //=====================================================================
 
     // Index of the next line to read in the ring buffer
-    t_FIFO_FROM_HOST_IDX next_read_req_idx;
+    t_fifo_from_host_idx next_read_req_idx;
 
     // Index of the oldest line in the ring buffer not yet read.  This pointer
     // will be sent to the host every once in a while by qa_drv_status_manager
     // in order to regulate host writes to the ring buffer.
-    t_FIFO_FROM_HOST_IDX oldest_read_line_idx;
+    t_fifo_from_host_idx oldest_read_line_idx;
     assign fifo_from_host_to_status.oldestReadLineIdx = oldest_read_line_idx;
 
     // The status manager updates the pointer to new data in the incoming
     // ring buffer and forwards it here.
-    t_FIFO_FROM_HOST_IDX newest_read_line_idx;
+    t_fifo_from_host_idx newest_read_line_idx;
     assign newest_read_line_idx = status_to_fifo_from_host.newestReadLineIdx;
 
     // Index of a scoreboard entry
@@ -119,7 +119,7 @@ module qa_drv_hc_fifo_from_host
     assign outQ_enq_en = sc_notEmpty && outQ_notFull;
 
     // Is the incoming read a FIFO read response?
-    t_READ_METADATA response_read_metadata;
+    t_read_metadata response_read_metadata;
     assign response_read_metadata = unpack_read_metadata(rx0.hdr);
 
     logic incoming_read_valid;
@@ -185,11 +185,11 @@ module qa_drv_hc_fifo_from_host
     // ====================================================================
 
     // Base address of the ring buffer
-    t_CACHE_LINE_ADDR buffer_base_addr;
-    assign buffer_base_addr = t_CACHE_LINE_ADDR'(csr.afu_read_frame);
+    t_cci_cl_paddr buffer_base_addr;
+    assign buffer_base_addr = t_cci_cl_paddr'(csr.afu_read_frame);
 
     t_cci_ReqMemHdr read_header;
-    t_READ_METADATA data_read_metadata;
+    t_read_metadata data_read_metadata;
 
     always_comb
     begin

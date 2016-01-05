@@ -29,7 +29,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 //
-// MPF -- Memory Protocol Factory
+// MPF -- Memory Properties Factory
 //
 //   The factory is a composable collection of shims for constructing
 //   Xeon+FPGA memory interfaces with a variety of characteristics.

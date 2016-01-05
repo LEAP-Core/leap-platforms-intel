@@ -29,7 +29,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-`include "qa_drv_hc.vh"
+import qa_drv_hc_types::*;
 
 module qa_drv_hc_status_manager
     (input logic clk,
@@ -38,21 +38,21 @@ module qa_drv_hc_status_manager
      input  t_if_cci_c0_Rx rx0,
 
      input  t_CSR_AFU_STATE      csr,
-     output t_FRAME_ARB          status_mgr_req,
-     input  t_CHANNEL_GRANT_ARB  read_grant,
-     input  t_CHANNEL_GRANT_ARB  write_grant,
+     output t_frame_arb          status_mgr_req,
+     input  t_channel_grant_arb  read_grant,
+     input  t_channel_grant_arb  write_grant,
 
-     input  t_TO_STATUS_MGR_FIFO_FROM_HOST   fifo_from_host_to_status,
-     output t_FROM_STATUS_MGR_FIFO_FROM_HOST status_to_fifo_from_host,
+     input  t_to_status_mgr_fifo_from_host   fifo_from_host_to_status,
+     output t_from_status_mgr_fifo_from_host status_to_fifo_from_host,
 
-     input  t_TO_STATUS_MGR_FIFO_TO_HOST     fifo_to_host_to_status,
-     output t_FROM_STATUS_MGR_FIFO_TO_HOST   status_to_fifo_to_host,
+     input  t_to_status_mgr_fifo_to_host     fifo_to_host_to_status,
+     output t_from_status_mgr_fifo_to_host   status_to_fifo_to_host,
 
-     input  t_TO_STATUS_MGR_TESTER           tester_to_status,
+     input  t_to_status_mgr_tester           tester_to_status,
 
-     output t_SREG_ADDR           sreg_req_addr,
+     output t_sreg_addr           sreg_req_addr,
      output logic                 sreg_req_rdy,
-     input  t_SREG                sreg_rsp,
+     input  t_sreg                sreg_rsp,
      input  logic                 sreg_rsp_enable
     );
 
@@ -61,11 +61,11 @@ module qa_drv_hc_status_manager
     //
     // THESE OFFSETS MUST MATCH THE HOST!
     //
-    localparam DSM_OFFSET_AFU_ID     = t_DSM_LINE_OFFSET'(0);
-    localparam DSM_OFFSET_SREG_RSP   = t_DSM_LINE_OFFSET'(1);
-    localparam DSM_OFFSET_DEBUG_RSP  = t_DSM_LINE_OFFSET'(2);
-    localparam DSM_OFFSET_FIFO_STATE = t_DSM_LINE_OFFSET'(3);
-    localparam DSM_OFFSET_POLL_STATE = t_DSM_LINE_OFFSET'(4);
+    localparam DSM_OFFSET_AFU_ID     = t_dsm_line_offset'(0);
+    localparam DSM_OFFSET_SREG_RSP   = t_dsm_line_offset'(1);
+    localparam DSM_OFFSET_DEBUG_RSP  = t_dsm_line_offset'(2);
+    localparam DSM_OFFSET_FIFO_STATE = t_dsm_line_offset'(3);
+    localparam DSM_OFFSET_POLL_STATE = t_dsm_line_offset'(4);
 
     //
     // AFU ID is used at the beginning of a run to tell the host the FPGA
@@ -73,7 +73,7 @@ module qa_drv_hc_status_manager
     //
     //   12345678-0D82-4272-9AEF-FE5F84570612
     //
-    t_CACHE_LINE_VEC32 afu_id;
+    t_cci_cldata_vec32 afu_id;
     assign afu_id[0] = 32'h84570612;
     assign afu_id[1] = 32'h9aeffe5f;
     assign afu_id[2] = 32'h0d824272;
@@ -83,9 +83,9 @@ module qa_drv_hc_status_manager
     // of the afu_id line:
 
     // Number of lines in the FIFO from the host
-    assign afu_id[4] = t_FIFO_FROM_HOST_IDX'(~0);
+    assign afu_id[4] = t_fifo_from_host_idx'(~0);
     // Number of lines in the FIFO to the host
-    assign afu_id[5] = t_FIFO_TO_HOST_IDX'(~0);
+    assign afu_id[5] = t_fifo_to_host_idx'(~0);
     
     // Clear the rest of afu_id
     genvar i;
@@ -102,16 +102,16 @@ module qa_drv_hc_status_manager
     //
 
     // Request (from the CSR write)
-    t_AFU_DEBUG_REQ debug_req;
+    t_afu_debug_req debug_req;
     // Response (muxed from other modules below)
-    t_AFU_DEBUG_RSP debug_rsp;
+    t_afu_debug_rsp debug_rsp;
     // The full message to be written to DSM line 0.
-    t_CACHE_LINE debug_rsp_line;
+    t_cci_cldata debug_rsp_line;
     assign debug_rsp_line = {debug_req, debug_rsp};
 
     // Status register response from client
-    t_SREG sreg_client_rsp;
-    t_CACHE_LINE sreg_rsp_line;
+    t_sreg sreg_client_rsp;
+    t_cci_cldata sreg_rsp_line;
 
     
     //=================================================================
@@ -127,10 +127,10 @@ module qa_drv_hc_status_manager
     //       the host.  This manages credit to send more to the host without
     //       overwriting unread messages.
     //
-    t_FIFO_FROM_HOST_IDX newest_read_line_idx;
+    t_fifo_from_host_idx newest_read_line_idx;
     assign status_to_fifo_from_host.newestReadLineIdx = newest_read_line_idx;
 
-    t_FIFO_TO_HOST_IDX oldest_write_idx;
+    t_fifo_to_host_idx oldest_write_idx;
     assign status_to_fifo_to_host.oldestWriteIdx = oldest_write_idx;
 
 
@@ -143,10 +143,10 @@ module qa_drv_hc_status_manager
     t_STATE_READER state_rd;
     t_STATE_READER next_state_rd;
 
-    t_READ_METADATA reader_meta_req;
+    t_read_metadata reader_meta_req;
 
     // Unpack read response metadata
-    t_READ_METADATA reader_meta_rsp;
+    t_read_metadata reader_meta_rsp;
     assign reader_meta_rsp = unpack_read_metadata(rx0.hdr);
 
     // Compute when a read response is available
@@ -156,7 +156,7 @@ module qa_drv_hc_status_manager
                              reader_meta_rsp.isHeader;
 
     // View incoming read data as a vector of 32 bit objects
-    t_CACHE_LINE_VEC32 read_data_vec32;
+    t_cci_cldata_vec32 read_data_vec32;
     assign read_data_vec32 = rx0.data;
 
 
@@ -296,12 +296,12 @@ module qa_drv_hc_status_manager
     //=================================================================
 
     // Last index the host knows about -- written to DSM
-    t_FIFO_FROM_HOST_IDX fifo_from_host_current_idx;
-    t_FIFO_TO_HOST_IDX   fifo_to_host_current_idx;
+    t_fifo_from_host_idx fifo_from_host_current_idx;
+    t_fifo_to_host_idx   fifo_to_host_current_idx;
 
     // Request write to DSM of an updated index
-    t_FIFO_FROM_HOST_IDX fifo_from_host_oldest_read_idx;
-    t_FIFO_TO_HOST_IDX   fifo_to_host_next_write_idx;
+    t_fifo_from_host_idx fifo_from_host_oldest_read_idx;
+    t_fifo_to_host_idx   fifo_to_host_next_write_idx;
 
     // Need to update the status line?
     logic need_fifo_status_update;
@@ -311,7 +311,7 @@ module qa_drv_hc_status_manager
 
     // Monitor one bit in the index to decide when to send credit.  Pick
     // a bit that balances reducing writes with sending credit early enough.
-    localparam MONITOR_IDX_BIT = $bits(t_FIFO_FROM_HOST_IDX) - 3;
+    localparam MONITOR_IDX_BIT = $bits(t_fifo_from_host_idx) - 3;
 
     //
     // Track the value last written to the DSM status line and whether
@@ -361,8 +361,8 @@ module qa_drv_hc_status_manager
     end
 
     // The FIFO status to write to DSM
-    t_CACHE_LINE fifo_status;
-    assign fifo_status = t_CACHE_LINE'({ 32'(fifo_to_host_next_write_idx),
+    t_cci_cldata fifo_status;
+    assign fifo_status = t_cci_cldata'({ 32'(fifo_to_host_next_write_idx),
                                          32'(fifo_from_host_oldest_read_idx) });
 
 
@@ -370,8 +370,8 @@ module qa_drv_hc_status_manager
     // create CCI Tx1 transaction (write to DSM)
     //=================================================================
 
-    t_DSM_LINE_OFFSET offset;
-    t_CACHE_LINE data;
+    t_dsm_line_offset offset;
+    t_cci_cldata data;
 
     always_comb
     begin
@@ -439,7 +439,7 @@ module qa_drv_hc_status_manager
 
     always_comb
     begin
-        sreg_rsp_line = t_CACHE_LINE'(sreg_client_rsp);
+        sreg_rsp_line = t_cci_cldata'(sreg_client_rsp);
         sreg_rsp_line[$size(sreg_rsp_line)-1] = 1'b1;
     end
 

@@ -1,4 +1,4 @@
-Memory Protocol Factory (MPF) is a set of shims that each provide a memory
+Memory Properties Factory (MPF) is a set of shims that each provide a memory
 function.  Functions include virtual to physical translation (VTP),
 load/store ordering, etc.  Each shim takes both consumes and produces an AFU
 interface.  The factory composes a memory subsystem with the desired

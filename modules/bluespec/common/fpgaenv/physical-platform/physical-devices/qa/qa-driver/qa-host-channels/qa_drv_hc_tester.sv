@@ -28,7 +28,7 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-`include "qa_drv_hc.vh"
+import qa_drv_hc_types::*;
 import qa_driver_csr_types::*;
 
 //
@@ -65,7 +65,7 @@ module qa_drv_hc_tester
     input  logic        tx_rdy,
     output logic        tx_enable,
 
-    output t_TO_STATUS_MGR_TESTER tester_to_status
+    output t_to_status_mgr_tester tester_to_status
     );
 
     //

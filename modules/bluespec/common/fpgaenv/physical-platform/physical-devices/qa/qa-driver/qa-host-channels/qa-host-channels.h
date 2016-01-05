@@ -29,8 +29,8 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef __QA_POLLED_DRIVER__
-#define __QA_POLLED_DRIVER__
+#ifndef __QA_HOST_CHANNELS_DRIVER__
+#define __QA_HOST_CHANNELS_DRIVER__
 
 #include "awb/provides/command_switches.h"
 #include "awb/provides/umf.h"
@@ -57,8 +57,8 @@ t_DSM_OFFSETS;
 // ==============================================
 //          QA Physical Device, software driver
 // ==============================================
-typedef class QA_DEVICE_CLASS* QA_DEVICE;
-class QA_DEVICE_CLASS: public PLATFORMS_MODULE_CLASS
+typedef class QA_HOST_CHANNELS_DEVICE_CLASS* QA_HOST_CHANNELS_DEVICE;
+class QA_HOST_CHANNELS_DEVICE_CLASS: public PLATFORMS_MODULE_CLASS
 {
   private:
     // Handles to AFU context.
@@ -97,8 +97,8 @@ class QA_DEVICE_CLASS: public PLATFORMS_MODULE_CLASS
     bool        enableTests;
 
   public:
-    QA_DEVICE_CLASS(PLATFORMS_MODULE p, AFU_CLASS& afuDev);
-    ~QA_DEVICE_CLASS();
+    QA_HOST_CHANNELS_DEVICE_CLASS(PLATFORMS_MODULE p, AFU_CLASS& afuDev);
+    ~QA_HOST_CHANNELS_DEVICE_CLASS();
 
     void Init();
     void Cleanup();                             // cleanup

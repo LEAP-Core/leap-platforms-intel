@@ -83,7 +83,7 @@ class QA_DEVICE_WRAPPER_CLASS: public PLATFORMS_MODULE_CLASS
     AFU_CLASS afu;
 
     // FIFO channels to/from FPGA
-    QA_DEVICE_CLASS channelDev;
+    QA_HOST_CHANNELS_DEVICE_CLASS channelDev;
 
     // Number of bytes remaining in current packet
     size_t bytesLeftInPacket;

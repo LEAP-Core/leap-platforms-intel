@@ -3,10 +3,10 @@
 
 %provides qa_driver_host_channels
 
-%param QA_DRIVER_DEBUG   0      "Enable QA driver debugging messages?"
+%param QA_HOST_CHANNELS_DEBUG   0    "Enable QA host channels debugging messages?"
 
-%sources -t H      -v PUBLIC  qa-polled-driver.h
-%sources -t CPP    -v PRIVATE qa-polled-driver.cpp
+%sources -t H      -v PUBLIC  qa-host-channels.h
+%sources -t CPP    -v PRIVATE qa-host-channels.cpp
 
 %sources -t VERILOG_PKG -v PRIVATE qa_drv_hc_types.sv
 

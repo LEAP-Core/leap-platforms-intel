@@ -162,7 +162,7 @@ AFU_CLASS::WriteCSR64(btCSROffset offset, bt64bitCSR value)
 
 
 void
-AFU_CLASS::RunTests(QA_DEVICE qa)
+AFU_CLASS::RunTests(QA_HOST_CHANNELS_DEVICE qa)
 {
 #if (QA_PLATFORM_MEMTEST != 0)
     void* base = CreateSharedBufferInVM(MB(64));

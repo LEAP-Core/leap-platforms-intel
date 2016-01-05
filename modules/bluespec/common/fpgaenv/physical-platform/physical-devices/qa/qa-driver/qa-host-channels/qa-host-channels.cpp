@@ -59,7 +59,7 @@
 using namespace std;
 
 // Handle to the QA device.  Useful when debugging.
-static QA_DEVICE_CLASS *debugQADev;
+static QA_HOST_CHANNELS_DEVICE_CLASS *debugQADev;
 
 // Receiver thread in loopback test
 static void* LoopbackTestRecv(void *arg);
@@ -70,7 +70,7 @@ static void* LoopbackTestRecv(void *arg);
 // ============================================
 
 
-QA_DEVICE_CLASS::QA_DEVICE_CLASS(
+QA_HOST_CHANNELS_DEVICE_CLASS::QA_HOST_CHANNELS_DEVICE_CLASS(
     PLATFORMS_MODULE p,
     AFU_CLASS& afuDev) :
         PLATFORMS_MODULE_CLASS(p),
@@ -89,7 +89,7 @@ QA_DEVICE_CLASS::QA_DEVICE_CLASS(
 }
 
 
-QA_DEVICE_CLASS::~QA_DEVICE_CLASS()
+QA_HOST_CHANNELS_DEVICE_CLASS::~QA_HOST_CHANNELS_DEVICE_CLASS()
 {
     // cleanup
     Cleanup();
@@ -97,7 +97,7 @@ QA_DEVICE_CLASS::~QA_DEVICE_CLASS()
 
 
 void
-QA_DEVICE_CLASS::Init()
+QA_HOST_CHANNELS_DEVICE_CLASS::Init()
 {
     // Disable AFU during configuration
     afu.WriteCSR(CSR_AFU_EN, 0);
@@ -113,7 +113,7 @@ QA_DEVICE_CLASS::Init()
     assert((readBufferIdxMask & (readBufferIdxMask + 1)) == 0);
     readBufferBytes = (readBufferIdxMask + 1) * CL(1);
 
-    if (QA_DRIVER_DEBUG)
+    if (QA_HOST_CHANNELS_DEBUG)
     {
         printf("FIFO from host buffer bytes:  %d\n", writeBufferBytes);
         printf("FIFO to host buffer bytes:    %d\n", readBufferBytes);
@@ -149,13 +149,13 @@ QA_DEVICE_CLASS::Init()
     // the FPGA write buffer. Our write buffer is the FPGA read
     // buffer.
     afu.WriteCSR64(CSR_WRITE_FRAME, readBuffer->physicalAddress / CL(1));
-    if (QA_DRIVER_DEBUG)
+    if (QA_HOST_CHANNELS_DEBUG)
     {
         printf("Writing Host READ_FRAME base %p (line %p) ...\n", readBuffer->physicalAddress, readBuffer->physicalAddress);
     }
 
     afu.WriteCSR64(CSR_READ_FRAME, writeBuffer->physicalAddress / CL(1));
-    if (QA_DRIVER_DEBUG)
+    if (QA_HOST_CHANNELS_DEBUG)
     {
         printf("Writing Host WRITE_FRAME base %p (line %p) ...\n", writeBuffer->physicalAddress, writeBuffer->physicalAddress);
     }
@@ -182,14 +182,14 @@ QA_DEVICE_CLASS::Init()
 }
 
 void
-QA_DEVICE_CLASS::Uninit()
+QA_HOST_CHANNELS_DEVICE_CLASS::Uninit()
 {
     // Disable AFU
     afu.WriteCSR(CSR_AFU_EN, 0);
 }
 
 void
-QA_DEVICE_CLASS::Cleanup()
+QA_HOST_CHANNELS_DEVICE_CLASS::Cleanup()
 {
 }
 
@@ -197,7 +197,7 @@ QA_DEVICE_CLASS::Cleanup()
 // Probe channel to determine whether fresh data exists.
 //
 bool
-QA_DEVICE_CLASS::Probe()
+QA_HOST_CHANNELS_DEVICE_CLASS::Probe()
 {
     // Do we already know about available data from a previous probe?
     if (readFillNext != readNext)
@@ -229,7 +229,7 @@ QA_DEVICE_CLASS::Probe()
 // Read lines
 //
 size_t
-QA_DEVICE_CLASS::Read(
+QA_HOST_CHANNELS_DEVICE_CLASS::Read(
     void* buf,
     size_t nBytes,
     bool block)
@@ -248,7 +248,7 @@ QA_DEVICE_CLASS::Read(
         sleep(1);
     }
 
-    if (QA_DRIVER_DEBUG)
+    if (QA_HOST_CHANNELS_DEBUG)
     {
         printf("READ needs %d bytes\n", nBytes);
     }
@@ -281,7 +281,7 @@ QA_DEVICE_CLASS::Read(
         // Read no more than are available
         size_t read_bytes = (nBytes <= readBytesAvail ? nBytes : readBytesAvail);
 
-        if (QA_DRIVER_DEBUG)
+        if (QA_HOST_CHANNELS_DEBUG)
         {
             printf("  READ %d bytes from %p\n", read_bytes, readNext);
         }
@@ -300,7 +300,7 @@ QA_DEVICE_CLASS::Read(
 // Write a message to the FPGA.
 //
 void
-QA_DEVICE_CLASS::Write(
+QA_HOST_CHANNELS_DEVICE_CLASS::Write(
     const void* buf,
     size_t nBytes)
 {
@@ -308,7 +308,7 @@ QA_DEVICE_CLASS::Write(
 
     while (!initWriteComplete)
     {
-        if (QA_DRIVER_DEBUG)
+        if (QA_HOST_CHANNELS_DEBUG)
         {
             printf("WRITE: waiting for init complete\n");
         }
@@ -316,7 +316,7 @@ QA_DEVICE_CLASS::Write(
         sleep(1);
     }
 
-    if (QA_DRIVER_DEBUG)
+    if (QA_HOST_CHANNELS_DEBUG)
     {
         printf("WRITE New %d byte write\n", nBytes);
     }
@@ -344,7 +344,7 @@ QA_DEVICE_CLASS::Write(
         }
         while (writeNext == max_write_bound);
 
-        if (QA_DRIVER_DEBUG)
+        if (QA_HOST_CHANNELS_DEBUG)
         {
             size_t idx = uint64_t(max_write_bound - writeBufferStart) / CL(1);
             printf("  WRITE Bound (at %p) is 0x%08lx\n", max_write_bound, idx);
@@ -369,7 +369,7 @@ QA_DEVICE_CLASS::Write(
         src = src + write_bytes;
         nBytes -= write_bytes;
 
-        if (QA_DRIVER_DEBUG)
+        if (QA_HOST_CHANNELS_DEBUG)
         {
             printf("    WRITE Copied %d bytes to %p, %d remain\n", write_bytes, writeNext, nBytes);
         }
@@ -392,7 +392,7 @@ QA_DEVICE_CLASS::Write(
         uint32_t next_line_idx = (writeNext - writeBufferStart) / CL(1);
         *newest_live_idx = next_line_idx;
 
-        if (QA_DRIVER_DEBUG)
+        if (QA_HOST_CHANNELS_DEBUG)
         {
             printf("    WRITE Control newest idx (at %p) is 0x%08lx\n", newest_live_idx, next_line_idx);
         }
@@ -401,7 +401,7 @@ QA_DEVICE_CLASS::Write(
 
 
 void
-QA_DEVICE_CLASS::Flush()
+QA_HOST_CHANNELS_DEVICE_CLASS::Flush()
 {
     // Is there a partially written line?
     size_t partial = size_t(writeNext) & (CL(1) - 1);
@@ -418,7 +418,7 @@ QA_DEVICE_CLASS::Flush()
         uint32_t next_line_idx = (writeNext - writeBufferStart) / CL(1);
         *newest_live_idx = next_line_idx;
 
-        if (QA_DRIVER_DEBUG)
+        if (QA_HOST_CHANNELS_DEBUG)
         {
             printf("    FLUSH Control newest idx (at %p) is 0x%08lx\n", newest_live_idx, next_line_idx);
         }
@@ -431,7 +431,7 @@ QA_DEVICE_CLASS::Flush()
 // the FPGA side of this driver and are intended for debugging.
 //
 uint64_t
-QA_DEVICE_CLASS::ReadSREG(uint32_t n)
+QA_HOST_CHANNELS_DEVICE_CLASS::ReadSREG(uint32_t n)
 {
     // The FPGA will write to DSM line 0.  Clear it first.
     memset((void*)afu.DSMAddress(DSM_OFFSET_SREG_RSP), 0, CL(1));
@@ -460,7 +460,7 @@ QA_DEVICE_CLASS::ReadSREG(uint32_t n)
 //   Send a stream of data to the FPGA.  The FPGA will drop it.
 //
 void
-QA_DEVICE_CLASS::TestSend()
+QA_HOST_CHANNELS_DEVICE_CLASS::TestSend()
 {
     printf("SEND to FPGA Test...\n");
     // The FPGA will write to DSM line 0.  Clear it first.
@@ -521,7 +521,7 @@ QA_DEVICE_CLASS::TestSend()
 //   Receive an FPGA-generated stream of test data.
 //
 void
-QA_DEVICE_CLASS::TestRecv()
+QA_HOST_CHANNELS_DEVICE_CLASS::TestRecv()
 {
     printf("RECEIVE from FPGA Test...\n");
     // The FPGA will write to DSM line 0.  Clear it first.
@@ -571,7 +571,7 @@ QA_DEVICE_CLASS::TestRecv()
 //   Test in which all messages sent to the FPGA are reflected back.
 //
 void
-QA_DEVICE_CLASS::TestLoopback()
+QA_HOST_CHANNELS_DEVICE_CLASS::TestLoopback()
 {
     printf("LOOPBACK Test...\n");
     // The FPGA will write to DSM line 0.  Clear it first.
@@ -628,7 +628,7 @@ QA_DEVICE_CLASS::TestLoopback()
 
 static void* LoopbackTestRecv(void *arg)
 {
-    QA_DEVICE dev = QA_DEVICE(arg);
+    QA_HOST_CHANNELS_DEVICE dev = QA_HOST_CHANNELS_DEVICE(arg);
 
     uint64_t expected_value = 0;
 

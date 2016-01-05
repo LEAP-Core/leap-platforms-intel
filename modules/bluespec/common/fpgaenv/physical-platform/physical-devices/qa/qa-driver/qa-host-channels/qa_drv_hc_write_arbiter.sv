@@ -36,7 +36,7 @@ module qa_drv_hc_write_arbiter
     input logic clk,
     input logic reset_n,
 
-    input  t_CSR_AFU_STATE        csr,
+    input  t_csr_afu_state        csr,
    
     input  t_frame_arb            frame_writer,
     input  t_frame_arb            frame_reader,
@@ -139,6 +139,12 @@ module qa_drv_hc_write_arbiter
         tx1_upd.hdr = header;
         tx1_upd.data = data;
         tx1_upd.wrValid = wrvalid;
+
+        if (! tx1_upd.wrValid)
+        begin
+            // req_type should match one-hot valid signal
+            tx1_upd.hdr.req_type = t_cci_req'(0);
+        end
     end
 
 

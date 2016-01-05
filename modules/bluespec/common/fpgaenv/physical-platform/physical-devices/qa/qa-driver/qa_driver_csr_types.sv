@@ -133,6 +133,6 @@ package qa_driver_csr_types;
         // Client status register read request.  Enable is held for one cycle.
         t_AFU_SREG_REQ afu_sreg_req;
     }
-    t_CSR_AFU_STATE;
+    t_csr_afu_state;
 
 endpackage // qa_driver_csr_types

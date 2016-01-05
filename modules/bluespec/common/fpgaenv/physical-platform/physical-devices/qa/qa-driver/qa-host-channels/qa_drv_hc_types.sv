@@ -64,7 +64,9 @@ package qa_drv_hc_types;
     typedef struct 
     {
         logic reserved;             // Used by MUX that merges the channels
-                                    // and the direct memory reader.
+                                    // and the direct memory reader. The high
+                                    // bit of the full t_cci_mdata must be 0.
+
         logic isHeader;             // Read header, used to manage FIFO credits
         logic isRead;               // Target of read response
         logic [9:0] robAddr;        // ROB address (data reads)
@@ -117,25 +119,22 @@ package qa_drv_hc_types;
 
 
     // Function: Packs read metadata 
-    function automatic [12:0] pack_read_metadata;
-        input    t_read_metadata metadata;
-        begin
-            pack_read_metadata = { metadata.reserved,
-                                   metadata.isHeader,
-                                   metadata.isRead,
-                                   metadata.robAddr };
-        end
+    function automatic t_cci_mdata pack_read_metadata(
+        input    t_read_metadata metadata
+        );
+
+        return t_cci_mdata'({ metadata.reserved,
+                              metadata.isHeader,
+                              metadata.isRead,
+                              metadata.robAddr });
     endfunction
 
     // Function: Packs read metadata 
-    function automatic t_read_metadata unpack_read_metadata;
-        input    [17:0] metadata;
-        begin
-            unpack_read_metadata.reserved = metadata[12];
-            unpack_read_metadata.isHeader = metadata[11];
-            unpack_read_metadata.isRead = metadata[10];
-            unpack_read_metadata.robAddr = metadata[9:0];
-        end
+    function automatic t_read_metadata unpack_read_metadata(
+        t_cci_mdata metadata
+        );
+
+        return t_read_metadata'(metadata);
     endfunction
 
 
@@ -181,9 +180,6 @@ package qa_drv_hc_types;
     {
         // Index of the next line the FPGA will read when data is present.
         t_fifo_from_host_idx oldestReadLineIdx;
-
-        // Debugging state
-        t_afu_debug_rsp dbgFIFOState;
     }
     t_to_status_mgr_fifo_from_host;
     
@@ -219,7 +215,7 @@ package qa_drv_hc_types;
     typedef struct
     {
         // Debugging state
-        t_afu_debug_rsp dbgTester;
+        logic [5:0] dbgTester;
     }
     t_to_status_mgr_tester;
 

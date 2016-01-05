@@ -42,7 +42,7 @@ module qa_drv_hc_root
     cci_mpf_if.to_fiu            fiu,
 
     // CSR updates and state
-    input t_CSR_AFU_STATE        csr,
+    input t_csr_afu_state        csr,
 
     // -------------------------------------------------------------------
     //

@@ -36,7 +36,7 @@ module qa_drv_hc_read_arbiter
     input logic clk,
     input logic reset_n,
 
-    input  t_CSR_AFU_STATE        csr,
+    input  t_csr_afu_state        csr,
 
     input  t_frame_arb            status_mgr_req,
     input  t_frame_arb            frame_writer,
@@ -138,6 +138,12 @@ module qa_drv_hc_read_arbiter
         tx0_upd = cci_c0TxClearValids();
         tx0_upd.hdr = header;
         tx0_upd.rdValid = rdvalid && reset_n;
+
+        if (! tx0_upd.rdValid)
+        begin
+            // req_type should match one-hot valid signal
+            tx0_upd.hdr.req_type = t_cci_req'(0);
+        end
     end
     
 endmodule // qa_drv_hc_read_arbiter

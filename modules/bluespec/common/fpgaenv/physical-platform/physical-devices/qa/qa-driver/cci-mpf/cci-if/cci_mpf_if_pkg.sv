@@ -294,6 +294,21 @@ package cci_mpf_if_pkg;
         return h;
     endfunction
 
+    // Same as MPF version of genReqHdr but return only the base header
+    function automatic t_cci_ReqMemHdr cci_genReqHdr(
+        input t_cci_req                 requestType,
+        input t_cci_cl_paddr            address,
+        input t_cci_mdata               mdata,
+        input t_cci_mpf_ReqMemHdrParams params
+        );
+
+        t_cci_mpf_ReqMemHdr h = cci_mpf_genReqHdr(requestType,
+                                                  t_cci_mpf_cl_vaddr'(address),
+                                                  mdata,
+                                                  params);
+        return h.base;
+    endfunction
+
 
     // Generate a new request header from a base CCI header
     function automatic t_cci_mpf_ReqMemHdr cci_mpf_cvtReqHdrFromBase(

@@ -43,7 +43,7 @@ module qa_drv_hc_tester
     input logic clk,
     input logic reset_n,
 
-    input   t_CSR_AFU_STATE csr,
+    input   t_csr_afu_state csr,
 
     // To-client FIFO
     output t_cci_cldata rx_fifo_data,
@@ -220,14 +220,7 @@ module qa_drv_hc_tester
     //
     always_ff @(posedge clk)
     begin
-        if (! reset_n)
-        begin
-            tester_to_status.dbgTester <= 0;
-        end
-        else
-        begin
-            tester_to_status.dbgTester[5:0] <= { rx_rdy, rx_enable, tx_rdy, tx_enable, state };
-        end
+        tester_to_status.dbgTester <= { rx_rdy, rx_enable, tx_rdy, tx_enable, state };
     end
 
 endmodule // qa_driver

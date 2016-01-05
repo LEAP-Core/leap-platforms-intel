@@ -210,7 +210,7 @@ module qa_driver
     //
     // ====================================================================    
 
-    t_CSR_AFU_STATE csr;
+    t_csr_afu_state csr;
     qa_driver_csr
       csr_mgr
         (.clk,

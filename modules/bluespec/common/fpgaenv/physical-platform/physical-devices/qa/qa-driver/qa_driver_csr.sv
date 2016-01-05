@@ -34,7 +34,7 @@ import qa_driver_csr_types::*;
 
 //
 // Consume control/status register writes from the host and broadcast
-// CSR state to all consumers through the t_CSR_AFU_STATE type.
+// CSR state to all consumers through the t_csr_afu_state type.
 //
 
 module qa_driver_csr
@@ -45,7 +45,7 @@ module qa_driver_csr
     cci_mpf_if.to_fiu_snoop fiu,
 
     // Parsed CSR messages and state
-    output t_CSR_AFU_STATE csr
+    output t_csr_afu_state csr
     );
 
     always_comb

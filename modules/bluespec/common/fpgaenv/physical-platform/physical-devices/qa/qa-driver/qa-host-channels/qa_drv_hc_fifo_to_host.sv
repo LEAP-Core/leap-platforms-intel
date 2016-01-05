@@ -38,7 +38,7 @@ module qa_drv_hc_fifo_to_host
 
     input  t_if_cci_c0_Rx rx0,
 
-    input  t_CSR_AFU_STATE     csr,
+    input  t_csr_afu_state     csr,
     output t_frame_arb         frame_writer,
     input  t_channel_grant_arb write_grant,
 
@@ -257,8 +257,13 @@ module qa_drv_hc_fifo_to_host
     //
     // Set write address and data.
     //
+    t_cci_mpf_ReqMemHdrParams write_params;
+
     always_comb
     begin
+        write_params = cci_mpf_defaultReqHdrParams();
+        write_params.addrIsVirtual = 1'b0;
+
         frame_writer.writeHeader = 0;
         frame_writer.writeHeader.mdata = 0;
 
@@ -267,14 +272,19 @@ module qa_drv_hc_fifo_to_host
         case (state)
           STATE_EMIT_FENCE:
             begin
-                frame_writer.writeHeader.req_type = eREQ_WRFENCE;
-                frame_writer.writeHeader.address = 0;
+                frame_writer.writeHeader =
+                    cci_genReqHdr(eREQ_WRFENCE,
+                                  t_cci_cl_paddr'(0),
+                                  t_cci_mdata'(0),
+                                  write_params);
             end
           default:
             begin
-                frame_writer.writeHeader.req_type = eREQ_WRLINE_I;
-                frame_writer.writeHeader.address = buffer_base_addr +
-                                                   cur_data_idx;
+                frame_writer.writeHeader =
+                    cci_genReqHdr(eREQ_WRLINE_I,
+                                  buffer_base_addr + cur_data_idx,
+                                  t_cci_mdata'(0),
+                                  write_params);
             end
         endcase
     end

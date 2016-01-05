@@ -42,7 +42,7 @@ module qa_drv_hc_fifo_from_host
 
     input  t_if_cci_c0_Rx rx0,
 
-    input  t_CSR_AFU_STATE     csr,
+    input  t_csr_afu_state     csr,
     output t_frame_arb         frame_reader,
     input  t_channel_grant_arb read_grant,
 
@@ -188,8 +188,8 @@ module qa_drv_hc_fifo_from_host
     t_cci_cl_paddr buffer_base_addr;
     assign buffer_base_addr = t_cci_cl_paddr'(csr.afu_read_frame);
 
-    t_cci_ReqMemHdr read_header;
     t_read_metadata data_read_metadata;
+    t_cci_mpf_ReqMemHdrParams read_params;
 
     always_comb
     begin
@@ -201,23 +201,24 @@ module qa_drv_hc_fifo_from_host
         frame_reader.read.request = (next_read_req_idx != newest_read_line_idx) &&
                                     scoreboard_slot_rdy;
 
-        read_header = 0;
-        read_header.req_type = eREQ_RDLINE_I;
+        read_params = cci_mpf_defaultReqHdrParams();
+        read_params.addrIsVirtual = 1'b0;
 
         // Read metadata
         data_read_metadata.reserved = 1'b0;
         data_read_metadata.isRead   = 1'b1;
         data_read_metadata.isHeader = 1'b0;
         data_read_metadata.robAddr  = scoreboard_slot_idx;
-        read_header.mdata = pack_read_metadata(data_read_metadata);
 
         // By adding to form the address instead of replacing low bits we avoid
         // the requirement that the buffer be aligned to the buffer size.
         // The buffer size must still be a power of two because we depend on
         // pointers wrapping from the last to the first entry.
-        read_header.address = buffer_base_addr + next_read_req_idx;
-
-        frame_reader.readHeader = read_header;
+        frame_reader.readHeader =
+            cci_genReqHdr(eREQ_RDLINE_I,
+                          buffer_base_addr + next_read_req_idx,
+                          pack_read_metadata(data_read_metadata),
+                          read_params);
     end
 
 

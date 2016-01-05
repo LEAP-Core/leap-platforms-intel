@@ -37,7 +37,7 @@ module qa_drv_hc_status_manager
 
      input  t_if_cci_c0_Rx rx0,
 
-     input  t_CSR_AFU_STATE      csr,
+     input  t_csr_afu_state      csr,
      output t_frame_arb          status_mgr_req,
      input  t_channel_grant_arb  read_grant,
      input  t_channel_grant_arb  write_grant,
@@ -461,13 +461,11 @@ module qa_drv_hc_status_manager
     // What debug info to write?
     always_comb
     begin
+        debug_rsp = t_afu_debug_rsp'('x);
         case (debug_req.idx)
-            1:
-              debug_rsp = fifo_from_host_to_status.dbgFIFOState;
             3:
-              debug_rsp = tester_to_status.dbgTester;
-            default:
-              debug_rsp = fifo_from_host_to_status.dbgFIFOState;
+              debug_rsp[$bits(tester_to_status.dbgTester)-1:0] =
+                  tester_to_status.dbgTester;
         endcase
     end
 

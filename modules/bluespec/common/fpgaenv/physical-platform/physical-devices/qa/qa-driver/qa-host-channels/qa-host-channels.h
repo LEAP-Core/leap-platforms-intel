@@ -40,18 +40,16 @@
 
 
 //
-// DSM offsets for various state.  THESE MUST MATCH THE VALUES IN
+// CTRL offsets for various state.  THESE MUST MATCH THE VALUES IN
 // qa_drv_status_manager.sv!
 //
 typedef enum
 {
-    DSM_OFFSET_AFU_ID     = CL(0),
-    DSM_OFFSET_SREG_RSP   = CL(1),
-    DSM_OFFSET_DEBUG_RSP  = CL(2),
-    DSM_OFFSET_FIFO_STATE = CL(3),
-    DSM_OFFSET_POLL_STATE = CL(4)
+    CTRL_OFFSET_AFU_ID     = CL(0),
+    CTRL_OFFSET_FIFO_STATE = CL(1),
+    CTRL_OFFSET_POLL_STATE = CL(2)
 }
-t_DSM_OFFSETS;
+t_CTRL_OFFSETS;
 
 
 // ==============================================
@@ -63,6 +61,10 @@ class QA_HOST_CHANNELS_DEVICE_CLASS: public PLATFORMS_MODULE_CLASS
   private:
     // Handles to AFU context.
     AFU_CLASS& afu;
+
+    // Control buffer.  Channel configuration and state is passed through here.
+    AFU_BUFFER  ctrlBuffer;
+    uint8_t*    ctrlBufferStart;
 
     // process/pipe state (physical channel)
     class tbb::atomic<bool> initReadComplete;
@@ -121,10 +123,6 @@ class QA_HOST_CHANNELS_DEVICE_CLASS: public PLATFORMS_MODULE_CLASS
     // FPGA cache line size.  Partial writes are padded with 0's.
     void Flush();
 
-    // The driver implements a status register space in the FPGA.
-    // The protocol is very slow -- the registers are intended for debugging.
-    uint64_t ReadSREG(uint32_t n);
-
     // Tests
     void TestSend();                    // Test sending to FPGA
     void TestRecv();                    // Test receiving from FPGA
@@ -158,13 +156,29 @@ class QA_HOST_CHANNELS_DEVICE_CLASS: public PLATFORMS_MODULE_CLASS
             readNext = readBufferStart;
         }
 
-        // Update sender credits updating the 2nd uint32_t of DSM POLL_STATE
+        // Update sender credits updating the 2nd uint32_t of CTRL POLL_STATE
         // with the index of the line currently being processed.
         uint32_t *cur_read_idx =
-            (uint32_t*)afu.DSMAddress(DSM_OFFSET_POLL_STATE +
-                                      sizeof(uint32_t));
+            (uint32_t*)CTRLAddress(CTRL_OFFSET_POLL_STATE + sizeof(uint32_t));
         *cur_read_idx = (readNext - readBufferStart) / CL(1);
     }
+
+
+    //
+    // Control buffer access functions
+    //
+    inline volatile void *CTRLAddress(uint32_t offset) {
+        return (void *)(ctrlBufferStart + offset);
+    }
+
+    inline volatile uint32_t ReadCTRL32(uint32_t offset) {
+        return *(volatile uint32_t *)(ctrlBufferStart + offset);
+    }
+
+    inline volatile uint64_t ReadCTRL64(uint32_t offset) {
+        return *(volatile uint64_t *)(ctrlBufferStart + offset);
+    }
+
 };
 
 #endif

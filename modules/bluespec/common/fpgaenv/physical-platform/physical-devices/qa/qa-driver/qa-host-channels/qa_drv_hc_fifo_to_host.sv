@@ -30,6 +30,8 @@
 //
 
 import qa_drv_hc_types::*;
+import qa_drv_hc_csr_types::*;
+
 
 module qa_drv_hc_fifo_to_host
    (
@@ -38,7 +40,7 @@ module qa_drv_hc_fifo_to_host
 
     input  t_if_cci_c0_Rx rx0,
 
-    input  t_csr_afu_state     csr,
+    input  t_qa_drv_hc_csrs    csr,
     output t_frame_arb         frame_writer,
     input  t_channel_grant_arb write_grant,
 
@@ -83,7 +85,7 @@ module qa_drv_hc_fifo_to_host
 
     // Base address of the ring buffer
     t_cci_cl_paddr buffer_base_addr;
-    assign buffer_base_addr = t_cci_cl_paddr'(csr.afu_write_frame);
+    assign buffer_base_addr = csr.hc_write_frame;
 
     // Pointer to the oldest live entry in the ring buffer.  This pointer
     // determines whether the the buffer is full, waiting for the host to
@@ -249,7 +251,7 @@ module qa_drv_hc_fifo_to_host
     logic allow_write;
     assign allow_write = (cur_data_idx + t_fifo_to_host_idx'(1) != oldest_write_idx);
 
-    assign frame_writer.write.request = csr.afu_en &&
+    assign frame_writer.write.request = csr.hc_en &&
                                         allow_write &&
                                         (lineIn_notEmpty ||
                                          (state == STATE_EMIT_FENCE));

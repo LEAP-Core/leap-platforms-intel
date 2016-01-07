@@ -31,8 +31,15 @@
 
 `include "cci_mpf_if.vh"
 import qa_drv_hc_types::*;
+import qa_drv_hc_csr_types::*;
+import qa_driver_csr_types::*;
+
 
 module qa_drv_hc_root
+  #(
+    // Start of the CSR region for the host channel
+    parameter CSR_HC_BASE_ADDR = 0
+    )
    (
     input  logic                 clk,
 
@@ -40,9 +47,6 @@ module qa_drv_hc_root
     // Signals connecting to QA Platform
     //
     cci_mpf_if.to_fiu            fiu,
-
-    // CSR updates and state
-    input t_csr_afu_state        csr,
 
     // -------------------------------------------------------------------
     //
@@ -62,23 +66,7 @@ module qa_drv_hc_root
     //
     input  t_cci_cldata tx_fifo_data,
     output logic        tx_fifo_rdy,
-    input  logic        tx_fifo_enable,
-
-    //
-    // Client status registers.  Mostly useful for debugging.
-    //
-    // Only one status register read will be in flight at once.
-    // The FPGA-side client must respond to a request with exactly
-    // one response.  No specific timing is required.
-    //
-    // Clients are not required to implement this as long as the host
-    // ReadStatusReg() method is never called.  In this case just
-    // tie off sreg_rsp_enable.
-    //
-    output t_sreg_addr  sreg_req_addr,
-    output logic        sreg_req_rdy,
-    input  t_sreg       sreg_rsp,
-    input  logic        sreg_rsp_enable
+    input  logic        tx_fifo_enable
     );
 
     //
@@ -130,6 +118,27 @@ module qa_drv_hc_root
             tx1_q <= tx1;
         end
     end
+
+
+    // ====================================================================
+    //
+    // CSR management
+    //
+    // ====================================================================
+
+    t_qa_drv_hc_csrs csr;
+
+    qa_drv_hc_csr
+      #(
+        .CSR_HC_BASE_ADDR(CSR_HC_BASE_ADDR)
+        )
+      hcCsr
+       (
+        .clk,
+        .reset_n,
+        .c0Rx(rx0),
+        .csr
+        );
 
 
     // ====================================================================

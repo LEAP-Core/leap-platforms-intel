@@ -30,13 +30,15 @@
 //
 
 import qa_drv_hc_types::*;
+import qa_drv_hc_csr_types::*;
+
 
 module qa_drv_hc_read_arbiter
    (
     input logic clk,
     input logic reset_n,
 
-    input  t_csr_afu_state        csr,
+    input  t_qa_drv_hc_csrs       csr,
 
     input  t_frame_arb            status_mgr_req,
     input  t_frame_arb            frame_writer,
@@ -52,7 +54,7 @@ module qa_drv_hc_read_arbiter
     // is enabled by software.
     logic cci_can_issue;
     logic can_issue;
-    assign can_issue = cci_can_issue && csr.afu_en;
+    assign can_issue = cci_can_issue && csr.hc_en;
 
     t_cci_ReqMemHdr header;
     logic rdvalid;

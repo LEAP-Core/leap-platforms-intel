@@ -29,7 +29,8 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 import qa_drv_hc_types::*;
-import qa_driver_csr_types::*;
+import qa_drv_hc_csr_types::*;
+
 
 //
 // Test node that is always inserted between the driver top and the FIFO
@@ -43,7 +44,7 @@ module qa_drv_hc_tester
     input logic clk,
     input logic reset_n,
 
-    input   t_csr_afu_state csr,
+    input  t_qa_drv_hc_csrs csr,
 
     // To-client FIFO
     output t_cci_cldata rx_fifo_data,
@@ -164,7 +165,7 @@ module qa_drv_hc_tester
                 rx_fifo_rdy = rx_rdy;
                 rx_enable = rx_fifo_enable;
 
-                tx_fifo_rdy = tx_rdy && csr.afu_en_user_channel;
+                tx_fifo_rdy = tx_rdy && csr.hc_en_user_channel;
                 tx_enable = tx_fifo_enable;
             end
         endcase
@@ -178,7 +179,7 @@ module qa_drv_hc_tester
     begin
         if (state != SOURCE)
         begin
-            source_count <= csr.afu_enable_test.count;
+            source_count <= csr.hc_enable_test.count;
         end
         else if (tx_rdy)
         begin
@@ -199,12 +200,12 @@ module qa_drv_hc_tester
         else
         begin
             //
-            // The CSR manager holds afu_enable_test with the value of the
+            // The CSR manager holds hc_enable_test with the value of the
             // request for one cycle.
             //
-            if (csr.afu_enable_test.test_state != 0)
+            if (csr.hc_enable_test.test_state != 0)
             begin
-                state <= t_STATE'(csr.afu_enable_test.test_state);
+                state <= t_STATE'(csr.hc_enable_test.test_state);
             end
             else if (test_done)
             begin
@@ -212,15 +213,6 @@ module qa_drv_hc_tester
                 state <= NORMAL;
             end
         end
-    end
-
-
-    //
-    // Debugging state.
-    //
-    always_ff @(posedge clk)
-    begin
-        tester_to_status.dbgTester <= { rx_rdy, rx_enable, tx_rdy, tx_enable, state };
     end
 
 endmodule // qa_driver

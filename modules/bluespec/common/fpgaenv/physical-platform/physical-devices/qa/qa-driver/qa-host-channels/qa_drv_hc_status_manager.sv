@@ -30,6 +30,8 @@
 //
 
 import qa_drv_hc_types::*;
+import qa_drv_hc_csr_types::*;
+
 
 module qa_drv_hc_status_manager
     (input logic clk,
@@ -37,7 +39,7 @@ module qa_drv_hc_status_manager
 
      input  t_if_cci_c0_Rx rx0,
 
-     input  t_csr_afu_state      csr,
+     input  t_qa_drv_hc_csrs     csr,
      output t_frame_arb          status_mgr_req,
      input  t_channel_grant_arb  read_grant,
      input  t_channel_grant_arb  write_grant,
@@ -48,72 +50,34 @@ module qa_drv_hc_status_manager
      input  t_to_status_mgr_fifo_to_host     fifo_to_host_to_status,
      output t_from_status_mgr_fifo_to_host   status_to_fifo_to_host,
 
-     input  t_to_status_mgr_tester           tester_to_status,
-
-     output t_sreg_addr           sreg_req_addr,
-     output logic                 sreg_req_rdy,
-     input  t_sreg                sreg_rsp,
-     input  logic                 sreg_rsp_enable
+     input  t_to_status_mgr_tester           tester_to_status
     );
 
     //
-    // Offsets in DSM used for communicating state with the host.
+    // Offsets in CTRL used for communicating state with the host.
     //
     // THESE OFFSETS MUST MATCH THE HOST!
     //
-    localparam DSM_OFFSET_AFU_ID     = t_dsm_line_offset'(0);
-    localparam DSM_OFFSET_SREG_RSP   = t_dsm_line_offset'(1);
-    localparam DSM_OFFSET_DEBUG_RSP  = t_dsm_line_offset'(2);
-    localparam DSM_OFFSET_FIFO_STATE = t_dsm_line_offset'(3);
-    localparam DSM_OFFSET_POLL_STATE = t_dsm_line_offset'(4);
+    localparam CTRL_OFFSET_CFG        = 0;
+    localparam CTRL_OFFSET_FIFO_STATE = 1;
+    localparam CTRL_OFFSET_POLL_STATE = 2;
 
-    //
-    // AFU ID is used at the beginning of a run to tell the host the FPGA
-    // is alive.
-    //
-    //   12345678-0D82-4272-9AEF-FE5F84570612
-    //
-    t_cci_cldata_vec32 afu_id;
-    assign afu_id[0] = 32'h84570612;
-    assign afu_id[1] = 32'h9aeffe5f;
-    assign afu_id[2] = 32'h0d824272;
-    assign afu_id[3] = 32'h12345678;
-
-    // Communicate information about the hardware configuration in the remainder
-    // of the afu_id line:
-
-    // Number of lines in the FIFO from the host
-    assign afu_id[4] = t_fifo_from_host_idx'(~0);
-    // Number of lines in the FIFO to the host
-    assign afu_id[5] = t_fifo_to_host_idx'(~0);
     
-    // Clear the rest of afu_id
-    genvar i;
-    generate
-        for (i = 6; i < N_BIT32_PER_CACHE_LINE; i++)
-        begin : gen_afu_id
-            assign afu_id[i] = 32'd0;
+    //
+    // CTRL buffer addressing.
+    //
+    function automatic [31:0] ctrl_line_offset_to_addr(
+        input int offset_l
+        );
+
+        begin
+            // The frame base is at least 4KB aligned.  We can use |
+            // instead of +.
+            ctrl_line_offset_to_addr = csr.hc_ctrl_frame | 4'(offset_l);
         end
-    endgenerate
+    endfunction
 
 
-    //
-    // Debugging state.
-    //
-
-    // Request (from the CSR write)
-    t_afu_debug_req debug_req;
-    // Response (muxed from other modules below)
-    t_afu_debug_rsp debug_rsp;
-    // The full message to be written to DSM line 0.
-    t_cci_cldata debug_rsp_line;
-    assign debug_rsp_line = {debug_req, debug_rsp};
-
-    // Status register response from client
-    t_sreg sreg_client_rsp;
-    t_cci_cldata sreg_rsp_line;
-
-    
     //=================================================================
     // Status READER FSM
     //=================================================================
@@ -200,12 +164,12 @@ module qa_drv_hc_status_manager
     always_comb
     begin
         //
-        // Poll the DSM line holding the read head pointer and write credits.
+        // Poll the CTRL line holding the read head pointer and write credits.
         //
         status_mgr_req.readHeader = 0;
         status_mgr_req.readHeader.req_type = eREQ_RDLINE_S;
         status_mgr_req.readHeader.address =
-            dsm_line_offset_to_addr(DSM_OFFSET_POLL_STATE, csr.afu_dsm_base);
+            ctrl_line_offset_to_addr(CTRL_OFFSET_POLL_STATE);
 
         reader_meta_req.reserved = 1'b0;
         reader_meta_req.isRead   = 1'b1;
@@ -218,7 +182,7 @@ module qa_drv_hc_status_manager
             //
             // IDLE: Request a read
             //
-            status_mgr_req.read.request = csr.afu_dsm_base_valid;
+            status_mgr_req.read.request = csr.hc_ctrl_frame_valid;
 
             // Wait for the read response if read was granted.
             next_state_rd = read_grant.statusGrant ? STATE_RD_WAIT : STATE_RD_POLL;
@@ -242,9 +206,7 @@ module qa_drv_hc_status_manager
     typedef enum
     {
         STATE_WR_INIT,
-        STATE_WR_IDLE,
-        STATE_WR_DEBUG,
-        STATE_WR_STATUS
+        STATE_WR_ACTIVE
     }
     t_STATE_WRITER;
     t_STATE_WRITER state_wr;
@@ -267,26 +229,17 @@ module qa_drv_hc_status_manager
         next_state_wr = state_wr;
 
         // Very simple protocol.  Only one thing may be active at a time.
-        // No other requests may be processed while in STATE_WR_INIT.  No new
-        // DEBUG requests will be noticed until the current one completes.
+        // No other requests may be processed while in STATE_WR_INIT.
         if (write_grant.statusGrant)
         begin
-            next_state_wr = STATE_WR_IDLE;
+            next_state_wr = STATE_WR_ACTIVE;
         end
-        else if (csr.afu_enable_test != 0)
+        else if (csr.hc_enable_test != 0)
         begin
-            // Signal the beginning of testing by writing the AFU ID again
-            // to DSM entry 0.  This is easily accomplished by returning
+            // Signal the beginning of testing by writing again
+            // to CTRL entry 0.  This is easily accomplished by returning
             // to STATE_WR_INIT.
             next_state_wr = STATE_WR_INIT;
-        end
-        else if (csr.afu_trigger_debug.idx != 0)
-        begin
-            next_state_wr = STATE_WR_DEBUG;
-        end
-        else if (sreg_rsp_enable)
-        begin
-            next_state_wr = STATE_WR_STATUS;
         end
     end
 
@@ -295,11 +248,11 @@ module qa_drv_hc_status_manager
     // FIFO state tracking
     //=================================================================
 
-    // Last index the host knows about -- written to DSM
+    // Last index the host knows about -- written to CTRL
     t_fifo_from_host_idx fifo_from_host_current_idx;
     t_fifo_to_host_idx   fifo_to_host_current_idx;
 
-    // Request write to DSM of an updated index
+    // Request write to CTRL of an updated index
     t_fifo_from_host_idx fifo_from_host_oldest_read_idx;
     t_fifo_to_host_idx   fifo_to_host_next_write_idx;
 
@@ -314,7 +267,7 @@ module qa_drv_hc_status_manager
     localparam MONITOR_IDX_BIT = $bits(t_fifo_from_host_idx) - 3;
 
     //
-    // Track the value last written to the DSM status line and whether
+    // Track the value last written to the CTRL status line and whether
     // a new write is required.
     //
     always_ff @(posedge clk)
@@ -329,7 +282,7 @@ module qa_drv_hc_status_manager
         begin
             if (need_fifo_status_update)
             begin
-                // Already need a write to DSM.  Did it happen?
+                // Already need a write to CTRL.  Did it happen?
                 if (requested_fifo_status_update && write_grant.statusGrant)
                 begin
                     // Yes.  Record the value written.
@@ -360,51 +313,39 @@ module qa_drv_hc_status_manager
             fifo_to_host_to_status.nextWriteIdx;
     end
 
-    // The FIFO status to write to DSM
+    // The FIFO status to write to CTRL
     t_cci_cldata fifo_status;
     assign fifo_status = t_cci_cldata'({ 32'(fifo_to_host_next_write_idx),
                                          32'(fifo_from_host_oldest_read_idx) });
 
 
     //=================================================================
-    // create CCI Tx1 transaction (write to DSM)
+    // create CCI Tx1 transaction (write to CTRL)
     //=================================================================
 
-    t_dsm_line_offset offset;
+    int offset;
     t_cci_cldata data;
 
     always_comb
     begin
         requested_fifo_status_update = 0;
 
-        if (state_wr != STATE_WR_IDLE)
-        begin
-            case (state_wr)
-              STATE_WR_DEBUG:
-                begin
-                    offset = DSM_OFFSET_DEBUG_RSP;
-                    data = debug_rsp_line;
-                end
-              STATE_WR_STATUS:
-                begin
-                    offset = DSM_OFFSET_SREG_RSP;
-                    data = sreg_rsp_line;
-                end
-              default:
-                begin
-                    offset = DSM_OFFSET_AFU_ID;
-                    data = afu_id;
-                end
-            endcase
+        data = fifo_status;
 
-            // Wait until the DSM is valid!
-            status_mgr_req.write.request = csr.afu_dsm_base_valid;
+        if (state_wr != STATE_WR_ACTIVE)
+        begin
+            // Configuration is the sizes of the read and write buffers
+            offset = CTRL_OFFSET_CFG;
+            data[63:0] = { 32'(t_fifo_to_host_idx'(~0)),
+                           32'(t_fifo_from_host_idx'(~0)) };
+
+            // Wait until the CTRL is valid!
+            status_mgr_req.write.request = csr.hc_ctrl_frame_valid;
         end
         else
         begin
             // FIFO state update
-            offset = DSM_OFFSET_FIFO_STATE;
-            data = fifo_status;
+            offset = CTRL_OFFSET_FIFO_STATE;
             status_mgr_req.write.request = need_fifo_status_update;
             requested_fifo_status_update = need_fifo_status_update;
         end
@@ -412,11 +353,11 @@ module qa_drv_hc_status_manager
         status_mgr_req.writeHeader = 0;
         status_mgr_req.writeHeader.req_type = eREQ_WRLINE_I;
         status_mgr_req.writeHeader.address =
-            dsm_line_offset_to_addr(offset, csr.afu_dsm_base);
+            ctrl_line_offset_to_addr(offset);
         status_mgr_req.data = data;
     end
     
-    always@(negedge clk)
+    always @(posedge clk)
     begin
         if (QA_DRIVER_DEBUG)
         begin  
@@ -424,59 +365,6 @@ module qa_drv_hc_status_manager
               $display("Status writer attempts to write 0x%h to CL 0x%h", status_mgr_req.data, status_mgr_req.writeHeader.address);
             if (write_grant.statusGrant)
               $display("Status writer write request granted");        
-        end
-    end
-    
-
-    //=================================================================
-    //
-    // Client status registers.
-    //
-    //=================================================================
-
-    assign sreg_req_addr = csr.afu_sreg_req.addr;
-    assign sreg_req_rdy = csr.afu_sreg_req.enable;
-
-    always_comb
-    begin
-        sreg_rsp_line = t_cci_cldata'(sreg_client_rsp);
-        sreg_rsp_line[$size(sreg_rsp_line)-1] = 1'b1;
-    end
-
-    always@(negedge clk)
-    begin
-        if (sreg_rsp_enable)
-        begin
-            sreg_client_rsp <= sreg_rsp;
-        end
-    end
-
-
-    //=================================================================
-    //
-    // Debugging state dump, triggered by CSR_AFU_TRIGGER_DEBUG.
-    //
-    //=================================================================
-
-    // What debug info to write?
-    always_comb
-    begin
-        debug_rsp = t_afu_debug_rsp'('x);
-        case (debug_req.idx)
-            3:
-              debug_rsp[$bits(tester_to_status.dbgTester)-1:0] =
-                  tester_to_status.dbgTester;
-        endcase
-    end
-
-    // Grab the index of debugging requests.  It is illegal in the debugging
-    // protocol to trigger a new request before the previous one is done,
-    // making this logic simple.
-    always_ff @(posedge clk)
-    begin
-        if (csr.afu_trigger_debug.idx != 0)
-        begin
-            debug_req <= csr.afu_trigger_debug;
         end
     end
 

@@ -4,19 +4,14 @@
 
 #define CSR_AFU_DSM_BASE        0x1a00
 #define CSR_AFU_CNTXT_BASE      0x1a08
-#define CSR_AFU_EN              0x1a10
-
-// We use 64-bit writes, automatically broken down by the software into a
-// pair of writes.  Hence the difference in names in the hardware version.
-#define CSR_READ_FRAME          0x1a18
-#define CSR_WRITE_FRAME         0x1a20
-
-#define CSR_AFU_TRIGGER_DEBUG   0x1a28
-#define CSR_AFU_ENABLE_TEST     0x1a2c
-#define CSR_AFU_SREG_READ       0x1a30
+#define CSR_AFU_SREG_READ       0x1a10
 
 // Page table base for qa_shim_tlb_simple (64 bits)
 #define CSR_AFU_PAGE_TABLE_BASE 0x1a80
+
+// The host channels driver manages its own CSR space starting at a
+// base address passed to the driver when it is instantiated.
+#define CSR_HC_BASE_ADDR        0x1b00
 
 //
 // System CSRs

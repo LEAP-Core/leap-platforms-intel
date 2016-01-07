@@ -35,7 +35,7 @@
 package qa_drv_hc_types;
     localparam QA_DRIVER_DEBUG = 0;
 
-    import qa_driver_csr_types::*;
+    import qa_drv_hc_csr_types::*;
     import cci_mpf_if_pkg::*;
 
     //
@@ -103,21 +103,6 @@ package qa_drv_hc_types;
     t_frame_arb;
 
 
-    //
-    // DSM addressing.
-    //
-    typedef logic [3:0] t_dsm_line_offset;
-
-    // Function: Returns physical address for a DSM register
-    function automatic [31:0] dsm_line_offset_to_addr;
-        input    t_dsm_line_offset offset_l;
-        input    [63:0] base_b;
-        begin
-            dsm_line_offset_to_addr = base_b[37:6] + offset_l;
-        end
-    endfunction
-
-
     // Function: Packs read metadata 
     function automatic t_cci_mdata pack_read_metadata(
         input    t_read_metadata metadata
@@ -140,25 +125,6 @@ package qa_drv_hc_types;
 
     // ========================================================================
     //
-    //   Debugging --
-    //
-    //     Each module may declare one or more vectors of debugging state that
-    //     are emitted by the status writer in response to CSR triggers.
-    //     See status_manager for the mapping of trigger IDs to modules.
-    //
-    //     Debug requests arrive in CSR_AFU_TRIGGER_DEBUG.  The request value
-    //     determines the state written back in status_manager to DSM line 0.
-    //
-    // ========================================================================
-
-    localparam AFU_DEBUG_REQ_SZ = $bits(t_afu_debug_req);
-    localparam AFU_DEBUG_RSP_SZ = 512 - AFU_DEBUG_REQ_SZ;
-
-    typedef logic [AFU_DEBUG_RSP_SZ - 1 : 0] t_afu_debug_rsp;
-
-
-    // ========================================================================
-    //
     //   Status manager --
     //
     //     Modules may communicate with the status manager in order to write
@@ -167,11 +133,6 @@ package qa_drv_hc_types;
     //     pointer updates through the status manager.
     //
     // ========================================================================
-    
-    // Status registers, exposed as a debugging interface to read status
-    // from the FPGA-side client.
-    typedef logic [31:0] t_sreg_addr;
-    typedef logic [63:0] t_sreg;
 
     //
     // FIFO from host status.  All fields must be valid every cycle.
@@ -214,8 +175,7 @@ package qa_drv_hc_types;
     //
     typedef struct
     {
-        // Debugging state
-        logic [5:0] dbgTester;
+        logic empty; // Empty
     }
     t_to_status_mgr_tester;
 

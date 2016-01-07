@@ -56,6 +56,8 @@
 //
 // ========================================================================
 
+import qa_driver_csr_types::*;
+
 module qa_driver
   #(
     parameter CCI_ADDR_WIDTH = 56
@@ -204,18 +206,46 @@ module qa_driver
       map_ifc(.*);
 
 
+    // ====================================================================
+    //
+    //   Add a tap to the FIU where the driver can inject messages to the
+    //   host and filter some responses.
+    //
+    // ====================================================================
+
+    cci_mpf_if fiu_main(.clk);
+    t_csr_afu_state csr;
+
+    qa_driver_main_fiu_tap
+      #(
+        .QA_DRIVER_WRITE_TAG(-1)
+        )
+      tap
+       (
+        .clk,
+        .fiu,
+        .afu(fiu_main),
+        .csr,
+        .sreg_rsp,
+        .sreg_rsp_enable
+        );
+
+
     // ====================================================================    
     //
     //  Parse CSR messages.
     //
     // ====================================================================    
 
-    t_csr_afu_state csr;
     qa_driver_csr
       csr_mgr
         (.clk,
-         .fiu,
+         .fiu(fiu_main),
          .csr);
+
+    // Forward status register read requests
+    assign sreg_req_addr = csr.afu_sreg_req.addr;
+    assign sreg_req_rdy = csr.afu_sreg_req.enable;
 
 
     // ====================================================================    
@@ -244,7 +274,7 @@ module qa_driver
       mux
        (
         .clk,
-        .fiu,
+        .fiu(fiu_main),
         .afus(fiu_mux)
         );
 
@@ -284,21 +314,21 @@ module qa_driver
     // ====================================================================    
 
     qa_drv_hc_root
+      #(
+        // Host channel CSR base address must match the software side,
+        // defined in AFU_csr.h.
+        .CSR_HC_BASE_ADDR('h1b00)
+        )
       host_channel
        (
         .clk,
         .fiu(fiu_mux[MUX_IDX_CHANNELS]),
-        .csr,
         .rx_fifo_data,
         .rx_fifo_rdy,
         .rx_fifo_enable,
         .tx_fifo_data,
         .tx_fifo_rdy,
-        .tx_fifo_enable,
-        .sreg_req_addr,
-        .sreg_req_rdy,
-        .sreg_rsp,
-        .sreg_rsp_enable
+        .tx_fifo_enable
         );
 
 endmodule

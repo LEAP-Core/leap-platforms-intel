@@ -55,6 +55,7 @@
 #include "awb/provides/physical_platform_defs.h"
 #include "awb/provides/qa_device.h"
 
+#include "qa-host-channels-params.h"
 
 using namespace std;
 
@@ -100,16 +101,36 @@ void
 QA_HOST_CHANNELS_DEVICE_CLASS::Init()
 {
     // Disable AFU during configuration
-    afu.WriteCSR(CSR_AFU_EN, 0);
+    afu.WriteCSR(CSR_HC_BASE_ADDR + CSR_HC_EN, 0);
+
+    //
+    // All physical addresses will be sent to the FPGA as line-based pointers.
+    //
+
+    // Create the control buffer and tell the hardware where it is
+    ctrlBuffer = afu.CreateSharedBuffer(4096);
+    ctrlBufferStart = (uint8_t *)ctrlBuffer->virtualAddress;
+    memset(ctrlBufferStart, 0, CL(1));
+    afu.WriteCSR64(CSR_HC_BASE_ADDR + CSR_HC_CTRL_FRAME,
+                   ctrlBuffer->physicalAddress / CL(1));
+    if (QA_HOST_CHANNELS_DEBUG)
+    {
+        printf("Writing Host CTRL_FRAME base %p (line %p) ...\n",
+               ctrlBuffer->physicalAddress, ctrlBuffer->physicalAddress / CL(1));
+    }
+
+    // Wait for the hardware to respond by writing the buffer sizes
+    // into CTRL line 0.
+    while (ReadCTRL32(0) == 0) {};
 
     // How big are the FIFO buffers supposed to be?  Sizes are determined
-    // in the hardware configuration and communicated in the DSM.  The hardware
+    // in the hardware configuration and communicated in the CTRL.  The hardware
     // fills the index of each buffer with ones.  Add one to get the size.
-    writeBufferIdxMask = afu.ReadDSM(4 * sizeof(uint32_t));
+    writeBufferIdxMask = ReadCTRL32(0);
     assert((writeBufferIdxMask & (writeBufferIdxMask + 1)) == 0);
     writeBufferBytes = (writeBufferIdxMask + 1) * CL(1);
 
-    uint64_t readBufferIdxMask = afu.ReadDSM(5 * sizeof(uint32_t));
+    uint64_t readBufferIdxMask = ReadCTRL32(sizeof(uint32_t));
     assert((readBufferIdxMask & (readBufferIdxMask + 1)) == 0);
     readBufferBytes = (readBufferIdxMask + 1) * CL(1);
 
@@ -148,20 +169,22 @@ QA_HOST_CHANNELS_DEVICE_CLASS::Init()
     // Notice that we swap the read/write frames. Our read buffer is
     // the FPGA write buffer. Our write buffer is the FPGA read
     // buffer.
-    afu.WriteCSR64(CSR_WRITE_FRAME, readBuffer->physicalAddress / CL(1));
+    afu.WriteCSR64(CSR_HC_BASE_ADDR + CSR_HC_WRITE_FRAME,
+                   readBuffer->physicalAddress / CL(1));
     if (QA_HOST_CHANNELS_DEBUG)
     {
         printf("Writing Host READ_FRAME base %p (line %p) ...\n", readBuffer->physicalAddress, readBuffer->physicalAddress);
     }
 
-    afu.WriteCSR64(CSR_READ_FRAME, writeBuffer->physicalAddress / CL(1));
+    afu.WriteCSR64(CSR_HC_BASE_ADDR + CSR_HC_READ_FRAME,
+                   writeBuffer->physicalAddress / CL(1));
     if (QA_HOST_CHANNELS_DEBUG)
     {
         printf("Writing Host WRITE_FRAME base %p (line %p) ...\n", writeBuffer->physicalAddress, writeBuffer->physicalAddress);
     }
 
     // Enable AFU (driver and test only)
-    afu.WriteCSR(CSR_AFU_EN, 1);
+    afu.WriteCSR(CSR_HC_BASE_ADDR + CSR_HC_EN, 1);
 
     initReadComplete = true;
     initWriteComplete = true;
@@ -178,14 +201,14 @@ QA_HOST_CHANNELS_DEVICE_CLASS::Init()
     }
 
     // Enable AFU (including user connection)
-    afu.WriteCSR(CSR_AFU_EN, 3);
+    afu.WriteCSR(CSR_HC_BASE_ADDR + CSR_HC_EN, 3);
 }
 
 void
 QA_HOST_CHANNELS_DEVICE_CLASS::Uninit()
 {
     // Disable AFU
-    afu.WriteCSR(CSR_AFU_EN, 0);
+    afu.WriteCSR(CSR_HC_BASE_ADDR + CSR_HC_EN, 0);
 }
 
 void
@@ -209,10 +232,10 @@ QA_HOST_CHANNELS_DEVICE_CLASS::Probe()
 
     //
     // Is there a new message?  The index of the newest active header is
-    // written to the second 32 bit integer in DSM FIFO_STATE.
+    // written to the second 32 bit integer in CTRL FIFO_STATE.
     //
     volatile uint32_t *newest_live_idx =
-        (volatile uint32_t*)afu.DSMAddress(DSM_OFFSET_FIFO_STATE +
+        (volatile uint32_t*)CTRLAddress(CTRL_OFFSET_FIFO_STATE +
                                            sizeof(uint32_t));
 
     // Hardware's index is offset in lines.  Convert to bytes.
@@ -324,7 +347,7 @@ QA_HOST_CHANNELS_DEVICE_CLASS::Write(
     // The FPGA updates a pointer to the oldest active entry in the ring buffer
     // to indicate when it is safe to overwrite the previous value.
     volatile uint32_t *oldest_live_idx =
-        (volatile uint32_t*)afu.DSMAddress(DSM_OFFSET_FIFO_STATE);
+        (volatile uint32_t*)CTRLAddress(CTRL_OFFSET_FIFO_STATE);
 
     const uint8_t* src = (const uint8_t*)buf;
 
@@ -386,9 +409,9 @@ QA_HOST_CHANNELS_DEVICE_CLASS::Write(
         atomic_thread_fence(std::memory_order_release);
 
         // Indicate that new lines are available by updating the first uint32_t
-        // of DSM POLL_STATE with a pointer to the head of the ring buffer.
+        // of CTRL POLL_STATE with a pointer to the head of the ring buffer.
         uint32_t *newest_live_idx =
-            (uint32_t*)afu.DSMAddress(DSM_OFFSET_POLL_STATE);
+            (uint32_t*)CTRLAddress(CTRL_OFFSET_POLL_STATE);
         uint32_t next_line_idx = (writeNext - writeBufferStart) / CL(1);
         *newest_live_idx = next_line_idx;
 
@@ -414,7 +437,7 @@ QA_HOST_CHANNELS_DEVICE_CLASS::Flush()
 
         // Update the FPGA-side pointer.
         volatile uint32_t *newest_live_idx =
-            (volatile uint32_t*)afu.DSMAddress(DSM_OFFSET_POLL_STATE);
+            (volatile uint32_t*)CTRLAddress(CTRL_OFFSET_POLL_STATE);
         uint32_t next_line_idx = (writeNext - writeBufferStart) / CL(1);
         *newest_live_idx = next_line_idx;
 
@@ -423,26 +446,6 @@ QA_HOST_CHANNELS_DEVICE_CLASS::Flush()
             printf("    FLUSH Control newest idx (at %p) is 0x%08lx\n", newest_live_idx, next_line_idx);
         }
     }
-}
-
-
-//
-// Read from status register space.  Status registers are implemented in
-// the FPGA side of this driver and are intended for debugging.
-//
-uint64_t
-QA_HOST_CHANNELS_DEVICE_CLASS::ReadSREG(uint32_t n)
-{
-    // The FPGA will write to DSM line 0.  Clear it first.
-    memset((void*)afu.DSMAddress(DSM_OFFSET_SREG_RSP), 0, CL(1));
-
-    // Write CSR to trigger a register read
-    afu.WriteCSR(CSR_AFU_SREG_READ, n);
-
-    // Wait for the response, signalled by the high bit in the line being set.
-    while (afu.ReadDSM(DSM_OFFSET_SREG_RSP + CL(1) - sizeof(uint32_t)) == 0) ;
-
-    return afu.ReadDSM64(DSM_OFFSET_SREG_RSP);
 }
 
 
@@ -463,14 +466,14 @@ void
 QA_HOST_CHANNELS_DEVICE_CLASS::TestSend()
 {
     printf("SEND to FPGA Test...\n");
-    // The FPGA will write to DSM line 0.  Clear it first.
-    memset((void*)afu.DSMAddress(0), 0, CL(1));
+    // The FPGA will write to CTRL line 0.  Clear it first.
+    memset((void*)CTRLAddress(0), 0, CL(1));
 
     // Put the FPGA in SINK mode.
-    afu.WriteCSR(CSR_AFU_ENABLE_TEST, 1);
+    afu.WriteCSR(CSR_HC_BASE_ADDR + CSR_HC_ENABLE_TEST, 1);
 
     // Wait for mode change.
-    while (afu.ReadDSM(0) == 0) ;
+    while (ReadCTRL32(0) == 0) ;
 
     uint8_t *msg = new uint8_t[TEST_MSG_BYTES];
     for (int32_t i = 0; i < TEST_MSG_BYTES; i += 1)
@@ -524,16 +527,16 @@ void
 QA_HOST_CHANNELS_DEVICE_CLASS::TestRecv()
 {
     printf("RECEIVE from FPGA Test...\n");
-    // The FPGA will write to DSM line 0.  Clear it first.
-    memset((void*)afu.DSMAddress(0), 0, CL(1));
+    // The FPGA will write to CTRL line 0.  Clear it first.
+    memset((void*)CTRLAddress(0), 0, CL(1));
 
     // Put the FPGA in SINK mode, requesting 1 GB of data.  The number of
     // chunks is sent in bits [31:2].
     uint64_t lines = (1LL << QA_TEST_LEN) / CL(1);
-    afu.WriteCSR(CSR_AFU_ENABLE_TEST, (lines << 2) | 2);
+    afu.WriteCSR(CSR_HC_BASE_ADDR + CSR_HC_ENABLE_TEST, (lines << 2) | 2);
 
     // Wait for mode change.
-    while (afu.ReadDSM(0) == 0) ;
+    while (ReadCTRL32(0) == 0) ;
 
     uint8_t *msg = new uint8_t[TEST_MSG_BYTES];
 
@@ -574,14 +577,14 @@ void
 QA_HOST_CHANNELS_DEVICE_CLASS::TestLoopback()
 {
     printf("LOOPBACK Test...\n");
-    // The FPGA will write to DSM line 0.  Clear it first.
-    memset((void*)afu.DSMAddress(0), 0, CL(1));
+    // The FPGA will write to CTRL line 0.  Clear it first.
+    memset((void*)CTRLAddress(0), 0, CL(1));
 
     // Put the FPGA in SINK mode.
-    afu.WriteCSR(CSR_AFU_ENABLE_TEST, 3);
+    afu.WriteCSR(CSR_HC_BASE_ADDR + CSR_HC_ENABLE_TEST, 3);
 
     // Wait for mode change.
-    while (afu.ReadDSM(0) == 0) ;
+    while (ReadCTRL32(0) == 0) ;
 
     pthread_t thread;
     pthread_create(&thread, NULL, LoopbackTestRecv, (void*)this);

@@ -8,9 +8,17 @@
 %sources -t H      -v PUBLIC  qa-host-channels.h
 %sources -t CPP    -v PRIVATE qa-host-channels.cpp
 
-%sources -t VERILOG_PKG -v PRIVATE qa_drv_hc_types.sv
+##
+## File with shared parameters, declared for both Verilog and C
+##
+%sources -t H          -v PRIVATE qa-host-channels-params.h
+%sources -t VERILOG_H  -v PRIVATE qa-host-channels-params.h
 
-%sources -t VERILOG -v PRIVATE qa_drv_hc_root.sv  
+%sources -t VERILOG_PKG -v PRIVATE qa_drv_hc_types.sv
+%sources -t VERILOG_PKG -v PRIVATE qa_drv_hc_csr_types.sv
+
+%sources -t VERILOG -v PRIVATE qa_drv_hc_root.sv
+%sources -t VERILOG -v PRIVATE qa_drv_hc_csr.sv
 %sources -t VERILOG -v PRIVATE qa_drv_hc_fifo_from_host.sv
 %sources -t VERILOG -v PRIVATE qa_drv_hc_fifo_to_host.sv
 %sources -t VERILOG -v PRIVATE qa_drv_hc_status_manager.sv  

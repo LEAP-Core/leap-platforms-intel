@@ -61,7 +61,9 @@ AFU_CLASS::AFU_CLASS(const char* afuID, uint32_t dsmSizeBytes)
     // reset AFU
     ResetAFU();
 
-    printf("Writing DSM base %llx ...\n", dsmBuffer->physicalAddress);
+    printf("Writing DSM base PA 0x%llx, VA 0x%llx...\n",
+           dsmBuffer->physicalAddress,
+           dsmBuffer->virtualAddress);
 
     // write physical address of DSM to AFU CSR
     WriteCSR64(CSR_AFU_DSM_BASE, dsmBuffer->physicalAddress);
@@ -70,7 +72,7 @@ AFU_CLASS::AFU_CLASS(const char* afuID, uint32_t dsmSizeBytes)
 
     // poll AFU_ID until it is non-zero
 
-    while (ReadDSM(0) == 0)
+    while (ReadDSM64(0) == 0)
     {
         printf("Polling DSM...\n"); sleep(1);
     }
@@ -80,7 +82,7 @@ AFU_CLASS::AFU_CLASS(const char* afuID, uint32_t dsmSizeBytes)
     // with the CreateSharedBufferInVM() method.
     vtp = new CCI_MPF_SHIM_VTP_CLASS(afuClient);
 
-    cout << "AFU ready." << endl;
+    printf("AFU Ready (0x%016llx)\n", ReadDSM64(0));
 }
 
 
@@ -161,6 +163,26 @@ AFU_CLASS::WriteCSR64(btCSROffset offset, bt64bitCSR value)
 }
 
 
+//
+// Read from status register space.  Status registers are implemented in
+// the FPGA side of this driver and are intended for debugging.
+//
+uint64_t
+AFU_CLASS::ReadSREG64(uint32_t n)
+{
+    // The FPGA will write to CTRL line 0.  Clear it first.
+    memset((void*)DSMAddress(CL(1)), 0, CL(1));
+
+    // Write CSR to trigger a register read
+    WriteCSR(CSR_AFU_SREG_READ, n);
+
+    // Wait for the response, signalled by bit 64 in the line being set.
+    while (ReadDSM64(CL(1) + sizeof(uint64_t)) == 0) {};
+
+    return ReadDSM64(CL(1));
+}
+
+
 void
 AFU_CLASS::RunTests(QA_HOST_CHANNELS_DEVICE qa)
 {
@@ -174,8 +196,8 @@ AFU_CLASS::RunTests(QA_HOST_CHANNELS_DEVICE qa)
 
     // Send 30 bits at a time, high part first.  Low 2 bits must be 0 and
     // aren't part of the address.
-    qa->ReadSREG(uint32_t((base_line >> 30) << 2));
-    qa->ReadSREG(uint32_t(base_line << 2));
+    ReadSREG64(uint32_t((base_line >> 30) << 2));
+    ReadSREG64(uint32_t(base_line << 2));
 
     uint32_t cached = 4;
     uint32_t check_order = 8;
@@ -193,9 +215,9 @@ AFU_CLASS::RunTests(QA_HOST_CHANNELS_DEVICE qa)
     double gb;
     double sec;
 
-    cycles = qa->ReadSREG(trips | 1);
-    rdWrCnt = qa->ReadSREG(0);
-    totalActiveRd = qa->ReadSREG(0);
+    cycles = ReadSREG64(trips | 1);
+    rdWrCnt = ReadSREG64(0);
+    totalActiveRd = ReadSREG64(0);
     gb = 64.0 * double(rdWrCnt >> 32) / (1024.0 * 1024.0 * 1024.0);
     sec = 5.0 * double(cycles) * 1.0e-9;
     printf("Read %ld in %lld cycles (%0.4f GB/s), latency %lld cycles (%d ns)\n",
@@ -204,9 +226,9 @@ AFU_CLASS::RunTests(QA_HOST_CHANNELS_DEVICE qa)
            totalActiveRd / cycles, 5 * totalActiveRd / cycles);
 
     *(uint64_t*)base = 0xdeadbeef;
-    cycles = qa->ReadSREG(trips | 2);
-    rdWrCnt = qa->ReadSREG(0);
-    totalActiveRd = qa->ReadSREG(0);
+    cycles = ReadSREG64(trips | 2);
+    rdWrCnt = ReadSREG64(0);
+    totalActiveRd = ReadSREG64(0);
     gb = 64.0 * double(rdWrCnt & 0xffffffff) / (1024.0 * 1024.0 * 1024.0);
     sec = 5.0 * double(cycles) * 1.0e-9;
     printf("Write %ld in %lld cycles (%0.4f GB/s)\n",
@@ -214,18 +236,18 @@ AFU_CLASS::RunTests(QA_HOST_CHANNELS_DEVICE qa)
            gb / sec);
 
     *(uint64_t*)base = 0xdeadbeef;
-    cycles = qa->ReadSREG(trips | 2);
-    rdWrCnt = qa->ReadSREG(0);
-    totalActiveRd = qa->ReadSREG(0);
+    cycles = ReadSREG64(trips | 2);
+    rdWrCnt = ReadSREG64(0);
+    totalActiveRd = ReadSREG64(0);
     gb = 64.0 * double(rdWrCnt & 0xffffffff) / (1024.0 * 1024.0 * 1024.0);
     sec = 5.0 * double(cycles) * 1.0e-9;
     printf("Write %ld in %lld cycles (%0.4f GB/s)\n",
            rdWrCnt & 0xffffffff, cycles,
            gb / sec);
 
-    cycles = qa->ReadSREG(trips | 3);
-    rdWrCnt = qa->ReadSREG(0);
-    totalActiveRd = qa->ReadSREG(0);
+    cycles = ReadSREG64(trips | 3);
+    rdWrCnt = ReadSREG64(0);
+    totalActiveRd = ReadSREG64(0);
     gb = 64.0 * (double(rdWrCnt >> 32) + double(rdWrCnt & 0xffffffff)) / (1024.0 * 1024.0 * 1024.0);
     sec = 5.0 * double(cycles) * 1.0e-9;
     printf("Read %ld in %lld cycles\n",

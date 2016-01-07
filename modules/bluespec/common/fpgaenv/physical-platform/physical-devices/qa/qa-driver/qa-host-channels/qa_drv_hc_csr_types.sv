@@ -33,61 +33,38 @@
 // FPGA-side control/status register definitions.
 //
 
-package qa_driver_csr_types;
+package qa_drv_hc_csr_types;
+    import cci_mpf_if_pkg::t_cci_cl_paddr;
 
-    typedef enum logic [15:0]
+    // CSR_HC_ENABLE_TEST passes a tag that may trigger a test in the
+    // driver.
+    typedef struct packed
     {
-        //
-        // CSR numbering must match the software-side numbering exactly!
-        //
-        CSR_AFU_DSM_BASEL          = 16'h1a00,
-        CSR_AFU_DSM_BASEH          = 16'h1a04,
-        CSR_AFU_CNTXT_BASEL        = 16'h1a08,
-        CSR_AFU_CNTXT_BASEH        = 16'h1a0c,
-
-        // LEAP status register
-        CSR_AFU_SREG_READ          = 16'h1a10,
-
-        // Page table base for qa_shim_tlb_simple (64 bits)
-        CSR_AFU_PAGE_TABLE_BASEL   = 16'h1a80,
-        CSR_AFU_PAGE_TABLE_BASEH   = 16'h1a84
+        // Count of messages to send for SOURCE mode test.
+        logic [30:0] count;
+        // Test -- must match t_STATE in qa_drv_tester.
+        logic [1:0]  test_state;
     }
-    t_CSR_AFU_MAP;
-
-    
-    // LEAP status registers, exposed as a debugging interface to read status
-    // from the FPGA-side client.
-    typedef logic [31:0] t_sreg_addr;
-    typedef logic [63:0] t_sreg;
+    t_hc_enable_test;
 
     typedef struct
     {
-        logic enable;
-        t_sreg_addr addr;
+        // Enable driver
+        logic        hc_en;
+        // Enable channel I/O connection to user code
+        logic        hc_en_user_channel;
+
+        t_cci_cl_paddr hc_ctrl_frame;
+        logic hc_ctrl_frame_valid;
+
+        t_cci_cl_paddr hc_write_frame;
+        t_cci_cl_paddr hc_read_frame;
+
+        // Test request.  The manager will hold the idx field in this
+        // register for one cycle after a request is received and
+        // then reset it to 0.
+        t_hc_enable_test hc_enable_test;
     }
-    t_afu_sreg_req;
+    t_qa_drv_hc_csrs;
 
-
-    // Compare CSR address in a message header to the map above.  The CCI
-    // header is 18 bits.
-    function automatic csr_addr_matches;
-        input [17:0] header;
-        input t_CSR_AFU_MAP idx;
-        begin
-            // The address in the header is only 14 bits.  The low 2 bits are
-            // dropped because addresses are 4-byte aligned.
-            csr_addr_matches = (header[13:0] == idx[15:2]);
-        end
-    endfunction
-
-    typedef struct
-    {
-        logic afu_dsm_base_valid;
-        logic [63:0] afu_dsm_base;
-
-        // Client status register read request.  Enable is held for one cycle.
-        t_afu_sreg_req afu_sreg_req;
-    }
-    t_csr_afu_state;
-
-endpackage // qa_driver_csr_types
+endpackage // qa_drv_hc_csr_types

@@ -108,7 +108,7 @@ class QA_DEVICE_WRAPPER_CLASS: public PLATFORMS_MODULE_CLASS
 
     // The driver implements a status register space in the FPGA.
     // The protocol is very slow -- the registers are intended for debugging.
-    inline uint64_t ReadSREG(uint32_t n);
+    inline uint64_t ReadSREG64(uint32_t n);
 };
 
 
@@ -161,8 +161,8 @@ QA_DEVICE_WRAPPER_CLASS::Flush()
 // the FPGA side of this driver and are intended for debugging.
 //
 inline uint64_t
-QA_DEVICE_WRAPPER_CLASS::ReadSREG(uint32_t n)
+QA_DEVICE_WRAPPER_CLASS::ReadSREG64(uint32_t n)
 {
-    return channelDev.ReadSREG(n);
+    return afu.ReadSREG64(n);
 }
 #endif

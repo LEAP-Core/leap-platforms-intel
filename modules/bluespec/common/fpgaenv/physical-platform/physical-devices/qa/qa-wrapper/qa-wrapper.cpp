@@ -60,7 +60,7 @@ using namespace std;
 
 // ID of the accelerator.  For now we use a constant.  This should change
 // to at least application-specific if not compilation-specific.
-static const char* QA_AFU_ID = "12345678-0D82-4272-9AEF-FE5F84570612";
+static const char* QA_AFU_ID = "13572468-0D82-4272-9AEF-FE5F84570612";
 
 
 // ============================================

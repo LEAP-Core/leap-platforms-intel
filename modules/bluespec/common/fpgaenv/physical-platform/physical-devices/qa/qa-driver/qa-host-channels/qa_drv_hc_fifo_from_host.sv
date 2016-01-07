@@ -31,6 +31,7 @@
 //
 
 import qa_drv_hc_types::*;
+import qa_drv_hc_csr_types::*;
 
 module qa_drv_hc_fifo_from_host
   #(
@@ -42,7 +43,7 @@ module qa_drv_hc_fifo_from_host
 
     input  t_if_cci_c0_Rx rx0,
 
-    input  t_csr_afu_state     csr,
+    input  t_qa_drv_hc_csrs    csr,
     output t_frame_arb         frame_reader,
     input  t_channel_grant_arb read_grant,
 
@@ -186,7 +187,7 @@ module qa_drv_hc_fifo_from_host
 
     // Base address of the ring buffer
     t_cci_cl_paddr buffer_base_addr;
-    assign buffer_base_addr = t_cci_cl_paddr'(csr.afu_read_frame);
+    assign buffer_base_addr = csr.hc_read_frame;
 
     t_read_metadata data_read_metadata;
     t_cci_mpf_ReqMemHdrParams read_params;

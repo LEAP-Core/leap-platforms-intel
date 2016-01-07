@@ -412,7 +412,6 @@ module cci_mpf_shim_vtp
 
     // Construct the read request header.
     t_cci_mpf_ReqMemHdr c0_req_hdr;
-    t_cci_mpf_ReqMemHdrParams c0_req_params;
 
     always_comb
     begin
@@ -438,13 +437,10 @@ module cci_mpf_shim_vtp
             //
             // Read for TLB miss.
             //
-            c0_req_params = cci_mpf_defaultReqHdrParams();
-            c0_req_params.checkLoadStoreOrder = 1'b0;
-            c0_req_params.addrIsVirtual = 1'b0;
             c0_req_hdr = cci_mpf_genReqHdr(eREQ_RDLINE_S,
                                            t_cci_mpf_cl_vaddr'(page_table_base + tlbReadIdx),
                                            t_cci_mdata'(0),
-                                           c0_req_params);
+                                           cci_mpf_defaultReqHdrParams(0));
 
             // Tag the request as a local page table walk
             c0_req_hdr[RESERVED_MDATA_IDX] = 1'b1;

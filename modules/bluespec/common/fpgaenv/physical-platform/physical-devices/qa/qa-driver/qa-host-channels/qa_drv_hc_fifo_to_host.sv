@@ -29,6 +29,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
+import cci_mpf_if_pkg::*;
 import qa_drv_hc_types::*;
 import qa_drv_hc_csr_types::*;
 
@@ -259,12 +260,10 @@ module qa_drv_hc_fifo_to_host
     //
     // Set write address and data.
     //
-    t_cci_mpf_ReqMemHdrParams write_params;
-
     always_comb
     begin
-        write_params = cci_mpf_defaultReqHdrParams();
-        write_params.addrIsVirtual = 1'b0;
+        t_cci_mpf_ReqMemHdrParams write_params = cci_mpf_defaultReqHdrParams(0);
+        write_params.vc_sel = eVC_VH1;
 
         frame_writer.writeHeader = 0;
         frame_writer.writeHeader.mdata = 0;

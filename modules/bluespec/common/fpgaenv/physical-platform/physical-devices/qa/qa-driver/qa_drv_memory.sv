@@ -92,9 +92,13 @@ module qa_drv_memory
     t_cci_mpf_ReqMemHdrParams rd_req_params;
     always_comb
     begin
-        rd_req_params = cci_mpf_defaultReqHdrParams();
+        rd_req_params = cci_mpf_defaultReqHdrParams(1);
         rd_req_params.checkLoadStoreOrder = mem_read_req_check_order;
-        rd_req_params.addrIsVirtual = 1'b1;
+        // Use a single, ordered channel when load/store order matters.
+        if (mem_read_req_check_order)
+        begin
+            rd_req_params.vc_sel = eVC_VL0;
+        end
     end
 
     assign afu_if.c0Tx =

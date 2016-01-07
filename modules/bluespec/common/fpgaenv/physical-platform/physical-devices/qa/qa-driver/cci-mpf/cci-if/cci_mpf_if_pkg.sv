@@ -59,11 +59,12 @@ package cci_mpf_if_pkg;
     typedef t_ccis_mdata t_cci_mdata;
 
     // Use a few types from CCI-P that aren't in CCI-S
-    import ccip_if_pkg::eVC_VA;
-    import ccip_if_pkg::eVC_VL0;
-    import ccip_if_pkg::eVC_VH0;
-    import ccip_if_pkg::eVC_VH1;
-    typedef ccip_if_pkg::t_ccip_vc t_cci_vc;
+    typedef enum logic [1:0] {
+        eVC_VA  = 2'b00,
+        eVC_VL0 = 2'b01,
+        eVC_VH0 = 2'b10,
+        eVC_VH1 = 2'b11
+    } t_cci_vc;
     typedef ccip_if_pkg::t_ccip_cl_num t_cci_cl_num;
 
     // Treat CCI-S CSR addresses like MMIO addresses
@@ -268,11 +269,18 @@ package cci_mpf_if_pkg;
         t_cci_cl_num  cl_num;
     } t_cci_mpf_ReqMemHdrParams;
 
-    function automatic t_cci_mpf_ReqMemHdrParams cci_mpf_defaultReqHdrParams();
+    // Default value for request header construction. It takes only one
+    // option (whether or not the reqest is a VA) to keep the interface
+    // simple and because answering VA vs. PA separates the two main
+    // categories of requests.
+    function automatic t_cci_mpf_ReqMemHdrParams cci_mpf_defaultReqHdrParams(
+        input int addrIsVirtual = 1
+        );
+
         t_cci_mpf_ReqMemHdrParams p;
-        p.checkLoadStoreOrder = 1'b1;
-        p.addrIsVirtual = 1'b1;
-        p.vc_sel = eVC_VL0;            // Default to low latency channel
+        p.checkLoadStoreOrder = 1'b0;      // Default hardware behavior
+        p.addrIsVirtual = 1'(addrIsVirtual);
+        p.vc_sel = eVC_VA;
         p.cl_num = 0;
         return p;
     endfunction

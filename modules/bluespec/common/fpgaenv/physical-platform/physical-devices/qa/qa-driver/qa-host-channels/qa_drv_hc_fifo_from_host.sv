@@ -30,8 +30,10 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
+import cci_mpf_if_pkg::*;
 import qa_drv_hc_types::*;
 import qa_drv_hc_csr_types::*;
+
 
 module qa_drv_hc_fifo_from_host
   #(
@@ -190,10 +192,12 @@ module qa_drv_hc_fifo_from_host
     assign buffer_base_addr = csr.hc_read_frame;
 
     t_read_metadata data_read_metadata;
-    t_cci_mpf_ReqMemHdrParams read_params;
 
     always_comb
     begin
+        t_cci_mpf_ReqMemHdrParams read_params = cci_mpf_defaultReqHdrParams(0);
+        read_params.vc_sel = eVC_VH1;
+
         // No writes, ever
         frame_reader.write.request = 0;
 
@@ -201,9 +205,6 @@ module qa_drv_hc_fifo_from_host
         // scoreboard has space.
         frame_reader.read.request = (next_read_req_idx != newest_read_line_idx) &&
                                     scoreboard_slot_rdy;
-
-        read_params = cci_mpf_defaultReqHdrParams();
-        read_params.addrIsVirtual = 1'b0;
 
         // Read metadata
         data_read_metadata.reserved = 1'b0;

@@ -95,7 +95,7 @@ module qa_driver_main_fiu_tap
                 fiu.c1Tx.hdr = cci_mpf_genReqHdr(eREQ_WRLINE_I,
                                                  csr.afu_dsm_base,
                                                  t_cci_mdata'(QA_DRIVER_WRITE_TAG),
-                                                 cci_mpf_defaultReqHdrParams());
+                                                 cci_mpf_defaultReqHdrParams(0));
                 fiu.c1Tx.data[127:0] = afu_id;
             end
             else if (sreg_rsp_enable_q)
@@ -110,7 +110,7 @@ module qa_driver_main_fiu_tap
                 fiu.c1Tx.hdr = cci_mpf_genReqHdr(eREQ_WRLINE_I,
                                                  csr.afu_dsm_base | 1'b1,
                                                  t_cci_mdata'(QA_DRIVER_WRITE_TAG),
-                                                 cci_mpf_defaultReqHdrParams());
+                                                 cci_mpf_defaultReqHdrParams(0));
                 fiu.c1Tx.data[63:0] = sreg_rsp_q;
                 fiu.c1Tx.data[64] = 1'b1;
             end

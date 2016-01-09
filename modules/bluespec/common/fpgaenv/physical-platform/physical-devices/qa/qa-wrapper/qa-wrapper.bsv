@@ -56,6 +56,13 @@ import Connectable::*;
 
 `include "awb/provides/clocks_device.bsh"
 
+`ifndef CCI_S_IFC_Z
+  `define USE_PLATFORM_CCIS 1
+`endif
+`ifndef CCI_P_IFC_Z
+  `define USE_PLATFORM_CCIP 1
+`endif
+
 // Maximum outstanding memory requests
 typedef 80 QA_MAX_MEM_READS;
 
@@ -169,6 +176,11 @@ interface QA_SREG_DRIVER;
 endinterface
 
 interface QA_WIRES;
+`ifdef USE_PLATFORM_CCIS
+    //
+    // CCI-S platform wires
+    //
+
     (* prefix = "" *)
     method Action inputWires(Bit#(1)   vl_clk_LPdomain_16ui,
                              Bit#(1)   ffs_vl_LP32ui_lp2sy_SystemReset_n,
@@ -198,6 +210,26 @@ interface QA_WIRES;
     method Bit#(1)   ffs_vl_LP32ui_sy2lp_C1TxWrValid;
     (* prefix = "", always_ready *)
     method Bit#(1)   ffs_vl_LP32ui_sy2lp_C1TxIrValid;
+`endif
+
+`ifdef USE_PLATFORM_CCIP
+    //
+    // CCI-P platform wires.  The sRxData and sTxData wires are the primary
+    // request and response structures.  Unfortunately, the SystemVerilog
+    // data structures are complicated to import in Bluespec so we pass
+    // them as opaque wires with strange sizes that must match the driver.
+    //
+
+    (* prefix = "" *)
+    method Action inputWires(Bit#(1)   vl_clk_LPdomain_64ui,
+                             Bit#(1)   vl_clk_LPdomain_32ui,
+                             Bit#(2)   ffs_LP16ui_afu_PwrState,
+                             Bit#(1)   ffs_LP16ui_afu_Error,
+                             Bit#(577) ffs_LP16ui_sRxData_afu);
+
+    (* prefix = "", always_ready *)
+    method Bit#(737) ffs_LP16ui_sTxData_afu;
+`endif
 endinterface
 
 interface QA_DEVICE#(type t_QA_CHANNEL_DRIVER, type t_QA_MEMORY_DRIVER);
@@ -222,18 +254,27 @@ typedef QA_DEVICE#(QA_CHANNEL_DRIVER,
 Integer umfChunkSize = valueOf(SizeOf#(UMF_CHUNK));
 
 import "BVI" qa_driver = 
-module mkQADeviceImport#(Clock vl_clk_LPdomain_32ui,
-                         Reset ffs_vl_LP32ui_lp2sy_SoftReset_n)
+module mkQADeviceImport#(Clock qaClk, Reset qaRst)
     // Interface:
     (QA_DEVICE_IMPORT);
 
     parameter CCI_ADDR_WIDTH = `CCI_ADDR_WIDTH;
 
-    input_clock (vl_clk_LPdomain_32ui) = vl_clk_LPdomain_32ui;
-    default_clock vl_clk_LPdomain_32ui;
+`ifdef USE_PLATFORM_CCIS
+    input_clock (vl_clk_LPdomain_32ui) = qaClk;
+    default_clock qaClk;
 
-    input_reset (ffs_vl_LP32ui_lp2sy_SoftReset_n) = ffs_vl_LP32ui_lp2sy_SoftReset_n;
-    default_reset ffs_vl_LP32ui_lp2sy_SoftReset_n;
+    input_reset (ffs_vl_LP32ui_lp2sy_SoftReset_n) = qaRst;
+    default_reset qaRst;
+`endif
+
+`ifdef USE_PLATFORM_CCIP
+    input_clock (vl_clk_LPdomain_16ui) = qaClk;
+    default_clock qaClk;
+
+    input_reset (ffs_LP16ui_afu_SoftReset_n) = qaRst;
+    default_reset qaRst;
+`endif
 
     interface QA_CHANNEL_DRIVER_IMPORT channelDriver;
         method deq() ready(rx_fifo_rdy) enable(rx_fifo_enable);
@@ -262,6 +303,7 @@ module mkQADeviceImport#(Clock vl_clk_LPdomain_32ui,
     endinterface
 
     interface QA_WIRES wires;
+`ifdef USE_PLATFORM_CCIS
         method inputWires(vl_clk_LPdomain_16ui,
                           ffs_vl_LP32ui_lp2sy_SystemReset_n,
                           ffs_vl18_LP32ui_lp2sy_C0RxHdr,
@@ -285,6 +327,18 @@ module mkQADeviceImport#(Clock vl_clk_LPdomain_32ui,
         method ffs_vl512_LP32ui_sy2lp_C1TxData ffs_vl512_LP32ui_sy2lp_C1TxData() clocked_by(no_clock);
         method ffs_vl_LP32ui_sy2lp_C1TxWrValid ffs_vl_LP32ui_sy2lp_C1TxWrValid() clocked_by(no_clock);
         method ffs_vl_LP32ui_sy2lp_C1TxIrValid ffs_vl_LP32ui_sy2lp_C1TxIrValid() clocked_by(no_clock);
+`endif
+
+`ifdef USE_PLATFORM_CCIP
+        method inputWires(vl_clk_LPdomain_64ui,
+                          vl_clk_LPdomain_32ui,
+                          ffs_LP16ui_afu_PwrState,
+                          ffs_LP16ui_afu_Error,
+                          ffs_LP16ui_sRxData_afu)
+            enable((*inhigh*) EN);
+
+        method ffs_LP16ui_sTxData_afu ffs_LP16ui_sTxData_afu() clocked_by(no_clock);
+`endif
     endinterface
 
     schedule (channelDriver_deq) C (channelDriver_deq);
@@ -311,20 +365,34 @@ module mkQADeviceImport#(Clock vl_clk_LPdomain_32ui,
               sregDriver_sregReq, sregDriver_sregRsp);
 
     schedule (wires_inputWires,
+`ifdef USE_PLATFORM_CCIS
               wires_ffs_vl61_LP32ui_sy2lp_C0TxHdr,
               wires_ffs_vl_LP32ui_sy2lp_C0TxRdValid,
               wires_ffs_vl61_LP32ui_sy2lp_C1TxHdr,
               wires_ffs_vl512_LP32ui_sy2lp_C1TxData,
               wires_ffs_vl_LP32ui_sy2lp_C1TxWrValid,
-              wires_ffs_vl_LP32ui_sy2lp_C1TxIrValid)
+              wires_ffs_vl_LP32ui_sy2lp_C1TxIrValid
+`endif
+
+`ifdef USE_PLATFORM_CCIP
+              wires_ffs_LP16ui_sTxData_afu
+`endif
+              )
              CF
              (wires_inputWires,
+`ifdef USE_PLATFORM_CCIS
               wires_ffs_vl61_LP32ui_sy2lp_C0TxHdr,
               wires_ffs_vl_LP32ui_sy2lp_C0TxRdValid,
               wires_ffs_vl61_LP32ui_sy2lp_C1TxHdr,
               wires_ffs_vl512_LP32ui_sy2lp_C1TxData,
               wires_ffs_vl_LP32ui_sy2lp_C1TxWrValid,
               wires_ffs_vl_LP32ui_sy2lp_C1TxIrValid,
+`endif
+
+`ifdef USE_PLATFORM_CCIP
+              wires_ffs_LP16ui_sTxData_afu,
+`endif
+
               channelDriver_deq, channelDriver_first, channelDriver_write,
               channelDriver_notFull, channelDriver_notEmpty,
               memoryDriver_readLineReq, memoryDriver_readLineRsp,
@@ -334,20 +402,17 @@ endmodule
 
 
 
-module [CONNECTED_MODULE] mkQADevice#(Clock vl_clk_LPdomain_32ui,
-                                      Reset ffs_vl_LP32ui_lp2sy_SoftReset_n)
+module [CONNECTED_MODULE] mkQADevice#(Clock qaClk, Reset qaRst)
     // Interface:
     (QA_DEVICE_PLAT);
 
-    QA_DEVICE_PLAT device <- mkQADeviceSynth(vl_clk_LPdomain_32ui,
-                                             ffs_vl_LP32ui_lp2sy_SoftReset_n);
+    QA_DEVICE_PLAT device <- mkQADeviceSynth(qaClk, qaRst);
     return device;
 endmodule
 
 
 (* synthesize *)
-module mkQADeviceSynth#(Clock vl_clk_LPdomain_32ui,
-                        Reset ffs_vl_LP32ui_lp2sy_SoftReset_n)
+module mkQADeviceSynth#(Clock qaClk, Reset qaRst)
     // Interface:
     (QA_DEVICE_PLAT)
     provisos (Bits#(UMF_CHUNK, n_UMF_CHUNK_SZ),
@@ -356,13 +421,11 @@ module mkQADeviceSynth#(Clock vl_clk_LPdomain_32ui,
               Alias#(t_NUM_CHUNKS, Bit#(TLog#(n_CHUNKS_PER_LINE))),
               Alias#(t_CHUNK_VEC, Vector#(n_CHUNKS_PER_LINE, UMF_CHUNK)));
 
-    let qa_clock = vl_clk_LPdomain_32ui;
-    let qa_reset = ffs_vl_LP32ui_lp2sy_SoftReset_n;
+    let qa_reset = qaRst;
 
     // FIFOs for coming out of QA domain.
 
-    let qaDevice <- mkQADeviceImport(vl_clk_LPdomain_32ui,
-                                     ffs_vl_LP32ui_lp2sy_SoftReset_n);
+    let qaDevice <- mkQADeviceImport(qaClk, qaRst);
     let qaChannelDriver = qaDevice.channelDriver;
     let qaMemoryDriver = qaDevice.memoryDriver;
     let qaSRegDriver = qaDevice.sregDriver;
@@ -372,18 +435,18 @@ module mkQADeviceSynth#(Clock vl_clk_LPdomain_32ui,
     // Host/FPGA Channels
     //
 
-    SyncFIFOIfc#(UMF_CHUNK) syncChannelReadQ <- mkSyncFIFOToCC(16, qa_clock, qa_reset);
-    SyncFIFOIfc#(UMF_CHUNK) syncChannelWriteQ <- mkSyncFIFOFromCC(16, qa_clock);
+    SyncFIFOIfc#(UMF_CHUNK) syncChannelReadQ <- mkSyncFIFOToCC(16, qaClk, qaRst);
+    SyncFIFOIfc#(UMF_CHUNK) syncChannelWriteQ <- mkSyncFIFOFromCC(16, qaClk);
 
     //
     // Extract UMF_CHUNKS from the incoming cache line sized vector coming
     // from the driver.
     //
-    Reg#(t_CHUNK_VEC) readChunkVec <- mkRegU(clocked_by qa_clock, reset_by qa_reset);
+    Reg#(t_CHUNK_VEC) readChunkVec <- mkRegU(clocked_by qaClk, reset_by qaRst);
     // Number of chunks remaining in current line
-    Reg#(t_NUM_CHUNKS) nReadVecChunksRem <- mkConfigReg(0, clocked_by qa_clock, reset_by qa_reset);
+    Reg#(t_NUM_CHUNKS) nReadVecChunksRem <- mkConfigReg(0, clocked_by qaClk, reset_by qaRst);
     // Number of chunks remaining in current UMF packet
-    Reg#(UMF_MSG_LENGTH) nReadPacketChunksRem <- mkConfigReg(0, clocked_by qa_clock, reset_by qa_reset);
+    Reg#(UMF_MSG_LENGTH) nReadPacketChunksRem <- mkConfigReg(0, clocked_by qaClk, reset_by qaRst);
 
     //
     // Convert incoming lines from the channel to UMF_CHUNKs.
@@ -433,15 +496,15 @@ module mkQADeviceSynth#(Clock vl_clk_LPdomain_32ui,
     // it may be necessary to flush a line before it is complete in order to
     // transmit a message to the host.
     //
-    Reg#(t_CHUNK_VEC) writeChunkVec <- mkRegU(clocked_by qa_clock, reset_by qa_reset);
+    Reg#(t_CHUNK_VEC) writeChunkVec <- mkRegU(clocked_by qaClk, reset_by qaRst);
     // Number of chunks valid in current line
-    Reg#(t_NUM_CHUNKS) nWriteChunksActive <- mkConfigReg(0, clocked_by qa_clock, reset_by qa_reset);
+    Reg#(t_NUM_CHUNKS) nWriteChunksActive <- mkConfigReg(0, clocked_by qaClk, reset_by qaRst);
     // Number of chunks remaining in current UMF packet
-    Reg#(UMF_MSG_LENGTH) nWriteChunksRem <- mkConfigReg(0, clocked_by qa_clock, reset_by qa_reset);
+    Reg#(UMF_MSG_LENGTH) nWriteChunksRem <- mkConfigReg(0, clocked_by qaClk, reset_by qaRst);
     // Idle cycles since last chunk arrived
-    Reg#(Bit#(4)) nWriteIdleCycles <- mkConfigReg(0, clocked_by qa_clock, reset_by qa_reset);
+    Reg#(Bit#(4)) nWriteIdleCycles <- mkConfigReg(0, clocked_by qaClk, reset_by qaRst);
 
-    PulseWire didWriteFlushW <- mkPulseWire(clocked_by qa_clock, reset_by qa_reset);
+    PulseWire didWriteFlushW <- mkPulseWire(clocked_by qaClk, reset_by qaRst);
 
     rule pushDataOut (syncChannelWriteQ.notEmpty);
         // Shift the next entry in to the output buffer
@@ -526,14 +589,13 @@ module mkQADeviceSynth#(Clock vl_clk_LPdomain_32ui,
     // Memory
     //
 
-    SyncFIFOIfc#(QA_MEM_REQ) syncMemoryReqQ <-
-        mkSyncFIFOFromCC(16, qa_clock);
+    SyncFIFOIfc#(QA_MEM_REQ) syncMemoryReqQ <- mkSyncFIFOFromCC(16, qaClk);
     SyncFIFOIfc#(QA_CCI_DATA) syncMemoryReadRspQ <-
-        mkSyncFIFOToCC(valueOf(QA_MAX_MEM_READS), qa_clock, qa_reset);
+        mkSyncFIFOToCC(valueOf(QA_MAX_MEM_READS), qaClk, qaRst);
 
     // A stream of counts of completed writes.
     SyncFIFOIfc#(Bit#(QA_DEVICE_WRITE_ACK_BITS)) syncMemoryWriteAckQ <-
-        mkSyncFIFOToCC(valueOf(QA_MAX_MEM_READS), qa_clock, qa_reset);
+        mkSyncFIFOToCC(valueOf(QA_MAX_MEM_READS), qaClk, qaRst);
 
     // Count operations in flight to prevent overflows
     COUNTER#(TLog#(TAdd#(QA_MAX_MEM_READS, 1))) activeMemReads <- mkLCounter(0);
@@ -570,7 +632,7 @@ module mkQADeviceSynth#(Clock vl_clk_LPdomain_32ui,
 
     // Counter in QA driver clock domain of completed writes.
     COUNTER#(TLog#(TAdd#(QA_MAX_MEM_WRITES, 1))) writeAcks <-
-        mkLCounter(0, clocked_by qa_clock, reset_by qa_reset);
+        mkLCounter(0, clocked_by qaClk, reset_by qaRst);
 
     (* fire_when_enabled, no_implicit_conditions *)
     rule noteWriteAck;
@@ -601,8 +663,8 @@ module mkQADeviceSynth#(Clock vl_clk_LPdomain_32ui,
     // Status registers
     //
 
-    SyncFIFOIfc#(QA_SREG_ADDR) syncSregReqQ <- mkSyncFIFOToCC(1, qa_clock, qa_reset);
-    SyncFIFOIfc#(QA_SREG) syncSregRspQ <- mkSyncFIFOFromCC(1, qa_clock);
+    SyncFIFOIfc#(QA_SREG_ADDR) syncSregReqQ <- mkSyncFIFOToCC(1, qaClk, qaRst);
+    SyncFIFOIfc#(QA_SREG) syncSregRspQ <- mkSyncFIFOFromCC(1, qaClk);
 
     (* fire_when_enabled *)
     rule sregReqIn;

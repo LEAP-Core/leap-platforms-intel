@@ -29,6 +29,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 `include "cci_mpf_if.vh"
+import cci_csr_if_pkg::*;
 import qa_driver_csr_types::*;
 
 
@@ -51,15 +52,18 @@ module qa_driver_csr
     logic reset_n;
     assign reset_n = fiu.reset_n;
 
+    logic is_csr_write;
+    assign is_csr_write = cci_csr_isWrite(fiu.c0Rx);
+
     always_comb
     begin
-        if (fiu.c0Rx.cfgValid)
+        if (is_csr_write)
             $display("SETTING CONFIG 0x%h 0x%h", {fiu.c0Rx.hdr[13:0], 2'b0}, fiu.c0Rx.data[31:0]);
     end
 
     always_ff @(posedge clk)
     begin
-        if (fiu.c0Rx.cfgValid && csr_addr_matches(fiu.c0Rx.hdr, CSR_AFU_DSM_BASEL))
+        if (is_csr_write && csrAddrMatches(fiu.c0Rx, CSR_AFU_DSM_BASEL))
         begin
             // DSM comes in byte addressed.  Convert to a line.
             csr.afu_dsm_base[25:0] <= fiu.c0Rx.data[31:6];
@@ -71,14 +75,14 @@ module qa_driver_csr
         begin
             csr.afu_dsm_base_valid <= 0;
         end
-        else if (fiu.c0Rx.cfgValid && csr_addr_matches(fiu.c0Rx.hdr, CSR_AFU_DSM_BASEL))
+        else if (is_csr_write && csrAddrMatches(fiu.c0Rx, CSR_AFU_DSM_BASEL))
         begin
             csr.afu_dsm_base_valid <= 1;
         end
     end
 
     always_ff @(posedge clk) begin
-        if (fiu.c0Rx.cfgValid && csr_addr_matches(fiu.c0Rx.hdr, CSR_AFU_DSM_BASEH))
+        if (is_csr_write && csrAddrMatches(fiu.c0Rx, CSR_AFU_DSM_BASEH))
         begin
             csr.afu_dsm_base[63:58] <= 6'b0;
             csr.afu_dsm_base[57:26] <= fiu.c0Rx.data[31:0];
@@ -90,7 +94,7 @@ module qa_driver_csr
         begin
             csr.afu_sreg_req.enable <= 0;
         end
-        else if (fiu.c0Rx.cfgValid && csr_addr_matches(fiu.c0Rx.hdr, CSR_AFU_SREG_READ))
+        else if (is_csr_write && csrAddrMatches(fiu.c0Rx, CSR_AFU_SREG_READ))
         begin
             csr.afu_sreg_req.enable <= 1;
             csr.afu_sreg_req.addr <= t_sreg_addr'(fiu.c0Rx.data);

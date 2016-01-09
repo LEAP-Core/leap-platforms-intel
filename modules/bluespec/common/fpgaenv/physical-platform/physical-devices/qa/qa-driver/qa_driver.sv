@@ -63,9 +63,6 @@ module qa_driver
     parameter CCI_ADDR_WIDTH = 56
     )
    (
-    input logic vl_clk_LPdomain_32ui,                      // CCI Inteface Clock. 32ui link/protocol clock domain.
-    input logic ffs_vl_LP32ui_lp2sy_SoftReset_n,           // CCI-S soft reset
-
     // -------------------------------------------------------------------
     //
     //   Client interface
@@ -138,6 +135,10 @@ module qa_driver
     //
     // -------------------------------------------------------------------
 
+`ifdef USE_PLATFORM_CCIS
+    input  logic           vl_clk_LPdomain_32ui,                // CCI Inteface Clock. 32ui link/protocol clock domain.
+    input  logic           ffs_vl_LP32ui_lp2sy_SoftReset_n,     // CCI-S soft reset
+
     input  logic           vl_clk_LPdomain_16ui,                // 2x CCI interface clock. Synchronous.16ui link/protocol clock domain.
     input  logic           ffs_vl_LP32ui_lp2sy_SystemReset_n,   // System Reset
 
@@ -168,11 +169,32 @@ module qa_driver
     input  logic           ffs_vl_LP32ui_lp2sy_C1TxAlmFull,     // Channel 1 almost full
 
     input  logic           ffs_vl_LP32ui_lp2sy_InitDnForSys     // System layer is aok to run
+`endif
+
+`ifdef USE_PLATFORM_CCIP
+    // CCI-P Clocks and Resets
+    input  logic        vl_clk_LPdomain_16ui,       // CCI interface clock
+    input  logic        vl_clk_LPdomain_64ui,       // 1/4x Frequency of interface clock. Synchronous.
+    input  logic        vl_clk_LPdomain_32ui,       // 1/2x Frequency of interface clock. Synchronous.
+    input  logic        ffs_LP16ui_afu_SoftReset_n, // CCI-P Soft Reset
+    input  logic [1:0]  ffs_LP16ui_afu_PwrState,    // CCI-P AFU Power State
+    input  logic        ffs_LP16ui_afu_Error,       // CCI-P Protocol Error Detected
+
+    // Data ports
+    output t_if_ccip_Tx ffs_LP16ui_sTxData_afu,     // CCI-P Tx Port
+    input  t_if_ccip_Rx ffs_LP16ui_sRxData_afu      // CCI-P Rx Port
+`endif
+
     );
 
 
     logic  clk;
+`ifdef USE_PLATFORM_CCIS
     assign clk = vl_clk_LPdomain_32ui;
+`endif
+`ifdef USE_PLATFORM_CCIP
+    assign clk = vl_clk_LPdomain_16ui;
+`endif
 
 
     // ====================================================================
@@ -198,7 +220,12 @@ module qa_driver
 
     cci_mpf_if fiu(.clk);
 
+`ifdef USE_PLATFORM_CCIS
     ccis_wires_to_mpf
+`endif
+`ifdef USE_PLATFORM_CCIP
+    ccip_wires_to_mpf
+`endif
       #(
         .REGISTER_INPUTS(0),
         .REGISTER_OUTPUTS(1)

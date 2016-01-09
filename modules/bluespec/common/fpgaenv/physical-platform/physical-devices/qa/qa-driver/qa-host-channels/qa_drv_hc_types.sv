@@ -61,7 +61,7 @@ package qa_drv_hc_types;
     // Read metadata is passed in the mdata field of each read request in
     // order to reorder and route the response.
     //
-    typedef struct 
+    typedef struct packed
     {
         logic reserved;             // Used by MUX that merges the channels
                                     // and the direct memory reader. The high

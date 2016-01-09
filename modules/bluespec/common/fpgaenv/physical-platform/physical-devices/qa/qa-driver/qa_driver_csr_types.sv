@@ -34,6 +34,8 @@
 //
 
 package qa_driver_csr_types;
+    import cci_mpf_if_pkg::*;
+    import cci_csr_if_pkg::*;
 
     typedef enum logic [15:0]
     {
@@ -70,14 +72,16 @@ package qa_driver_csr_types;
 
     // Compare CSR address in a message header to the map above.  The CCI
     // header is 18 bits.
-    function automatic csr_addr_matches;
-        input [17:0] header;
-        input t_CSR_AFU_MAP idx;
-        begin
-            // The address in the header is only 14 bits.  The low 2 bits are
-            // dropped because addresses are 4-byte aligned.
-            csr_addr_matches = (header[13:0] == idx[15:2]);
-        end
+    function automatic logic csrAddrMatches(
+        input t_if_cci_c0_Rx req,
+        input t_CSR_AFU_MAP idx
+        );
+
+        t_cci_mmioaddr req_addr = cci_csr_getAddress(req);
+
+        // The low 2 bits of the address are dropped because addresses
+        // are 4-byte aligned.
+        return (req_addr == t_cci_mmioaddr'(idx >> 2));
     endfunction
 
     typedef struct

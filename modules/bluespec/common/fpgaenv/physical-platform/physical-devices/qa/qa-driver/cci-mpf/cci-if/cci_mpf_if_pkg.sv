@@ -19,11 +19,13 @@
 // ========================================================================
 //
 //  Before importing this module, define exactly one preprocessor macro
-//  to specify the physical interface.  E.g. USE_PLATFORM_CCI_P.
+//  to specify the physical interface.  E.g. USE_PLATFORM_CCIP.
 //
 // ========================================================================
 
 package cci_mpf_if_pkg;
+    import ccis_if_pkg::*;
+    import ccip_if_pkg::*;
 
     //
     // Most data structures are passed unchanged from the chosen interface
@@ -42,13 +44,86 @@ package cci_mpf_if_pkg;
     typedef logic [CCI_MPF_CL_VADDR_WIDTH-1:0] t_cci_mpf_cl_vaddr;
 
 
-`ifdef USE_PLATFORM_CCI_P
-    import ccip_if_pkg::*;
+`ifdef USE_PLATFORM_CCIP
+    parameter CCI_CL_PADDR_WIDTH = CCIP_CLADDR_WIDTH;
+    parameter CCI_CLDATA_WIDTH = CCIP_CLDATA_WIDTH;
+
+    parameter CCI_MMIOADDR_WIDTH = CCIP_MMIOADDR_WIDTH;
+    parameter CCI_MMIODATA_WIDTH = CCIP_MMIODATA_WIDTH;
+
+    parameter CCI_MDATA_WIDTH = CCIP_MDATA_WIDTH;
+    parameter CCI_ALMOST_FULL_THRESHOLD = CCIP_ALMOST_FULL_THRESHOLD;
+
+    typedef t_ccip_claddr t_cci_cl_paddr;
+    typedef t_ccip_cldata t_cci_cldata;
+    typedef t_ccip_mdata t_cci_mdata;
+
+    typedef t_ccip_vc t_cci_vc;
+    typedef t_ccip_cl_num t_cci_cl_num;
+
+    typedef t_ccip_mmioaddr t_cci_mmioaddr;
+    typedef t_ccip_mmiodata t_cci_mmiodata;
+
+    typedef t_ccip_req t_cci_req;
+    typedef t_ccip_rsp t_cci_rsp;
+
+    typedef t_ccip_ReqMemHdr t_cci_ReqMemHdr;
+    parameter CCI_TX_MEMHDR_WIDTH = CCIP_TX_MEMHDR_WIDTH;
+
+    typedef t_ccip_RspMemHdr t_cci_RspMemHdr;
+    parameter CCI_RX_MEMHDR_WIDTH = CCIP_RX_MEMHDR_WIDTH;
+
+    typedef t_ccip_Req_MmioHdr t_cci_Req_MmioHdr;
+    parameter CCI_RX_MMIOHDR_WIDTH = CCIP_RX_MMIOHDR_WIDTH;
+
+    typedef t_ccip_Rsp_MmioHdr t_cci_Rsp_MmioHdr;
+    parameter CCI_TX_MMIOHDR_WIDTH = CCIP_TX_MMIOHDR_WIDTH;
+
+    typedef t_if_ccip_c0_Tx t_if_cci_c0_Tx;
+    typedef t_if_ccip_c1_Tx t_if_cci_c1_Tx;
+    typedef t_if_ccip_Tx t_if_cci_Tx;
+
+    typedef t_if_ccip_c0_Rx t_if_cci_c0_Rx;
+    typedef t_if_ccip_c1_Rx t_if_cci_c1_Rx;
+    typedef t_if_ccip_Rx t_if_cci_Rx;
+
+    function automatic t_cci_ReqMemHdr cci_updMemReqHdrRsvd(
+        input t_cci_ReqMemHdr h
+        );
+        return ccip_updMemReqHdrRsvd(h);
+    endfunction
+
+    function automatic t_if_cci_c0_Tx cci_c0TxClearValids();
+        return ccip_c0TxClearValids();
+    endfunction
+
+    function automatic t_if_cci_c1_Tx cci_c1TxClearValids();
+        return ccip_c1TxClearValids();
+    endfunction
+
+    function automatic t_if_cci_c0_Rx cci_c0RxClearValids();
+        return ccip_c0RxClearValids();
+    endfunction
+
+    function automatic t_if_cci_c1_Rx cci_c1RxClearValids();
+        return ccip_c1RxClearValids();
+    endfunction
+
+    function automatic logic cci_c0RxIsValid(
+        input t_if_cci_c0_Rx r
+        );
+        return ccip_c0RxIsValid(r);
+    endfunction
+
+    function automatic logic cci_c1RxIsValid(
+        input t_if_cci_c1_Rx r
+        );
+        return ccip_c1RxIsValid(r);
+    endfunction
+
 `endif
 
-`ifdef USE_PLATFORM_CCI_S
-    import ccis_if_pkg::*;
-
+`ifdef USE_PLATFORM_CCIS
     parameter CCI_CL_PADDR_WIDTH = CCIS_CLADDR_WIDTH;
     parameter CCI_CLDATA_WIDTH = CCIS_CLDATA_WIDTH;
     parameter CCI_MDATA_WIDTH = CCIS_MDATA_WIDTH;
@@ -59,12 +134,7 @@ package cci_mpf_if_pkg;
     typedef t_ccis_mdata t_cci_mdata;
 
     // Use a few types from CCI-P that aren't in CCI-S
-    typedef enum logic [1:0] {
-        eVC_VA  = 2'b00,
-        eVC_VL0 = 2'b01,
-        eVC_VH0 = 2'b10,
-        eVC_VH1 = 2'b11
-    } t_cci_vc;
+    typedef ccip_if_pkg::t_ccip_vc t_cci_vc;
     typedef ccip_if_pkg::t_ccip_cl_num t_cci_cl_num;
 
     // Treat CCI-S CSR addresses like MMIO addresses

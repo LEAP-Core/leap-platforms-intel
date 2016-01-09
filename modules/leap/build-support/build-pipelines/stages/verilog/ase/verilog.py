@@ -2,6 +2,7 @@ import os
 import re
 import sys
 import string
+import glob
 
 import SCons.Script
 
@@ -150,7 +151,7 @@ class Verilog():
     ##
     cci_type = moduleList.getAWBParamSafe('qa_cci_if', 'CCI_TYPE')
     if (cci_type != None):
-        vexe_gen_command += ' -Xv +define+USE_PLATFORM_' + string.replace(cci_type, '-', '_')
+        vexe_gen_command += ' -Xv +define+USE_PLATFORM_' + string.replace(cci_type, '-', '')
 
     ## Enable simulation mode
     cci_sim = moduleList.getAWBParamSafe('qa_device', 'CCI_SIMULATION')
@@ -174,12 +175,20 @@ class Verilog():
     vexe_gen_command += ' -Xv ' +  moduleList.env['DEFS']['ROOT_DIR_HW'] + '/' + (' -Xv ' +  moduleList.env['DEFS']['ROOT_DIR_HW'] + '/').join(moduleList.getAllDependenciesWithPaths('GIVEN_BDPI_CS')) + ' ' 
 
     # Add the ASE DPI-C source files
-    vexe_gen_command += ' -Xv ' + ase_sw_dir + '/' + \
-                        (' -Xv ' + ase_sw_dir + '/').join(sorted([f for f in os.listdir(ase_sw_dir) if (f[-2:] == '.c')]))
+    vexe_gen_command += ' -Xv ' + ase_sw_dir
+    dpic_srcs = glob.glob(ase_sw_dir + '/*.c')
+    # Some sources aren't part of simulator side
+    dpic_srcs = [s for s in dpic_srcs if not os.path.basename(s) in ['app_backend.c']]
+    vexe_gen_command += ' -Xv ' + (' -Xv ').join(dpic_srcs)
 
     # Bluespec requires that source files terminate the command line.
     vexe_gen_command += ' -verilog -e qa_sim_top_level ' +\
                         moduleList.env['DEFS']['BDPI_CS']
+
+    # Put ASE packages on the command line
+    ase_pkgs = glob.glob(ase_hw_dir + '/*_pkg.sv')
+    if (len(ase_pkgs) != 0):
+        vexe_gen_command += ' ' + ' '.join(ase_pkgs)
 
     vexe_gen_command += ' ' + ' '.join(model.sortPkgList(moduleList.getAllDependencies('VERILOG_PKG')))
     vexe_gen_command += ' ' + ' '.join(moduleList.getAllDependencies('VERILOG'))

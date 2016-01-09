@@ -29,7 +29,10 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 `include "cci_mpf_if.vh"
+import cci_csr_if_pkg::*;
+
 `include "cci_mpf_shim_vtp_params.h"
+
 
 //
 // Map virtual to physical addresses.  The AFU and FIU interfaces are thus
@@ -231,6 +234,41 @@ module cci_mpf_shim_vtp
     // Base address of the page table
     t_cci_cl_paddr page_table_base;
 
+    // Check for a CSR address match for a 32-bit object
+    function automatic logic csrAddrMatches32(
+        input t_if_cci_c0_Rx c0Rx,
+        input int c);
+
+        // Target address.  The CSR space is 4-byte addressable.  The
+        // low 2 address bits must be 0 and aren't transmitted.
+        t_cci_mmioaddr tgt = t_cci_mmioaddr'(c >> 2);
+
+        // Actual address sent in CSR write
+        t_cci_mmioaddr addr = cci_csr_getAddress(c0Rx);
+
+        return cci_csr_isWrite(c0Rx) && (addr == tgt);
+    endfunction
+
+    // Check for a CSR address match for a 64-bit naturally aligned object
+    function automatic logic csrAddrMatches64(
+        input t_if_cci_c0_Rx c0Rx,
+        input int c);
+
+        // Target address.  The CSR space is 4-byte addressable.  The
+        // low 2 address bits must be 0 and aren't transmitted.
+        t_cci_mmioaddr tgt = t_cci_mmioaddr'(c >> 2);
+
+        // Actual address sent in CSR write.  64 bit writes may be sent
+        // either as a full 64 bit object or as a pair of 32 bit writes,
+        // sending the high half before the low half.  Ignore the low
+        // address bit to check the match.
+        t_cci_mmioaddr addr = cci_csr_getAddress(c0Rx);
+        addr[0] = 1'b0;
+
+        return cci_csr_isWrite(c0Rx) && (addr == tgt);
+    endfunction
+
+
     always_ff @(posedge clk)
     begin
         if (! reset_n)
@@ -239,18 +277,17 @@ module cci_mpf_shim_vtp
         end
         else
         begin
-            if (fiu.c0Rx.cfgValid &&
-                (csr_addr_matches(fiu.c0Rx.hdr, CSR_AFU_PAGE_TABLE_BASEL) ||
-                 csr_addr_matches(fiu.c0Rx.hdr, CSR_AFU_PAGE_TABLE_BASEH)))
+            if (cci_csr_isWrite(fiu.c0Rx) &&
+                csrAddrMatches64(fiu.c0Rx, CSR_AFU_PAGE_TABLE_BASEL))
             begin
                 // Shift address into page_table_base
                 page_table_base <=
                     t_cci_cl_paddr'({ page_table_base, fiu.c0Rx.data[31:0]});
 
-                if (csr_addr_matches(fiu.c0Rx.hdr, CSR_AFU_PAGE_TABLE_BASEL))
-                begin
-                    tlbReadIdxRdy <= 1;
-                end
+                // If the low bit of the address is 0 then the register update
+                // is complete.  When sent as a pair of 32 bit writes the high
+                // half is sent first.
+                tlbReadIdxRdy <= ~ fiu.c0Rx.hdr[0];
             end
         end
     end

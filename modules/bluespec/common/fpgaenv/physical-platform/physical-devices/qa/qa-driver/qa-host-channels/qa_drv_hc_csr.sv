@@ -29,6 +29,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 `include "cci_mpf_if.vh"
+import cci_csr_if_pkg::*;
 import qa_drv_hc_csr_types::*;
 
 `include "qa-host-channels-params.h"
@@ -61,9 +62,9 @@ module qa_drv_hc_csr
         t_cci_mmioaddr tgt = t_cci_mmioaddr'((CSR_HC_BASE_ADDR + c) >> 2);
 
         // Actual address sent in CSR write
-        t_cci_mmioaddr addr = t_cci_mmioaddr'(c0Rx.hdr);
+        t_cci_mmioaddr addr = cci_csr_getAddress(c0Rx);
 
-        return c0Rx.cfgValid && (addr == tgt);
+        return cci_csr_isWrite(c0Rx) && (addr == tgt);
     endfunction
 
     // Check for a CSR address match for a 64-bit naturally aligned object
@@ -76,10 +77,10 @@ module qa_drv_hc_csr
         // either as a full 64 bit object or as a pair of 32 bit writes,
         // sending the high half before the low half.  Ignore the low
         // address bit to check the match.
-        t_cci_mmioaddr addr = t_cci_mmioaddr'(c0Rx.hdr);
+        t_cci_mmioaddr addr = cci_csr_getAddress(c0Rx);
         addr[0] = 1'b0;
 
-        return c0Rx.cfgValid && (addr == tgt);
+        return cci_csr_isWrite(c0Rx) && (addr == tgt);
     endfunction
 
 

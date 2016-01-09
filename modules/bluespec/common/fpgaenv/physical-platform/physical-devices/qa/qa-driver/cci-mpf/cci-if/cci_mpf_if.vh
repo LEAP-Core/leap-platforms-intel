@@ -6,14 +6,29 @@
 `define CCI_MPF_IF_VH
 
 import cci_mpf_if_pkg::*;
-
-`ifdef USE_PLATFORM_CCI_S
 import ccis_if_pkg::*;
-`endif
-
-`ifdef USE_PLATFORM_CCI_P
 import ccip_if_pkg::*;
+
+//
+// Specify source of conflicting enum imports
+//
+`ifdef USE_PLATFORM_CCIS
+  `define PLATFORM_IFC ccis_if_pkg
+`else
+  `define PLATFORM_IFC ccip_if_pkg
 `endif
+import `PLATFORM_IFC::eREQ_WRLINE_I;
+import `PLATFORM_IFC::eREQ_WRLINE_M;
+import `PLATFORM_IFC::eREQ_WRFENCE;
+import `PLATFORM_IFC::eREQ_RDLINE_S;
+import `PLATFORM_IFC::eREQ_RDLINE_I;
+import `PLATFORM_IFC::eREQ_INTR;
+
+import `PLATFORM_IFC::eRSP_WRLINE;
+import `PLATFORM_IFC::eRSP_RDLINE;
+import `PLATFORM_IFC::eRSP_INTR;
+import `PLATFORM_IFC::eRSP_UMSG;
+
 
 // Global log file handle
 int cci_mpf_if_log_fd = -1;

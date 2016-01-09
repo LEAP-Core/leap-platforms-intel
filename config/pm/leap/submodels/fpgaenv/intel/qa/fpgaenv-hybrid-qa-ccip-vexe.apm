@@ -2,10 +2,10 @@
 [Global]
 SaveParameters=0
 Description=Hybrid Simulation FPGA Environment
-File=fpgaenv-hybrid-qa-vexe
+File=fpgaenv-hybrid-qa-ccip-vexe
 Version=2.2
 Type=Leap
-Name=Intel QuickAssist CCI-S Simulation FPGA Environment
+Name=Intel QuickAssist CCI-P Simulation FPGA Environment
 Class=Asim::Model
 DefaultBenchmark=
 DefaultRunOpts=
@@ -141,8 +141,8 @@ Packagehint=leap-platforms
 [Single-Ended Crystal Clocks Device/Params]
 CRYSTAL_CLOCK_FREQ=200
 MODEL_CLOCK_FREQ=200
-SINGLE_ENDED_CLOCKS_CLK="vl_clk_LPdomain_32ui"
-SINGLE_ENDED_CLOCKS_RST_N="ffs_vl_LP32ui_lp2sy_SoftReset_n"
+SINGLE_ENDED_CLOCKS_CLK="vl_clk_LPdomain_16ui"
+SINGLE_ENDED_CLOCKS_RST_N="ffs_LP16ui_afu_SoftReset_n"
 
 [Intel QuickAssist Device/Requires]
 qa_driver=Intel QuickAssist Driver
@@ -160,6 +160,8 @@ Packagehint=leap-platforms-intel
 
 [Intel QuickAssist Device/Params]
 CCI_SIMULATION=1
+CCI_S_IFC=0
+CCI_P_IFC=1
 
 [Intel QuickAssist Platform Debugger]
 File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-debugger/qa-platform-debugger.awb
@@ -215,3 +217,6 @@ Packagehint=leap-platforms-intel
 [Primitive Modules for MPF]
 File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/cci-mpf-prims/cci-mpf-prims.awb
 Packagehint=leap-platforms-intel
+
+[Intel CCI Abstract Interface/Params]
+CCI_TYPE="CCI-P"

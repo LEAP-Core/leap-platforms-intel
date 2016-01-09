@@ -12,9 +12,13 @@
 %sources -t CPP     -v PRIVATE qa-wrapper.cpp
 
 %sources -t VERILOG -v PRIVATE cci_std_afu.sv
+%sources -t VERILOG -v PRIVATE ccip_std_afu.sv
 %sources -t SDC     -v PRIVATE qa.sdc
 
 %generated -t VERILOG mkQADeviceSynth.v
+
+%param CCI_S_IFC        1      "Use CCI-S interface"
+%param CCI_P_IFC        0      "Use CCI-P interface"
 
 %param CCI_ADDR_WIDTH   42     "Address bits (cache line granularity)"
 %param CCI_DATA_WIDTH   512    "Cache line width"

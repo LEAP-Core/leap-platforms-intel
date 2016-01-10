@@ -49,9 +49,10 @@ class PostSynthesize():
         ## Define which version of CCI is in use for SystemVerilog packages
         ## imported from outside LEAP.
         ##
-        cci_type = moduleList.getAWBParamSafe('qa_cci_if', 'CCI_TYPE')
-        if (cci_type != None):
-            prjFile.write('set_global_assignment -name VERILOG_MACRO "USE_PLATFORM_' + string.replace(cci_type, '-', '') + '=1"\n')
+        if (moduleList.getAWBParamSafe('qa_device', 'CCI_S_IFC')):
+            prjFile.write('set_global_assignment -name VERILOG_MACRO "USE_PLATFORM_CCIS=1"\n')
+        if (moduleList.getAWBParamSafe('qa_device', 'CCI_P_IFC')):
+            prjFile.write('set_global_assignment -name VERILOG_MACRO "USE_PLATFORM_CCIP=1"\n')
 
         prjFile.write('source ' + rel_qsf_src_dir + '/ome2_ivt.qsf\n')
         prjFile.write('source ' + rel_qsf_src_dir + '/qsf_env_settings.qsf\n')

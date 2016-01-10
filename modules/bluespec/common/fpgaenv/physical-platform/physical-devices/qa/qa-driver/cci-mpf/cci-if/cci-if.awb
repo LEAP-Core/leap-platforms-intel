@@ -13,5 +13,3 @@
 
 %sources -t VERILOG     -v PRIVATE ccip_wires_to_mpf.sv
 %sources -t VERILOG     -v PRIVATE ccis_wires_to_mpf.sv
-
-%param CCI_TYPE  "CCI-S"  "What version of CCI is the target?"

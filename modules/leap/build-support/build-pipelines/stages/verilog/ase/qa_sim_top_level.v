@@ -107,10 +107,7 @@ module qa_sim_top_level(CLK,
         if ({getenv("VCD_ENABLE_DUMP")} != "")
         begin
             $display("Enabling dump to driver_dump.vcd");
-            $dumpvars(0, emulator);
-`ifdef USE_PLATFORM_CCIP
-            $dumpvars(0, ccip_std_afu);
-`endif
+            $dumpvars(0, qa_sim_top_level);
             $dumpon;
         end
         else

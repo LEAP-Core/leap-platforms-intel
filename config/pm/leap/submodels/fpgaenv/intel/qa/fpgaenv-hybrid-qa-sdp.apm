@@ -1,11 +1,11 @@
 
 [Global]
 SaveParameters=0
-Description=Intel QuickAssist FPGA Canoe Pass SDP
+Description=Intel QuickAssist CCI-S FPGA Canoe Pass SDP
 File=fpgaenv-hybrid-qa-sdp
 Version=2.2
 Type=Leap
-Name=Intel QuickAssist FPGA Canoe Pass SDP
+Name=Intel QuickAssist CCI-S FPGA Canoe Pass SDP
 Class=Asim::Model
 DefaultBenchmark=
 DefaultRunOpts=
@@ -180,8 +180,6 @@ qa_cci_mpf=Intel MPF (Memory Protocol Factory)
 [Intel QuickAssist Driver]
 File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/qa-driver.awb
 Packagehint=leap-platforms-intel
-
-
 
 [Intel QuickAssist Host/FPGA Channels]
 File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/qa-host-channels/qa-host-channels.awb

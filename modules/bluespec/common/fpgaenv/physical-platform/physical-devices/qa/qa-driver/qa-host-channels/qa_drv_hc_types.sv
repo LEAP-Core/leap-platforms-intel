@@ -32,6 +32,9 @@
 // Main type definitions for the QA host channel driver.
 //
 
+`ifndef QA_DRV_HC_TYPES_PKG
+`define QA_DRV_HC_TYPES_PKG
+
 package qa_drv_hc_types;
     localparam QA_DRIVER_DEBUG = 0;
 
@@ -181,3 +184,4 @@ package qa_drv_hc_types;
 
 endpackage // qa_drv_hc_types
 
+`endif //  `ifndef QA_DRV_HC_TYPES_PKG

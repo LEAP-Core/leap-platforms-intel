@@ -1,11 +1,11 @@
 
 [Global]
 SaveParameters=0
-Description=Intel QuickAssist FPGA BDX Xeon+FPGA
+Description=Intel QuickAssist CCI-P FPGA BDX Xeon+FPGA
 File=fpgaenv-hybrid-qa-ccip-bdx
 Version=2.2
 Type=Leap
-Name=Intel QuickAssist FPGA BDX Xeon+FPGA
+Name=Intel QuickAssist CCI-P FPGA BDX Xeon+FPGA
 Class=Asim::Model
 DefaultBenchmark=
 DefaultRunOpts=
@@ -131,7 +131,7 @@ File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/clocks/s
 Packagehint=leap-platforms
 
 [Single-Ended Crystal Clocks Device/Params]
-CRYSTAL_CLOCK_FREQ=200
+CRYSTAL_CLOCK_FREQ=400
 MODEL_CLOCK_FREQ=200
 SINGLE_ENDED_CLOCKS_CLK="vl_clk_LPdomain_16ui"
 SINGLE_ENDED_CLOCKS_RST_N="ffs_LP16ui_afu_SoftReset_n"
@@ -215,9 +215,6 @@ Packagehint=leap-platforms-intel
 [Primitive Modules for MPF]
 File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/cci-mpf-prims/cci-mpf-prims.awb
 Packagehint=leap-platforms-intel
-
-[Intel CCI Abstract Interface/Params]
-CCI_TYPE="CCI-P"
 
 [Intel QuickAssist Device/Params]
 CCI_S_IFC=0

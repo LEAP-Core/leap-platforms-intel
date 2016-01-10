@@ -262,7 +262,8 @@ module qa_drv_hc_fifo_to_host
     //
     always_comb
     begin
-        t_cci_mpf_ReqMemHdrParams write_params = cci_mpf_defaultReqHdrParams(0);
+        t_cci_mpf_ReqMemHdrParams write_params;
+        write_params = cci_mpf_defaultReqHdrParams(0);
         write_params.vc_sel = eVC_VH1;
 
         frame_writer.writeHeader = 0;

@@ -66,14 +66,6 @@ package qa_driver_csr_types;
     typedef logic [31:0] t_sreg_addr;
     typedef logic [63:0] t_sreg;
 
-    typedef struct
-    {
-        logic enable;
-        t_sreg_addr addr;
-    }
-    t_afu_sreg_req;
-
-
     // Compare CSR address in a message header to the map above.  The CCI
     // header is 18 bits.
     function automatic logic csrAddrMatches(
@@ -94,7 +86,7 @@ package qa_driver_csr_types;
         logic [63:0] afu_dsm_base;
 
         // Client status register read request.  Enable is held for one cycle.
-        t_afu_sreg_req afu_sreg_req;
+        t_sreg_addr afu_sreg_addr;
     }
     t_csr_afu_state;
 

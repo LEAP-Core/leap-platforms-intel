@@ -53,7 +53,14 @@ module qa_driver_csr_rd
     //
     // Signals connecting to AFU, the client code
     //
-    cci_mpf_if.to_afu afu
+    cci_mpf_if.to_afu afu,
+
+    // SREG reads.  SREGs are LEAP system registers, accessed via a CSR.
+    // The SREG address is written to the CSR and then a CSR read on the
+    // same location triggers the request to LEAP.
+    output logic sreg_req_rdy,
+    input t_sreg sreg_rsp,
+    input logic sreg_rsp_enable
     );
 
     logic reset_n;
@@ -75,30 +82,43 @@ module qa_driver_csr_rd
 
     // CCI-S compatibility mode.  See below.
     logic csr_rd_compat_en;
-    logic did_csr_rd_compat;
     t_cci_mmioaddr csr_rd_compat_addr;
 
     logic [127:0] afu_id;
     assign afu_id = AFU_ID;
 
+    logic did_sreg_rsp;
+    logic sreg_rsp_enable_q;
+    t_sreg sreg_rsp_q;
+    t_ccip_tid sreg_tid;
+
+    logic is_csr_read;
+    assign is_csr_read = cci_csr_isRead(fiu.c0Rx) || csr_rd_compat_en;
+
+    // Give priority to existing MMIO responses from the AFU
+    logic may_read;
+    assign may_read = ! afu.c2Tx.mmioRdValid;
+
+    t_cci_mmioaddr csr_addr;
     always_comb
     begin
-        t_cci_mmioaddr addr;
-        did_csr_rd_compat = 1'b0;
-
-        // Normal case -- just pass through read response port to FIU
-        fiu.c2Tx = t_if_cci_c2_Tx'(0);
-
-        if (cci_csr_isRead(fiu.c0Rx) || csr_rd_compat_en)
+        csr_addr = cci_csr_getAddress(fiu.c0Rx);
+        if (csr_rd_compat_en)
         begin
-            addr = cci_csr_getAddress(fiu.c0Rx);
-            if (csr_rd_compat_en)
-            begin
-                addr = csr_rd_compat_addr;
-                did_csr_rd_compat = 1'b1;
-            end
+            csr_addr = csr_rd_compat_addr;
+        end
+    end
 
-            case (addr)
+    always_comb
+    begin
+        // Normal case -- just pass through read response port to FIU
+        fiu.c2Tx = afu.c2Tx;
+
+        did_sreg_rsp = 1'b0;
+
+        if (may_read && is_csr_read)
+        begin
+            case (csr_addr)
               0: // AFU DFH (device feature header)
                 begin
                     fiu.c2Tx.hdr.tid = cci_csr_getTid(fiu.c0Rx);
@@ -131,6 +151,51 @@ module qa_driver_csr_rd
                 end
             endcase
         end
+        else if (may_read && sreg_rsp_enable_q)
+        begin
+            // Is an SREG response ready to go?  Only one SREG read
+            // is allowed outstanding at a time so this can wait for
+            // a free slot.
+            did_sreg_rsp = 1'b1;
+
+            fiu.c2Tx.hdr.tid = sreg_tid;
+            fiu.c2Tx.mmioRdValid = 1'b1;
+            fiu.c2Tx.data = sreg_rsp_q;
+        end
+    end
+
+
+    //
+    // SREG
+    //
+    assign sreg_req_rdy = is_csr_read &&
+                          (csr_addr == (CSR_AFU_SREG_READ >> 2));
+
+    // Record read request's TID
+    always_ff @(posedge clk)
+    begin
+        if (sreg_req_rdy)
+        begin
+            sreg_tid <= cci_csr_getTid(fiu.c0Rx);
+        end
+    end
+
+    // Hold the response until it is emitted
+    always_ff @(posedge clk)
+    begin
+        if (! reset_n)
+        begin
+            sreg_rsp_enable_q <= 1'b0;
+        end
+        else if (did_sreg_rsp)
+        begin
+            sreg_rsp_enable_q <= 1'b0;
+        end
+        else if (sreg_rsp_enable)
+        begin
+            sreg_rsp_enable_q <= 1'b1;
+            sreg_rsp_q <= sreg_rsp;
+        end
     end
 
 `ifndef USE_PLATFORM_CCIS
@@ -149,8 +214,9 @@ module qa_driver_csr_rd
         begin
             csr_rd_compat_en <= 1'b0;
         end
-        else if (did_csr_rd_compat)
+        else if (csr_rd_compat_en && may_read)
         begin
+            // If reading was permitted then the request fired
             csr_rd_compat_en <= 1'b0;
         end
         else if (cci_csr_isWrite(fiu.c0Rx) &&

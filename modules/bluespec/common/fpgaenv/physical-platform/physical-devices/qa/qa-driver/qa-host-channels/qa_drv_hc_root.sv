@@ -101,6 +101,7 @@ module qa_drv_hc_root
 
     assign fiu.c0Tx = cci_mpf_cvtC0TxFromBase(tx0_q);
     assign fiu.c1Tx = cci_mpf_cvtC1TxFromBase(tx1_q);
+    assign fiu.c2Tx = t_if_cci_c2_Tx'(0);
 
     //
     // All signals to the host must come from registers.  Guarantee that here.

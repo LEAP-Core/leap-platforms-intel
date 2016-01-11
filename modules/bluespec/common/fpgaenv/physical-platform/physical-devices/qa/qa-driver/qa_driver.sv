@@ -254,9 +254,7 @@ module qa_driver
         .clk,
         .fiu,
         .afu(fiu_csr),
-        .csr,
-        .sreg_rsp,
-        .sreg_rsp_enable
+        .csr
         );
 
 
@@ -271,9 +269,10 @@ module qa_driver
     // Writes from host to FPGA CSRs
     qa_driver_csr_wr
       csr_mgr_wr
-        (.clk,
-         .fiu(fiu_csr),
-         .csr);
+       (
+        .clk,
+        .fiu(fiu_csr),
+        .csr);
 
     // Reads from host from FPGA CSRs
     qa_driver_csr_rd
@@ -281,14 +280,17 @@ module qa_driver
          .AFU_ID(AFU_ID)
          )
       csr_mgr_rd
-        (.clk,
-         .fiu(fiu_csr),
-         .afu(fiu_main)
-         );
+       (
+        .clk,
+        .fiu(fiu_csr),
+        .afu(fiu_main),
+        .sreg_req_rdy,
+        .sreg_rsp,
+        .sreg_rsp_enable
+        );
 
     // Forward status register read requests
-    assign sreg_req_addr = csr.afu_sreg_req.addr;
-    assign sreg_req_rdy = csr.afu_sreg_req.enable;
+    assign sreg_req_addr = csr.afu_sreg_addr;
 
 
     // ====================================================================    

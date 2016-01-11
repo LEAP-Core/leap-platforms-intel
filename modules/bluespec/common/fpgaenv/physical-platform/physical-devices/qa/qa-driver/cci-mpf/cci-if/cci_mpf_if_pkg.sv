@@ -63,6 +63,7 @@ package cci_mpf_if_pkg;
 
     typedef t_ccip_mmioaddr t_cci_mmioaddr;
     typedef t_ccip_mmiodata t_cci_mmiodata;
+    typedef t_ccip_tid t_cci_tid;
 
     typedef t_ccip_req t_cci_req;
     typedef t_ccip_rsp t_cci_rsp;
@@ -137,6 +138,7 @@ package cci_mpf_if_pkg;
     // Use a few types from CCI-P that aren't in CCI-S
     typedef ccip_if_pkg::t_ccip_vc t_cci_vc;
     typedef ccip_if_pkg::t_ccip_cl_num t_cci_cl_num;
+    typedef ccip_if_pkg::t_ccip_tid t_cci_tid;
 
     // Treat CCI-S CSR addresses like MMIO addresses
     parameter CCI_MMIOADDR_WIDTH = 14;

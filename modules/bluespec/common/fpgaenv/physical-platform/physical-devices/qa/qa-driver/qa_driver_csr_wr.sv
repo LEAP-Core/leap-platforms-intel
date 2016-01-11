@@ -89,20 +89,14 @@ module qa_driver_csr_wr
         end
     end
 
+    //
+    // The SREG address is specified as a CSR write.  Actually fetching the
+    // data will be a later CSR read from the same CSR_AFU_SREG_READ location.
+    //
     always_ff @(posedge clk) begin
-        if (! reset_n)
+        if (is_csr_write && csrAddrMatches(fiu.c0Rx, CSR_AFU_SREG_READ))
         begin
-            csr.afu_sreg_req.enable <= 0;
-        end
-        else if (is_csr_write && csrAddrMatches(fiu.c0Rx, CSR_AFU_SREG_READ))
-        begin
-            csr.afu_sreg_req.enable <= 1;
-            csr.afu_sreg_req.addr <= t_sreg_addr'(fiu.c0Rx.data);
-        end
-        else
-        begin
-            // Hold request for only one cycle
-            csr.afu_sreg_req.enable <= 0;
+            csr.afu_sreg_addr <= t_sreg_addr'(fiu.c0Rx.data);
         end
     end
 

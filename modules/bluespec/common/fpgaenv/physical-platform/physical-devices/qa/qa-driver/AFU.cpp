@@ -198,16 +198,11 @@ AFU_CLASS::ReadCSR64(uint32_t n)
 uint64_t
 AFU_CLASS::ReadSREG64(uint32_t n)
 {
-    // The FPGA will write to CTRL line 1.  Clear it first.
-    memset((void*)DSMAddress(CL(1)), 0, CL(1));
-
-    // Write CSR to trigger a register read
+    // Write the SREG address to the FPGA-side CSR
     WriteCSR(CSR_AFU_SREG_READ, n);
 
-    // Wait for the response, signalled by bit 64 in the line being set.
-    while (ReadDSM64(CL(1) + sizeof(uint64_t)) == 0) {};
-
-    return ReadDSM64(CL(1));
+    // Reading from the same CSR triggers the SREG read
+    return ReadCSR64(CSR_AFU_SREG_READ);
 }
 
 

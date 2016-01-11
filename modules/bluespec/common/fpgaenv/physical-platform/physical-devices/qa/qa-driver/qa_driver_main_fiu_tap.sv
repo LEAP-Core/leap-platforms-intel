@@ -56,11 +56,7 @@ module qa_driver_main_fiu_tap
     cci_mpf_if.to_afu afu,
 
     // CSR monitoring
-    input t_csr_afu_state csr,
-
-    // LEAP status registers to be written to host
-    input t_sreg sreg_rsp,
-    input logic  sreg_rsp_enable
+    input t_csr_afu_state csr
     );
 
     logic reset_n;
@@ -81,10 +77,6 @@ module qa_driver_main_fiu_tap
     t_if_cci_c2_Tx mmio_read_rsp_q;
     logic did_mmio_read_rsp;
 
-    t_sreg sreg_rsp_q;
-    logic sreg_rsp_enable_q;
-    logic did_sreg_writeback;
-
     always_comb
     begin
         // Request channels to host
@@ -97,7 +89,6 @@ module qa_driver_main_fiu_tap
         fiu.c2Tx = afu.c2Tx;
 
         did_mmio_read_rsp = 1'b0;
-        did_sreg_writeback = 1'b0;
 
         //
         // Inject memory writes for special cases:
@@ -137,22 +128,6 @@ module qa_driver_main_fiu_tap
                 fiu.c1Tx.data[64] = 1'b1;
             end
 `endif
-            else if (sreg_rsp_enable_q)
-            begin
-                // There is an SREG response ready, the output queue is data
-                // ready and there is no traffic coming from the AFU.
-                did_sreg_writeback = 1'b1;
-
-                // Write to DSM line 1.  The value goes in the low 64 bits.
-                // Use the bit 64 to note that the write happend.
-                fiu.c1Tx.wrValid = 1'b1;
-                fiu.c1Tx.hdr = cci_mpf_genReqHdr(eREQ_WRLINE_I,
-                                                 csr.afu_dsm_base | 1'b1,
-                                                 t_cci_mdata'(QA_DRIVER_WRITE_TAG),
-                                                 cci_mpf_defaultReqHdrParams(0));
-                fiu.c1Tx.data[63:0] = sreg_rsp_q;
-                fiu.c1Tx.data[64] = 1'b1;
-            end
         end
 
 
@@ -216,27 +191,5 @@ module qa_driver_main_fiu_tap
     // Compatibility mode not required
     assign mmio_read_rsp_q.mmioRdValid = 1'b0;
 `endif
-
-
-    //
-    // Track writing SREG response to DSM line 1.  Only one SREG read
-    // is allowed to be outstanding at a time.
-    //
-    always_ff @(posedge clk)
-    begin
-        if (! reset_n)
-        begin
-            sreg_rsp_enable_q <= 1'b0;
-        end
-        else if (did_sreg_writeback)
-        begin
-            sreg_rsp_enable_q <= 1'b0;
-        end
-        else if (! sreg_rsp_enable_q)
-        begin
-            sreg_rsp_enable_q <= sreg_rsp_enable;
-            sreg_rsp_q <= sreg_rsp;
-        end
-    end
 
 endmodule // qa_driver_main_fiu_tap

@@ -74,6 +74,8 @@ module cci_mpf_shim_mux
     logic reset_n;
     assign reset_n = fiu.reset_n;
 
+    // Fixme
+    assign fiu.c2Tx = t_if_cci_c2_Tx'(0);
 
     // ====================================================================
     //

@@ -11,6 +11,7 @@ parameter CCIP_CLDATA_WIDTH      = 512;
 
 parameter CCIP_MMIOADDR_WIDTH    = 16;
 parameter CCIP_MMIODATA_WIDTH    = 64;
+parameter CCIP_TID_WIDTH         = 9;
 
 parameter CCIP_MDATA_WIDTH       = 16;
 
@@ -25,6 +26,7 @@ typedef logic [CCIP_CLDATA_WIDTH-1:0] t_ccip_cldata;
 
 typedef logic [CCIP_MMIOADDR_WIDTH-1:0] t_ccip_mmioaddr;
 typedef logic [CCIP_MMIODATA_WIDTH-1:0] t_ccip_mmiodata;
+typedef logic [CCIP_TID_WIDTH-1:0] t_ccip_tid;
 
 typedef logic [CCIP_MDATA_WIDTH-1:0] t_ccip_mdata;
 
@@ -90,12 +92,12 @@ typedef struct packed {
     t_ccip_mmioaddr address;    // 4B aligned Mmio address
     logic [1:0]     length;     // 2'b00- 4B, 2'b01- 8B, 2'b10- 64B
     logic           poison;
-    logic [8:0]     tid;
+    t_ccip_tid      tid;
 } t_ccip_Req_MmioHdr;
 parameter CCIP_RX_MMIOHDR_WIDTH = $bits(t_ccip_Req_MmioHdr);
 
 typedef struct packed {
-    logic [8:0]     tid;        // Returnd back from Request header
+    t_ccip_tid      tid;        // Returnd back from Request header
 } t_ccip_Rsp_MmioHdr;
 parameter CCIP_TX_MMIOHDR_WIDTH = $bits(t_ccip_Rsp_MmioHdr);
 

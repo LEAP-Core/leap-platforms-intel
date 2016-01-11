@@ -35,6 +35,12 @@ import qa_driver_csr_types::*;
 module qa_driver_main_fiu_tap
   #(
     //
+    // Pass in the AFU ID.  This module writes AFU ID to the base of the
+    // device status memory for the CCI-S protocol.
+    //
+    AFU_ID = 0,
+
+    //
     // When the driver injects write requests they will be tagged with this
     // value in Mdata. Write responses matching the tag are dropped here.
     //
@@ -62,8 +68,18 @@ module qa_driver_main_fiu_tap
     assign afu.reset_n = fiu.reset_n;
 
     logic did_afu_id_write;
-    logic [127:0] afu_id;
-    assign afu_id = 128'h13572468_0d824272_9aeffe5f_84570612;
+
+    //
+    // Extra logic for CSR read from host addition to CCI-S.  This is a
+    // compatibility extension to CCI-S to emulate the MMIO read available
+    // in CCI-P.  This compatibility mode maps MMIO read responses to
+    // DSM line 1 writes.
+    // 
+    // Note: in this compatibility mode only one CSR read may be in flight
+    // at a time.
+    //
+    t_if_cci_c2_Tx mmio_read_rsp_q;
+    logic did_mmio_read_rsp;
 
     t_sreg sreg_rsp_q;
     logic sreg_rsp_enable_q;
@@ -78,13 +94,18 @@ module qa_driver_main_fiu_tap
         fiu.c1Tx = afu.c1Tx;
         afu.c1TxAlmFull = fiu.c1TxAlmFull;
 
+        fiu.c2Tx = afu.c2Tx;
+
+        did_mmio_read_rsp = 1'b0;
         did_sreg_writeback = 1'b0;
 
         //
         // Inject memory writes for special cases:
         //
 
-        // Give priority to AFU activity
+        // Give priority to AFU activity.  Special cases considered only when
+        // memory writes are permitted and there is no traffic already generated
+        // this cycle by the AFU.
         if (! fiu.c1TxAlmFull && ! cci_mpf_c1TxIsValid(afu.c1Tx))
         begin
             // Need to set AFU_ID in DSM?  This can always be done since
@@ -96,15 +117,33 @@ module qa_driver_main_fiu_tap
                                                  csr.afu_dsm_base,
                                                  t_cci_mdata'(QA_DRIVER_WRITE_TAG),
                                                  cci_mpf_defaultReqHdrParams(0));
-                fiu.c1Tx.data[127:0] = afu_id;
+                fiu.c1Tx.data[127:0] = AFU_ID;
             end
+`ifdef USE_PLATFORM_CCIS
+            else if (mmio_read_rsp_q.mmioRdValid)
+            begin
+                // Map MMIO read response to a memory write. A software-side
+                // CSR read compatibility function expects it there.
+                did_mmio_read_rsp = 1'b1;
+
+                // Write to DSM line 1.  The value goes in the low 64 bits.
+                // Use the bit 64 to note that the write happend.
+                fiu.c1Tx.wrValid = 1'b1;
+                fiu.c1Tx.hdr = cci_mpf_genReqHdr(eREQ_WRLINE_I,
+                                                 csr.afu_dsm_base | 1'b1,
+                                                 t_cci_mdata'(QA_DRIVER_WRITE_TAG),
+                                                 cci_mpf_defaultReqHdrParams(0));
+                fiu.c1Tx.data[CCIP_MMIODATA_WIDTH-1:0] = mmio_read_rsp_q.data;
+                fiu.c1Tx.data[64] = 1'b1;
+            end
+`endif
             else if (sreg_rsp_enable_q)
             begin
                 // There is an SREG response ready, the output queue is data
                 // ready and there is no traffic coming from the AFU.
                 did_sreg_writeback = 1'b1;
 
-                // Write to DSM line 1.  The value goes in the first 64 bits.
+                // Write to DSM line 1.  The value goes in the low 64 bits.
                 // Use the bit 64 to note that the write happend.
                 fiu.c1Tx.wrValid = 1'b1;
                 fiu.c1Tx.hdr = cci_mpf_genReqHdr(eREQ_WRLINE_I,
@@ -151,6 +190,32 @@ module qa_driver_main_fiu_tap
             did_afu_id_write <= csr.afu_dsm_base_valid;
         end
     end
+
+
+    //
+    // Track compatibility-mode mapping CSR read responses to DSM writes
+    // in CCI-S.  Only one CSR read is allowed to be outstanding at a time.
+    //
+`ifdef USE_PLATFORM_CCIS
+    always_ff @(posedge clk)
+    begin
+        if (! reset_n)
+        begin
+            mmio_read_rsp_q.mmioRdValid <= 1'b0;
+        end
+        else if (did_mmio_read_rsp)
+        begin
+            mmio_read_rsp_q.mmioRdValid <= 1'b0;
+        end
+        else if (! mmio_read_rsp_q.mmioRdValid)
+        begin
+            mmio_read_rsp_q <= fiu.c2Tx;
+        end
+    end
+`else
+    // Compatibility mode not required
+    assign mmio_read_rsp_q.mmioRdValid = 1'b0;
+`endif
 
 
     //

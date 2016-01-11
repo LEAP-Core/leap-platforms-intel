@@ -25,10 +25,45 @@ package cci_csr_if_pkg;
 
 
     //
+    // Is the incoming request a CSR read?
+    //
+    function automatic logic cci_csr_isRead(
+        input t_if_cci_c0_Rx r
+        );
+
+`ifdef USE_PLATFORM_CCIS
+        // CCI-S doesn't have CSR reads
+        return 1'b0;
+`endif
+
+`ifdef USE_PLATFORM_CCIP
+        // CCI-P maps CSRs to mmio reads and writes
+        return r.mmioRdValid;
+`endif
+    endfunction
+
+
+    //
     // Get the CSR address of a read/write request.
     //
-    //   We define t_cci_mmioaddr as the configuration register space in
-    //   CCI-S to simplify the code.
+    function automatic logic [8:0] cci_csr_getTid(
+        input t_if_cci_c0_Rx r
+        );
+
+`ifdef USE_PLATFORM_CCIS
+        return 8'b0;
+`endif
+
+`ifdef USE_PLATFORM_CCIP
+        t_cci_Req_MmioHdr h = t_cci_Req_MmioHdr'(r.hdr);
+        return h.tid;
+`endif
+    endfunction
+
+
+    //
+    // Get the CSR tid from a read request.
+    //
     function automatic t_cci_mmioaddr cci_csr_getAddress(
         input t_if_cci_c0_Rx r
         );

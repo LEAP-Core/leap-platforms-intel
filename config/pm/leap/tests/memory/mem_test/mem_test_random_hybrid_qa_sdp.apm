@@ -23,7 +23,6 @@ Packagehint=leap
 [Default Software Connected Application/Requires]
 hardware_system=Scratchpad Memory Random Test System
 
-
 [Default Hybrid Project Common Utilities]
 File=config/pm/leap/submodels/common/project-common-default.apm
 Packagehint=leap
@@ -34,7 +33,7 @@ Packagehint=leap
 
 [HW/SW Hybrid Pipeline Build/Requires]
 project_common=Default Hybrid Project Common Utilities
-fpgaenv=Intel QuickAssist FPGA Canoe Pass SDP
+fpgaenv=Intel QuickAssist CCI-S FPGA Canoe Pass SDP
 application_env=Soft Services Hybrid Application Environment
 
 [Soft Services Hybrid Application Environment/Requires]
@@ -44,10 +43,11 @@ connected_application=Default Software Connected Application
 File=modules/leap/build-support/project/project-pipeline.awb
 Packagehint=leap
 
-[Intel QuickAssist FPGA Canoe Pass SDP]
-File=config/pm/leap/submodels/fpgaenv/intel/qa/fpgaenv-hybrid-qa-sdp.apm
-Packagehint=leap-platforms-intel
 
 [Scratchpad Memory Random Test System]
 File=modules/apps/tests/mem_random/mem-random.awb
 Packagehint=leap-debug
+
+[Intel QuickAssist CCI-S FPGA Canoe Pass SDP]
+File=config/pm/leap/submodels/fpgaenv/intel/qa/fpgaenv-hybrid-qa-sdp.apm
+Packagehint=leap-platforms-intel

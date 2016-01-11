@@ -81,6 +81,7 @@ package cci_mpf_if_pkg;
 
     typedef t_if_ccip_c0_Tx t_if_cci_c0_Tx;
     typedef t_if_ccip_c1_Tx t_if_cci_c1_Tx;
+    typedef t_if_ccip_c2_Tx t_if_cci_c2_Tx;
     typedef t_if_ccip_Tx t_if_cci_Tx;
 
     typedef t_if_ccip_c0_Rx t_if_cci_c0_Rx;
@@ -155,6 +156,8 @@ package cci_mpf_if_pkg;
 
     typedef t_if_ccis_c0_Tx t_if_cci_c0_Tx;
     typedef t_if_ccis_c1_Tx t_if_cci_c1_Tx;
+    // CCI-S has no MMIO channel. Import it from CCI-P to simplify code.
+    typedef t_if_ccip_c2_Tx t_if_cci_c2_Tx;
     typedef t_if_ccis_Tx t_if_cci_Tx;
 
     typedef t_if_ccis_c0_Rx t_if_cci_c0_Rx;

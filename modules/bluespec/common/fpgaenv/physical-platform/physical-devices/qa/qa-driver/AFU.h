@@ -140,6 +140,10 @@ class AFU_CLASS
     bool WriteCSR(btCSROffset offset, bt32bitCSR value);
     bool WriteCSR64(btCSROffset offset, bt64bitCSR value);
 
+    //
+    // Read CSR from the hardware.
+    //
+    uint64_t ReadCSR64(uint32_t n);
 
     // The driver implements a status register space in the FPGA.
     // The protocol is very slow -- the registers are intended for debugging.

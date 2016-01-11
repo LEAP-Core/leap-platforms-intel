@@ -73,6 +73,7 @@ module cci_mpf
     logic  reset_n;
     assign reset_n = fiu.reset_n;
 
+
     // ====================================================================
     //
     //  Canonicalize requests on exit toward the FIU.

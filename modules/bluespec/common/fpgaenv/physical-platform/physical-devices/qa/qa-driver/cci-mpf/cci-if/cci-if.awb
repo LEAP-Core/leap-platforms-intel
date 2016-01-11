@@ -7,6 +7,7 @@
 %sources -t VERILOG_PKG -v PRIVATE ccip_if_pkg.sv
 %sources -t VERILOG_PKG -v PRIVATE ccis_if_pkg.sv
 %sources -t VERILOG_PKG -v PRIVATE cci_csr_if_pkg.sv
+%sources -t VERILOG_PKG -v PRIVATE ccip_feature_list_pkg.sv
 
 %sources -t VERILOG_H   -v PRIVATE cci_mpf_if.vh
 %sources -t VERILOG_H   -v PRIVATE cci_mpf_if_dbg.vh

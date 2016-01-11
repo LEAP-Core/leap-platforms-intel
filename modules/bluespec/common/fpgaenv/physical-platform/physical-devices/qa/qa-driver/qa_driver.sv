@@ -187,6 +187,7 @@ module qa_driver
 
     );
 
+    localparam AFU_ID = 128'h13572468_0d824272_9aeffe5f_84570612;
 
     logic  clk;
 `ifdef USE_PLATFORM_CCIS
@@ -240,18 +241,19 @@ module qa_driver
     //
     // ====================================================================
 
-    cci_mpf_if fiu_main(.clk);
+    cci_mpf_if fiu_csr(.clk);
     t_csr_afu_state csr;
 
     qa_driver_main_fiu_tap
       #(
+        .AFU_ID(AFU_ID),
         .QA_DRIVER_WRITE_TAG(-1)
         )
       tap
        (
         .clk,
         .fiu,
-        .afu(fiu_main),
+        .afu(fiu_csr),
         .csr,
         .sreg_rsp,
         .sreg_rsp_enable
@@ -264,11 +266,25 @@ module qa_driver
     //
     // ====================================================================    
 
-    qa_driver_csr
-      csr_mgr
+    cci_mpf_if fiu_main(.clk);
+
+    // Writes from host to FPGA CSRs
+    qa_driver_csr_wr
+      csr_mgr_wr
         (.clk,
-         .fiu(fiu_main),
+         .fiu(fiu_csr),
          .csr);
+
+    // Reads from host from FPGA CSRs
+    qa_driver_csr_rd
+       #(
+         .AFU_ID(AFU_ID)
+         )
+      csr_mgr_rd
+        (.clk,
+         .fiu(fiu_csr),
+         .afu(fiu_main)
+         );
 
     // Forward status register read requests
     assign sreg_req_addr = csr.afu_sreg_req.addr;

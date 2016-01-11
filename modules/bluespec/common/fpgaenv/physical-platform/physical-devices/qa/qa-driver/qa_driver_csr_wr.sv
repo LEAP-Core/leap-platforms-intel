@@ -38,7 +38,7 @@ import qa_driver_csr_types::*;
 // CSR state to all consumers through the t_csr_afu_state type.
 //
 
-module qa_driver_csr
+module qa_driver_csr_wr
    (
     input logic clk,
 

@@ -50,6 +50,10 @@ package qa_driver_csr_types;
         // LEAP status register
         CSR_AFU_SREG_READ          = 16'h1a10,
 
+        // MMIO read compatibility for CCI-S.  Writes here are treated
+        // as a CSR read request.
+        CSR_AFU_MMIO_READ_COMPAT   = 16'h1a14,
+
         // Page table base for qa_shim_tlb_simple (64 bits)
         CSR_AFU_PAGE_TABLE_BASEL   = 16'h1a80,
         CSR_AFU_PAGE_TABLE_BASEH   = 16'h1a84

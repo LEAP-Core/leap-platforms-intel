@@ -51,7 +51,7 @@ module ccip_wires_to_mpf
             begin
                 ffs_LP16ui_sTxData_afu.c0 <= fiu.c0Tx;
                 ffs_LP16ui_sTxData_afu.c1 <= fiu.c1Tx;
-                ffs_LP16ui_sTxData_afu.c2 <= t_if_ccip_c2_Tx'(0);
+                ffs_LP16ui_sTxData_afu.c2 <= fiu.c2Tx;
 
                 fiu.c0TxAlmFull <= ffs_LP16ui_sRxData_afu.c0TxAlmFull;
                 fiu.c1TxAlmFull <= ffs_LP16ui_sRxData_afu.c1TxAlmFull;
@@ -63,7 +63,7 @@ module ccip_wires_to_mpf
             begin
                 ffs_LP16ui_sTxData_afu.c0 = fiu.c0Tx;
                 ffs_LP16ui_sTxData_afu.c1 = fiu.c1Tx;
-                ffs_LP16ui_sTxData_afu.c2 = t_if_ccip_c2_Tx'(0);
+                ffs_LP16ui_sTxData_afu.c2 = fiu.c2Tx;
 
                 fiu.c0TxAlmFull = ffs_LP16ui_sRxData_afu.c0TxAlmFull;
                 fiu.c1TxAlmFull = ffs_LP16ui_sRxData_afu.c1TxAlmFull;

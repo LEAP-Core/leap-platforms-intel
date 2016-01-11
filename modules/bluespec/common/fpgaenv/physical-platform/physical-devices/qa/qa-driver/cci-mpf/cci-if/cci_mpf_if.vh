@@ -53,6 +53,9 @@ interface cci_mpf_if
     t_if_cci_mpf_c1_Tx c1Tx;
     logic              c1TxAlmFull;
 
+    // MMIO read response channel -- new in CCI-P interface
+    t_if_cci_c2_Tx     c2Tx;
+
     // Responses from FIU.  All objects are inputs from the FIU and flow
     // toward the AFU.  There is no flow control.  The AFU must be prepared
     // to receive responses for all in-flight requests.
@@ -70,6 +73,8 @@ interface cci_mpf_if
        output c1Tx,
        input  c1TxAlmFull,
 
+       output c2Tx,
+
        input  c0Rx,
        input  c1Rx
        );
@@ -84,6 +89,8 @@ interface cci_mpf_if
 
        input  c1Tx,
        output c1TxAlmFull,
+
+       input  c2Tx,
 
        output c0Rx,
        output c1Rx
@@ -113,7 +120,8 @@ interface cci_mpf_if
        input  reset_n,
 
        input  c0Tx,
-       input  c1Tx
+       input  c1Tx,
+       input  c2Tx
        );
 
 

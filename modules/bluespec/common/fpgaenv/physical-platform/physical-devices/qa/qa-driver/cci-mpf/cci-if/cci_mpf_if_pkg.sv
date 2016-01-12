@@ -355,7 +355,7 @@ package cci_mpf_if_pkg;
         t_cci_mpf_ReqMemHdrParams p;
         p.checkLoadStoreOrder = 1'b0;      // Default hardware behavior
         p.addrIsVirtual = 1'(addrIsVirtual);
-        p.vc_sel = eVC_VA;
+        p.vc_sel = eVC_VL0;
         p.cl_num = 0;
         return p;
     endfunction
@@ -377,6 +377,10 @@ package cci_mpf_if_pkg;
 
         h.base.req_type = requestType;
         h.base.mdata = mdata;
+`ifdef USE_PLATFORM_CCIP
+        h.base.vc_sel = params.vc_sel;
+        h.base.cl_num = params.cl_num;
+`endif
 
         return h;
     endfunction

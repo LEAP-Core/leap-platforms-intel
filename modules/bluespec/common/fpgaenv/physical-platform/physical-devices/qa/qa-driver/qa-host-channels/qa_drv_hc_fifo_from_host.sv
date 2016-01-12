@@ -37,7 +37,10 @@ import qa_drv_hc_csr_types::*;
 
 module qa_drv_hc_fifo_from_host
   #(
-    parameter N_SCOREBOARD_ENTRIES=256
+    parameter N_SCOREBOARD_ENTRIES=256,
+
+    // Which virtual channel should be used?
+    parameter MEM_VIRTUAL_CHANNEL = 1
     )
    (
     input logic clk,
@@ -196,7 +199,7 @@ module qa_drv_hc_fifo_from_host
     always_comb
     begin
         t_cci_mpf_ReqMemHdrParams read_params = cci_mpf_defaultReqHdrParams(0);
-        read_params.vc_sel = eVC_VH1;
+        read_params.vc_sel = t_ccip_vc'(MEM_VIRTUAL_CHANNEL);
 
         // No writes, ever
         frame_reader.write.request = 0;

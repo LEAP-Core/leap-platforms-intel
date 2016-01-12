@@ -80,7 +80,7 @@ module ccip_wires_to_mpf
             always_ff @(posedge clk)
             begin
                 fiu.c0Rx <= ffs_LP16ui_sRxData_afu.c0;
-                fiu.c1Rx <= ffs_LP16ui_sRxData_afu.c0;
+                fiu.c1Rx <= ffs_LP16ui_sRxData_afu.c1;
             end
         end
         else
@@ -88,7 +88,7 @@ module ccip_wires_to_mpf
             always_comb
             begin
                 fiu.c0Rx = ffs_LP16ui_sRxData_afu.c0;
-                fiu.c1Rx = ffs_LP16ui_sRxData_afu.c0;
+                fiu.c1Rx = ffs_LP16ui_sRxData_afu.c1;
             end
         end
     endgenerate

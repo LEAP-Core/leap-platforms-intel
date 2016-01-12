@@ -475,8 +475,8 @@ QA_HOST_CHANNELS_DEVICE_CLASS::TestSend()
     // Wait for mode change.
     while (ReadCTRL32(0) == 0) ;
 
-    uint8_t *msg = new uint8_t[TEST_MSG_BYTES];
-    for (int32_t i = 0; i < TEST_MSG_BYTES; i += 1)
+    uint64_t *msg = new uint64_t[TEST_MSG_BYTES / sizeof(uint64_t)];
+    for (int64_t i = 0; i < TEST_MSG_BYTES / sizeof(uint64_t); i += 1)
     {
         msg[i] = i << 1;
     }

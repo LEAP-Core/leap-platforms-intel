@@ -1,0 +1,53 @@
+
+[Global]
+SaveParameters=0
+Description=Hybrid Virtual Memory Test Model for Intel QA Simulation
+File=mem_test_random_hybrid_qa_ccip_vexe
+Version=2.2
+Name=Hybrid Virtual Memory Test Model for Intel QA Simulation
+Type=Leap
+Class=Asim::Model
+DefaultBenchmark=
+DefaultRunOpts=
+RootName=HW/SW Hybrid Pipeline Build
+RootProvides=model
+
+[Model]
+DefaultAttributes=bram-test hybrid
+model=HW/SW Hybrid Pipeline Build
+
+[Default Software Connected Application]
+File=modules/leap/build-support/project/application-env/soft-services/default-sw/connected-application-default-sw.awb
+Packagehint=leap
+
+[Default Software Connected Application/Requires]
+hardware_system=Scratchpad Memory Random Test System
+
+[Default Hybrid Project Common Utilities]
+File=config/pm/leap/submodels/common/project-common-default.apm
+Packagehint=leap
+
+[Soft Services Hybrid Application Environment]
+File=modules/leap/build-support/project/application-env/soft-services/application-env-hybrid-soft-service.awb
+Packagehint=leap
+
+[HW/SW Hybrid Pipeline Build/Requires]
+project_common=Default Hybrid Project Common Utilities
+fpgaenv=Intel QuickAssist CCI-P Simulation FPGA Environment
+application_env=Soft Services Hybrid Application Environment
+
+[Soft Services Hybrid Application Environment/Requires]
+connected_application=Default Software Connected Application
+
+[HW/SW Hybrid Pipeline Build]
+File=modules/leap/build-support/project/project-pipeline.awb
+Packagehint=leap
+
+[Scratchpad Memory Random Test System]
+File=modules/apps/tests/mem_random/mem-random.awb
+Packagehint=leap-debug
+
+
+[Intel QuickAssist CCI-P Simulation FPGA Environment]
+File=config/pm/leap/submodels/fpgaenv/intel/qa/fpgaenv-hybrid-qa-ccip-vexe.apm
+Packagehint=leap-platforms-intel

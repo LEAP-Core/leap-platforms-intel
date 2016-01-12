@@ -34,23 +34,28 @@ import qa_drv_hc_csr_types::*;
 
 
 module qa_drv_hc_status_manager
-    (input logic clk,
-     input logic reset_n,
+  #(
+    // Which virtual channel should be used?
+    parameter MEM_VIRTUAL_CHANNEL = 1
+    )
+   (
+    input logic clk,
+    input logic reset_n,
 
-     input  t_if_cci_c0_Rx rx0,
+    input  t_if_cci_c0_Rx rx0,
 
-     input  t_qa_drv_hc_csrs     csr,
-     output t_frame_arb          status_mgr_req,
-     input  t_channel_grant_arb  read_grant,
-     input  t_channel_grant_arb  write_grant,
+    input  t_qa_drv_hc_csrs     csr,
+    output t_frame_arb          status_mgr_req,
+    input  t_channel_grant_arb  read_grant,
+    input  t_channel_grant_arb  write_grant,
 
-     input  t_to_status_mgr_fifo_from_host   fifo_from_host_to_status,
-     output t_from_status_mgr_fifo_from_host status_to_fifo_from_host,
+    input  t_to_status_mgr_fifo_from_host   fifo_from_host_to_status,
+    output t_from_status_mgr_fifo_from_host status_to_fifo_from_host,
 
-     input  t_to_status_mgr_fifo_to_host     fifo_to_host_to_status,
-     output t_from_status_mgr_fifo_to_host   status_to_fifo_to_host,
+    input  t_to_status_mgr_fifo_to_host     fifo_to_host_to_status,
+    output t_from_status_mgr_fifo_to_host   status_to_fifo_to_host,
 
-     input  t_to_status_mgr_tester           tester_to_status
+    input  t_to_status_mgr_tester           tester_to_status
     );
 
     //
@@ -166,16 +171,22 @@ module qa_drv_hc_status_manager
         //
         // Poll the CTRL line holding the read head pointer and write credits.
         //
-        status_mgr_req.readHeader = 0;
-        status_mgr_req.readHeader.req_type = eREQ_RDLINE_S;
-        status_mgr_req.readHeader.address =
-            ctrl_line_offset_to_addr(CTRL_OFFSET_POLL_STATE);
+        t_cci_mpf_ReqMemHdrParams read_params;
+        read_params = cci_mpf_defaultReqHdrParams(0);
+        // Use eVC_VL0 -- we want to use the FPGA-side cache to avoid
+        // repeatedly using the system bus to read an unchanging control line.
+        read_params.vc_sel = eVC_VL0;
+
+        status_mgr_req.readHeader =
+            cci_mpf_genReqHdr(eREQ_RDLINE_S,
+                              ctrl_line_offset_to_addr(CTRL_OFFSET_POLL_STATE),
+                              pack_read_metadata(reader_meta_req),
+                              read_params);
 
         reader_meta_req.reserved = 1'b0;
         reader_meta_req.isRead   = 1'b1;
         reader_meta_req.isHeader = 1'b1;
         reader_meta_req.robAddr  = 0;
-        status_mgr_req.readHeader.mdata = pack_read_metadata(reader_meta_req);
 
         if (state_rd == STATE_RD_POLL)
         begin
@@ -328,6 +339,8 @@ module qa_drv_hc_status_manager
 
     always_comb
     begin
+        t_cci_mpf_ReqMemHdrParams write_params;
+
         requested_fifo_status_update = 0;
 
         data = fifo_status;
@@ -350,10 +363,14 @@ module qa_drv_hc_status_manager
             requested_fifo_status_update = need_fifo_status_update;
         end
 
-        status_mgr_req.writeHeader = 0;
-        status_mgr_req.writeHeader.req_type = eREQ_WRLINE_I;
-        status_mgr_req.writeHeader.address =
-            ctrl_line_offset_to_addr(offset);
+        write_params = cci_mpf_defaultReqHdrParams(0);
+        write_params.vc_sel = t_ccip_vc'(MEM_VIRTUAL_CHANNEL);
+        status_mgr_req.writeHeader =
+            cci_mpf_genReqHdr(eREQ_WRLINE_I,
+                              ctrl_line_offset_to_addr(offset),
+                              t_cci_mdata'(0),
+                              write_params);
+
         status_mgr_req.data = data;
     end
     

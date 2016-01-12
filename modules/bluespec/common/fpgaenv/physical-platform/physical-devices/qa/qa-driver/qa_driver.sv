@@ -219,7 +219,7 @@ module qa_driver
     //
     // ====================================================================
 
-    cci_mpf_if fiu(.clk);
+    cci_mpf_if#(.ENABLE_LOG(1)) fiu(.clk);
 
 `ifdef USE_PLATFORM_CCIS
     ccis_wires_to_mpf

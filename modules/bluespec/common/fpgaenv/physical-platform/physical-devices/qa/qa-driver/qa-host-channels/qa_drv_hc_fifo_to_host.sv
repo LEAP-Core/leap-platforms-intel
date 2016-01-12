@@ -35,6 +35,10 @@ import qa_drv_hc_csr_types::*;
 
 
 module qa_drv_hc_fifo_to_host
+  #(
+    // Which virtual channel should be used?
+    parameter MEM_VIRTUAL_CHANNEL = 1
+    )
    (
     input logic clk,
     input logic reset_n,
@@ -264,7 +268,7 @@ module qa_drv_hc_fifo_to_host
     begin
         t_cci_mpf_ReqMemHdrParams write_params;
         write_params = cci_mpf_defaultReqHdrParams(0);
-        write_params.vc_sel = eVC_VH1;
+        write_params.vc_sel = t_ccip_vc'(MEM_VIRTUAL_CHANNEL);
 
         frame_writer.writeHeader = 0;
         frame_writer.writeHeader.mdata = 0;

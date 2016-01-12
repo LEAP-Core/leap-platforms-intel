@@ -49,6 +49,36 @@
         endcase
     endfunction
 
+    // Print CSR data
+    function string csr_data(int num_bytes, t_cci_cldata rx0_data);
+        string str_4;
+        string str_8;
+        string str_64;
+
+        begin
+          case (num_bytes)
+            4 :
+            begin
+                str_4.hextoa(rx0_data[31:0]);
+                return str_4;
+            end
+
+            8 :
+            begin
+                str_8.hextoa(rx0_data[63:0]);
+                return str_8;
+            end
+
+            64 :
+            begin
+                str_64.hextoa(rx0_data[511:0]);
+                return str_64;
+            end
+          endcase
+        end
+    endfunction
+
+ 
     initial
     begin : logger_proc
         if (cci_mpf_if_log_fd == -1)
@@ -65,9 +95,15 @@
                 /******************* AFU -> MEM Read Request ******************/
                 if (reset_n && c0Tx.rdValid)
                 begin
-                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%s\t%x\t%s %x\n",
+                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%x\t%s %x\n",
                             $time,
-                            print_channel(0 /*c0Tx.hdr.vc*/),
+`ifdef USE_PLATFORM_CCIS
+                            print_channel(0),
+                            0,
+`else
+                            print_channel(c0Tx.hdr.base.vc_sel),
+                            c0Tx.hdr.base.cl_num,
+`endif
                             print_reqtype(c0Tx.hdr.base.req_type),
                             c0Tx.hdr.base.mdata,
                             (c0Tx.hdr.ext.addrIsVirtual ? "V" : "P"),
@@ -81,9 +117,15 @@
                 /******************* AFU -> MEM Write Request *****************/
                 if (reset_n && c1Tx.wrValid)
                 begin
-                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%s\t%x\t%s %x\t%x\n",
+                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%x\t%s %x\t%x\n",
                             $time,
-                            print_channel(0 /*c1Tx.hdr.vc*/),
+`ifdef USE_PLATFORM_CCIS
+                            print_channel(0),
+                            0,
+`else
+                            print_channel(c1Tx.hdr.base.vc_sel),
+                            c1Tx.hdr.base.cl_num,
+`endif
                             print_reqtype(c1Tx.hdr.base.req_type),
                             c1Tx.hdr.base.mdata,
                             (c1Tx.hdr.ext.addrIsVirtual ? "V" : "P"),
@@ -97,9 +139,15 @@
                 /******************* MEM -> AFU Read Response *****************/
                 if (reset_n && c0Rx.rdValid)
                 begin
-                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%s\t%x\t%x\n",
+                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%x\t%x\n",
                             $time,
-                            print_channel(0 /*c0Rx.hdr.vc*/),
+`ifdef USE_PLATFORM_CCIS
+                            print_channel(0),
+                            0,
+`else
+                            print_channel(c0Rx.hdr.vc_used),
+                            c0Rx.hdr.cl_num,
+`endif
                             print_resptype(c0Rx.hdr.resp_type),
                             c0Rx.hdr.mdata,
                             c0Rx.data);
@@ -108,30 +156,41 @@
                 /****************** MEM -> AFU Write Response *****************/
                 if (reset_n && c0Rx.wrValid)
                 begin
-                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%s\t%x\n",
+                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%x\n",
                             $time,
-                            print_channel(0 /*c0Rx.hdr.vc*/),
+`ifdef USE_PLATFORM_CCIS
+                            print_channel(0),
+                            0,
+`else
+                            print_channel(c0Rx.hdr.vc_used),
+                            c0Rx.hdr.cl_num,
+`endif
                             print_resptype(c0Rx.hdr.resp_type),
                             c0Rx.hdr.mdata);
                 end
 
                 if (reset_n && c1Rx.wrValid)
                 begin
-                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%s\t%x\n",
+                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%x\n",
                             $time,
-                            print_channel(0 /*c1Rx.hdr.vc*/),
+`ifdef USE_PLATFORM_CCIS
+                            print_channel(0),
+                            0,
+`else
+                            print_channel(c1Rx.hdr.vc_used),
+                            c1Rx.hdr.cl_num,
+`endif
                             print_resptype(c1Rx.hdr.resp_type),
                             c1Rx.hdr.mdata);
                 end
 
-`ifdef BOO
-                /////////////////////// CONFIG CHANNEL TRANSACTIONS //////////////////////////
+`ifdef FIXME
                 /******************* SW -> AFU Config Write *******************/
-                if (C0RxMMIOWrValid)
+                if (reset_n && c0Rx.mmioWrValid)
                 begin
                     $fwrite(cci_mpf_if_log_fd, "%t\tMMIOWrReq\t%x\t%d bytes\t%s\n",
                             $time,
-                            C0RxMMIOHdr.index,
+                            c0RxMMIOHdr.index,
                             4^(1 + C0RxMMIOHdr.len),
                             csr_data(4^(1 + C0RxMMIOHdr.len), C0RxData) );
                 end

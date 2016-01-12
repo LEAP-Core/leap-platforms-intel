@@ -2,6 +2,7 @@
 %desc Intel QuickAssist Driver
 
 %provides qa_driver
+%requires qa_platform_libs
 %requires qa_driver_host_channels
 %requires qa_cci_mpf
 

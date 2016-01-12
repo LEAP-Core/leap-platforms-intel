@@ -106,9 +106,13 @@ module qa_drv_hc_csr
         end
         else if (csrMatches64(CSR_HC_CTRL_FRAME))
         begin
+`ifdef USE_PLATFORM_CCIS
             // Shift in by 32 bit chunks
             csr.hc_ctrl_frame <=
                 t_cci_cl_paddr'({ csr.hc_ctrl_frame, c0Rx.data[31:0] });
+`else
+            csr.hc_ctrl_frame <= t_cci_cl_paddr'(c0Rx.data);
+`endif
 
             // If the low bit of the address is 0 then the register update
             // is complete.  When sent as a pair of 32 bit writes the high
@@ -121,9 +125,13 @@ module qa_drv_hc_csr
     begin
         if (csrMatches64(CSR_HC_READ_FRAME))
         begin
+`ifdef USE_PLATFORM_CCIS
             // Shift in by chunks
             csr.hc_read_frame <=
                 t_cci_cl_paddr'({ csr.hc_read_frame, c0Rx.data[31:0] });
+`else
+            csr.hc_read_frame <= t_cci_cl_paddr'(c0Rx.data);
+`endif
         end
     end
 
@@ -131,9 +139,13 @@ module qa_drv_hc_csr
     begin
         if (csrMatches64(CSR_HC_WRITE_FRAME))
         begin
+`ifdef USE_PLATFORM_CCIS
             // Shift in by chunks
             csr.hc_write_frame <=
                 t_cci_cl_paddr'({ csr.hc_write_frame, c0Rx.data[31:0] });
+`else
+            csr.hc_write_frame <= t_cci_cl_paddr'(c0Rx.data);
+`endif
         end
     end
 

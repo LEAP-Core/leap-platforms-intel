@@ -111,7 +111,7 @@ AFU_CLASS::~AFU_CLASS() {
 
 
 AFU_BUFFER 
-AFU_CLASS::CreateSharedBuffer(size_t size_bytes) {
+AFU_CLASS::CreateSharedBuffer(ssize_t size_bytes) {
     AFU_BUFFER buffer = afuClient->CreateSharedBuffer(size_bytes);
 
     // store buffer in vector, so it can be released later
@@ -123,7 +123,7 @@ AFU_CLASS::CreateSharedBuffer(size_t size_bytes) {
 
 
 void*
-AFU_CLASS::CreateSharedBufferInVM(size_t size_bytes)
+AFU_CLASS::CreateSharedBufferInVM(ssize_t size_bytes)
 {
     return vtp->CreateSharedBufferInVM(size_bytes);
 }
@@ -139,7 +139,8 @@ AFU_CLASS::SharedBufferVAtoPA(const void* va)
 void
 AFU_CLASS::ResetAFU()
 {
-    btCSRValue csr;
+#if (CCI_S_IFC != 0)
+    bt32bitCSR csr;
 
     const uint32_t CIPUCTL_RESET_BIT = 0x01000000;
 
@@ -154,6 +155,7 @@ AFU_CLASS::ResetAFU()
     afuClient->ReadCSR(CSR_CIPUCTL, &csr);
     csr &= ~CIPUCTL_RESET_BIT;
     WriteCSR(CSR_CIPUCTL, csr);
+#endif
 }
 
 
@@ -171,13 +173,16 @@ AFU_CLASS::WriteCSR64(btCSROffset offset, bt64bitCSR value)
 }
 
 
-//
-// CCI-S compatibility mode function: read a CSR from the hardware.
-// MMIO reads are mapped to writes by the hardware to the DSM, line 1.
-//
 uint64_t
 AFU_CLASS::ReadCSR64(uint32_t n)
 {
+#if (CCI_S_IFC != 0)
+
+    //
+    // CCI-S compatibility mode function: read a CSR from the hardware.
+    // MMIO reads are mapped to writes by the hardware to the DSM, line 1.
+    //
+
     // The FPGA will write to CTRL line 1.  Clear it first.
     memset((void*)DSMAddress(CL(1)), 0, CL(1));
 
@@ -188,6 +193,14 @@ AFU_CLASS::ReadCSR64(uint32_t n)
     while (ReadDSM64(CL(1) + sizeof(uint64_t)) == 0) {};
 
     return ReadDSM64(CL(1));
+
+#else
+
+    bt64bitCSR v;
+    assert(afuClient->ReadCSR64(n, &v));
+    return v;
+
+#endif
 }
 
 
@@ -291,14 +304,26 @@ AFU_CLASS::RunTests(QA_HOST_CHANNELS_DEVICE qa)
 AFU_CLIENT_CLASS::AFU_CLIENT_CLASS(AFU_RUNTIME_CLIENT rtc) :
     m_pAALService(NULL),
     m_runtimeClient(rtc),
+#if (CCI_S_IFC != 0)
     m_Service(NULL),
+#else
+    m_pALIBufferService(NULL),
+    m_pALIMMIOService(NULL),
+    m_pALIResetService(NULL),
+#endif
     m_Result(0),
     m_WrkVA(NULL),
     m_WrkPA(0),
     m_WrkBytes(0)
 {
+    // Register our Client side interfaces so that the Service can acquire them.
+    //   SetInterface() is inherited from CAASBase
+#if (CCI_S_IFC != 0)
     SetSubClassInterface(iidServiceClient, dynamic_cast<IServiceClient *>(this));
     SetInterface(iidCCIClient, dynamic_cast<ICCIClient *>(this));
+#else
+    SetInterface(iidServiceClient, dynamic_cast<IServiceClient *>(this));
+#endif
 
     m_Sem.Create(0, 1);
     m_SemWrk.Create(0, 1);
@@ -321,17 +346,43 @@ AFU_CLIENT_CLASS::InitService(const char* afuID)
     NamedValueSet config_record;
 
 #if (CCI_SIMULATION == 0)
+
     // Use FPGA hardware
+  #if (CCI_S_IFC != 0)
+    // CCI-S
     config_record.Add(AAL_FACTORY_CREATE_CONFIGRECORD_FULL_SERVICE_NAME, "libHWCCIAFU");
-    config_record.Add(keyRegAFU_ID, afuID);
     config_record.Add(AAL_FACTORY_CREATE_CONFIGRECORD_FULL_AIA_NAME, "libAASUAIA");
+  #else
+    // CCI-P
+    // Service library
+    config_record.Add(AAL_FACTORY_CREATE_CONFIGRECORD_FULL_SERVICE_NAME, "libHWALIAFU");
+    // Indicate that this service needs to allocate an AIAService
+    // to talk to the HW.
+    config_record.Add(AAL_FACTORY_CREATE_CONFIGRECORD_FULL_AIA_NAME, "libaia");
+  #endif
+
+    config_record.Add(keyRegAFU_ID, afuID);
+
 #else
     // Use ASE based RTL simulation
+    manifest.Add(keyRegHandle, 20);
+
+  #if (CCI_S_IFC != 0)
+    // CCI-S
     config_record.Add(AAL_FACTORY_CREATE_CONFIGRECORD_FULL_SERVICE_NAME, "libASECCIAFU");
+  #else
+    // CCI-P
+    config_record.Add(AAL_FACTORY_CREATE_CONFIGRECORD_FULL_SERVICE_NAME, "libASEALIAFU");
+  #endif
+
     config_record.Add(AAL_FACTORY_CREATE_SOFTWARE_SERVICE, true);
 #endif
 
+#if (CCI_S_IFC != 0)
     manifest.Add(AAL_FACTORY_CREATE_CONFIGRECORD_INCLUDED, config_record);
+#else
+    manifest.Add(AAL_FACTORY_CREATE_CONFIGRECORD_INCLUDED, &config_record);
+#endif
     manifest.Add(AAL_FACTORY_CREATE_SERVICENAME, "LEAP Runtime");
 
     // Allocate the Service and allocate the required workspace.
@@ -356,8 +407,10 @@ AFU_CLIENT_CLASS::UninitService()
 
 
 AFU_BUFFER
-AFU_CLIENT_CLASS::CreateSharedBuffer(size_t size_bytes)
+AFU_CLIENT_CLASS::CreateSharedBuffer(ssize_t size_bytes)
 {
+#if (CCI_S_IFC != 0)
+
     //
     // The API doesn't return the workspace.  Instead, a callback is informed
     // about the details.
@@ -369,6 +422,25 @@ AFU_CLIENT_CLASS::CreateSharedBuffer(size_t size_bytes)
 
     m_Service->WorkspaceAllocate(size_bytes, TransactionID(0));
     m_SemWrk.Wait();
+
+#else
+
+    m_WrkBytes = size_bytes;
+    if (ali_errnumOK != m_pALIBufferService->bufferAllocate(size_bytes, &m_WrkVA))
+    {
+        fprintf(stderr, "ERROR: Failed to allocate ALI buffer of %lld bytes", size_bytes);
+        exit(1);
+    }
+
+    // Map the VA to the hardware's address
+    m_WrkPA = m_pALIBufferService->bufferGetIOVA(m_WrkVA);
+    if (0 == m_WrkPA)
+    {
+        fprintf(stderr, "ERROR: Failed to map ALI buffer of %lld bytes", size_bytes);
+        exit(1);
+    }
+
+#endif
 
     // Create an AFU_BUFFER descriptor with the workspace details.
     AFU_BUFFER_CLASS* buffer = new AFU_BUFFER_CLASS();
@@ -393,8 +465,16 @@ AFU_CLIENT_CLASS::CreateSharedBuffer(size_t size_bytes)
 void
 AFU_CLIENT_CLASS::FreeSharedBuffer(AFU_BUFFER buffer)
 {
+#if (CCI_S_IFC != 0)
+
     m_Service->WorkspaceFree(btVirtAddr(buffer->virtualAddress),
                              TransactionID(0));
+
+#else
+
+    m_pALIBufferService->bufferFree(btVirtAddr(buffer->virtualAddress));
+
+#endif
 }
 
 
@@ -409,9 +489,24 @@ AFU_CLIENT_CLASS::serviceAllocated(
     m_pAALService = pServiceBase;
     assert(NULL != m_pAALService);
 
+#if (CCI_S_IFC != 0)
+
     // CCIAFU Service publishes ICCIAFU as subclass interface.
     m_Service = subclass_ptr<ICCIAFU>(pServiceBase);
     assert(NULL != m_Service);
+
+#else
+
+    m_pALIBufferService = dynamic_ptr<IALIBuffer>(iidALI_BUFF_Service, pServiceBase);
+    assert(NULL != m_pALIBufferService);
+
+    m_pALIMMIOService = dynamic_ptr<IALIMMIO>(iidALI_MMIO_Service, pServiceBase);
+    assert(NULL != m_pALIMMIOService);
+
+    m_pALIResetService = dynamic_ptr<IALIReset>(iidALI_RSET_Service, pServiceBase);
+    assert(NULL != m_pALIResetService);
+
+#endif
 
     m_Sem.Post(1);
 }
@@ -420,9 +515,8 @@ AFU_CLIENT_CLASS::serviceAllocated(
 void
 AFU_CLIENT_CLASS::serviceAllocateFailed(const IEvent &rEvent)
 {
-    IExceptionTransactionEvent * pExEvent = dynamic_ptr<IExceptionTransactionEvent>(iidExTranEvent, rEvent);
-    fprintf(stderr, "ERROR: AFU CLIENT service allocation failed: %s\n",
-            pExEvent->Description());
+    fprintf(stderr, "ERROR: AFU CLIENT service allocation failed\n");
+    PrintExceptionDescription(rEvent);
 
     // Remember the error
     ++m_Result;
@@ -430,13 +524,38 @@ AFU_CLIENT_CLASS::serviceAllocateFailed(const IEvent &rEvent)
     m_Sem.Post(1);
 }
 
+void
+AFU_CLIENT_CLASS::serviceReleased(const TransactionID &rTranID)
+{
+    m_Sem.Post(1);
+}
 
+void
+AFU_CLIENT_CLASS::serviceReleaseFailed(const IEvent &rEvent)
+{
+    fprintf(stderr, "ERROR: AFU CLIENT service release failed\n");
+    PrintExceptionDescription(rEvent);
+
+    m_Sem.Post(1);
+}
+
+
+// CCI-S only
 void
 AFU_CLIENT_CLASS::serviceFreed(TransactionID const &rTranID)
 {
     m_Sem.Post(1);
 }
 
+
+void
+AFU_CLIENT_CLASS::serviceEvent(const IEvent &rEvent)
+{
+    fprintf(stderr, "ERROR: AFU CLIENT unexpected event 0x%lx\n", rEvent.SubClassID());
+}
+
+
+#if (CCI_S_IFC != 0)
 
 // <ICCIClient>
 void
@@ -479,11 +598,7 @@ void AFU_CLIENT_CLASS::OnWorkspaceFreeFailed(const IEvent &rEvent)
             pExEvent->Description());
 }
 
-
-void AFU_CLIENT_CLASS::serviceEvent(const IEvent &rEvent)
-{
-    fprintf(stderr, "ERROR: AFU CLIENT unexpected event 0x%lx\n", rEvent.SubClassID());
-}
+#endif // CCI_S_IFC for OnWorkspace...
 
 
 // ========================================================================
@@ -493,7 +608,11 @@ void AFU_CLIENT_CLASS::serviceEvent(const IEvent &rEvent)
 // ========================================================================
 
 AFU_RUNTIME_CLIENT_CLASS::AFU_RUNTIME_CLIENT_CLASS() :
+#if (CCI_S_IFC != 0)
     m_Runtime(),
+#else
+    m_Runtime(this),
+#endif
     m_pRuntime(NULL),
     m_isActive(false)
 {
@@ -501,7 +620,11 @@ AFU_RUNTIME_CLIENT_CLASS::AFU_RUNTIME_CLIENT_CLASS() :
     NamedValueSet configRecord;
 
     // Publish our interface
+#if (CCI_S_IFC != 0)
     SetSubClassInterface(iidRuntimeClient, dynamic_cast<IRuntimeClient *>(this));
+#else
+    SetInterface(iidRuntimeClient, dynamic_cast<IRuntimeClient *>(this));
+#endif
 
     m_Sem.Create(0, 1);
 
@@ -513,7 +636,11 @@ AFU_RUNTIME_CLIENT_CLASS::AFU_RUNTIME_CLIENT_CLASS() :
     configArgs.Add(XLRUNTIME_CONFIG_RECORD,configRecord);
 #endif
 
-    if (!m_Runtime.start(this, configArgs))
+    if (!m_Runtime.start(
+#if (CCI_S_IFC != 0)
+            this,
+#endif
+            configArgs))
     {
         m_isActive = false;
 
@@ -569,19 +696,22 @@ AFU_RUNTIME_CLIENT_CLASS::runtimeStopped(IRuntime *pRuntime)
 void
 AFU_RUNTIME_CLIENT_CLASS::runtimeStartFailed(const IEvent &rEvent)
 {
-   IExceptionTransactionEvent * pExEvent = dynamic_ptr<IExceptionTransactionEvent>(iidExTranEvent, rEvent);
+    fprintf(stderr, "ERROR: AFU runtime start failed\n");
+    PrintExceptionDescription(rEvent);
+}
 
-   fprintf(stderr, "ERROR: AFU runtime start failed: %s\n",
-           pExEvent->Description());
+void
+AFU_RUNTIME_CLIENT_CLASS::runtimeStopFailed(const IEvent &rEvent)
+{
+    fprintf(stderr, "ERROR: AFU runtime stop failed\n");
+    PrintExceptionDescription(rEvent);
 }
 
 void
 AFU_RUNTIME_CLIENT_CLASS::runtimeAllocateServiceFailed( IEvent const &rEvent)
 {
-   IExceptionTransactionEvent * pExEvent = dynamic_ptr<IExceptionTransactionEvent>(iidExTranEvent, rEvent);
-
-   fprintf(stderr, "ERROR: AFU runtime allocation failed: %s\n",
-           pExEvent->Description());
+    fprintf(stderr, "ERROR: AFU runtime allocation failed\n");
+    PrintExceptionDescription(rEvent);
 }
 
 void

@@ -149,9 +149,9 @@ class Verilog():
     ## Define which version of CCI is in use for SystemVerilog packages
     ## imported from outside LEAP.
     ##
-    if (moduleList.getAWBParamSafe('qa_device', 'CCI_S_IFC')):
+    if (moduleList.getAWBParamSafe('qa_platform_libs', 'CCI_S_IFC')):
         vexe_gen_command += ' -Xv +define+USE_PLATFORM_CCIS'
-    if (moduleList.getAWBParamSafe('qa_device', 'CCI_P_IFC')):
+    if (moduleList.getAWBParamSafe('qa_platform_libs', 'CCI_P_IFC')):
         vexe_gen_command += ' -Xv +define+USE_PLATFORM_CCIP'
 
     ## Enable simulation mode

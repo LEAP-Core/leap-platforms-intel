@@ -52,49 +52,76 @@ module qa_driver_csr_wr
     logic reset_n;
     assign reset_n = fiu.reset_n;
 
-    logic is_csr_write;
-    assign is_csr_write = cci_csr_isWrite(fiu.c0Rx);
+    // Check for a CSR address match for a 32-bit object
+    function automatic logic csrMatches32(int c);
+        // Target address.  The CSR space is 4-byte addressable.  The
+        // low 2 address bits must be 0 and aren't transmitted.
+        t_cci_mmioaddr tgt = t_cci_mmioaddr'(c >> 2);
 
-    always_comb
-    begin
-        if (is_csr_write)
-            $display("SETTING CONFIG 0x%h 0x%h", {fiu.c0Rx.hdr[13:0], 2'b0}, fiu.c0Rx.data[31:0]);
-    end
+        // Actual address sent in CSR write
+        t_cci_mmioaddr addr = cci_csr_getAddress(fiu.c0Rx);
 
+        return cci_csr_isWrite(fiu.c0Rx) && (addr == tgt);
+    endfunction
+
+    // Check for a CSR address match for a 64-bit naturally aligned object
+    function automatic logic csrMatches64(int c);
+        // Target address.  The CSR space is 4-byte addressable.  The
+        // low 2 address bits must be 0 and aren't transmitted.
+        t_cci_mmioaddr tgt = t_cci_mmioaddr'(c >> 2);
+
+        // Actual address sent in CSR write.  64 bit writes may be sent
+        // either as a full 64 bit object or as a pair of 32 bit writes,
+        // sending the high half before the low half.  Ignore the low
+        // address bit to check the match.
+        t_cci_mmioaddr addr = cci_csr_getAddress(fiu.c0Rx);
+        addr[0] = 1'b0;
+
+        return cci_csr_isWrite(fiu.c0Rx) && (addr == tgt);
+    endfunction
+
+
+    //
+    // DSM base address
+    //
     always_ff @(posedge clk)
     begin
-        if (is_csr_write && csrAddrMatches(fiu.c0Rx, CSR_AFU_DSM_BASEL))
-        begin
-            // DSM comes in byte addressed.  Convert to a line.
-            csr.afu_dsm_base[25:0] <= fiu.c0Rx.data[31:6];
-        end
-    end
-
-    always_ff @(posedge clk) begin
         if (! reset_n)
         begin
             csr.afu_dsm_base_valid <= 0;
+            csr.afu_dsm_base[63:58] <= 6'b0;
         end
-        else if (is_csr_write && csrAddrMatches(fiu.c0Rx, CSR_AFU_DSM_BASEL))
+        else if (csrMatches64(CSR_AFU_DSM_BASEL))
         begin
-            csr.afu_dsm_base_valid <= 1;
+`ifdef USE_PLATFORM_CCIS
+            // 32 bit chunks
+            if (fiu.c0Rx.hdr[0] == 1)
+            begin
+                csr.afu_dsm_base[57:26] <= fiu.c0Rx.data[31:0];
+            end
+            else
+            begin
+                csr.afu_dsm_base[25:0] <= fiu.c0Rx.data[31:6];
+            end
+`else
+            // Single chunk
+            csr.afu_dsm_base <= t_cci_cl_paddr'(fiu.c0Rx.data[63:6]);
+`endif
+
+            // If the low bit of the address is 0 then the register update
+            // is complete.  When sent as a pair of 32 bit writes the high
+            // half is sent first.
+            csr.afu_dsm_base_valid <= ~ fiu.c0Rx.hdr[0];
         end
     end
 
-    always_ff @(posedge clk) begin
-        if (is_csr_write && csrAddrMatches(fiu.c0Rx, CSR_AFU_DSM_BASEH))
-        begin
-            csr.afu_dsm_base[63:58] <= 6'b0;
-            csr.afu_dsm_base[57:26] <= fiu.c0Rx.data[31:0];
-        end
-    end
 
     //
     // The SREG address is specified as a CSR write.  Actually fetching the
     // data will be a later CSR read from the same CSR_AFU_SREG_READ location.
     //
     always_ff @(posedge clk) begin
-        if (is_csr_write && csrAddrMatches(fiu.c0Rx, CSR_AFU_SREG_READ))
+        if (csrMatches32(CSR_AFU_SREG_READ))
         begin
             csr.afu_sreg_addr <= t_sreg_addr'(fiu.c0Rx.data);
         end

@@ -55,6 +55,7 @@ import Connectable::*;
 `include "awb/provides/soft_services_deps.bsh"
 
 `include "awb/provides/clocks_device.bsh"
+`include "awb/provides/qa_platform_libs.bsh"
 
 `ifndef CCI_S_IFC_Z
   `define USE_PLATFORM_CCIS 1

@@ -280,9 +280,13 @@ module cci_mpf_shim_vtp
             if (cci_csr_isWrite(fiu.c0Rx) &&
                 csrAddrMatches64(fiu.c0Rx, CSR_AFU_PAGE_TABLE_BASEL))
             begin
+`ifdef USE_PLATFORM_CCIS
                 // Shift address into page_table_base
                 page_table_base <=
                     t_cci_cl_paddr'({ page_table_base, fiu.c0Rx.data[31:0]});
+`else
+                page_table_base <= t_cci_cl_paddr'(fiu.c0Rx.data);
+`endif
 
                 // If the low bit of the address is 0 then the register update
                 // is complete.  When sent as a pair of 32 bit writes the high

@@ -26,7 +26,3 @@
 %sources -t VERILOG -v PRIVATE qa_drv_hc_write_arbiter.sv  
 %sources -t VERILOG -v PRIVATE qa_drv_hc_can_issue.sv
 %sources -t VERILOG -v PRIVATE qa_drv_hc_tester.sv  
-
-%library libAAS.so
-%library libOSAL.so
-%library libxlrt.so

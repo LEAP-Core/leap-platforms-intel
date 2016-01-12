@@ -38,7 +38,10 @@ import qa_driver_csr_types::*;
 module qa_drv_hc_root
   #(
     // Start of the CSR region for the host channel
-    parameter CSR_HC_BASE_ADDR = 0
+    parameter CSR_HC_BASE_ADDR = 0,
+
+    // Which virtual channel should be used?
+    parameter MEM_VIRTUAL_CHANNEL = 3  // eVC_VH1
     )
    (
     input  logic                 clk,
@@ -183,12 +186,23 @@ module qa_drv_hc_root
 
     // Manage memory-mapped FIFOs in each direction.
     qa_drv_hc_fifo_from_host
+      #(
+        .MEM_VIRTUAL_CHANNEL(MEM_VIRTUAL_CHANNEL)
+        )
       fifo_from_host(.*);
 
     qa_drv_hc_fifo_to_host
+      #(
+        .MEM_VIRTUAL_CHANNEL(MEM_VIRTUAL_CHANNEL)
+        )
       fifo_to_host(.*);
 
-    qa_drv_hc_status_manager  status_manager(.*);
+    qa_drv_hc_status_manager
+      #(
+        .MEM_VIRTUAL_CHANNEL(MEM_VIRTUAL_CHANNEL)
+        )
+      status_manager(.*);
+
     qa_drv_hc_read_arbiter    read_arb(.*);
     qa_drv_hc_write_arbiter   write_arb(.*);
     

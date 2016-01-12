@@ -86,7 +86,7 @@ module qa_drv_memory
     //
     // ====================================================================
 
-    cci_mpf_if#(.ENABLE_LOG(1)) afu_if(.clk);
+    cci_mpf_if afu_if(.clk);
 
 
     t_cci_mpf_ReqMemHdrParams rd_req_params;

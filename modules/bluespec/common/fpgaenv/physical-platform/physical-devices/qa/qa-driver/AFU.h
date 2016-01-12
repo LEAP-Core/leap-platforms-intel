@@ -40,9 +40,17 @@
 #include <vector>
 
 #include <aalsdk/AAL.h>
+
+#include "awb/provides/qa_platform_libs.h"
+
+#if (CCI_S_IFC != 0)
 #include <aalsdk/xlRuntime.h>
 #include <aalsdk/service/ICCIAFU.h>
 #include <aalsdk/service/ICCIClient.h>
+#else
+#include <aalsdk/Runtime.h>
+#include <aalsdk/service/IALIAFU.h>
+#endif
 
 #include "AFU_csr.h"
 #include "cci_mpf_shim_vtp.h"
@@ -50,6 +58,7 @@
 
 USING_NAMESPACE(std)
 USING_NAMESPACE(AAL)
+
 
 typedef class AFU_CLIENT_CLASS *AFU_CLIENT;
 typedef class AFU_RUNTIME_CLIENT_CLASS *AFU_RUNTIME_CLIENT;
@@ -101,14 +110,14 @@ class AFU_CLASS
     // Allocate a memory buffer shared by the host and an FPGA.  This call
     // DOES NOT add the VA/PA pair to the FPGA-side VTP.
     //
-    AFU_BUFFER CreateSharedBuffer(size_t size_bytes);
+    AFU_BUFFER CreateSharedBuffer(ssize_t size_bytes);
 
     //
     // Allocate a shared memory buffer and add the VA/PA mapping to the
     // FPGA-side VTP, implemented in CCI_MPF_SHIM_VTP_CLASS and the
     // corresponding RTL.
     //
-    void* CreateSharedBufferInVM(size_t size_bytes);
+    void* CreateSharedBufferInVM(ssize_t size_bytes);
 
     // Virtual to physical translation for memory created by
     // CreateSharedBufferInVM.
@@ -178,8 +187,10 @@ class AFU_CLASS
 //   AAL Runtime.
 //
 class AFU_CLIENT_CLASS: public CAASBase,
-                        public IServiceClient,
-                        public ICCIClient
+#if (CCI_S_IFC != 0)
+                        public ICCIClient,
+#endif
+                        public IServiceClient
 {
 public:
     AFU_CLIENT_CLASS(AFU_RUNTIME_CLIENT rtc);
@@ -190,34 +201,64 @@ public:
 
     inline bool WriteCSR(btCSROffset offset, bt32bitCSR value)
     {
+#if (CCI_S_IFC != 0)
         return m_Service->CSRWrite(offset, value);
+#else
+        return m_pALIMMIOService->mmioWrite32(offset, value);
+#endif
     }
 
     inline bool WriteCSR64(btCSROffset offset, bt64bitCSR value)
     {
+#if (CCI_S_IFC != 0)
         return m_Service->CSRWrite64(offset, value);
+#else
+        return m_pALIMMIOService->mmioWrite64(offset, value);
+#endif
     }
 
-    inline bool ReadCSR(btCSROffset offset, btCSRValue* pValue)
+    inline bool ReadCSR(btCSROffset offset, bt32bitCSR* pValue)
     {
-        return m_Service->CSRRead(offset, pValue);
+#if (CCI_S_IFC != 0)
+        btCSRValue v;
+        bool r = m_Service->CSRRead(offset, &v);
+        *pValue = v;
+        return r;
+#else
+        return m_pALIMMIOService->mmioRead32(offset, pValue);
+#endif
+    }
+
+    inline bool ReadCSR64(btCSROffset offset, bt64bitCSR* pValue)
+    {
+#if (CCI_S_IFC != 0)
+        return false;
+#else
+        return m_pALIMMIOService->mmioRead64(offset, pValue);
+#endif
     }
 
     //
     // Allocate a memory buffer shared by the host and an FPGA.
     //
-    AFU_BUFFER CreateSharedBuffer(size_t size_bytes);
+    AFU_BUFFER CreateSharedBuffer(ssize_t size_bytes);
     void FreeSharedBuffer(AFU_BUFFER buffer);
 
     // <begin IServiceClient interface>
     void serviceAllocated(IBase *pServiceBase,
                           TransactionID const &rTranID);
     void serviceAllocateFailed(const IEvent &rEvent);
+    void serviceReleased(const TransactionID &rTranID);
+    void serviceReleaseFailed(const IEvent &rEvent);
+
+    // CCI-S only
     void serviceFreed(TransactionID const &rTranID);
+
     void serviceEvent(const IEvent &rEvent);
     // <end IServiceClient interface>
 
-    // <ICCIClient>
+#if (CCI_S_IFC != 0)
+    // <ICCIClient> -- used only by CCI-S
     virtual void OnWorkspaceAllocated(TransactionID const &TranID,
                                       btVirtAddr WkspcVirt,
                                       btPhysAddr WkspcPhys,
@@ -225,12 +266,20 @@ public:
     virtual void OnWorkspaceAllocateFailed(const IEvent &Event);
     virtual void OnWorkspaceFreed(TransactionID const &TranID);
     virtual void OnWorkspaceFreeFailed(const IEvent &Event);
+#endif
+
     // </ICCIClient>
 
   protected:
     IBase         *m_pAALService;    // The generic AAL Service interface for the AFU.
-    AFU_RUNTIME_CLIENT m_runtimeClient;
+#if (CCI_S_IFC != 0)
     ICCIAFU       *m_Service;
+#else
+    IALIBuffer    *m_pALIBufferService; ///< Pointer to Buffer Service
+    IALIMMIO      *m_pALIMMIOService;   ///< Pointer to MMIO Service
+    IALIReset     *m_pALIResetService;  ///< Pointer to AFU Reset Service
+#endif
+    AFU_RUNTIME_CLIENT m_runtimeClient;
     CSemaphore     m_Sem;            // For synchronizing with the AAL runtime.
     CSemaphore     m_SemWrk;         // Semaphore for workspace syc
     btInt          m_Result;         // Returned result value; 0 if success
@@ -263,10 +312,15 @@ public:
                         const NamedValueSet &rConfigParms);
     void runtimeStopped(IRuntime *pRuntime);
     void runtimeStartFailed(const IEvent &rEvent);
+    void runtimeStopFailed(const IEvent &rEvent);
     void runtimeAllocateServiceFailed(IEvent const &rEvent);
     void runtimeAllocateServiceSucceeded(IBase *pClient,
                                          TransactionID const &rTranID);
     void runtimeEvent(const IEvent &rEvent);
+
+    // Not Used
+    void runtimeCreateOrGetProxyFailed(IEvent const &rEvent) {};
+
     // <end IRuntimeClient interface>
 
   protected:

@@ -176,6 +176,7 @@ Packagehint=leap
 [Intel QuickAssist Driver/Requires]
 qa_driver_host_channels=Intel QuickAssist Host/FPGA Channels
 qa_cci_mpf=Intel MPF (Memory Protocol Factory)
+qa_platform_libs=Intel QuickAssist CCI-P Platform Libraries
 
 [Intel QuickAssist Driver]
 File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/qa-driver.awb
@@ -216,6 +217,7 @@ Packagehint=leap-platforms-intel
 File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/cci-mpf-prims/cci-mpf-prims.awb
 Packagehint=leap-platforms-intel
 
-[Intel QuickAssist Device/Params]
-CCI_S_IFC=0
-CCI_P_IFC=1
+
+[Intel QuickAssist CCI-P Platform Libraries]
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/qa-ccip-platform-libs.awb
+Packagehint=leap-platforms-intel

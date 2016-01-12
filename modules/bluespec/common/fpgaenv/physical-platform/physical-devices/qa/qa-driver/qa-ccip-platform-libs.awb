@@ -1,0 +1,11 @@
+%name Intel QuickAssist CCI-P Platform Libraries
+%desc Intel QuickAssist CCI-P Platform Libraries
+
+%provides qa_platform_libs
+
+%library libAAS.so
+%library libOSAL.so
+%library libaalrt.so
+
+%param CCI_S_IFC        0      "Use CCI-S interface"
+%param CCI_P_IFC        1      "Use CCI-P interface"

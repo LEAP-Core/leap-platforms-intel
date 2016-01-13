@@ -37,11 +37,6 @@ import FIFO::*;
 import FIFOF::*;
 import ConfigReg::*;
 
-`ifndef CCI_LOOPBACK_HACK_Z
-import GetPut::*;
-import Connectable::*;
-`endif
-
 
 `include "awb/provides/umf.bsh"
 `include "awb/provides/physical_platform_utils.bsh"

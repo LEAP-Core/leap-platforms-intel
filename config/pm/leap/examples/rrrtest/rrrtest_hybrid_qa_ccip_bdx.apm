@@ -2,7 +2,7 @@
 [Global]
 SaveParameters=0
 Description=RRR Test and Benchmarking Program
-File=rrrtest_hybrid_qa_sdp
+File=rrrtest_hybrid_qa_ccip_bdx
 Version=2.2
 Name=RRR Test and Benchmarking Program
 DefaultBenchmark=config/bm/leap/demos.cfx/benchmarks/null.cfg
@@ -26,7 +26,7 @@ Packagehint=leap
 
 [HW/SW Hybrid Pipeline Build/Requires]
 project_common=Default Hybrid Project Common Utilities
-fpgaenv=Intel QuickAssist CCI-S FPGA Canoe Pass SDP
+fpgaenv=Intel QuickAssist CCI-P FPGA BDX Xeon+FPGA
 application_env=Soft Services Hybrid Application Environment
 
 [HW/SW Hybrid Pipeline Build]
@@ -41,6 +41,6 @@ Packagehint=leap
 connected_application=Bluespec RRR Test and Benchmarking Program
 
 
-[Intel QuickAssist CCI-S FPGA Canoe Pass SDP]
-File=config/pm/leap/submodels/fpgaenv/intel/qa/fpgaenv-hybrid-qa-sdp.apm
+[Intel QuickAssist CCI-P FPGA BDX Xeon+FPGA]
+File=config/pm/leap/submodels/fpgaenv/intel/qa/fpgaenv-hybrid-qa-ccip-bdx.apm
 Packagehint=leap-platforms-intel

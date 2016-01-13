@@ -1,0 +1,3 @@
+set AAL_QA_HW $::env(AAL_QA_HW)
+set REL_RTL_SRC "/RTL/bdx_fpga/design"
+set RTL_SRC ${AAL_QA_HW}${REL_RTL_SRC}

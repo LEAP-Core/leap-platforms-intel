@@ -629,11 +629,15 @@ AFU_RUNTIME_CLIENT_CLASS::AFU_RUNTIME_CLIENT_CLASS() :
     m_Sem.Create(0, 1);
 
     // Using Hardware Services requires the Remote Resource Manager Broker
-    // Service.  Note that this could also be accomplished by setting the
-    // environment variable XLRUNTIME_CONFIG_BROKER_SERVICE to librrmbroker.
+    // Service.
 #if (CCI_SIMULATION == 0)
+  #if (CCI_S_IFC != 0)
     configRecord.Add(XLRUNTIME_CONFIG_BROKER_SERVICE, "librrmbroker");
-    configArgs.Add(XLRUNTIME_CONFIG_RECORD,configRecord);
+    configArgs.Add(XLRUNTIME_CONFIG_RECORD, configRecord);
+  #else
+     configRecord.Add(AALRUNTIME_CONFIG_BROKER_SERVICE, "librrmbroker");
+     configArgs.Add(AALRUNTIME_CONFIG_RECORD, &configRecord);
+  #endif
 #endif
 
     if (!m_Runtime.start(

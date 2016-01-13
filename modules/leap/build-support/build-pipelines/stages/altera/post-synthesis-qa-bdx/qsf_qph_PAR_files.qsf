@@ -1,0 +1,140 @@
+# Fix hold violation due to 12.0-SP2 bug ... see release notes
+set_instance_assignment -name GLOBAL_SIGNAL "REGIONAL CLOCK" -to "altera_internal_jtag~TCKUTAP"
+# Copyright Intel Corporation 2012.
+# qsf_standalone_settings_CRAM.txt: C-RAM xcvr settings to include in .qsf
+# Arthur.Sheiman@Intel.com: Created 05-02-12
+# Revised 03-09-13  15:38
+#
+# Contains both Altera recommended and AES added
+
+# Support Recommended
+# Note that global is for power estimator, but
+# instance needed for real assignment.
+set_global_assignment -name VCCT_L_USER_VOLTAGE 0.9V
+set_global_assignment -name VCCT_R_USER_VOLTAGE 0.9V
+set_global_assignment -name VCCR_L_USER_VOLTAGE 0.9V
+set_global_assignment -name VCCR_R_USER_VOLTAGE 0.9V
+set_global_assignment -name VCCA_L_USER_VOLTAGE 1.8V
+set_global_assignment -name VCCA_R_USER_VOLTAGE 1.8V
+
+
+#AES added
+
+set_instance_assignment -name XCVR_VCCR_VCCT_VOLTAGE 1_0V -to pin_qpi_bid_vl_QPI0_CLKRX_DP  
+set_instance_assignment -name XCVR_VCCR_VCCT_VOLTAGE 1_0V -to pin_qpi_bid_vl20_QPI0_DRX_DP  
+set_instance_assignment -name XCVR_VCCR_VCCT_VOLTAGE 1_0V -to pin_qpi_bid_vl3_QPI0_RsvdRX_DP
+set_instance_assignment -name XCVR_VCCR_VCCT_VOLTAGE 1_0V -to pin_qpi_bid_vl_QPI0_CLKTX_DP  
+set_instance_assignment -name XCVR_VCCR_VCCT_VOLTAGE 1_0V -to pin_qpi_bid_vl20_QPI0_DTX_DP  
+set_instance_assignment -name XCVR_VCCR_VCCT_VOLTAGE 1_0V -to pin_qpi_bid_vl3_QPI0_RsvdTX_DP
+
+set_instance_assignment -name XCVR_A10_RX_ONE_STAGE_ENABLE NON_S1_MODE -to pin_qpi_bid_vl_QPI0_CLKRX_DP  
+set_instance_assignment -name XCVR_A10_RX_ONE_STAGE_ENABLE NON_S1_MODE -to pin_qpi_bid_vl20_QPI0_DRX_DP  
+set_instance_assignment -name XCVR_A10_RX_ONE_STAGE_ENABLE NON_S1_MODE -to pin_qpi_bid_vl3_QPI0_RsvdRX_DP
+
+set_instance_assignment -name XCVR_A10_RX_EQ_DC_GAIN_TRIM STG2_GAIN7 -to pin_qpi_bid_vl_QPI0_CLKRX_DP  
+set_instance_assignment -name XCVR_A10_RX_EQ_DC_GAIN_TRIM STG2_GAIN7 -to pin_qpi_bid_vl20_QPI0_DRX_DP  
+set_instance_assignment -name XCVR_A10_RX_EQ_DC_GAIN_TRIM STG2_GAIN7 -to pin_qpi_bid_vl3_QPI0_RsvdRX_DP
+
+set_instance_assignment -name XCVR_A10_RX_ADP_CTLE_ACGAIN_4S RADP_CTLE_ACGAIN_4S_22 -to pin_qpi_bid_vl_QPI0_CLKRX_DP  
+set_instance_assignment -name XCVR_A10_RX_ADP_CTLE_ACGAIN_4S RADP_CTLE_ACGAIN_4S_22 -to pin_qpi_bid_vl20_QPI0_DRX_DP  
+set_instance_assignment -name XCVR_A10_RX_ADP_CTLE_ACGAIN_4S RADP_CTLE_ACGAIN_4S_22 -to pin_qpi_bid_vl3_QPI0_RsvdRX_DP
+
+set_instance_assignment -name XCVR_A10_RX_ADP_VGA_SEL RADP_VGA_SEL_2 -to pin_qpi_bid_vl_QPI0_CLKRX_DP  
+set_instance_assignment -name XCVR_A10_RX_ADP_VGA_SEL RADP_VGA_SEL_2 -to pin_qpi_bid_vl20_QPI0_DRX_DP  
+set_instance_assignment -name XCVR_A10_RX_ADP_VGA_SEL RADP_VGA_SEL_2 -to pin_qpi_bid_vl3_QPI0_RsvdRX_DP
+
+set_instance_assignment -name XCVR_A10_RX_TERM_SEL R_R2 -to pin_qpi_bid_vl_QPI0_CLKRX_DP  
+set_instance_assignment -name XCVR_A10_RX_TERM_SEL R_R2 -to pin_qpi_bid_vl20_QPI0_DRX_DP  
+set_instance_assignment -name XCVR_A10_RX_TERM_SEL R_R2 -to pin_qpi_bid_vl3_QPI0_RsvdRX_DP
+
+set_instance_assignment -name XCVR_A10_TX_VOD_OUTPUT_SWING_CTRL 31 -to pin_qpi_bid_vl_QPI0_CLKTX_DP
+set_instance_assignment -name XCVR_A10_TX_VOD_OUTPUT_SWING_CTRL 31 -to pin_qpi_bid_vl20_QPI0_DTX_DP
+set_instance_assignment -name XCVR_A10_TX_VOD_OUTPUT_SWING_CTRL 31 -to pin_qpi_bid_vl3_QPI0_RsvdTX_DP
+
+set_instance_assignment -name XCVR_A10_TX_PRE_EMP_SWITCHING_CTRL_PRE_TAP_1T 3 -to pin_qpi_bid_vl_QPI0_CLKTX_DP
+set_instance_assignment -name XCVR_A10_TX_PRE_EMP_SWITCHING_CTRL_PRE_TAP_1T 3 -to pin_qpi_bid_vl20_QPI0_DTX_DP
+set_instance_assignment -name XCVR_A10_TX_PRE_EMP_SWITCHING_CTRL_PRE_TAP_1T 3 -to pin_qpi_bid_vl3_QPI0_RsvdTX_DP
+set_instance_assignment -name XCVR_A10_TX_PRE_EMP_SIGN_PRE_TAP_1T FIR_PRE_1T_NEG -to pin_qpi_bid_vl_QPI0_CLKTX_DP
+set_instance_assignment -name XCVR_A10_TX_PRE_EMP_SIGN_PRE_TAP_1T FIR_PRE_1T_NEG -to pin_qpi_bid_vl3_QPI0_RsvdTX_DP
+set_instance_assignment -name XCVR_A10_TX_PRE_EMP_SIGN_PRE_TAP_1T FIR_PRE_1T_NEG -to pin_qpi_bid_vl20_QPI0_DTX_DP
+
+set_instance_assignment -name XCVR_A10_TX_PRE_EMP_SIGN_1ST_POST_TAP FIR_POST_1T_NEG -to pin_qpi_bid_vl20_QPI0_DTX_DP
+set_instance_assignment -name XCVR_A10_TX_PRE_EMP_SIGN_1ST_POST_TAP FIR_POST_1T_NEG -to pin_qpi_bid_vl_QPI0_CLKTX_DP
+set_instance_assignment -name XCVR_A10_TX_PRE_EMP_SIGN_1ST_POST_TAP FIR_POST_1T_NEG -to pin_qpi_bid_vl3_QPI0_RsvdTX_DP
+set_instance_assignment -name XCVR_A10_TX_PRE_EMP_SWITCHING_CTRL_1ST_POST_TAP 6 -to pin_qpi_bid_vl20_QPI0_DTX_DP
+set_instance_assignment -name XCVR_A10_TX_PRE_EMP_SWITCHING_CTRL_1ST_POST_TAP 6 -to pin_qpi_bid_vl_QPI0_CLKTX_DP
+set_instance_assignment -name XCVR_A10_TX_PRE_EMP_SWITCHING_CTRL_1ST_POST_TAP 6 -to pin_qpi_bid_vl3_QPI0_RsvdTX_DP
+# Copyright Intel Corporation 2012, 2013
+# qsf_standalone_settings_EQ.txt: Equalization settings to include in .qsf
+# Arthur.Sheiman@Intel.com: Created 05-25-12
+# Revised 06-25-13  00:44
+#
+# Contains both Altera recommended and AES added
+# Altera has different formats for the same register. Read documentation.
+# XCVR_TX_PRE_EMP_PRE_TAP_USER:
+#   Desired: -3 => 16 - (-3) = 19 (enter this for USER)
+#   Desired: +3 => 16 - (+3) = 13 (enter this for USER)
+
+# CAUTION: Rx EQ for AC boost (XCVR_RX_LINEAR_EQUALIZER_CONTROL) in QSF is register value + 1.
+# Copyright Intel Corporation $RTL_SRC/qpi/qph/wcp/par/2012,2013.
+# txt_qph_PAR_files.txt: Files for QPH for $RTL_SRC/qpi/qph/wcp/par/OME
+# Arthur.Sheiman@Intel.com: Created $RTL_SRC/qpi/qph/wcp/par/04-09-12
+# Revised 10-04-13  $RTL_SRC/qpi/qph/wcp/par/17:34
+#
+# NOTE: No path information is provided in this file. It is just a $RTL_SRC/qpi/qph/wcp/par/template.
+#
+set_global_assignment -name SEARCH_PATH   $RTL_SRC/qpi/qph/wcp/par/
+set_global_assignment -name QSYS_FILE $RTL_SRC/qpi/qph/wcp/par/qpi_bonded_pll.qsys
+set_global_assignment -name QSYS_FILE $RTL_SRC/qpi/qph/wcp/par/native_phy_qpi.qsys
+set_global_assignment -name QSYS_FILE $RTL_SRC/qpi/qph/wcp/par/qph_reset_s45_MRST.qsys
+set_global_assignment -name QSYS_FILE $RTL_SRC/qpi/qph/wcp/par/qph_xcvr_s45_ctl_XDAC.qsys
+set_global_assignment -name QSYS_FILE $RTL_SRC/qpi/qph/wcp/par/qph_xcvr_s45_ctl_XTRG.qsys
+set_global_assignment -name QSYS_FILE $RTL_SRC/qpi/qph/wcp/par/qph_reset_pll_fab_s45.qsys
+set_global_assignment -name QSYS_FILE $RTL_SRC/qpi/qph/wcp/par/qph_reset_pll_pcie_pr.qsys
+set_global_assignment -name QSYS_FILE $RTL_SRC/qpi/qph/wcp/par/pushbutton_txlane.qsys
+set_global_assignment -name QSYS_FILE $RTL_SRC/qpi/qph/wcp/par/pushbutton_source.qsys
+set_global_assignment -name QSYS_FILE $RTL_SRC/qpi/qph/wcp/par/qph_top_STAT.qsys
+set_global_assignment -name QSYS_FILE $RTL_SRC/qpi/qph/wcp/par/debug_link.qsys
+set_global_assignment -name VERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/pma_direct_fifo.v
+set_global_assignment -name QSYS_FILE $RTL_SRC/qpi/qph/wcp/par/clkusr_gpio.qsys
+set_global_assignment -name QSYS_FILE $RTL_SRC/qpi/qph/wcp/par/clkctrl_gpio.qsys
+set_global_assignment -name VERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/clkusr_gpio_iopll.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/mux_16x1.v
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_reset_s45.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_xtmr_TmrTwo.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_xtmr_TmrOne.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_xcvr_s45_ctl_reconfig_mach_csr.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_xcvr_s45_ctl.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_xcvr_s45_xdbg.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_xcvr_s45_xcvr_utest.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_xcvr_s45_xcvr.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_xcvr_s45.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_csr_rw1c_s.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_csr_rw1c_x.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_csr_rwdl.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_csr_rwxx.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_csr.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_debug_leds.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/ahm_debug_ssm_mach.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/ahm_debug_tracking.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/ahm_debug_xcvr.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_pushbutton.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_ldc.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_mach_deskew.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_mach_param.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_mach_rx.sv
+set_global_assignment -name SOURCE_FILE $RTL_SRC/qpi/qph/wcp/par/qph_mach_rx_full.inc
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_mach_tx.sv
+set_global_assignment -name SOURCE_FILE $RTL_SRC/qpi/qph/wcp/par/qph_mach_tx_full.inc
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_prbs23_32.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_timer_debounce.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_timer_duration.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_timer_interval.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_timer_ssm.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_timer_lfsr28.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_debug_mach_master.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_mach_master.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_muxdat.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qph_top.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/qpi/qph/wcp/par/qlp_topph.sv
+set_global_assignment -name SDC_FILE $RTL_SRC/qpi/qph/wcp/par/../par_constraints/sdc_qph.sdc6.4

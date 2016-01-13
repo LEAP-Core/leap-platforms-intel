@@ -1,0 +1,10 @@
+
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/pcie01/pcie0_ccib_top.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/pcie01/pcie1_ccib_top.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/pcie01/avl_cci_bridge.sv
+set_global_assignment -name VERILOG_FILE $RTL_SRC/pcie01/spl_fifo.v
+set_global_assignment -name VERILOG_FILE $RTL_SRC/pcie01/spl_sdp_mem.v
+set_global_assignment -name QSYS_FILE $RTL_SRC/pcie01/ips/quartus_15.1.0.179/D1/pcie_ep_g3x8/pcie_ep_g3x8.qsys
+set_global_assignment -name QSYS_FILE $RTL_SRC/pcie01/ips/quartus_15.1.0.179/D1/pcie1_ep_g3x8/pcie1_ep_g3x8.qsys
+set_global_assignment -name SEARCH_PATH $RTL_SRC/pcie01
+

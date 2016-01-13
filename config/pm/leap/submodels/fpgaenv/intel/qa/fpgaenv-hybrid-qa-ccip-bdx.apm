@@ -24,7 +24,7 @@ Packagehint=leap
 virtual_platform=Standard Virtual Platform
 fpga_components=Hardware FPGA Components for StratixIII
 librl_bsv=RL Bluespec Library Submodel
-build_pipeline=FPGA Build Pipeline Altera for QuickAssist Canoe Pass SDP
+build_pipeline=FPGA Build Pipeline Altera for QuickAssist CCI-P BDX
 soft_services=Soft Services Submodel
 
 [Standard Virtual Platform]
@@ -154,9 +154,6 @@ Packagehint=leap-platforms-intel
 File=modules/bluespec/common/fpgaenv/fpga-components/hardware-fpga-components-stratixIII.awb
 Packagehint=leap-platforms
 
-[FPGA Build Pipeline Altera for QuickAssist Canoe Pass SDP]
-File=config/pm/leap/submodels/pipelines/build-pipeline-qa-sdp.apm
-Packagehint=leap-platforms-intel
 
 [Hardware FPGA Components for StratixIII/Params]
 BROKEN_REGFILE=0
@@ -217,7 +214,10 @@ Packagehint=leap-platforms-intel
 File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/cci-mpf-prims/cci-mpf-prims.awb
 Packagehint=leap-platforms-intel
 
-
 [Intel QuickAssist CCI-P Platform Libraries]
 File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/qa-ccip-platform-libs.awb
+Packagehint=leap-platforms-intel
+
+[FPGA Build Pipeline Altera for QuickAssist CCI-P BDX]
+File=config/pm/leap/submodels/pipelines/build-pipeline-qa-ccip-bdx.apm
 Packagehint=leap-platforms-intel

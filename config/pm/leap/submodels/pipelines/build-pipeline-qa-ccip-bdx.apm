@@ -1,0 +1,81 @@
+
+[Global]
+SaveParameters=0
+Description=FPGA Build Pipeline Altera for QuickAssist CCI-P BDX
+File=build-pipeline-qa-ccip-bdx
+Version=2.2
+Type=Leap
+Name=FPGA Build Pipeline Altera for QuickAssist CCI-P BDX
+Class=Asim::Model
+DefaultBenchmark=
+DefaultRunOpts=
+RootName=FPGA Build Pipeline
+RootProvides=build_pipeline
+
+[Model]
+DefaultAttributes=altera build pipeline
+model=FPGA Build Pipeline
+
+[FPGA Build Pipeline]
+File=modules/leap/build-support/build-pipelines/pipelines/fpga/fpga-build-pipeline.awb
+Packagehint=leap
+
+[FPGA Build Pipeline/Requires]
+post_synthesis_tool=Altera Full Compilation Intel QuickAssist CCI-P BDX
+synthesis_tool=Altera Null Synthesis Tool
+mcd_tool=Simple MCD Tool
+software_tool=Software build tool
+iface_tool=Interface builder
+bsv_tool=BSV Build Tool (First Phase)
+fpga_program_tool=FPGA Programming Tool
+wrapper_gen_tool=Synthesis Boundary Wrapper generation tool
+li_module=LEAP LI Module Handler
+parameter_substitution=AWB Parameter Substitution Parser
+
+[Simple MCD Tool]
+File=modules/leap/build-support/build-pipelines/stages/mcd/mcd.awb
+Packagehint=leap
+
+[Interface builder]
+File=modules/leap/build-support/build-pipelines/stages/iface/iface.awb
+Packagehint=leap
+
+[Software build tool]
+File=modules/leap/build-support/build-pipelines/stages/software/software.awb
+Packagehint=leap
+
+[BSV Build Tool (First Phase)]
+File=modules/leap/build-support/build-pipelines/stages/bluespec/bsv.awb
+Packagehint=leap
+
+[FPGA Programming Tool]
+File=modules/leap/build-support/build-pipelines/stages/fpgaprog/fpgaprog.awb
+Packagehint=leap
+
+[Synthesis Boundary Wrapper generation tool]
+File=modules/leap/build-support/build-pipelines/stages/wrapper_gen/synthesis_boundary_wrapper_gen.awb
+Packagehint=leap
+
+[LEAP LI Module Handler]
+File=modules/leap/build-support/build-pipelines/stages/li_module/li_module.awb
+Packagehint=leap
+
+[AWB Parameter Substitution Parser]
+File=modules/leap/build-support/build-pipelines/stages/parameter_substitution/parameter_substitution.awb
+Packagehint=leap
+
+[Synthesis library]
+File=modules/leap/build-support/build-pipelines/stages/synthesis/synthesis_library.awb
+Packagehint=leap
+
+[Altera Null Synthesis Tool/Requires]
+synthesis_library=Synthesis library
+
+[Altera Null Synthesis Tool]
+File=modules/leap/build-support/build-pipelines/stages/altera/synthesis/altera-null-syntheis.awb
+Packagehint=leap-platforms-altera
+
+
+[Altera Full Compilation Intel QuickAssist CCI-P BDX]
+File=modules/leap/build-support/build-pipelines/stages/altera/post-synthesis-qa-bdx/altera-full-post-synth.awb
+Packagehint=leap-platforms-intel

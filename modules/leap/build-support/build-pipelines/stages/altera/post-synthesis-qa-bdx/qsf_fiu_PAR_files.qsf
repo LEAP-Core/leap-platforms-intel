@@ -1,0 +1,31 @@
+# fme files
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/fiu/fme_top.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/fiu/fme_csr.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/fiu/fme_csr_pkg.sv
+
+# ptmgr files
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/fiu/ptmgr/ptmgr_general_pkg.svh
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/fiu/ptmgr/ptmgr_top.sv
+
+# power mgr files
+set_global_assignment -name SEARCH_PATH $RTL_SRC/fiu/ptmgr/
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/fiu/ptmgr/PMBUS_SourceTree/ptmgr_pmbus.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/fiu/ptmgr/PMBUS_SourceTree/ptmgr_pmbus_cmb2edge.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/fiu/ptmgr/PMBUS_SourceTree/ptmgr_pmbus_filter.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/fiu/ptmgr/PMBUS_SourceTree/ptmgr_pmbus_mach_xact.sv
+set_global_assignment -name QSYS_FILE $RTL_SRC/fiu/ptmgr/PMBUS_SourceTree/ptmgr_pmbus_io.qsys
+set_global_assignment -name QSYS_FILE $RTL_SRC/fiu/ptmgr/PMBUS_SourceTree/ptmgr_pmbus_xact_rom.qsys
+set_global_assignment -name MIF_FILE $RTL_SRC/fiu/ptmgr/PMBUS_SourceTree/ptmgr_pmbus_mach_xact_XACT_ROM.mif
+
+# temperature mgr files
+set_global_assignment -name MIF_FILE $RTL_SRC/fiu/ptmgr/TEMPERATURE_SourceTree/ptmgr_temp_cmp_ROM.mif
+set_global_assignment -name MIF_FILE $RTL_SRC/fiu/ptmgr/TEMPERATURE_SourceTree/ptmgr_temp_cnv_ROM.mif
+set_global_assignment -name QSYS_FILE $RTL_SRC/fiu/ptmgr/TEMPERATURE_SourceTree/ptmgr_temp_cmp_rom.qsys
+set_global_assignment -name QSYS_FILE $RTL_SRC/fiu/ptmgr/TEMPERATURE_SourceTree/ptmgr_temp_cnv_rom.qsys
+set_global_assignment -name QSYS_FILE $RTL_SRC/fiu/ptmgr/TEMPERATURE_SourceTree/ptmgr_temp_sensor.qsys
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/fiu/ptmgr/TEMPERATURE_SourceTree/ptmgr_temperature.sv
+
+# FME SDC
+set_global_assignment -name SDC_FILE $RTL_SRC/fiu/par/sdc_fme.sdc
+set_global_assignment -name SDC_FILE $RTL_SRC/fiu/par/sdc_ptmgr.sdc
+

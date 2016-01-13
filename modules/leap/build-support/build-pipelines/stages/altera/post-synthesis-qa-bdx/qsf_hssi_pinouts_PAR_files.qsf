@@ -1,0 +1,77 @@
+# HSSI Pins
+set_location_assignment PIN_AW30 -to pin_cmos18_inp_vl_HSSI0_RESET_N
+set_location_assignment PIN_H21  -to pin_cmos18_out_vl_HSSI0_RESET_N
+set_location_assignment PIN_AW31 -to pin_cmos18_inp_vl_HSSI1_RESET_N
+set_location_assignment PIN_G21  -to pin_cmos18_out_vl_HSSI1_RESET_N
+
+set_location_assignment PIN_AM9  -to pin_lvds_inp_vl_HSSI_REFCLK
+set_location_assignment PIN_AM10 -to "pin_lvds_inp_vl_HSSI_REFCLK(n)"
+
+set_location_assignment PIN_BB5 -to pin_hssi_bid_vl8_HSSI0_DRX_DP[0]
+set_location_assignment PIN_AY5 -to pin_hssi_bid_vl8_HSSI0_DRX_DP[1]
+set_location_assignment PIN_AW7 -to pin_hssi_bid_vl8_HSSI0_DRX_DP[2]
+set_location_assignment PIN_AV5 -to pin_hssi_bid_vl8_HSSI0_DRX_DP[3]
+set_location_assignment PIN_AU7 -to pin_hssi_bid_vl8_HSSI0_DRX_DP[4]
+set_location_assignment PIN_AT5 -to pin_hssi_bid_vl8_HSSI0_DRX_DP[5]
+set_location_assignment PIN_AR7 -to pin_hssi_bid_vl8_HSSI0_DRX_DP[6]
+set_location_assignment PIN_AP5 -to pin_hssi_bid_vl8_HSSI0_DRX_DP[7]
+set_location_assignment PIN_BB6 -to "pin_hssi_bid_vl8_HSSI0_DRX_DP[0](n)"
+set_location_assignment PIN_AY6 -to "pin_hssi_bid_vl8_HSSI0_DRX_DP[1](n)"
+set_location_assignment PIN_AW8 -to "pin_hssi_bid_vl8_HSSI0_DRX_DP[2](n)"
+set_location_assignment PIN_AV6 -to "pin_hssi_bid_vl8_HSSI0_DRX_DP[3](n)"
+set_location_assignment PIN_AU8 -to "pin_hssi_bid_vl8_HSSI0_DRX_DP[4](n)"
+set_location_assignment PIN_AT6 -to "pin_hssi_bid_vl8_HSSI0_DRX_DP[5](n)"
+set_location_assignment PIN_AR8 -to "pin_hssi_bid_vl8_HSSI0_DRX_DP[6](n)"
+set_location_assignment PIN_AP6 -to "pin_hssi_bid_vl8_HSSI0_DRX_DP[7](n)"
+
+set_location_assignment PIN_BA3 -to pin_hssi_bid_vl8_HSSI0_DTX_DP[0]
+set_location_assignment PIN_AY1 -to pin_hssi_bid_vl8_HSSI0_DTX_DP[1]
+set_location_assignment PIN_AW3 -to pin_hssi_bid_vl8_HSSI0_DTX_DP[2]
+set_location_assignment PIN_AV1 -to pin_hssi_bid_vl8_HSSI0_DTX_DP[3]
+set_location_assignment PIN_AU3 -to pin_hssi_bid_vl8_HSSI0_DTX_DP[4]
+set_location_assignment PIN_AT1 -to pin_hssi_bid_vl8_HSSI0_DTX_DP[5]
+set_location_assignment PIN_AR3 -to pin_hssi_bid_vl8_HSSI0_DTX_DP[6]
+set_location_assignment PIN_AP1 -to pin_hssi_bid_vl8_HSSI0_DTX_DP[7]
+set_location_assignment PIN_BA4 -to "pin_hssi_bid_vl8_HSSI0_DTX_DP[0](n)"
+set_location_assignment PIN_AY2 -to "pin_hssi_bid_vl8_HSSI0_DTX_DP[1](n)"
+set_location_assignment PIN_AW4 -to "pin_hssi_bid_vl8_HSSI0_DTX_DP[2](n)"
+set_location_assignment PIN_AV2 -to "pin_hssi_bid_vl8_HSSI0_DTX_DP[3](n)"
+set_location_assignment PIN_AU4 -to "pin_hssi_bid_vl8_HSSI0_DTX_DP[4](n)"
+set_location_assignment PIN_AT2 -to "pin_hssi_bid_vl8_HSSI0_DTX_DP[5](n)"
+set_location_assignment PIN_AR4 -to "pin_hssi_bid_vl8_HSSI0_DTX_DP[6](n)"
+set_location_assignment PIN_AP2 -to "pin_hssi_bid_vl8_HSSI0_DTX_DP[7](n)"
+
+set_location_assignment PIN_AJ7 -to pin_hssi_bid_vl8_HSSI1_DRX_DP[0]
+set_location_assignment PIN_AH5 -to pin_hssi_bid_vl8_HSSI1_DRX_DP[1]
+set_location_assignment PIN_AG7 -to pin_hssi_bid_vl8_HSSI1_DRX_DP[2]
+set_location_assignment PIN_AF5 -to pin_hssi_bid_vl8_HSSI1_DRX_DP[3]
+set_location_assignment PIN_AE7 -to pin_hssi_bid_vl8_HSSI1_DRX_DP[4]
+set_location_assignment PIN_AD5 -to pin_hssi_bid_vl8_HSSI1_DRX_DP[5]
+set_location_assignment PIN_AC7 -to pin_hssi_bid_vl8_HSSI1_DRX_DP[6]
+set_location_assignment PIN_AB5 -to pin_hssi_bid_vl8_HSSI1_DRX_DP[7]
+set_location_assignment PIN_AJ8 -to "pin_hssi_bid_vl8_HSSI1_DRX_DP[0](n)"
+set_location_assignment PIN_AH6 -to "pin_hssi_bid_vl8_HSSI1_DRX_DP[1](n)"
+set_location_assignment PIN_AG8 -to "pin_hssi_bid_vl8_HSSI1_DRX_DP[2](n)"
+set_location_assignment PIN_AF6 -to "pin_hssi_bid_vl8_HSSI1_DRX_DP[3](n)"
+set_location_assignment PIN_AE8 -to "pin_hssi_bid_vl8_HSSI1_DRX_DP[4](n)"
+set_location_assignment PIN_AD6 -to "pin_hssi_bid_vl8_HSSI1_DRX_DP[5](n)"
+set_location_assignment PIN_AC8 -to "pin_hssi_bid_vl8_HSSI1_DRX_DP[6](n)"
+set_location_assignment PIN_AB6 -to "pin_hssi_bid_vl8_HSSI1_DRX_DP[7](n)"
+
+set_location_assignment PIN_AJ3 -to pin_hssi_bid_vl8_HSSI1_DTX_DP[0]
+set_location_assignment PIN_AH1 -to pin_hssi_bid_vl8_HSSI1_DTX_DP[1]
+set_location_assignment PIN_AG3 -to pin_hssi_bid_vl8_HSSI1_DTX_DP[2]
+set_location_assignment PIN_AF1 -to pin_hssi_bid_vl8_HSSI1_DTX_DP[3]
+set_location_assignment PIN_AE3 -to pin_hssi_bid_vl8_HSSI1_DTX_DP[4]
+set_location_assignment PIN_AD1 -to pin_hssi_bid_vl8_HSSI1_DTX_DP[5]
+set_location_assignment PIN_AC3 -to pin_hssi_bid_vl8_HSSI1_DTX_DP[6]
+set_location_assignment PIN_AB1 -to pin_hssi_bid_vl8_HSSI1_DTX_DP[7]
+set_location_assignment PIN_AJ4 -to "pin_hssi_bid_vl8_HSSI1_DTX_DP[0](n)"
+set_location_assignment PIN_AH2 -to "pin_hssi_bid_vl8_HSSI1_DTX_DP[1](n)"
+set_location_assignment PIN_AG4 -to "pin_hssi_bid_vl8_HSSI1_DTX_DP[2](n)"
+set_location_assignment PIN_AF2 -to "pin_hssi_bid_vl8_HSSI1_DTX_DP[3](n)"
+set_location_assignment PIN_AE4 -to "pin_hssi_bid_vl8_HSSI1_DTX_DP[4](n)"
+set_location_assignment PIN_AD2 -to "pin_hssi_bid_vl8_HSSI1_DTX_DP[5](n)"
+set_location_assignment PIN_AC4 -to "pin_hssi_bid_vl8_HSSI1_DTX_DP[6](n)"
+set_location_assignment PIN_AB2 -to "pin_hssi_bid_vl8_HSSI1_DTX_DP[7](n)"
+

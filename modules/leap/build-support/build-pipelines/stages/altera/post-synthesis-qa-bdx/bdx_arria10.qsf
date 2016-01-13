@@ -1,0 +1,115 @@
+source ../hw/model/qsf_env_settings.qsf
+
+set_global_assignment -name TOP_LEVEL_ENTITY wcp_top
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/top/wcp_bot.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $RTL_SRC/top/wcp_top.sv
+set_global_assignment -name SDC_FILE $RTL_SRC/top/par/sdc_wcp_bot.sdc
+
+#---------------------------------------------------------------------------#
+#                       Synthesis Options                                   #
+#---------------------------------------------------------------------------#
+
+set_global_assignment -name FAMILY "Arria 10"
+set_global_assignment -name DEVICE 10AX115U3F45E2SGE3
+set_global_assignment -name ERROR_CHECK_FREQUENCY_DIVISOR 256
+set_global_assignment -name DEVICE_FILTER_PACKAGE FBGA
+set_global_assignment -name DEVICE_FILTER_PIN_COUNT 1932
+set_global_assignment -name DEVICE_FILTER_SPEED_GRADE 2
+set_global_assignment -name VERILOG_INPUT_VERSION SYSTEMVERILOG_2005
+set_global_assignment -name VERILOG_SHOW_LMF_MAPPING_MESSAGES OFF
+set_global_assignment -name MIN_CORE_JUNCTION_TEMP 0
+set_global_assignment -name MAX_CORE_JUNCTION_TEMP 100
+
+#set_global_assignment -name PROJECT_OUTPUT_DIRECTORY output_files
+set_global_assignment -name AUTO_RESERVE_CLKUSR_FOR_CALIBRATION OFF
+set_global_assignment -name SEED 0
+set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_RETIMING ON
+set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_DUPLICATION ON
+set_global_assignment -name ALLOW_ANY_RAM_SIZE_FOR_RECOGNITION ON
+set_global_assignment -name OPTIMIZATION_TECHNIQUE SPEED
+set_global_assignment -name SYNTH_TIMING_DRIVEN_SYNTHESIS ON
+set_global_assignment -name ADD_PASS_THROUGH_LOGIC_TO_INFERRED_RAMS OFF
+set_global_assignment -name USE_HIGH_SPEED_ADDER ON
+set_global_assignment -name TIMEQUEST_MULTICORNER_ANALYSIS ON
+set_global_assignment -name SMART_RECOMPILE ON
+set_global_assignment -name PHYSICAL_SYNTHESIS_COMBO_LOGIC ON
+set_global_assignment -name PHYSICAL_SYNTHESIS_COMBO_LOGIC_FOR_AREA ON
+set_global_assignment -name OPTIMIZE_HOLD_TIMING "ALL PATHS"
+set_global_assignment -name OPTIMIZE_MULTI_CORNER_TIMING ON
+set_global_assignment -name ROUTER_TIMING_OPTIMIZATION_LEVEL MAXIMUM
+set_global_assignment -name FITTER_EFFORT "STANDARD FIT"
+set_global_assignment -name ROUTER_LCELL_INSERTION_AND_LOGIC_DUPLICATION ON
+set_global_assignment -name QII_AUTO_PACKED_REGISTERS NORMAL
+set_global_assignment -name MUX_RESTRUCTURE ON
+set_global_assignment -name ADV_NETLIST_OPT_SYNTH_WYSIWYG_REMAP ON
+set_global_assignment -name OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"
+set_global_assignment -name PROGRAMMABLE_POWER_TECHNOLOGY_SETTING "FORCE ALL TILES WITH FAILING TIMING PATHS TO HIGH SPEED"
+
+# Enable Scrubbing. Set Divider to 2 when using D1 Device
+set_global_assignment -name ENABLE_OCT_DONE OFF
+set_global_assignment -name USE_CONFIGURATION_DEVICE ON
+set_global_assignment -name CRC_ERROR_OPEN_DRAIN OFF
+set_global_assignment -name INTERNAL_SCRUBBING ON
+set_global_assignment -name OUTPUT_IO_TIMING_NEAR_END_VMEAS "HALF VCCIO" -rise
+set_global_assignment -name OUTPUT_IO_TIMING_NEAR_END_VMEAS "HALF VCCIO" -fall
+set_global_assignment -name OUTPUT_IO_TIMING_FAR_END_VMEAS "HALF SIGNAL SWING" -rise
+set_global_assignment -name OUTPUT_IO_TIMING_FAR_END_VMEAS "HALF SIGNAL SWING" -fall
+set_global_assignment -name ACTIVE_SERIAL_CLOCK FREQ_100MHZ
+
+# Design Paritions
+#===================
+set_global_assignment -name LAST_QUARTUS_VERSION 15.1.0
+set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
+set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT -section_id Top
+set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top
+set_global_assignment -name PARTITION_NETLIST_TYPE POST_FIT -section_id "wcp_bot:bot_wcp"
+set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT -section_id "wcp_bot:bot_wcp"
+set_global_assignment -name PARTITION_COLOR 39423 -section_id "wcp_bot:bot_wcp"
+
+set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id "ccip_std_afu:inst_ccip_std_afu"
+set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT -section_id "ccip_std_afu:inst_ccip_std_afu"
+set_global_assignment -name PARTITION_COLOR 52377 -section_id "ccip_std_afu:inst_ccip_std_afu"
+
+set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top
+set_instance_assignment -name PARTITION_HIERARCHY botwc_34341 -to "wcp_bot:bot_wcp" -section_id "wcp_bot:bot_wcp"
+set_instance_assignment -name PARTITION_HIERARCHY instc_9f1d1 -to "ccip_std_afu:inst_ccip_std_afu" -section_id "ccip_std_afu:inst_ccip_std_afu"
+
+# Logic Lock Regions
+# 1. wcp_bot without HSSI
+# 2. ccip_std_afu
+# =======================
+set_global_assignment -name LL_ENABLED ON -section_id "wcp_bot:bot_wcp"
+set_global_assignment -name LL_RESERVED OFF -section_id "wcp_bot:bot_wcp"
+set_global_assignment -name LL_CORE_ONLY OFF -section_id "wcp_bot:bot_wcp"
+set_global_assignment -name LL_SECURITY_ROUTING_INTERFACE OFF -section_id "wcp_bot:bot_wcp"
+set_global_assignment -name LL_IGNORE_IO_BANK_SECURITY_CONSTRAINT OFF -section_id "wcp_bot:bot_wcp"
+set_global_assignment -name LL_PR_REGION OFF -section_id "wcp_bot:bot_wcp"
+set_global_assignment -name LL_ROUTING_REGION_EXPANSION_SIZE 2147483647 -section_id "wcp_bot:bot_wcp"
+set_instance_assignment -name LL_MEMBER_OF "wcp_bot:bot_wcp" -to "wcp_bot:bot_wcp" -section_id "wcp_bot:bot_wcp"
+set_global_assignment -name STRATIX_DEVICE_IO_STANDARD "1.8 V"
+set_global_assignment -name LL_ENABLED ON -section_id "ccip_std_afu:inst_ccip_std_afu"
+set_global_assignment -name LL_AUTO_SIZE OFF -section_id "ccip_std_afu:inst_ccip_std_afu"
+set_global_assignment -name LL_STATE LOCKED -section_id "ccip_std_afu:inst_ccip_std_afu"
+set_global_assignment -name LL_RESERVED OFF -section_id "ccip_std_afu:inst_ccip_std_afu"
+set_global_assignment -name LL_CORE_ONLY OFF -section_id "ccip_std_afu:inst_ccip_std_afu"
+set_global_assignment -name LL_SECURITY_ROUTING_INTERFACE OFF -section_id "ccip_std_afu:inst_ccip_std_afu"
+set_global_assignment -name LL_IGNORE_IO_BANK_SECURITY_CONSTRAINT OFF -section_id "ccip_std_afu:inst_ccip_std_afu"
+set_global_assignment -name LL_PR_REGION OFF -section_id "ccip_std_afu:inst_ccip_std_afu"
+set_global_assignment -name LL_ROUTING_REGION_EXPANSION_SIZE 2147483647 -section_id "ccip_std_afu:inst_ccip_std_afu"
+set_global_assignment -name LL_WIDTH 139 -section_id "ccip_std_afu:inst_ccip_std_afu"
+set_global_assignment -name LL_HEIGHT 225 -section_id "ccip_std_afu:inst_ccip_std_afu"
+set_global_assignment -name LL_ORIGIN X86_Y0 -section_id "ccip_std_afu:inst_ccip_std_afu"
+set_instance_assignment -name LL_MEMBER_OF "ccip_std_afu:inst_ccip_std_afu" -to "ccip_std_afu:inst_ccip_std_afu" -section_id "ccip_std_afu:inst_ccip_std_afu"
+set_global_assignment -name LL_HEIGHT 181 -section_id "wcp_bot:bot_wcp"
+set_global_assignment -name LL_WIDTH 86 -section_id "wcp_bot:bot_wcp"
+set_global_assignment -name LL_ORIGIN X0_Y23 -section_id "wcp_bot:bot_wcp"
+set_global_assignment -name LL_STATE LOCKED -section_id "wcp_bot:bot_wcp"
+set_global_assignment -name LL_AUTO_SIZE OFF -section_id "wcp_bot:bot_wcp"
+source ../hw/model/qsf_qph_PAR_files.qsf
+source ../hw/model/qsf_pinouts_PAR_files.qsf
+source ../hw/model/qsf_hssi_pinouts_PAR_files.qsf
+source ../hw/model/qsf_qlp_PAR_files.qsf
+source ../hw/model/qsf_ccip_PAR_files.qsf
+source ../hw/model/qsf_fiu_PAR_files.qsf
+source ../hw/model/qsf_pcie_PAR_files.qsf
+source ../hw/model/qsf_hssi_PAR_files.qsf

@@ -1,0 +1,25 @@
+%name Altera Full Compilation Intel QuickAssist CCI-P BDX
+%desc Altera Full Compilation Intel QuickAssist CCI-P BDX
+%attributes tool
+
+%provides post_synthesis_tool
+
+%notes README
+
+%scons %library ALTERA_FULL_POST_SYNTH.py
+
+%sources -t QSF -v PRIVATE bdx_arria10.qsf
+%sources -t QSF -v PRIVATE qsf_env_settings.qsf
+
+%sources -t QSF -v PRIVATE qsf_qph_PAR_files.qsf
+%sources -t QSF -v PRIVATE qsf_pinouts_PAR_files.qsf
+%sources -t QSF -v PRIVATE qsf_hssi_pinouts_PAR_files.qsf
+%sources -t QSF -v PRIVATE qsf_qlp_PAR_files.qsf
+%sources -t QSF -v PRIVATE qsf_ccip_PAR_files.qsf
+%sources -t QSF -v PRIVATE qsf_fiu_PAR_files.qsf
+%sources -t QSF -v PRIVATE qsf_pcie_PAR_files.qsf
+%sources -t QSF -v PRIVATE qsf_hssi_PAR_files.qsf
+
+%sources -t TCL_HEADER -v PRIVATE altera-timing.sdc
+
+%sources -t VERILOG_H  -v PRIVATE sys_cfg_pkg.svh

@@ -16,4 +16,4 @@
 %sources -t VERILOG     -v PRIVATE qa_driver_csr_rd.sv
 %sources -t VERILOG     -v PRIVATE qa_driver_csr_wr.sv
 %sources -t VERILOG     -v PRIVATE qa_driver_main_fiu_tap.sv
-%sources -t VERILOG     -v PRIVATE qa_drv_memory.sv
+%sources -t VERILOG     -v PRIVATE qa_driver_memory.sv

@@ -6,4 +6,12 @@
 %requires qa_cci_mpf_shims
 %requires qa_cci_mpf_prims
 
-%sources -t VERILOG    -v PRIVATE cci_mpf.sv
+##
+## File with shared parameters, declared for both Verilog and C
+##
+%sources -t H           -v PRIVATE cci_mpf_csrs.h
+%sources -t VERILOG_H   -v PRIVATE cci_mpf_csrs.h
+
+%sources -t VERILOG_PKG -v PRIVATE cci_mpf_csrs_pkg.sv
+
+%sources -t VERILOG     -v PRIVATE cci_mpf.sv

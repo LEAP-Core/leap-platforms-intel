@@ -37,15 +37,19 @@ package qa_driver_csr_types;
     import cci_mpf_if_pkg::*;
     import cci_csr_if_pkg::*;
 
+    // QA driver MMIO feature space size (bytes)
+    parameter QA_DRIVER_DFH_SIZE = 1024;
+
+    //
+    // These CSRs are used only in the old CCI-S mode.  When possible,
+    // MMIO and feature lists are used instead.
+    //
     typedef enum logic [15:0]
     {
         //
         // CSR numbering must match the software-side numbering exactly!
         //
-        CSR_AFU_DSM_BASEL          = 16'h1a00,
-        CSR_AFU_DSM_BASEH          = 16'h1a04,
-        CSR_AFU_CNTXT_BASEL        = 16'h1a08,
-        CSR_AFU_CNTXT_BASEH        = 16'h1a0c,
+        CSR_AFU_DSM_BASE           = 16'h1a00,
 
         // LEAP status register
         CSR_AFU_SREG_READ          = 16'h1a10,
@@ -55,10 +59,9 @@ package qa_driver_csr_types;
         CSR_AFU_MMIO_READ_COMPAT   = 16'h1a14,
 
         // Page table base for qa_shim_tlb_simple (64 bits)
-        CSR_AFU_PAGE_TABLE_BASEL   = 16'h1a80,
-        CSR_AFU_PAGE_TABLE_BASEH   = 16'h1a84
+        CSR_AFU_PAGE_TABLE_BASE    = 16'h1a80
     }
-    t_CSR_AFU_MAP;
+    t_ccis_csr_afu_map;
 
     
     // LEAP status registers, exposed as a debugging interface to read status
@@ -70,7 +73,7 @@ package qa_driver_csr_types;
     // header is 18 bits.
     function automatic logic csrAddrMatches(
         input t_if_cci_c0_Rx req,
-        input t_CSR_AFU_MAP idx
+        input t_ccis_csr_afu_map idx
         );
 
         t_cci_mmioaddr req_addr = cci_csr_getAddress(req);

@@ -278,7 +278,7 @@ module cci_mpf_shim_vtp
         else
         begin
             if (cci_csr_isWrite(fiu.c0Rx) &&
-                csrAddrMatches64(fiu.c0Rx, CSR_AFU_PAGE_TABLE_BASEL))
+                csrAddrMatches64(fiu.c0Rx, CSR_AFU_PAGE_TABLE_BASE))
             begin
 `ifdef USE_PLATFORM_CCIS
                 // Shift address into page_table_base

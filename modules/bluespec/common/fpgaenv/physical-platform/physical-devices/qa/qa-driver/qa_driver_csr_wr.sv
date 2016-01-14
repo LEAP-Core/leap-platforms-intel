@@ -91,7 +91,7 @@ module qa_driver_csr_wr
             csr.afu_dsm_base_valid <= 0;
             csr.afu_dsm_base[63:58] <= 6'b0;
         end
-        else if (csrMatches64(CSR_AFU_DSM_BASEL))
+        else if (csrMatches64(CSR_AFU_DSM_BASE))
         begin
 `ifdef USE_PLATFORM_CCIS
             // 32 bit chunks

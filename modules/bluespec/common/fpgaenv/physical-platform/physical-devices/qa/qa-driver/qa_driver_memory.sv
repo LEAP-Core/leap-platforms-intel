@@ -30,6 +30,7 @@
 //
 
 `include "cci_mpf_if.vh"
+import qa_driver_csr_types::QA_DRIVER_DFH_SIZE;
 
 module qa_drv_memory
    (
@@ -161,6 +162,7 @@ module qa_drv_memory
 
     cci_mpf
       #(
+        .DFH_MMIO_BASE_ADDR(QA_DRIVER_DFH_SIZE),
         .SORT_READ_RESPONSES(1),
         .PRESERVE_WRITE_MDATA(0)
         )

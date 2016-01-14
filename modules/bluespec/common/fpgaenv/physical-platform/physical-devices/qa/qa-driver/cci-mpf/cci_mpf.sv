@@ -41,6 +41,7 @@
 //
 
 `include "cci_mpf_if.vh"
+import cci_mpf_csrs_pkg::*;
 
 
 //
@@ -49,6 +50,19 @@
 
 module cci_mpf
   #(
+    // MMIO base address (byte level) allocated to MPF for feature lists
+    // and CSRs.  The AFU allocating this module must build at least
+    // a device feature header (DFH) for the AFU.  The chain of device
+    // features in the AFU must then point to the base address here
+    // as another feature in the chain.  MPF will continue the list.
+    // The base address here must point to a region that is at least
+    // CCI_MPF_MMIO_SIZE bytes.
+    parameter DFH_MMIO_BASE_ADDR = 0,
+
+    // Address of the next device feature header outside MPF.  MPF will
+    // terminate the feature list if the next address is 0.
+    parameter DFH_MMIO_NEXT_ADDR = 0,
+
     // Return read responses in the order they were requested?
     parameter SORT_READ_RESPONSES = 1,
 

@@ -25,7 +25,10 @@
 
 package cci_mpf_if_pkg;
     import ccis_if_pkg::*;
+    import ccis_if_funcs_pkg::*;
+
     import ccip_if_pkg::*;
+    import ccip_if_funcs_pkg::*;
 
     //
     // Most data structures are passed unchanged from the chosen interface

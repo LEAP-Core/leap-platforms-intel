@@ -201,13 +201,11 @@ File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-dr
 Packagehint=leap-platforms-intel
 
 [Intel MPF (Memory Protocol Factory)/Requires]
-qa_cci_if=Intel CCI Abstract Interface
+qa_cci_if=Intel CCI Interface
 qa_cci_mpf_shims=Intel MPF Shims
 qa_cci_mpf_prims=Primitive Modules for MPF
+qa_cci_mpf_if=Intel MPF CCI Abstract Interface
 
-[Intel CCI Abstract Interface]
-File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/cci-if/cci-if.awb
-Packagehint=leap-platforms-intel
 
 [Intel MPF Shims]
 File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/cci-mpf-shims/cci-mpf-shims.awb
@@ -217,7 +215,14 @@ Packagehint=leap-platforms-intel
 File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/cci-mpf-prims/cci-mpf-prims.awb
 Packagehint=leap-platforms-intel
 
-
 [Intel QuickAssist CCI-P Platform Libraries]
 File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/qa-ccip-platform-libs.awb
+Packagehint=leap-platforms-intel
+
+[Intel CCI Interface]
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/cci-if/cci-if.awb
+Packagehint=leap-platforms-intel
+
+[Intel MPF CCI Abstract Interface]
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/cci-mpf-if/cci-mpf-if.awb
 Packagehint=leap-platforms-intel

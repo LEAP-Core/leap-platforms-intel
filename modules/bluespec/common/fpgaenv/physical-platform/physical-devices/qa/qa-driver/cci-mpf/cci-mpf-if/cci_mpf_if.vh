@@ -7,7 +7,9 @@
 
 import cci_mpf_if_pkg::*;
 import ccis_if_pkg::*;
+import ccis_if_funcs_pkg::*;
 import ccip_if_pkg::*;
+import ccip_if_funcs_pkg::*;
 
 //
 // Specify source of conflicting enum imports

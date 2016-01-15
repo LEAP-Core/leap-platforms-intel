@@ -1,17 +1,14 @@
-%name Intel CCI Abstract Interface
-%desc Intel CCI Abstract Interface
+%name Intel CCI Interface
+%desc Intel CCI Interface
 
 %provides qa_cci_if
 
-%sources -t VERILOG_PKG -v PRIVATE cci_mpf_if_pkg.sv
-%sources -t VERILOG_PKG -v PRIVATE ccip_if_pkg.sv
-%sources -t VERILOG_PKG -v PRIVATE ccis_if_pkg.sv
+%sources -t VERILOG_H   -v PRIVATE cci_csr_if.vh
 %sources -t VERILOG_PKG -v PRIVATE cci_csr_if_pkg.sv
 %sources -t VERILOG_PKG -v PRIVATE ccip_feature_list_pkg.sv
 
-%sources -t VERILOG_H   -v PRIVATE cci_csr_if.vh
-%sources -t VERILOG_H   -v PRIVATE cci_mpf_if.vh
-%sources -t VERILOG_H   -v PRIVATE cci_mpf_if_dbg.vh
+%sources -t VERILOG_PKG -v PRIVATE ccip_if_pkg.sv
+%sources -t VERILOG_PKG -v PRIVATE ccip_if_funcs_pkg.sv
 
-%sources -t VERILOG     -v PRIVATE ccip_wires_to_mpf.sv
-%sources -t VERILOG     -v PRIVATE ccis_wires_to_mpf.sv
+%sources -t VERILOG_PKG -v PRIVATE ccis_if_pkg.sv
+%sources -t VERILOG_PKG -v PRIVATE ccis_if_funcs_pkg.sv

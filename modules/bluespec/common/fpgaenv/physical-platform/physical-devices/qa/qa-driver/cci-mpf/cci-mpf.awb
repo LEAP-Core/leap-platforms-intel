@@ -3,6 +3,7 @@
 
 %provides qa_cci_mpf
 %requires qa_cci_if
+%requires qa_cci_mpf_if
 %requires qa_cci_mpf_shims
 %requires qa_cci_mpf_prims
 

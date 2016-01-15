@@ -135,5 +135,14 @@ module cci_mpf_shim_buffer_lockstep_afu
               .notEmpty(notEmpty)
               );
 
+
+    // ====================================================================
+    //
+    // Channel 2 Tx (MMIO read response) is unbuffered.
+    //
+    // ====================================================================
+
+    assign afu_buf.c2Tx = afu_raw.c2Tx;
+
 endmodule // cci_mpf_shim_buffer_lockstep_afu
 

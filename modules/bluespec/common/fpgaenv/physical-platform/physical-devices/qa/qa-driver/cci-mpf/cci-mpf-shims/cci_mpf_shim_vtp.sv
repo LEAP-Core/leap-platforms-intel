@@ -551,6 +551,15 @@ module cci_mpf_shim_vtp
         afu_buf.c1Rx = fiu.c1Rx;
     end
 
+
+    // ====================================================================
+    //
+    // Channel 2 Tx (MMIO read response) flows straight through.
+    //
+    // ====================================================================
+
+    assign fiu.c2Tx = afu_buf.c2Tx;
+
 endmodule // cci_mpf_shim_vtp
 
 

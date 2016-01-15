@@ -41,6 +41,14 @@
 module cci_mpf_shim_mux
   #(
     //
+    // The MUX currently supports c2Tx from only one source.  Since c2Tx
+    // isn't flow controlled buffering would be required to support accurate
+    // flow control.  Specify the input channel to which c2Tx should
+    // connect.
+    //
+    parameter C2TX_INPUT_CHANNEL = 0,
+
+    //
     // This MUX requires that one bit be reserved for message routing in the
     // Mdata field.  This reserved bit allows the MUX to route responses with
     // simple logic and without having to allocate extra storage to preserve
@@ -74,8 +82,6 @@ module cci_mpf_shim_mux
     logic reset_n;
     assign reset_n = fiu.reset_n;
 
-    // Fixme
-    assign fiu.c2Tx = t_if_cci_c2_Tx'(0);
 
     // ====================================================================
     //
@@ -313,5 +319,23 @@ module cci_mpf_shim_mux
         end
     endgenerate
 
-endmodule // cci_mpf_shim_mux
 
+    // ====================================================================
+    //
+    //  MMIO (c2Tx)
+    //
+    // ====================================================================
+
+    // c2Tx isn't currently multiplexed
+    assign fiu.c2Tx = afus[C2TX_INPUT_CHANNEL].c2Tx;
+
+    always_ff @(posedge clk)
+    begin
+        if (reset_n)
+        begin
+            assert (! afus[(C2TX_INPUT_CHANNEL == 0) ? 1 : 0].c2Tx.mmioRdValid) else
+              $fatal("cci_mpf_shim_mux.sv: mmioRdValid set on ignored input channel!");
+        end
+    end
+
+endmodule // cci_mpf_shim_mux

@@ -53,8 +53,7 @@ module cci_mpf_shim_canonicalize_to_fiu
 
     assign fiu.c0Tx = cci_mpf_updC0TxCanonical(afu.c0Tx);
     assign fiu.c1Tx = cci_mpf_updC1TxCanonical(afu.c1Tx);
-    // Fixme
-    assign fiu.c2Tx = t_if_cci_c2_Tx'(0);
+    assign fiu.c2Tx = afu.c2Tx;
 
     assign afu.c0TxAlmFull = fiu.c0TxAlmFull;
     assign afu.c1TxAlmFull = fiu.c1TxAlmFull;

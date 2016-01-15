@@ -401,5 +401,14 @@ module cci_mpf_shim_rsp_order
     assign wr_heap_readIdx[1] = t_heap_idx'(fiu.c1Rx.hdr.mdata);
     assign wr_heap_free[1] = fiu.c1Rx.wrValid;
 
+
+    // ====================================================================
+    //
+    // Channel 2 Tx (MMIO read response) flows straight through.
+    //
+    // ====================================================================
+
+    assign fiu.c2Tx = afu.c2Tx;
+
 endmodule // cci_mpf_shim_rsp_order
 

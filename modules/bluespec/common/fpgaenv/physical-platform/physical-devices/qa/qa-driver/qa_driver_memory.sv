@@ -32,7 +32,7 @@
 `include "cci_mpf_if.vh"
 import qa_driver_csr_types::QA_DRIVER_DFH_SIZE;
 
-module qa_drv_memory
+module qa_driver_memory
    (
     input  logic              clk,
 
@@ -46,6 +46,9 @@ module qa_drv_memory
     //   Client interface
     //
     // -------------------------------------------------------------------
+
+    // MMIO read response from AFU.
+    input  t_if_cci_c2_Tx     afu_mmio_rd_rsp,
 
     //
     // Memory read
@@ -152,6 +155,8 @@ module qa_drv_memory
                 $fatal("qa_drv_memory: Memory write not ready!");
         end
     end
+
+    assign afu_if.c2Tx = afu_mmio_rd_rsp;
 
 
     // ====================================================================

@@ -135,6 +135,16 @@
                             c1Tx.data);
                 end
 
+                //////////////////////// C2 TX CHANNEL TRANSACTIONS //////////////////////////
+                /******************* AFU -> MMIO Read Response *****************/
+                if (reset_n && c2Tx.mmioRdValid)
+                begin
+                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\tMMIORdRsp\t%x\t%x\n",
+                            $time,
+                            c2Tx.hdr.tid,
+                            c2Tx.data);
+                end
+
                 //////////////////////// C0 RX CHANNEL TRANSACTIONS //////////////////////////
                 /******************* MEM -> AFU Read Response *****************/
                 if (reset_n && c0Rx.rdValid)

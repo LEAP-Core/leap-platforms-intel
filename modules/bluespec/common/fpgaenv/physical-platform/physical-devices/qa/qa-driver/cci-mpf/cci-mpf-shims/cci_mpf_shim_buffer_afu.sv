@@ -192,4 +192,15 @@ module cci_mpf_shim_buffer_afu
               .deq_en(deqC1Tx),
               .notEmpty(c1_notEmpty)
               );
+
+
+    // ====================================================================
+    //
+    // Channel 2 Tx (MMIO read response) is unbuffered.
+    //
+    // ====================================================================
+
+    assign afu_buf.c2Tx = afu_raw.c2Tx;
+
+
 endmodule // cci_mpf_shim_buffer_afu

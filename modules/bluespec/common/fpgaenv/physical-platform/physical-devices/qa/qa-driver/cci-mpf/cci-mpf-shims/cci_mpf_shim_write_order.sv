@@ -790,5 +790,14 @@ module cci_mpf_shim_write_order
     end
 `endif
 
+
+    // ====================================================================
+    //
+    // Channel 2 Tx (MMIO read response) flows straight through.
+    //
+    // ====================================================================
+
+    assign fiu_buf.c2Tx = afu_buf.c2Tx;
+
 endmodule // cci_mpf_shim_write_order
 

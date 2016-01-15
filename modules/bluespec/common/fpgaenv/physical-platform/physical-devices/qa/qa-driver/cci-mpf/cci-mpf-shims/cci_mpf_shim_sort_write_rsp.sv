@@ -219,5 +219,14 @@ module cci_mpf_shim_sort_write_rsp
                 fiu.c1Rx.hdr;
     end
 
+
+    // ====================================================================
+    //
+    // Channel 2 Tx (MMIO read response) flows straight through.
+    //
+    // ====================================================================
+
+    assign fiu.c2Tx = afu.c2Tx;
+
 endmodule // cci_mpf_shim_sort_write_rsp
 

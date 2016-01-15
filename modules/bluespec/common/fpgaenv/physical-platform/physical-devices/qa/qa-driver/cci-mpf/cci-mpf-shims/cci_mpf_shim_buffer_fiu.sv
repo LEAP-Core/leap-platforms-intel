@@ -81,6 +81,8 @@ module cci_mpf_shim_buffer_fiu
 
                 fiu_raw.c1Tx = fiu_buf.c1Tx;
                 fiu_buf.c1TxAlmFull = fiu_raw.c1TxAlmFull;
+
+                fiu_raw.c2Tx = fiu_buf.c2Tx;
             end
         end
         else
@@ -92,6 +94,8 @@ module cci_mpf_shim_buffer_fiu
 
                 fiu_raw.c1Tx <= fiu_buf.c1Tx;
                 fiu_buf.c1TxAlmFull <= fiu_raw.c1TxAlmFull;
+
+                fiu_raw.c2Tx <= fiu_buf.c2Tx;
             end
         end
     endgenerate

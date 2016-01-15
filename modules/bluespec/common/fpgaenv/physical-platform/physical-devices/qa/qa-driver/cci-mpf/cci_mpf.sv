@@ -41,7 +41,7 @@
 //
 
 `include "cci_mpf_if.vh"
-import cci_mpf_csrs_pkg::*;
+`include "cci_mpf_csrs.vh"
 
 
 //

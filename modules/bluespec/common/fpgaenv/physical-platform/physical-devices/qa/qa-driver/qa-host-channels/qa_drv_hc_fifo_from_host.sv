@@ -30,9 +30,8 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-import cci_mpf_if_pkg::*;
-import qa_drv_hc_types::*;
-import qa_drv_hc_csr_types::*;
+`include "cci_mpf_if.vh"
+`include "qa_drv_hc.vh"
 
 
 module qa_drv_hc_fifo_from_host
@@ -198,7 +197,8 @@ module qa_drv_hc_fifo_from_host
 
     always_comb
     begin
-        t_cci_mpf_ReqMemHdrParams read_params = cci_mpf_defaultReqHdrParams(0);
+        t_cci_mpf_ReqMemHdrParams read_params;
+        read_params = cci_mpf_defaultReqHdrParams(0);
         read_params.vc_sel = t_ccip_vc'(MEM_VIRTUAL_CHANNEL);
 
         // No writes, ever

@@ -29,8 +29,8 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 `include "cci_mpf_if.vh"
-import cci_csr_if_pkg::*;
-import ccip_feature_list_pkg::*;
+`include "qa_driver_csr.vh"
+
 
 //
 // Consume control/status register read requests from the host and

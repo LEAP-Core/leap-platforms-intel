@@ -29,8 +29,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 `include "cci_mpf_if.vh"
-import cci_csr_if_pkg::*;
-import qa_driver_csr_types::*;
+`include "qa_driver_csr.vh"
 
 
 //

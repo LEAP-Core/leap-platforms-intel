@@ -30,7 +30,8 @@
 //
 
 `include "cci_mpf_if.vh"
-import qa_driver_csr_types::QA_DRIVER_DFH_SIZE;
+`include "qa_driver_csr.vh"
+
 
 module qa_driver_memory
    (

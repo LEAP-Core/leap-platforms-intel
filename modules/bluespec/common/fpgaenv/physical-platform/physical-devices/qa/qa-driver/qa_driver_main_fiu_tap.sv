@@ -29,7 +29,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 `include "cci_mpf_if.vh"
-import qa_driver_csr_types::*;
+`include "qa_driver_csr.vh"
 
 
 module qa_driver_main_fiu_tap

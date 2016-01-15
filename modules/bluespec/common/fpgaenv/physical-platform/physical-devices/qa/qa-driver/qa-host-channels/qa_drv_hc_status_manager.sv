@@ -29,8 +29,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-import qa_drv_hc_types::*;
-import qa_drv_hc_csr_types::*;
+`include "qa_drv_hc.vh"
 
 
 module qa_drv_hc_status_manager

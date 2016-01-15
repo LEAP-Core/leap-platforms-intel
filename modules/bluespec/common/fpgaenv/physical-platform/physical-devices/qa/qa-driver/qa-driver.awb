@@ -12,6 +12,8 @@
 
 %sources -t VERILOG_PKG -v PRIVATE qa_driver_csr_types.sv
 
+%sources -t VERILOG_H   -v PRIVATE qa_driver_csr.vh
+
 %sources -t VERILOG     -v PRIVATE qa_driver.sv
 %sources -t VERILOG     -v PRIVATE qa_driver_csr_rd.sv
 %sources -t VERILOG     -v PRIVATE qa_driver_csr_wr.sv

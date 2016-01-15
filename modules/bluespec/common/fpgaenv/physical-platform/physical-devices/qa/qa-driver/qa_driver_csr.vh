@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2014, Intel Corporation
+// Copyright (c) 2016, Intel Corporation
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -27,26 +27,15 @@
 // CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
+
+//
+// Common definitions for managing CSR reads and writes.
 //
 
-`include "qa_drv_hc.vh"
+`ifndef QA_DRIVER_CSR_VH
+`define QA_DRIVER_CSR_VH
 
+`include "cci_csr_if.vh"
+import qa_driver_csr_types::*;
 
-module qa_drv_hc_can_issue
-  #(parameter CAN_ISSUE_FULL=4)
-  (
-    input  logic clk,
-    input  logic reset_n,
-    input  logic almostfull,
-    input  logic issue,
-    output logic can_issue
-   );
-
-   logic almostfull_ff;
-
-   assign can_issue = ~almostfull_ff;
-   
-   always_ff @(posedge clk) begin
-      almostfull_ff <= almostfull;
-   end
-endmodule
+`endif

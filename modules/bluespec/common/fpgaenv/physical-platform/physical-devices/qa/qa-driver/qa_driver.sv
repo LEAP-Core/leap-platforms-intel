@@ -56,7 +56,8 @@
 //
 // ========================================================================
 
-import qa_driver_csr_types::*;
+`include "qa_driver_csr.vh"
+
 
 module qa_driver
   #(

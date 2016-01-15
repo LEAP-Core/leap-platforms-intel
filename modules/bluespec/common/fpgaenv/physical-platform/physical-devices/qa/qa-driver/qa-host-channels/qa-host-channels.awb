@@ -14,6 +14,8 @@
 %sources -t H          -v PRIVATE qa-host-channels-params.h
 %sources -t VERILOG_H  -v PRIVATE qa-host-channels-params.h
 
+%sources -t VERILOG_H  -v PRIVATE qa_drv_hc.vh
+
 %sources -t VERILOG_PKG -v PRIVATE qa_drv_hc_types.sv
 %sources -t VERILOG_PKG -v PRIVATE qa_drv_hc_csr_types.sv
 

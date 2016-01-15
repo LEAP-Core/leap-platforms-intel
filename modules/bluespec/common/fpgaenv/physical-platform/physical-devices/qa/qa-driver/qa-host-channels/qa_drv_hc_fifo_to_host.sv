@@ -29,9 +29,8 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-import cci_mpf_if_pkg::*;
-import qa_drv_hc_types::*;
-import qa_drv_hc_csr_types::*;
+`include "cci_mpf_if.vh"
+`include "qa_drv_hc.vh"
 
 
 module qa_drv_hc_fifo_to_host

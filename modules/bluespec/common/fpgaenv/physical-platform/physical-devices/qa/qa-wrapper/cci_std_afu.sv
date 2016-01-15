@@ -22,6 +22,8 @@
 // compilation purposes.
 // ***************************************************************************
 
+`ifdef USE_PLATFORM_CCIS
+
 module cci_std_afu
     (// Link/Protocol (LP) clocks and reset
      input  /*var*/  logic             vl_clk_LPdomain_32ui,                      // CCI Inteface Clock. 32ui link/protocol clock domain.
@@ -58,8 +60,6 @@ module cci_std_afu
      input  /*var*/  logic             ffs_vl_LP32ui_lp2sy_InitDnForSys           // System layer is aok to run
      );
 
-`ifdef USE_PLATFORM_CCIS
-
     // Instantiate LEAP top level.
     mk_model_Wrapper model_wrapper(
         .*,
@@ -74,6 +74,6 @@ module cci_std_afu
         .EN_inputWires(1'b1),
         .RDY_inputWires());
    
-`endif
-
 endmodule
+
+`endif

@@ -29,8 +29,8 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 `include "cci_mpf_if.vh"
-import cci_csr_if_pkg::*;
-import qa_drv_hc_csr_types::*;
+`include "cci_csr_if.vh"
+`include "qa_drv_hc.vh"
 
 `include "qa-host-channels-params.h"
 

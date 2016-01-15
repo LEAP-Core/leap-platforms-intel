@@ -28,8 +28,7 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-import qa_drv_hc_types::*;
-import qa_drv_hc_csr_types::*;
+`include "qa_drv_hc.vh"
 
 
 //

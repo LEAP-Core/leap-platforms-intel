@@ -28,6 +28,8 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
+`ifdef USE_PLATFORM_CCIP
+
 import ccip_if_pkg::*;
 
 module ccip_std_afu
@@ -45,8 +47,6 @@ module ccip_std_afu
     input  t_if_ccip_Rx ffs_LP16ui_sRxData_afu      // CCI-P Rx Port
     );
 
-`ifdef USE_PLATFORM_CCIP
-
     // Instantiate LEAP top level.
     mk_model_Wrapper model_wrapper(
         .*,
@@ -61,6 +61,6 @@ module ccip_std_afu
         .EN_inputWires(1'b1),
         .RDY_inputWires());
 
-`endif
-
 endmodule // ccip_std_afu
+
+`endif

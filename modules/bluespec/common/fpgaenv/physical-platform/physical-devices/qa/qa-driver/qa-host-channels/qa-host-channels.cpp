@@ -214,6 +214,8 @@ QA_HOST_CHANNELS_DEVICE_CLASS::Uninit()
 void
 QA_HOST_CHANNELS_DEVICE_CLASS::Cleanup()
 {
+    // Disable AFU
+    afu.WriteCSR(CSR_HC_BASE_ADDR + CSR_HC_EN, 0);
 }
 
 //

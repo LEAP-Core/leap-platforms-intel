@@ -29,7 +29,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 `include "cci_mpf_if.vh"
-import cci_csr_if_pkg::*;
+`include "cci_mpf_csrs.vh"
 
 `include "cci_mpf_shim_vtp_params.h"
 

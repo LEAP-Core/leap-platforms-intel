@@ -30,9 +30,7 @@
 //
 
 `include "cci_mpf_if.vh"
-import qa_drv_hc_types::*;
-import qa_drv_hc_csr_types::*;
-import qa_driver_csr_types::*;
+`include "qa_drv_hc.vh"
 
 
 module qa_drv_hc_root

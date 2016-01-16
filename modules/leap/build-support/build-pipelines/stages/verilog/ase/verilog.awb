@@ -8,7 +8,7 @@
 %notes README
 
 %scons %library verilog.py
-%sources -t VERILOG -v PRIVATE qa_sim_top_level.v
+%sources -t VERILOG -v PRIVATE qa_sim_top_level.sv
 
 %syslibrary rt
 

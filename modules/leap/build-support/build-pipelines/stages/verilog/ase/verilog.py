@@ -152,7 +152,7 @@ class Verilog():
     if (moduleList.getAWBParamSafe('qa_platform_libs', 'CCI_S_IFC')):
         vexe_gen_command += ' -Xv +define+USE_PLATFORM_CCIS'
     if (moduleList.getAWBParamSafe('qa_platform_libs', 'CCI_P_IFC')):
-        vexe_gen_command += ' -Xv +define+USE_PLATFORM_CCIP'
+        vexe_gen_command += ' -Xv +define+USE_PLATFORM_CCIP -Xv +define+CCIP_IF_V0_1'
 
     ## Enable simulation mode
     cci_sim = moduleList.getAWBParamSafe('qa_device', 'CCI_SIMULATION')

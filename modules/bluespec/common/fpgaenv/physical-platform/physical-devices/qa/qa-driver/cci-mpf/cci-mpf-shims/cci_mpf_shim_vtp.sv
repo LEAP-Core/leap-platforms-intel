@@ -87,7 +87,10 @@ module cci_mpf_shim_vtp
     cci_mpf_if.to_fiu fiu,
 
     // Connections toward user code.
-    cci_mpf_if.to_afu afu
+    cci_mpf_if.to_afu afu,
+
+    // CSRs
+    cci_mpf_csrs.vtp csrs
     );
 
     logic reset_n;
@@ -205,8 +208,6 @@ module cci_mpf_shim_vtp
     // Request from the TLB to read a line in the host-memory page table.
     t_PTE_IDX tlbReadIdx;
     logic tlbReadIdxEn;
-    // Permit the TLB to request a page table line?
-    logic tlbReadIdxRdy;
 
     // Response to page table read request
     t_cci_cldata tlbReadData;
@@ -225,77 +226,10 @@ module cci_mpf_shim_vtp
          .lookupNotPresent,
          .tlbReadIdx,
          .tlbReadIdxEn,
-         .tlbReadIdxRdy,
+         .tlbReadIdxRdy(csrs.vtp_in_page_table_base_valid),
          .tlbReadData,
          .tlbReadDataEn
          );
-
-
-    // Base address of the page table
-    t_cci_cl_paddr page_table_base;
-
-    // Check for a CSR address match for a 32-bit object
-    function automatic logic csrAddrMatches32(
-        input t_if_cci_c0_Rx c0Rx,
-        input int c);
-
-        // Target address.  The CSR space is 4-byte addressable.  The
-        // low 2 address bits must be 0 and aren't transmitted.
-        t_cci_mmioaddr tgt = t_cci_mmioaddr'(c >> 2);
-
-        // Actual address sent in CSR write
-        t_cci_mmioaddr addr = cci_csr_getAddress(c0Rx);
-
-        return cci_csr_isWrite(c0Rx) && (addr == tgt);
-    endfunction
-
-    // Check for a CSR address match for a 64-bit naturally aligned object
-    function automatic logic csrAddrMatches64(
-        input t_if_cci_c0_Rx c0Rx,
-        input int c);
-
-        // Target address.  The CSR space is 4-byte addressable.  The
-        // low 2 address bits must be 0 and aren't transmitted.
-        t_cci_mmioaddr tgt = t_cci_mmioaddr'(c >> 2);
-
-        // Actual address sent in CSR write.  64 bit writes may be sent
-        // either as a full 64 bit object or as a pair of 32 bit writes,
-        // sending the high half before the low half.  Ignore the low
-        // address bit to check the match.
-        t_cci_mmioaddr addr = cci_csr_getAddress(c0Rx);
-        addr[0] = 1'b0;
-
-        return cci_csr_isWrite(c0Rx) && (addr == tgt);
-    endfunction
-
-
-    always_ff @(posedge clk)
-    begin
-        if (! reset_n)
-        begin
-            tlbReadIdxRdy <= 0;
-        end
-        else
-        begin
-            if (cci_csr_isWrite(fiu.c0Rx) &&
-                csrAddrMatches64(fiu.c0Rx, CSR_AFU_PAGE_TABLE_BASE))
-            begin
-`ifdef USE_PLATFORM_CCIS
-                // Shift address into page_table_base
-                page_table_base <=
-                    t_cci_cl_paddr'({ page_table_base, fiu.c0Rx.data[31:0]});
-`else
-                page_table_base <= t_cci_cl_paddr'(fiu.c0Rx.data);
-`endif
-
-                // If the low bit of the address is 0 then the register update
-                // is complete.  When sent as a pair of 32 bit writes the high
-                // half is sent first.
-                tlbReadIdxRdy <= ~ fiu.c0Rx.hdr[0];
-            end
-        end
-    end
-
 
     always_ff @(posedge clk)
     begin
@@ -453,6 +387,10 @@ module cci_mpf_shim_vtp
 
     // Construct the read request header.
     t_cci_mpf_ReqMemHdr c0_req_hdr;
+
+    // Base address of the page table
+    t_cci_cl_paddr page_table_base;
+    assign page_table_base = csrs.vtp_in_page_table_base;
 
     always_comb
     begin

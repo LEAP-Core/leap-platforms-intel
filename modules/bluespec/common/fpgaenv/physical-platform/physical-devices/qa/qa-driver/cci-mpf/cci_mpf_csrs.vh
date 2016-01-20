@@ -34,4 +34,76 @@
 `include "cci_csr_if.vh"
 import cci_mpf_csrs_pkg::*;
 
+
+//
+// MPF implements a single CSR read/write module that connects to the host
+// through MMIO reads and writes.  A single module is more efficient, since
+// MMIO lacks flow control and requires message buffering.  The CCI MPF CSRs
+// interface defines a set of signals that are managed by the CSR module.
+// Private modports are defined for each class of MPF shims.
+//
+//   *** Directions are relative to a shim ***
+//
+interface cci_mpf_csrs();
+    //
+    // VTP -- virtual to physical translation
+    //
+
+    // Input: page table mode (see cci_mpf_csrs.h)
+    t_cci_mpf_vtp_csr_mode vtp_in_mode;
+    // Input: page table base address (line address)
+    t_cci_cl_paddr vtp_in_page_table_base;
+    logic          vtp_in_page_table_base_valid;
+    // Output: number of hits
+    logic [63:0] vtp_out_num_hits;
+    // Output: number of misses
+    logic [63:0] vtp_out_num_misses;
+
+    //
+    // WRO -- write/read ordering
+    //
+
+    // Output: total writes observed
+    logic [63:0] wro_out_num_writes;
+    // Output: total reads observed
+    logic [63:0] wro_out_num_reads;
+    // Output: total write conflicts (writes blocked)
+    logic [63:0] wro_out_num_write_conflicts;
+    // Output: total read conflicts (reads blocked by writes)
+    logic [63:0] wro_out_num_read_conflicts;
+
+    // CSR manager port
+    modport csr
+       (
+        output vtp_in_mode,
+        output vtp_in_page_table_base,
+        output vtp_in_page_table_base_valid,
+        input  vtp_out_num_hits,
+        input  vtp_out_num_misses,
+
+        input  wro_out_num_writes,
+        input  wro_out_num_reads,
+        input  wro_out_num_write_conflicts,
+        input  wro_out_num_read_conflicts
+        );
+
+    modport vtp
+       (
+        input  vtp_in_mode,
+        input  vtp_in_page_table_base,
+        input  vtp_in_page_table_base_valid,
+        output vtp_out_num_hits,
+        output vtp_out_num_misses
+        );
+
+    modport wro
+       (
+        output wro_out_num_writes,
+        output wro_out_num_reads,
+        output wro_out_num_write_conflicts,
+        output wro_out_num_read_conflicts
+        );
+
+endinterface // cci_mpf_csrs
+
 `endif

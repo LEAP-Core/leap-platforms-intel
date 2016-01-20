@@ -3,6 +3,8 @@
 
 %provides qa_cci_if
 
+%sources -t H           -v PUBLIC  ccip_feature_list.h
+
 %sources -t VERILOG_H   -v PRIVATE cci_csr_if.vh
 %sources -t VERILOG_PKG -v PRIVATE cci_csr_if_pkg.sv
 %sources -t VERILOG_PKG -v PRIVATE ccip_feature_list_pkg.sv

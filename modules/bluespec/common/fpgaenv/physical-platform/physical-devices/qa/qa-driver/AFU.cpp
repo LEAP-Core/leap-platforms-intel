@@ -38,6 +38,7 @@
 
 #include "awb/provides/qa_device.h"
 #include "awb/provides/qa_cci_mpf_shims.h"
+#include "awb/provides/qa_cci_if.h"
 
 #include "awb/provides/physical_platform.h"
 
@@ -77,18 +78,10 @@ AFU_CLASS::AFU_CLASS(const char* afuID, uint32_t dsmSizeBytes)
         printf("Polling DSM...\n"); sleep(1);
     }
 
-    //
-    // Compare the DSM response to CCI-P CSRs
-    //
-    for (int i = 0; i <= 32; i += 8)
-    {
-        printf("CSR%d: 0x%016llx\n", i, ReadCSR64(i));
-    }
-
     // Allocate the virtual to physical translation table that enables
     // host/FPGA shared virtual regions.  Shared regions are allocated
     // with the CreateSharedBufferInVM() method.
-    vtp = new CCI_MPF_SHIM_VTP_CLASS(afuClient);
+    vtp = new CCI_MPF_SHIM_VTP_CLASS(this);
 
     printf("AFU Ready (0x%016llx)\n", ReadDSM64(0));
 }
@@ -176,6 +169,15 @@ AFU_CLASS::WriteCSR64(btCSROffset offset, bt64bitCSR value)
 uint64_t
 AFU_CLASS::ReadCSR64(uint32_t n)
 {
+    bt64bitCSR v;
+    assert(ReadCSR64(n, &v));
+    return v;
+}
+
+
+bool
+AFU_CLASS::ReadCSR64(btCSROffset offset, bt64bitCSR* pValue)
+{
 #if (CCI_S_IFC != 0)
 
     //
@@ -187,18 +189,17 @@ AFU_CLASS::ReadCSR64(uint32_t n)
     memset((void*)DSMAddress(CL(1)), 0, CL(1));
 
     // Write CSR to trigger a register read
-    WriteCSR(CSR_AFU_MMIO_READ_COMPAT, n >> 2);
+    WriteCSR(CSR_AFU_MMIO_READ_COMPAT, offset >> 2);
 
     // Wait for the response, signalled by bit 64 in the line being set.
     while (ReadDSM64(CL(1) + sizeof(uint64_t)) == 0) {};
 
-    return ReadDSM64(CL(1));
+    *pValue = ReadDSM64(CL(1));
+    return true;
 
 #else
 
-    bt64bitCSR v;
-    assert(afuClient->ReadCSR64(n, &v));
-    return v;
+    return afuClient->ReadCSR64(offset, pValue);
 
 #endif
 }

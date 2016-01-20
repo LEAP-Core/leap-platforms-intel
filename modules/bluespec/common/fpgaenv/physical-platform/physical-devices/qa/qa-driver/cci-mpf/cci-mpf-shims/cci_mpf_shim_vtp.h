@@ -78,13 +78,13 @@ USING_NAMESPACE(AAL)
 
 
 typedef class CCI_MPF_SHIM_VTP_CLASS* CCI_MPF_SHIM_VTP;
-typedef class AFU_CLIENT_CLASS* AFU_CLIENT;
+typedef class AFU_CLASS* AFU;
 
 
 class CCI_MPF_SHIM_VTP_CLASS : public CAASBase
 {
   public:
-    CCI_MPF_SHIM_VTP_CLASS(AFU_CLIENT afuClient);
+    CCI_MPF_SHIM_VTP_CLASS(AFU afu);
     ~CCI_MPF_SHIM_VTP_CLASS();
 
     //
@@ -167,7 +167,8 @@ class CCI_MPF_SHIM_VTP_CLASS : public CAASBase
     uint8_t*       m_pageTableEnd;      // First address beyond the page table
     uint8_t*       m_pageTableFree;     // First free line in the page table
 
-    AFU_CLIENT     m_afuClient;
+    AFU            m_afu;
+    btCSROffset    m_csr_base;          // Base address of VTP CSRs
 };
 
 

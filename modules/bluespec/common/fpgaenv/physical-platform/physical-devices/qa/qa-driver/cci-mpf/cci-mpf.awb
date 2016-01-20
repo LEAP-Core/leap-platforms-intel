@@ -10,7 +10,7 @@
 ##
 ## File with shared parameters, declared for both Verilog and C
 ##
-%sources -t H           -v PRIVATE cci_mpf_csrs.h
+%sources -t H           -v PUBLIC  cci_mpf_csrs.h
 %sources -t VERILOG_H   -v PRIVATE cci_mpf_csrs.h
 
 %sources -t VERILOG_H   -v PRIVATE cci_mpf_csrs.vh

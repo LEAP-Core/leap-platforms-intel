@@ -107,6 +107,31 @@ module cci_mpf
 
     // ====================================================================
     //
+    //  Manage CSRs used by MPF
+    //
+    // ====================================================================
+
+    cci_mpf_if fiu_csrs (.clk);
+    cci_mpf_csrs mpf_csrs ();
+
+    cci_mpf_shim_csr
+      #(
+        .DFH_MMIO_BASE_ADDR(DFH_MMIO_BASE_ADDR),
+        .DFH_MMIO_NEXT_ADDR(DFH_MMIO_NEXT_ADDR),
+        .MPF_ENABLE_VTP(1),
+        .MPF_ENABLE_WRO(1)
+        )
+      csr
+       (
+        .clk,
+        .fiu(fiu_canonical),
+        .afu(fiu_csrs),
+        .csrs(mpf_csrs)
+        );
+
+
+    // ====================================================================
+    //
     //  Virtual to physical translation. This is the lowest level of
     //  the hierarchy, nearest the FIU connection. The translation layer
     //  can thus depend on a few properties, such as that only one
@@ -131,8 +156,9 @@ module cci_mpf
       v_to_p
        (
         .clk,
-        .fiu(fiu_canonical),
-        .afu(fiu_virtual)
+        .fiu(fiu_csrs),
+        .afu(fiu_virtual),
+        .csrs(mpf_csrs)
         );
 
 

@@ -38,20 +38,58 @@
 
 #include "awb/provides/qa_driver.h"
 #include "awb/provides/qa_cci_mpf_shims.h"
+#include "awb/provides/qa_cci_if.h"
+#include "awb/provides/qa_cci_mpf.h"
 
 
-CCI_MPF_SHIM_VTP_CLASS::CCI_MPF_SHIM_VTP_CLASS(AFU_CLIENT afuClient) :
-    m_afuClient(afuClient)
+CCI_MPF_SHIM_VTP_CLASS::CCI_MPF_SHIM_VTP_CLASS(AFU afu) :
+    m_afu(afu),
+    m_csr_base(0)
 {
     // There must be overflow space in the page table
     assert(CCI_PT_VA_IDX_BITS < CCI_PT_LINE_IDX_BITS);
+
+    //
+    // Find the VTP feature header in the AFU.
+    //
+    btCSROffset f_addr = 0;
+    // Get the main AFU feature header
+    CCIP_AFU_FEATURE_DFH f_afu(afu->ReadCSR64(f_addr));
+
+    // Walk the list of features, looking for VTP
+    bool is_eol = f_afu.isEOL();
+    f_addr = f_afu.getNext();
+    while (! is_eol)
+    {
+        CCIP_FEATURE_DFH f(afu->ReadCSR64(f_addr));
+        printf("DFH 0x%04llx: %d 0x%016llx 0x%016llx\n", f_addr,
+               f.getFeatureType(),
+               afu->ReadCSR64(f_addr + 16),
+               afu->ReadCSR64(f_addr + 8));
+        if ((f.getFeatureType() == eFTYP_BBB) &&
+            (afu->ReadCSR64(f_addr + 16) == 0xc8a2982fff9642bf) &&
+            (afu->ReadCSR64(f_addr + 8)  == 0xa70545727f501901))
+        {
+            // Found VTP
+            m_csr_base = f_addr;
+            break;
+        }
+
+        f_addr = f.getNext();
+
+        // EOL?
+        is_eol = f.isEOL();
+    }
+
+    // Was the VTP CSR region found?
+    assert(m_csr_base != 0);
 
     // Allocate the page table.  The size of the page table is a function
     // of the PTE index space.
     size_t pt_size = (1LL << CCI_PT_LINE_IDX_BITS) * CL(1);
 
     // Allocate the table.  The allocator fills it with zeros.
-    AFU_BUFFER pt = afuClient->CreateSharedBuffer(pt_size);
+    AFU_BUFFER pt = afu->CreateSharedBuffer(pt_size);
     assert(pt && (pt->numBytes == pt_size));
 
     m_pageTable = (uint8_t*)pt->virtualAddress;
@@ -67,7 +105,8 @@ CCI_MPF_SHIM_VTP_CLASS::CCI_MPF_SHIM_VTP_CLASS(AFU_CLIENT afuClient) :
     assert(m_pageTableFree <= m_pageTableEnd);
 
     // Tell the hardware the address of the table
-    afuClient->WriteCSR64(CSR_AFU_PAGE_TABLE_BASE, m_pageTablePA / CL(1));
+    afu->WriteCSR64(m_csr_base + CCI_MPF_VTP_CSR_PAGE_TABLE_PADDR,
+                    m_pageTablePA / CL(1));
 }
 
 
@@ -127,7 +166,7 @@ CCI_MPF_SHIM_VTP_CLASS::CreateSharedBufferInVM(size_t size_bytes)
     for (size_t i = 0; i < n_buffers; i++)
     {
         // Get a page size buffer
-        AFU_BUFFER buffer = m_afuClient->CreateSharedBuffer(pageSize);
+        AFU_BUFFER buffer = m_afu->CreateSharedBuffer(pageSize);
         assert(buffer != NULL);
 
         // Shrink the reserved area in order to make a hole in the virtual

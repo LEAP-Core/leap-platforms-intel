@@ -52,11 +52,19 @@ package ccip_feature_list_pkg;
     //
     typedef struct packed {
         t_ccip_feature_type f_type;
-        logic [19:0]        rsvd0;
+        logic [18:0]        rsvd0;
         logic               eol;
         t_ccip_feature_next next;
         logic [3:0]         version;
         t_ccip_feature_id   id;
     } t_ccip_dfh;
+
+    function automatic t_ccip_dfh ccip_dfh_defaultDFH();
+        t_ccip_dfh dfh;
+        dfh = t_ccip_dfh'(0);
+
+        dfh.f_type = eFTYP_PVT;
+        return dfh;
+    endfunction
 
 endpackage // ccip_feature_list_pkg

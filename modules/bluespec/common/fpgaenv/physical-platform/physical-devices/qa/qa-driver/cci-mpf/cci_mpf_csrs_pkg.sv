@@ -51,4 +51,10 @@ package cci_mpf_csrs_pkg;
     parameter CCI_MPF_MMIO_SIZE = CCI_MPF_VTP_CSR_SIZE +
                                   CCI_MPF_WRO_CSR_SIZE;
 
+    // CCI_MPF_VTP_CSR_MODE -- see cci_mpf_csrs.h
+    typedef struct packed {
+        logic inval_translation_cache;
+        logic enabled;
+    } t_cci_mpf_vtp_csr_mode;
+
 endpackage // cci_mpf_csrs_pkg

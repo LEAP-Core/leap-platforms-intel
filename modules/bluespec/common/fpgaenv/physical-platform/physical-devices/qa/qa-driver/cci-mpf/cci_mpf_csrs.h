@@ -54,12 +54,10 @@ typedef enum
     //   Bit 1:
     //      0 - Normal
     //      1 - Invalidate current FPGA-side translation cache.
-    //          Bit 0 must be 0 
-    //        1: Enabled
-    //        2: Invalidate FPGA-side translation cache.  Software
-    //           may read the register.  Bit 1 in the register will
-    //           return 1 during invalidation and 0 when invalidation
-    //           is complete.
+    //          Bit 0 must be 0 to disable translation during flush.
+    //          Software may also read this register.  Bit 1 in the
+    //          register will return 1 during invalidation and 0 when
+    //          invalidation is complete.
     CCI_MPF_VTP_CSR_MODE = 24,
 
     // Page table physical address (line address) (write)

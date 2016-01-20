@@ -38,7 +38,7 @@ package qa_driver_csr_types;
     import cci_csr_if_pkg::*;
 
     // QA driver MMIO feature space size (bytes)
-    parameter QA_DRIVER_DFH_SIZE = 1024;
+    parameter QA_DRIVER_DFH_SIZE = 16'h1b00;
 
     //
     // These CSRs are used only in the old CCI-S mode.  When possible,
@@ -56,10 +56,7 @@ package qa_driver_csr_types;
 
         // MMIO read compatibility for CCI-S.  Writes here are treated
         // as a CSR read request.
-        CSR_AFU_MMIO_READ_COMPAT   = 16'h1a14,
-
-        // Page table base for qa_shim_tlb_simple (64 bits)
-        CSR_AFU_PAGE_TABLE_BASE    = 16'h1a80
+        CSR_AFU_MMIO_READ_COMPAT   = 16'h1a14
     }
     t_ccis_csr_afu_map;
 

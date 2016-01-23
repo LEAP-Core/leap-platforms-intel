@@ -368,7 +368,7 @@ module qa_driver
       #(
         // Host channel CSR base address must match the software side,
         // defined in AFU_csr.h.
-        .CSR_HC_BASE_ADDR('h1b00)
+        .CSR_HC_BASE_ADDR('h1a80)
         )
       host_channel
        (

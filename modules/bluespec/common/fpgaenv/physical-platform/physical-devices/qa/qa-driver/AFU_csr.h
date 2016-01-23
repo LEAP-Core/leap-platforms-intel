@@ -15,7 +15,7 @@
 
 // The host channels driver manages its own CSR space starting at a
 // base address passed to the driver when it is instantiated.
-#define CSR_HC_BASE_ADDR        0x1b00
+#define CSR_HC_BASE_ADDR        0x1a80
 
 //
 // System CSRs

@@ -49,8 +49,8 @@ module ccip_wires_to_mpf
         begin : reg_out
             always_ff @(posedge clk)
             begin
-                ffs_LP16ui_sTxData_afu.c0 <= fiu.c0Tx;
-                ffs_LP16ui_sTxData_afu.c1 <= fiu.c1Tx;
+                ffs_LP16ui_sTxData_afu.c0 <= cci_mpf_cvtC0TxToBase(fiu.c0Tx);
+                ffs_LP16ui_sTxData_afu.c1 <= cci_mpf_cvtC1TxToBase(fiu.c1Tx);
                 ffs_LP16ui_sTxData_afu.c2 <= fiu.c2Tx;
 
                 fiu.c0TxAlmFull <= ffs_LP16ui_sRxData_afu.c0TxAlmFull;
@@ -61,8 +61,8 @@ module ccip_wires_to_mpf
         begin : wire_out
             always_comb
             begin
-                ffs_LP16ui_sTxData_afu.c0 = fiu.c0Tx;
-                ffs_LP16ui_sTxData_afu.c1 = fiu.c1Tx;
+                ffs_LP16ui_sTxData_afu.c0 = cci_mpf_cvtC0TxToBase(fiu.c0Tx);
+                ffs_LP16ui_sTxData_afu.c1 = cci_mpf_cvtC1TxToBase(fiu.c1Tx);
                 ffs_LP16ui_sTxData_afu.c2 = fiu.c2Tx;
 
                 fiu.c0TxAlmFull = ffs_LP16ui_sRxData_afu.c0TxAlmFull;

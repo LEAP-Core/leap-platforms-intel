@@ -125,6 +125,7 @@ class Verilog():
         vexe_gen_command += ' -Xc++ ' + definition + ' -Xc ' + definition
  
     # cflags to be passed into vcs compiler
+    vexe_gen_command += ' -Xv -top -Xv main'
     for definition in defs:
         vexe_gen_command += ' -Xv -CFLAGS -Xv ' + definition
     for path in inc_paths:

@@ -139,15 +139,23 @@ module cci_mpf_prim_heap_multi
     // Slots are allocated round robin instead of using a complicated free
     // list. There must be at least MIN_FREE_SLOTS in the oldest positions.
     //
+    // For timing we compute notFull in advance.  To guarantee
+    // MIN_FREE_SLOTS next cycle we add one to the requirement, naming
+    // the stronger requirement MIN_FREE_SLOTS_Q.
     // ====================================================================
+
+    localparam MIN_FREE_SLOTS_Q = MIN_FREE_SLOTS + 1;
 
     // notBusyRepl replicates the low bits of notBusy at the end to avoid
     // computing wrap-around.
-    logic [MIN_FREE_SLOTS + N_ENTRIES-1 : 0] notBusyRepl;
-    assign notBusyRepl = {notBusy[MIN_FREE_SLOTS-1 : 0], notBusy};
+    logic [MIN_FREE_SLOTS_Q + N_ENTRIES-1 : 0] notBusyRepl;
+    assign notBusyRepl = {notBusy[MIN_FREE_SLOTS_Q-1 : 0], notBusy};
 
-    // The next MIN_FREE_SLOTS entries must be free
-    assign notFull = &(notBusyRepl[nextAlloc +: MIN_FREE_SLOTS]);
+    // The next MIN_FREE_SLOTS_Q entries must be free
+    always_ff @(posedge clk)
+    begin
+        notFull <= &(notBusyRepl[nextAlloc +: MIN_FREE_SLOTS_Q]);
+    end
 
     always_ff @(posedge clk)
     begin

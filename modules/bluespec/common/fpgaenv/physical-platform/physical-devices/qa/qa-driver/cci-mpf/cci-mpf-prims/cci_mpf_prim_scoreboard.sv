@@ -89,9 +89,6 @@ module cci_mpf_prim_scoreboard
     t_IDX oldest;
     t_IDX oldest_next;
 
-    // Track data arrival
-    reg [N_ENTRIES-1 : 0] dataValid;
-
     // notFull is true as long as there are at least MIN_FREE_SLOTS available
     // at the end of the ring buffer. The computation is complicated by the
     // wrapping pointer.
@@ -136,87 +133,129 @@ module cci_mpf_prim_scoreboard
         end
     end
 
+    // Needed for block RAM timing
+    t_DATA mem_rd /* synthesis keep */;
+    assign first = mem_rd;
+    t_META_DATA meta_rd /* synthesis keep */;
+    assign firstMeta = meta_rd;
 
     //
     // Storage where data will be sorted.  Port 0 is used for writes and
     // port 1 for reads.
     //
     cci_mpf_prim_dualport_ram#(.N_ENTRIES(N_ENTRIES),
-                              .N_DATA_BITS(N_DATA_BITS))
-        mem(.clk0(clk),
-            .addr0(enqDataIdx),
-            .wen0(enqData_en),
-            .wdata0(enqData),
-            .rdata0(),
+                               .N_DATA_BITS(N_DATA_BITS))
+      memData
+       (
+        .clk0(clk),
+        .addr0(enqDataIdx),
+        .wen0(enqData_en),
+        .wdata0(enqData),
+        .rdata0(),
 
-            .clk1(clk),
-            .addr1(oldest_next),
-            .wen1(1'b0),
-            .wdata1(N_DATA_BITS'(0)),
-            .rdata1(first));
+        .clk1(clk),
+        .addr1(oldest_next),
+        .wen1(1'b0),
+        .wdata1(N_DATA_BITS'(0)),
+        .rdata1(mem_rd)
+        );
 
 
     //
     // Manage the meta-data memory.
     //
-    t_META_DATA metaData[0 : N_ENTRIES-1];
+    generate
+        if (N_META_BITS != 0)
+        begin : genMeta
+            cci_mpf_prim_dualport_ram#(.N_ENTRIES(N_ENTRIES),
+                                       .N_DATA_BITS(N_META_BITS))
+              memMeta
+               (
+                .clk0(clk),
+                .addr0(enqIdx),
+                .wen0(enq_en),
+                .wdata0(enqMeta),
+                .rdata0(),
 
-    t_META_DATA meta_oldest;
-    assign firstMeta = meta_oldest;
-
-    always_ff @(posedge clk)
-    begin
-        meta_oldest <= metaData[oldest_next];
-
-        // Meta-data is written along with the original request to allocate
-        // a slot.
-        if (enq_en)
-        begin
-            metaData[enqIdx] <= enqMeta;
+                .clk1(clk),
+                .addr1(oldest_next),
+                .wen1(1'b0),
+                .wdata1('x),
+                .rdata1(meta_rd)
+                );
         end
-    end
+        else
+        begin : noMeta
+            assign meta_rd = 'x;
+        end
+    endgenerate
 
+
+    // Track data arrival
+    logic [N_ENTRIES-1 : 0] dataValid;
+    logic [N_ENTRIES-1 : 0] dataValid_q;
+
+    // Small register with the two dataValid_q entries that are useful
+    // this cycle.
+    logic [1 : 0] dataValid_sub_q;
+    logic deq_en_q;
 
     // Track valid data
-    always_ff @(posedge clk)
+    always_comb
     begin
-        if (! reset_n)
+        dataValid = dataValid_q;
+
+        // Clear on completion
+        if (deq_en)
         begin
-            dataValid <= 1'b0;
+            dataValid[oldest] = 1'b0;
         end
-        else
+
+        // Set when data arrives.
+        if (enqData_en)
         begin
-            // Clear on completion
-            if (deq_en)
-            begin
-                dataValid[oldest] <= 1'b0;
-            end
-
-            // Set when data arrives
-            if (enqData_en)
-            begin
-                dataValid[enqDataIdx] <= 1'b1;
-            end
-
-            assert(! deq_en || notEmpty) else
-                $fatal("cci_mpf_prim_scoreboard: Can't DEQ when EMPTY!");
+            dataValid[enqDataIdx] = 1'b1;
         end
     end
 
-
-    // Track whether the oldest entry's data is valid and should be made
-    // available to the client.
+    // Local reset for output data valid registers since dataValid_q is
+    // large enough to be a timing problem. No output can be ready the
+    // first cycle after reset is complete, so the delay isn't a problem.
+    logic reset_n_q;
     always_ff @(posedge clk)
     begin
-        if (! reset_n)
+        reset_n_q <= reset_n;
+    end
+
+    always_ff @(posedge clk)
+    begin
+        if (! reset_n_q)
         begin
-            notEmpty <= 1'b0;
+            dataValid_q <= N_ENTRIES'(0);
+            dataValid_sub_q <= 2'b0;
+            deq_en_q <= 1'b0;
         end
         else
         begin
-            notEmpty <= dataValid[oldest_next];
+            dataValid_q <= dataValid;
+
+            // Record enough state to compute notEmpty in the next cycle
+            // in a method that is relatively independent of computation
+            // this cycle.
+            dataValid_sub_q <= { dataValid_q[t_IDX'(oldest + 1)],
+                                 dataValid_q[oldest] };
+            deq_en_q <= deq_en;
+
+            if (reset_n)
+            begin
+                assert(! deq_en || notEmpty) else
+                    $fatal("cci_mpf_prim_scoreboard: Can't DEQ when EMPTY!");
+            end
         end
     end
+
+    // Check one of two valid bits to determine notEmpty, depending on whether
+    // the oldest entry was dequeued last cycle.
+    assign notEmpty = dataValid_sub_q[deq_en_q];
 
 endmodule // cci_mpf_prim_scoreboard
-

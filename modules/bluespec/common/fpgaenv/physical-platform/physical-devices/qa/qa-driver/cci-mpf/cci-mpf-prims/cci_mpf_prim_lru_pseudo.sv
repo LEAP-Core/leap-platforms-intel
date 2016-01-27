@@ -167,60 +167,83 @@ module cci_mpf_prim_lru_pseudo
     //
     // ====================================================================
 
-    logic update0;
-    t_ENTRY_IDX update_idx0;
-    t_WAY_VEC update_way0;
+    //
+    // Update is a multi-cycle read/modify/write operation. An extra cycle
+    // in the middle breaks the block RAM read response -> block RAM write
+    // into separate cycles for timing.
+    //
+    logic update0_en;
+    logic update0_en_q;
+    logic update0_en_qq;
 
-    // Write if initializing or update started last cycle
-    assign wen0 = update0 || ! initialized;
+    t_ENTRY_IDX update0_idx;
+    t_ENTRY_IDX update0_idx_q;
+    t_ENTRY_IDX update0_idx_qq;
+
+    // New reference
+    t_WAY_VEC update0_ref;
+    t_WAY_VEC update0_ref_q;
+    t_WAY_VEC update0_ref_qq;
+
+    // Current state into which new reference is added
+    t_WAY_VEC update0_cur_lru_qq;
 
     //
     // Address and write data assignment.
     //
     always_comb
     begin
+        // Default -- read for update if requested
+        addr0 = refIdx0;
+        wdata0 = 'x;
+        wen0 = 1'b0;
+
+        update0_en  = refEn0;
+        update0_idx = refIdx0;
+        update0_ref = refWayVec0;
+
         if (! initialized)
         begin
             // Initializing
             addr0 = t_ENTRY_IDX'(init_idx);
             wdata0 = t_WAY_VEC'(0);
+            wen0 = 1'b1;
+
+            // No new update can start since can't read for update
+            update0_en = 1'b0;
         end
-        else if (update0)
+        else if (update0_en_qq)
         begin
             // Updating
-            addr0 = update_idx0;
-            wdata0 = updatePseudoLRU(rdata0, update_way0);
-        end
-        else
-        begin
-            // Not writing.  Set up for possible read for update.
-            addr0 = refIdx0;
-            wdata0 = 'x;
+            addr0 = update0_idx_qq;
+            wdata0 = updatePseudoLRU(update0_cur_lru_qq, update0_ref_qq);
+            wen0 = 1'b1;
+
+            // No new update can start since can't read for update
+            update0_en = 1'b0;
         end
     end
 
-    //
-    // Update lookup state to be used during update.
-    //
+    // Read/modify/write update pipeline
     always_ff @(posedge clk)
     begin
         if (! reset_n)
         begin
-            update0 <= 0;
+            update0_en_q <= 0;
+            update0_en_qq <= 0;
         end
         else
         begin
-            if (update0)
-            begin
-                // Completed LRU update this cycle
-                update0 <= 0;
-            end
-            else
-            begin
-                update0 <= refEn0 && initialized;
-                update_idx0 <= refIdx0;
-                update_way0 <= refWayVec0;
-            end
+            update0_en_q <= update0_en;
+            update0_idx_q <= update0_idx;
+            update0_ref_q <= update0_ref;
+
+            // Register read response to avoid block RAM read response ->
+            // block RAM write in a single cycle.
+            update0_en_qq <= update0_en_q;
+            update0_idx_qq <= update0_idx_q;
+            update0_ref_qq <= update0_ref_q;
+            update0_cur_lru_qq <= rdata0;
         end 
     end
 
@@ -232,9 +255,21 @@ module cci_mpf_prim_lru_pseudo
     //
     // ====================================================================
 
-    logic update1;
-    t_ENTRY_IDX update_idx1;
-    t_WAY_VEC update_way1;
+    logic update1_en;
+    logic update1_en_q;
+    logic update1_en_qq;
+
+    t_ENTRY_IDX update1_idx;
+    t_ENTRY_IDX update1_idx_q;
+    t_ENTRY_IDX update1_idx_qq;
+
+    // New reference
+    t_WAY_VEC update1_ref;
+    t_WAY_VEC update1_ref_q;
+    t_WAY_VEC update1_ref_qq;
+
+    // Current state into which new reference is added
+    t_WAY_VEC update1_cur_lru_qq;
 
     // Compute the lookup response
     always_comb
@@ -256,7 +291,7 @@ module cci_mpf_prim_lru_pseudo
     end
 
     // Lookup request has priority of writes
-    assign wen1 = update1 && ! lookupEn &&
+    assign wen1 = update1_en_qq && ! lookupEn &&
                   // Don't request writes to the same line in both ports
                   (! wen0 || (addr0 != addr1));
 
@@ -265,48 +300,65 @@ module cci_mpf_prim_lru_pseudo
     //
     always_comb
     begin
+        // Default -- read for update if requested
+        addr1 = refIdx1;
+        wdata1 = 'x;
+
+        update1_en  = refEn1 && initialized;
+        update1_idx = refIdx1;
+        update1_ref = refWayVec1;
+
         if (lookupEn)
         begin
             // Lookup
             addr1 = lookupIdx;
             wdata1 = 'x;
+
+            // No new update can start since can't read for update
+            update1_en = 1'b0;
         end
-        else if (update1)
+        else if (update1_en_qq)
         begin
-            // Updating
-            addr1 = update_idx1;
-            wdata1 = updatePseudoLRU(rdata1, update_way1);
-        end
-        else
-        begin
-            // Not writing.  Set up for possible read for update.
-            addr1 = refIdx1;
-            wdata1 = 'x;
+            // Ready to write for update
+            addr1 = update1_idx_qq;
+            wdata1 = updatePseudoLRU(update1_cur_lru_qq, update1_ref_qq);
+
+            // No new update can start since can't read for update
+            update1_en = 1'b0;
         end
     end
 
     //
-    // Update lookup state to be used during update.
+    // Shift update state as updates progress (read, modify, write)
     //
     always_ff @(posedge clk)
     begin
         if (! reset_n)
         begin
-            update1 <= 0;
+            update1_en_q <= 0;
+            update1_en_qq <= 0;
         end
         else
         begin
-            if (update1)
+            // Register read for update requests made this cycle
+            update1_en_q <= update1_en;
+            update1_idx_q <= update1_idx;
+            update1_ref_q <= update1_ref;
+
+            // Consume read response for update.  Moving the pipeline
+            // conditionally allows updates to sit in the qq slot until
+            // a write cycle becomes available.
+            if (update1_en_q)
             begin
-                // Completed LRU update this cycle
-                update1 <= 0;
+                update1_en_qq <= update1_en_q;
+                update1_idx_qq <= update1_idx_q;
+                update1_ref_qq <= update1_ref_q;
+                update1_cur_lru_qq <= rdata1;
             end
-            else
+            else if (! lookupEn)
             begin
-                // Lookup has priority
-                update1 <= refEn1 && ! lookupEn && initialized;
-                update_idx1 <= refIdx1;
-                update_way1 <= refWayVec1;
+                // If a write for update was pending it completed this cycle
+                update1_en_qq <= 1'b0;
             end
         end 
     end

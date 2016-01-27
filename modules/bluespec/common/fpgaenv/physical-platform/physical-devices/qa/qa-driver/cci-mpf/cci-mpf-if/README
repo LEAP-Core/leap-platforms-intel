@@ -1,0 +1,96 @@
+MPF requires extra header state for requests beyond CCI headers.  For example,
+the WRO shim (write/read ordering) adds a control bit to indicate whether to
+enforce ordering for a given request.  CCI-MPF extends CCI headers with
+this extended state.  In addition, CCI-MPF adds a layer of abstraction on top
+of CCI to simplify writing AFUs that can be compiled against a variety of CCI
+hardware platforms.
+
+Unlike CCI, which is exposed to modules as a pair of structs -- one for
+requests to the FIU and one for FIU responses -- CCI-MPF describes the
+AFU/FIU connection as a SystemVerilog interface.  The wires inside the
+interface map trivially to standard CCI structs.  Describing CCI-MPF as
+a SystemVerilog interface with directional ports greatly simplifies shim
+module interfaces, since a shim necessarily exposes two instances of an
+interface.  One shim connects in the direction of the FIU and the other
+in the direction of the AFU.  cci_mpf_if.vh holds the interface.
+
+cci_mpf_if_pkg.sv maps platform-specific CCI structures and functions
+to platform-agnostic objects with similar names.  E.g., t_ccip_ReqMemHdr
+becomes t_cci_ReqMemHdr.  Constructor and accessor functions offer cross-
+platform compatibility.  The cci_mpf_genReqHdr() initializes a memory
+request header with default values appropriate to the target platform.
+
+cci_mpf_if_pkg.sv also defines the CCI-MPF header extension.  The MPF
+extension is always added to the high bits of any struct, making it possible
+to convert an MPF version of a struct to the CCI version by simple
+truncation.  Of course truncation only works if the request is meaningful
+without the MPF state.  For example, an incoming MPF request tagged with
+a virtual address must first be converted to a physical address using
+the MPF VTP shim before the CCI-MPF object can be downsized to a pure
+CCI object.
+
+
+In addition to the interface definition, this directory has helper modules
+for mapping standard CCI wires coming from an FIU to CCI-MPF interfaces.
+For modules holding wires with standard CCI names, the following code
+remaps those wires to a CCI-MPF object named fiu:
+
+    //
+    // Expose FIU as MPF interface
+    //
+    cci_mpf_if fiu(.clk);
+
+    ccip_wires_to_mpf
+      #(
+        .REGISTER_INPUTS(0),
+        .REGISTER_OUTPUTS(1)
+        )
+      map_ifc(.*);
+
+The fiu object can be connected to MPF:
+
+    //
+    // Put MPF between AFU and FIU.
+    //
+    cci_mpf_if afu(.clk);
+
+    cci_mpf
+      #(
+        .SORT_READ_RESPONSES(1),
+        .PRESERVE_WRITE_MDATA(1)
+        )
+      mpf
+       (
+        .clk,
+        .fiu,
+        .afu
+        );
+
+The afu interface can then be connected to the user design, where afu_rx
+and afu_tx are standard CCI structs:
+
+    t_if_ccip_Rx afu_rx;
+    t_if_ccip_Tx afu_tx;
+
+    always_comb
+    begin
+        afu_rx.c0 = afu.c0Rx;
+        afu_rx.c1 = afu.c1Rx;
+
+        afu_rx.c0TxAlmFull = afu.c0TxAlmFull;
+        afu_rx.c1TxAlmFull = afu.c1TxAlmFull;
+
+        // Convert c0 header to MPF, request virtual to physical
+        // translation and preserve ordering within lines.
+        afu.c0Tx = cci_mpf_cvtC0TxFromBase(afu_tx.c0);
+        afu.c0Tx.hdr.ext.checkLoadStoreOrder = 1'b1;
+        afu.c0Tx.hdr.ext.addrIsVirtual = 1'b1;
+
+        // Convert c1 header to MPF, request virtual to physical
+        // translation and preserve ordering within lines.
+        afu.c1Tx = cci_mpf_cvtC1TxFromBase(afu_tx.c1);
+        afu.c1Tx.hdr.ext.checkLoadStoreOrder = 1'b1;
+        afu.c1Tx.hdr.ext.addrIsVirtual = 1'b1;
+
+        afu.c2Tx = afu_tx.c2;
+    end

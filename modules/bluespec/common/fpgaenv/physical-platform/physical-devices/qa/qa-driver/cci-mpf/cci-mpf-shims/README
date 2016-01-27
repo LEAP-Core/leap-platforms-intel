@@ -3,3 +3,7 @@ function.  Functions include virtual to physical translation (VTP),
 load/store ordering, etc.  Each shim takes both consumes and produces an AFU
 interface.  The factory composes a memory subsystem with the desired
 characteristics by combining the appropriate shims.
+
+../cci_mpf.sv is a configurable module the composes these shims.
+
+../cci-mpf-if/README describes the process of incorporating MPF into a design.

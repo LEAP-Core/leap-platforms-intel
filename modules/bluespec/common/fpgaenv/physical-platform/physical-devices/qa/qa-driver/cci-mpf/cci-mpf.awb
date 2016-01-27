@@ -7,6 +7,8 @@
 %requires qa_cci_mpf_shims
 %requires qa_cci_mpf_prims
 
+%notes README
+
 ##
 ## File with shared parameters, declared for both Verilog and C
 ##

@@ -69,6 +69,13 @@ module cci_mpf_prim_fifo_lutram
     t_COUNTER valid_cnt_next;
 
     assign first = data[rd_idx];
+    always_ff @(posedge clk)
+    begin
+        if (enq_en)
+        begin
+            data[wr_idx] <= enq_data;
+        end
+    end
 
     // Write pointer advances on ENQ
     always_ff @(posedge clk)
@@ -79,7 +86,6 @@ module cci_mpf_prim_fifo_lutram
         end
         else if (enq_en)
         begin
-            data[wr_idx] <= enq_data;
             wr_idx <= (wr_idx == t_IDX'(N_ENTRIES-1)) ? 0 : wr_idx + 1;
 
             assert (notFull) else

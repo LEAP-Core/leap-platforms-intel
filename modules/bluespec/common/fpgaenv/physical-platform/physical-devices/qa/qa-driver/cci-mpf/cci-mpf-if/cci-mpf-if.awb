@@ -3,6 +3,8 @@
 
 %provides qa_cci_mpf_if
 
+%notes README
+
 %sources -t VERILOG_H   -v PRIVATE cci_mpf_if.vh
 %sources -t VERILOG_H   -v PRIVATE cci_mpf_if_dbg.vh
 

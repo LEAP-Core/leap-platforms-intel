@@ -56,7 +56,7 @@ module cci_mpf_prim_filter_cam
     // Mirrors test_notPresent but one cycle delayed. Internally this gives
     // the logic more time to implement the CAM and the computation is split
     // across the cycles.
-    output logic [0 : N_TEST_CLIENTS-1]                 test_notPresent_reg,
+    output logic [0 : N_TEST_CLIENTS-1]                 test_notPresent_q,
 
     // Insert one value into the CAM in a specific slot. Slots are managed
     // outside this module.
@@ -120,37 +120,12 @@ module cci_mpf_prim_filter_cam
 
 
     // Registered equivalent of the combinational logic, producing the
-    // test_notPresent_delayed result. This is the same result as
-    // test_notPresent returned the previous cycle with computation spread
-    // across the two cycles to relax timing.
-    logic [0 : N_TEST_CLIENTS-1] reg_test_en;
-    logic [0 : N_TEST_CLIENTS-1][0 : N_BUCKETS-1] reg_test_match;
-    logic [0 : N_TEST_CLIENTS-1] reg_insert_match;
-
-    generate
-        for (g = 0; g < N_TEST_CLIENTS; g = g + 1)
-        begin : registered
-            assign test_notPresent_reg[g] =
-                (! reg_test_en[g] ||
-                 // Not present if no matches
-                 (! (| reg_test_match[g]) && ! reg_insert_match[g]));
-        end
-    endgenerate
-
+    // test_notPresent registered result.
     always_ff @(posedge clk)
     begin
-        if (! reset_n)
+        for (int c = 0; c < N_TEST_CLIENTS; c = c + 1)
         begin
-            reg_test_en <= 0;
-        end
-        else
-        begin
-            for (int c = 0; c < N_TEST_CLIENTS; c = c + 1)
-            begin
-                reg_test_en[c] <= test_en[c];
-                reg_test_match[c] <= valid & test_match[c];
-                reg_insert_match[c] = insert_en && insert_match[c];
-            end
+            test_notPresent_q[c] <= test_notPresent[c];
         end
     end
 

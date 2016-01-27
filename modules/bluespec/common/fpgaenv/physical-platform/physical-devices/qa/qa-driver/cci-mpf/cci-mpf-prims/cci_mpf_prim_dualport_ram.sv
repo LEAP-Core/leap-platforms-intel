@@ -38,7 +38,9 @@
 module cci_mpf_prim_dualport_ram
   #(
     parameter N_ENTRIES = 32,
-              N_DATA_BITS = 64
+    parameter N_DATA_BITS = 64,
+    // Number of extra stages of output register buffering to add
+    parameter N_OUTPUT_REG_STAGES = 0
     )
    (
     input  logic clk0,
@@ -54,7 +56,14 @@ module cci_mpf_prim_dualport_ram
     output logic [N_DATA_BITS-1 : 0] rdata1
     );
 
-    reg [N_DATA_BITS-1 : 0] data[0 : N_ENTRIES-1];
+    logic [N_DATA_BITS-1 : 0] data[0 : N_ENTRIES-1];
+
+    logic [N_DATA_BITS-1 : 0] mem_rd0[0 : N_OUTPUT_REG_STAGES];
+    logic [N_DATA_BITS-1 : 0] mem_rd1[0 : N_OUTPUT_REG_STAGES];
+
+    assign rdata0 = mem_rd0[N_OUTPUT_REG_STAGES];
+    assign rdata1 = mem_rd1[N_OUTPUT_REG_STAGES];
+
 
     // Port A
     always @(posedge clk0)
@@ -63,11 +72,11 @@ module cci_mpf_prim_dualport_ram
         begin
             data[addr0] <= wdata0;
             // Altera includes this bypass in the sample dual write port memory.
-            rdata0 <= wdata0;
+            mem_rd0[0] <= wdata0;
         end
         else
         begin
-            rdata0 <= data[addr0];
+            mem_rd0[0] <= data[addr0];
         end
     end
 
@@ -78,12 +87,28 @@ module cci_mpf_prim_dualport_ram
         begin
             data[addr1] <= wdata1;
             // Altera includes this bypass in the sample dual write port memory.
-            rdata1 <= wdata1;
+            mem_rd1[0] <= wdata1;
         end
         else
         begin
-            rdata1 <= data[addr1];
+            mem_rd1[0] <= data[addr1];
         end
     end
+
+    genvar s;
+    generate
+        for (s = 0; s < N_OUTPUT_REG_STAGES; s = s + 1)
+        begin: r
+            always_ff @(posedge clk0)
+            begin
+                mem_rd0[s+1] <= mem_rd0[s];
+            end
+
+            always_ff @(posedge clk1)
+            begin
+                mem_rd1[s+1] <= mem_rd1[s];
+            end
+        end
+    endgenerate
 
 endmodule // cci_mpf_prim_dualport_ram

@@ -63,6 +63,9 @@ module cci_mpf
     // terminate the feature list if the next address is 0.
     parameter DFH_MMIO_NEXT_ADDR = 0,
 
+    // Enforce write/write and write/read ordering with cache lines?
+    parameter ENFORCE_WR_ORDER = 1,
+
     // Return read responses in the order they were requested?
     parameter SORT_READ_RESPONSES = 1,
 
@@ -169,16 +172,30 @@ module cci_mpf
     //
     // ====================================================================
 
-    cci_mpf_if fiu_write_order (.clk);
+    cci_mpf_if fiu_wro (.clk);
 
-    cci_mpf_shim_write_order
-      filter
-       (
-        .clk,
-        .fiu(fiu_virtual),
-        .afu(fiu_write_order)
-        );
-
+    generate
+        if (ENFORCE_WR_ORDER)
+        begin : wro
+            cci_mpf_shim_write_order
+              filter
+               (
+                .clk,
+                .fiu(fiu_virtual),
+                .afu(fiu_wro)
+                );
+        end
+        else
+        begin : no_wro
+            cci_mpf_shim_null
+              filter
+               (
+                .clk,
+                .fiu(fiu_virtual),
+                .afu(fiu_wro)
+                );
+        end
+    endgenerate
 
     // ====================================================================
     //
@@ -189,6 +206,8 @@ module cci_mpf
     //
     // ====================================================================
 
+    cci_mpf_if fiu_rsp_order (.clk);
+
     cci_mpf_shim_rsp_order
       #(
         .SORT_READ_RESPONSES(SORT_READ_RESPONSES),
@@ -197,9 +216,23 @@ module cci_mpf
       rspOrder
        (
         .clk,
-        .fiu(fiu_write_order),
-        .afu(afu)
+        .fiu(fiu_wro),
+        .afu(fiu_rsp_order)
+        );
+
+
+    // ====================================================================
+    //
+    //  Register responses to AFU.
+    //
+    // ====================================================================
+
+    cci_mpf_shim_buffer_fiu
+      regRsp
+       (
+        .clk,
+        .fiu_raw(fiu_rsp_order),
+        .fiu_buf(afu)
         );
 
 endmodule // cci_mpf
-

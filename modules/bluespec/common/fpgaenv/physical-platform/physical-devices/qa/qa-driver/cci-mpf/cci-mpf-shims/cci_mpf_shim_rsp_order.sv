@@ -157,12 +157,20 @@ module cci_mpf_shim_rsp_order
         //
         if (PRESERVE_WRITE_MDATA)
         begin : gen_wr_heap
+            // Buffer not full for timing.  An extra free slot is added to
+            // the heap to account for latency of the not full signal.
+            logic wr_not_full;
+            always_ff @(posedge clk)
+            begin
+                wr_heap_notFull <= wr_not_full;
+            end
+
             cci_mpf_prim_heap_multi
               #(
                 .N_ENTRIES(N_SCOREBOARD_ENTRIES),
                 .N_DATA_BITS(CCI_MDATA_WIDTH),
                 .N_READ_PORTS(2),
-                .MIN_FREE_SLOTS(CCI_ALMOST_FULL_THRESHOLD)
+                .MIN_FREE_SLOTS(CCI_ALMOST_FULL_THRESHOLD + 1)
                 )
               wr_heap
                (
@@ -171,7 +179,7 @@ module cci_mpf_shim_rsp_order
 
                 .enq(afu.c1Tx.wrValid),
                 .enqData(afu.c1Tx.hdr.base.mdata),
-                .notFull(wr_heap_notFull),
+                .notFull(wr_not_full),
                 .allocIdx(wr_heap_allocIdx),
 
                 .readReq(wr_heap_readIdx),
@@ -244,6 +252,14 @@ module cci_mpf_shim_rsp_order
 
     t_cci_cldata rd_scoreboard_outData;
 
+    // Buffer not full for timing.  An extra free slot is added to the
+    // scoreboard to account for latency of the not full signal.
+    logic rd_not_full;
+    always_ff @(posedge clk)
+    begin
+        rd_scoreboard_notFull <= rd_not_full;
+    end
+
     generate
         if (SORT_READ_RESPONSES)
         begin : gen_rd_scoreboard
@@ -256,7 +272,7 @@ module cci_mpf_shim_rsp_order
                 .N_ENTRIES(N_SCOREBOARD_ENTRIES),
                 .N_DATA_BITS(CCI_CLDATA_WIDTH),
                 .N_META_BITS(CCI_MDATA_WIDTH),
-                .MIN_FREE_SLOTS(CCI_ALMOST_FULL_THRESHOLD)
+                .MIN_FREE_SLOTS(CCI_ALMOST_FULL_THRESHOLD + 1)
                 )
               rd_scoreboard
                (
@@ -265,7 +281,7 @@ module cci_mpf_shim_rsp_order
 
                 .enq_en(afu.c0Tx.rdValid),
                 .enqMeta(afu.c0Tx.hdr.base.mdata),
-                .notFull(rd_scoreboard_notFull),
+                .notFull(rd_not_full),
                 .enqIdx(rd_scoreboard_enqIdx),
 
                 .enqData_en(fiu.c0Rx.rdValid),
@@ -288,7 +304,7 @@ module cci_mpf_shim_rsp_order
               #(
                 .N_ENTRIES(N_SCOREBOARD_ENTRIES),
                 .N_DATA_BITS(CCI_MDATA_WIDTH),
-                .MIN_FREE_SLOTS(CCI_ALMOST_FULL_THRESHOLD)
+                .MIN_FREE_SLOTS(CCI_ALMOST_FULL_THRESHOLD + 1)
                 )
               rd_heap
                (
@@ -297,7 +313,7 @@ module cci_mpf_shim_rsp_order
 
                 .enq(afu.c0Tx.rdValid),
                 .enqData(afu.c0Tx.hdr.base.mdata),
-                .notFull(rd_scoreboard_notFull),
+                .notFull(rd_not_full),
                 .allocIdx(rd_scoreboard_enqIdx),
 
                 .readReq(t_scoreboard_idx'(fiu.c0Rx.hdr.mdata)),

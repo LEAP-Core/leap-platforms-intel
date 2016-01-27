@@ -3,6 +3,8 @@
 
 %provides qa_cci_if
 
+%notes README
+
 %sources -t H           -v PUBLIC  ccip_feature_list.h
 
 %sources -t VERILOG_H   -v PRIVATE cci_csr_if.vh

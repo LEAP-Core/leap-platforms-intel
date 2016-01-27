@@ -95,12 +95,12 @@ module cci_mpf_shim_write_order
         .THRESHOLD(CCI_ALMOST_FULL_THRESHOLD)
         )
       bufafu
-        (
-         .clk,
-         .afu_raw(afu),
-         .afu_buf(afu_buf),
-         .deqTx(afu_deq)
-         );
+       (
+        .clk,
+        .afu_raw(afu),
+        .afu_buf(afu_buf),
+        .deqTx(afu_deq)
+        );
 
     assign afu_buf.reset_n = fiu.reset_n;
 
@@ -125,12 +125,16 @@ module cci_mpf_shim_write_order
       fiu_buf (.clk);
 
     cci_mpf_shim_buffer_fiu
+      #(
+        // Add a register on output for timing
+        .REGISTER_OUTBOUND(1)
+        )
       buffiu
-        (
-         .clk,
-         .fiu_raw(fiu),
-         .fiu_buf(fiu_buf)
-         );
+       (
+        .clk,
+        .fiu_raw(fiu),
+        .fiu_buf(fiu_buf)
+        );
 
 
     // ====================================================================
@@ -222,7 +226,7 @@ module cci_mpf_shim_write_order
                .test_value(filter_test_req[1]),
                .test_en(filter_test_req_en[1]),
                .test_notPresent(),
-               .test_notPresent_reg(rd_filter_test_notPresent),
+               .test_notPresent_q(rd_filter_test_notPresent),
                .insert_idx(rd_filter_insert_idx),
                .insert_value(rd_filter_insert_hash),
                .insert_en(fiu_buf.c0Tx.rdValid),
@@ -242,7 +246,7 @@ module cci_mpf_shim_write_order
                .test_value(filter_test_req),
                .test_en(filter_test_req_en),
                .test_notPresent(),
-               .test_notPresent_reg(wr_filter_test_notPresent),
+               .test_notPresent_q(wr_filter_test_notPresent),
                .insert_idx(wr_filter_insert_idx),
                .insert_value(wr_filter_insert_hash),
                .insert_en(fiu_buf.c1Tx.wrValid),
@@ -381,7 +385,8 @@ module cci_mpf_shim_write_order
     t_REQUEST_PIPE;
 
     // Pipeline stage storage
-    t_REQUEST_PIPE afu_pipe[0:1];
+    localparam AFU_PIPE_DEPTH = 2;
+    t_REQUEST_PIPE afu_pipe[0 : AFU_PIPE_DEPTH-1];
 
     //
     // Work backwards in the pipeline.  First decide whether the oldest
@@ -488,7 +493,7 @@ module cci_mpf_shim_write_order
     begin
         if (! reset_n)
         begin
-            for (int i = 0; i < 2; i = i + 1)
+            for (int i = 0; i < AFU_PIPE_DEPTH; i = i + 1)
             begin
                 afu_pipe[i].c0Tx <= cci_mpf_c0TxClearValids();
                 afu_pipe[i].c1Tx <= cci_mpf_c1TxClearValids();
@@ -539,17 +544,92 @@ module cci_mpf_shim_write_order
 
     //
     // Calculate whether the entries in the afu_pipe can be swapped when
-    // the oldest one is blocked. This may permit requests to continue.
+    // the oldest one is blocked.  Allowing a swap allows newer requests to
+    // flow around blocked older requests.  The computation takes too long
+    // to be used to affect pipeline flow combinationally, so it is computed
+    // for use in the next cycle.
     //
     logic can_swap_oldest;
-    assign can_swap_oldest =
-        // Write can't conflict with read or write of slot 0
-        (! afu_pipe[1].c1Tx.wrValid ||
-         ((! afu_pipe[0].c1Tx.wrValid || (afu_pipe[1].c1AddrHash != afu_pipe[0].c1AddrHash)) &&
-          (! afu_pipe[0].c0Tx.rdValid || (afu_pipe[1].c1AddrHash != afu_pipe[0].c0AddrHash))))
-        // Write in slot 0 can't conflict with read in slot 1
-        && (! afu_pipe[0].c1Tx.wrValid || ! afu_pipe[1].c0Tx.rdValid ||
-            (afu_pipe[1].c0AddrHash != afu_pipe[0].c1AddrHash));
+
+    // Record conflicts.  There are AFU_PIPE_DEPTH+1 conflict bits because
+    // we must also compare against requests currently in afu_buf,
+    // which by the cycle that can_swap_oldest is used may be in afu_pipe.
+    logic [AFU_PIPE_DEPTH : 0] wr_wr_conflict;
+    logic [AFU_PIPE_DEPTH : 0] wr_rd_conflict;
+
+    always_ff @(posedge clk)
+    begin
+        // Can swap if there are no conflicts
+        can_swap_oldest <= ! (|(wr_wr_conflict) || |(wr_rd_conflict));
+    end
+
+    always_comb
+    begin
+        //
+        // Look for address matches that would make it illegal to rotate the
+        // pipeline without inducing a conflict.
+        //
+        for (int i = 0; i < AFU_PIPE_DEPTH; i = i + 1)
+        begin
+            wr_wr_conflict[i] = 1'b0;
+            wr_rd_conflict[i] = 1'b0;
+
+            if (afu_pipe[i].c1Tx.wrValid)
+            begin
+                // Compare all writes against all other writes
+                for (int j = i + 1; j < AFU_PIPE_DEPTH; j = j + 1)
+                begin
+                    wr_wr_conflict[i] =
+                        wr_wr_conflict[i] ||
+                        (afu_pipe[j].c1Tx.wrValid &&
+                         (afu_pipe[i].c1AddrHash == afu_pipe[j].c1AddrHash));
+                end
+
+                // Compare all writes against all other reads
+                for (int j = 0; j < AFU_PIPE_DEPTH; j = j + 1)
+                begin
+                    wr_rd_conflict[i] =
+                        wr_rd_conflict[i] ||
+                        (afu_pipe[j].c0Tx.rdValid &&
+                         (afu_pipe[i].c1AddrHash == afu_pipe[j].c0AddrHash));
+                end
+            end
+        end
+
+        //
+        // Do the same checks for incoming requests from afu_buf in case
+        // requests there enter afu_pipe this cycle.
+        //
+
+        // Incoming write against all other writes and reads
+        wr_wr_conflict[AFU_PIPE_DEPTH] = 1'b0;
+        if (afu_buf.c1Tx.wrValid)
+        begin
+            for (int i = 0; i < AFU_PIPE_DEPTH; i = i + 1)
+            begin
+                wr_wr_conflict[AFU_PIPE_DEPTH] =
+                    wr_wr_conflict[AFU_PIPE_DEPTH] ||
+                    (afu_pipe[i].c1Tx.wrValid &&
+                     (c1_hash_calc == afu_pipe[i].c1AddrHash)) ||
+                    (afu_pipe[i].c0Tx.rdValid &&
+                     (c1_hash_calc == afu_pipe[i].c0AddrHash));
+            end
+        end
+
+        // Incoming read against all other writes
+        wr_rd_conflict[AFU_PIPE_DEPTH] = 1'b0;
+        if (afu_buf.c0Tx.rdValid)
+        begin
+            for (int i = 0; i < AFU_PIPE_DEPTH; i = i + 1)
+            begin
+                wr_rd_conflict[AFU_PIPE_DEPTH] =
+                    wr_rd_conflict[AFU_PIPE_DEPTH] ||
+                    (afu_pipe[i].c1Tx.wrValid &&
+                     (c0_hash_calc == afu_pipe[i].c1AddrHash));
+            end
+        end
+    end
+
 
     //
     // Update the addresses being tested in the filter.  The test value
@@ -560,7 +640,8 @@ module cci_mpf_shim_write_order
 
     // If the pipeline is about to block try swapping the entries to avoid
     // blocking.
-    assign swap_entries = (c0_blocked || c1_blocked) && can_swap_oldest;
+    assign swap_entries = (c0_blocked || c1_blocked) && can_swap_oldest &&
+                          ! was_blocked;
 
     logic blocked_next;
     assign blocked_next = (c0_blocked || c1_blocked) && ! can_swap_oldest;

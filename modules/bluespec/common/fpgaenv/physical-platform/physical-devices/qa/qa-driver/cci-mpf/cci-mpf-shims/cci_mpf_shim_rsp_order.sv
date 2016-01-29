@@ -267,7 +267,7 @@ module cci_mpf_shim_rsp_order
             // Read responses are sorted.  Allocate a scoreboard as
             // a reorder buffer.
             //
-            cci_mpf_prim_scoreboard
+            cci_mpf_prim_scoreboard_obuf
               #(
                 .N_ENTRIES(N_SCOREBOARD_ENTRIES),
                 .N_DATA_BITS(CCI_CLDATA_WIDTH),

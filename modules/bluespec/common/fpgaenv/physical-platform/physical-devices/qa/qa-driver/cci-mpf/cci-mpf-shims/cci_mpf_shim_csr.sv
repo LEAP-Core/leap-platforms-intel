@@ -212,7 +212,7 @@ module cci_mpf_shim_csr
         // Construct the feature headers for each feature
         vtp_dfh = ccip_dfh_defaultDFH();
         vtp_dfh.f_type = eFTYP_BBB;
-        vtp_dfh.next = CCI_MPF_WRO_CSR_BASE;
+        vtp_dfh.next = CCI_MPF_VTP_CSR_SIZE;
         if (MPF_ENABLE_VTP != 0)
         begin
             // UID of VTP feature (from cci_mpf_csrs.h)
@@ -238,13 +238,13 @@ module cci_mpf_shim_csr
         if (DFH_MMIO_NEXT_ADDR == 0)
         begin
             // WRO is the last feature in the AFU's list
-            wro_dfh.next = CCI_MPF_WRO_CSR_BASE + CCI_MPF_WRO_CSR_SIZE;
+            wro_dfh.next = CCI_MPF_WRO_CSR_SIZE;
             wro_dfh.eol = 1'b1;
         end
         else
         begin
             // Point to the next feature (outside of MPF)
-            wro_dfh.next = DFH_MMIO_NEXT_ADDR;
+            wro_dfh.next = DFH_MMIO_NEXT_ADDR - CCI_MPF_WRO_CSR_BASE;
         end
 
         // Normal case -- just pass through read response port to FIU

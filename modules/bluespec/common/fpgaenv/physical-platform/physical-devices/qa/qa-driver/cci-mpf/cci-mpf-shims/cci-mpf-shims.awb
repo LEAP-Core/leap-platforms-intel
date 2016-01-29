@@ -23,4 +23,4 @@
 %sources -t VERILOG    -v PRIVATE cci_mpf_shim_null.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_shim_rsp_order.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_shim_vtp.sv
-%sources -t VERILOG    -v PRIVATE cci_mpf_shim_write_order.sv
+%sources -t VERILOG    -v PRIVATE cci_mpf_shim_wro.sv

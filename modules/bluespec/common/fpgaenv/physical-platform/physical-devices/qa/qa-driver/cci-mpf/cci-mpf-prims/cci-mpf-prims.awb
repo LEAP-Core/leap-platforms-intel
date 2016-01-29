@@ -14,4 +14,4 @@
 %sources -t VERILOG    -v PRIVATE cci_mpf_prim_heap.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_prim_lru_pseudo.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_prim_scoreboard.sv
-%sources -t VERILOG    -v PRIVATE cci_mpf_prim_scoreboard_dualport.sv
+%sources -t VERILOG    -v PRIVATE cci_mpf_prim_scoreboard_obuf.sv

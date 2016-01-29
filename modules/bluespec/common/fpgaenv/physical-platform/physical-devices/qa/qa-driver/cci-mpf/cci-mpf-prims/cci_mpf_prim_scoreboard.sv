@@ -70,24 +70,17 @@ module cci_mpf_prim_scoreboard
     output logic [N_META_BITS-1 : 0] firstMeta      // Meta-data for oldest entry
     );
 
-    typedef logic [N_DATA_BITS-1 : 0] t_DATA;
-    typedef logic [N_META_BITS-1 : 0] t_META_DATA;
-    typedef logic [$clog2(N_ENTRIES)-1 : 0] t_IDX;
+    typedef logic [N_DATA_BITS-1 : 0] t_data;
+    typedef logic [N_META_BITS-1 : 0] t_meta_data;
+    typedef logic [$clog2(N_ENTRIES)-1 : 0] t_idx;
 
     // Index logic in a space 1 bit larger than the true space
     // in order to accommodate pointer comparison as pointers wrap.
-    typedef logic [$clog2(N_ENTRIES) : 0] t_IDX_NOWRAP;
+    typedef logic [$clog2(N_ENTRIES) : 0] t_idx_nowrap;
 
-    typedef struct packed
-    {
-        t_DATA data;
-        t_META_DATA meta;
-    }
-    t_OUTPUT_DATA;
-
-    t_IDX newest;
-    t_IDX oldest;
-    t_IDX oldest_next;
+    t_idx newest;
+    t_idx oldest;
+    t_idx oldest_next;
 
     // notFull is true as long as there are at least MIN_FREE_SLOTS available
     // at the end of the ring buffer. The computation is complicated by the
@@ -95,7 +88,7 @@ module cci_mpf_prim_scoreboard
     logic newest_ge_oldest;
     assign newest_ge_oldest = (newest >= oldest);
     assign notFull =
-        ({1'b0, newest} + t_IDX_NOWRAP'(MIN_FREE_SLOTS)) < {newest_ge_oldest, oldest};
+        ({1'b0, newest} + t_idx_nowrap'(MIN_FREE_SLOTS)) < {newest_ge_oldest, oldest};
 
     // enq allocates a slot and returns the index of the slot.
     assign enqIdx = newest;
@@ -110,7 +103,7 @@ module cci_mpf_prim_scoreboard
         begin
             newest <= newest + 1;
 
-            assert ((newest + t_IDX'(1)) != oldest) else
+            assert ((newest + t_idx'(1)) != oldest) else
                 $fatal("cci_mpf_prim_scoreboard: Can't ENQ when FULL!");
             assert ((N_ENTRIES & (N_ENTRIES - 1)) == 0) else
                 $fatal("cci_mpf_prim_scoreboard: N_ENTRIES must be a power of 2!");
@@ -133,12 +126,6 @@ module cci_mpf_prim_scoreboard
         end
     end
 
-    // Needed for block RAM timing
-    t_DATA mem_rd /* synthesis keep */;
-    assign first = mem_rd;
-    t_META_DATA meta_rd /* synthesis keep */;
-    assign firstMeta = meta_rd;
-
     //
     // Storage where data will be sorted.  Port 0 is used for writes and
     // port 1 for reads.
@@ -157,7 +144,7 @@ module cci_mpf_prim_scoreboard
         .addr1(oldest_next),
         .wen1(1'b0),
         .wdata1(N_DATA_BITS'(0)),
-        .rdata1(mem_rd)
+        .rdata1(first)
         );
 
 
@@ -181,12 +168,12 @@ module cci_mpf_prim_scoreboard
                 .addr1(oldest_next),
                 .wen1(1'b0),
                 .wdata1('x),
-                .rdata1(meta_rd)
+                .rdata1(firstMeta)
                 );
         end
         else
         begin : noMeta
-            assign meta_rd = 'x;
+            assign firstMeta = 'x;
         end
     endgenerate
 
@@ -199,16 +186,17 @@ module cci_mpf_prim_scoreboard
     // this cycle.
     logic [1 : 0] dataValid_sub_q;
     logic deq_en_q;
+    t_idx oldest_q;
 
     // Track valid data
     always_comb
     begin
         dataValid = dataValid_q;
 
-        // Clear on completion
-        if (deq_en)
+        // Clear on completion. Actually, one cycle later for timing.
+        if (deq_en_q)
         begin
-            dataValid[oldest] = 1'b0;
+            dataValid[oldest_q] = 1'b0;
         end
 
         // Set when data arrives.
@@ -238,13 +226,13 @@ module cci_mpf_prim_scoreboard
         else
         begin
             dataValid_q <= dataValid;
+            deq_en_q <= deq_en;
 
             // Record enough state to compute notEmpty in the next cycle
             // in a method that is relatively independent of computation
             // this cycle.
-            dataValid_sub_q <= { dataValid_q[t_IDX'(oldest + 1)],
+            dataValid_sub_q <= { dataValid_q[t_idx'(oldest + 1)],
                                  dataValid_q[oldest] };
-            deq_en_q <= deq_en;
 
             if (reset_n)
             begin
@@ -252,6 +240,8 @@ module cci_mpf_prim_scoreboard
                     $fatal("cci_mpf_prim_scoreboard: Can't DEQ when EMPTY!");
             end
         end
+
+        oldest_q <= oldest;
     end
 
     // Check one of two valid bits to determine notEmpty, depending on whether

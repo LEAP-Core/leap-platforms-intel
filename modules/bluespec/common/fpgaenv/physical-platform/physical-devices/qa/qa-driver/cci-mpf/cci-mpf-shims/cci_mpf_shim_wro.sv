@@ -38,7 +38,7 @@
 //
 
 
-module cci_mpf_shim_write_order
+module cci_mpf_shim_wro
   #(
     // Size of the incoming buffer.  It must be at least as large as the
     // almost full threshold.
@@ -713,7 +713,7 @@ module cci_mpf_shim_write_order
                         (filter_verify_req[1] == afu_pipe[1].c1AddrHash) &&
                         (filter_verify_req_en[0] == afu_pipe[1].c0Tx.rdValid) &&
                         (filter_verify_req_en[1] == afu_pipe[1].c1Tx.wrValid)) else
-                    $fatal("cci_mpf_shim_write_order: Incorrect pipeline control");
+                    $fatal("cci_mpf_shim_wro: Incorrect pipeline control");
             end
         end
     end
@@ -880,5 +880,4 @@ module cci_mpf_shim_write_order
 
     assign fiu_buf.c2Tx = afu_buf.c2Tx;
 
-endmodule // cci_mpf_shim_write_order
-
+endmodule // cci_mpf_shim_wro

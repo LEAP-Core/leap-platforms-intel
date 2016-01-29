@@ -58,7 +58,7 @@ CCI_MPF_SHIM_VTP_CLASS::CCI_MPF_SHIM_VTP_CLASS(AFU afu) :
 
     // Walk the list of features, looking for VTP
     bool is_eol = f_afu.isEOL();
-    f_addr = f_afu.getNext();
+    f_addr += f_afu.getNext();
     while (! is_eol)
     {
         CCIP_FEATURE_DFH f(afu->ReadCSR64(f_addr));
@@ -75,7 +75,7 @@ CCI_MPF_SHIM_VTP_CLASS::CCI_MPF_SHIM_VTP_CLASS(AFU afu) :
             break;
         }
 
-        f_addr = f.getNext();
+        f_addr += f.getNext();
 
         // EOL?
         is_eol = f.isEOL();

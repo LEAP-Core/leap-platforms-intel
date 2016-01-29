@@ -177,8 +177,8 @@ module cci_mpf
     generate
         if (ENFORCE_WR_ORDER)
         begin : wro
-            cci_mpf_shim_write_order
-              filter
+            cci_mpf_shim_wro
+              order
                (
                 .clk,
                 .fiu(fiu_virtual),

@@ -170,7 +170,8 @@ module cci_mpf_shim_rsp_order
                 .N_ENTRIES(N_SCOREBOARD_ENTRIES),
                 .N_DATA_BITS(CCI_MDATA_WIDTH),
                 .N_READ_PORTS(2),
-                .MIN_FREE_SLOTS(CCI_ALMOST_FULL_THRESHOLD + 1)
+                .MIN_FREE_SLOTS(CCI_ALMOST_FULL_THRESHOLD + 1),
+                .N_OUTPUT_REG_STAGES(2)
                 )
               wr_heap
                (
@@ -191,9 +192,7 @@ module cci_mpf_shim_rsp_order
         else
         begin : no_wr_heap
             //
-            // Can overwrite Mdata without preserving it.  Some downstream
-            // MPF modules depend on finding zero bits in Mdata, so set up
-            // the dangling heap wires to clear Mdata.
+            // Can overwrite Mdata without preserving it.
             //
             assign wr_heap_notFull = 1'b1;
             assign wr_heap_allocIdx = t_heap_idx'(0);
@@ -205,37 +204,31 @@ module cci_mpf_shim_rsp_order
 
     // ====================================================================
     //
-    // Buffer for responses to allow a cycle for heap lookup.  If we aren't
+    // Buffer for responses to allow time for heap lookup.  If we aren't
     // sorting reads or preserving Mdata for writes then the buffer isn't
     // needed.  In that case just make it an alias for the incoming data.
     //
     // ====================================================================
 
-    cci_mpf_if fiu_buf (.clk);
-    assign fiu_buf.reset_n = fiu.reset_n;
+    // Set buffer latency as needed:
+    //   - Preserving write data: 2 cycles (heap latency)
+    //   - Not sorting read responses: 2 cycles (heap latency)
+    //   - Otherwise: 1 cycle (timing requirements)
+    localparam FIU_BUF_CYCLES =
+        ((PRESERVE_WRITE_MDATA || (SORT_READ_RESPONSES == 0)) ? 2 : 1);
 
-    generate
-        //
-        // Does the configuration require preserving Mdata for writes or
-        // reads?
-        //
-        if ((SORT_READ_RESPONSES == 0) || PRESERVE_WRITE_MDATA)
-        begin : gen_fiu_buf
-            always_ff @(posedge clk)
-            begin
-                fiu_buf.c0Rx <= fiu.c0Rx;
-                fiu_buf.c1Rx <= fiu.c1Rx;
-            end
-        end
-        else
-        begin : no_fiu_buf
-            always_comb
-            begin
-                fiu_buf.c0Rx = fiu.c0Rx;
-                fiu_buf.c1Rx = fiu.c1Rx;
-            end
-        end
-    endgenerate
+    cci_mpf_if fiu_buf (.clk);
+
+    cci_mpf_shim_buffer_fiu
+      #(
+        .N_RX_REG_STAGES(FIU_BUF_CYCLES)
+        )
+      buf_rx
+       (
+        .clk,
+        .fiu_raw(fiu),
+        .fiu_buf
+        );
 
 
     // ====================================================================
@@ -304,7 +297,8 @@ module cci_mpf_shim_rsp_order
               #(
                 .N_ENTRIES(N_SCOREBOARD_ENTRIES),
                 .N_DATA_BITS(CCI_MDATA_WIDTH),
-                .MIN_FREE_SLOTS(CCI_ALMOST_FULL_THRESHOLD + 1)
+                .MIN_FREE_SLOTS(CCI_ALMOST_FULL_THRESHOLD + 1),
+                .N_OUTPUT_REG_STAGES(2)
                 )
               rd_heap
                (
@@ -329,8 +323,8 @@ module cci_mpf_shim_rsp_order
     // and restored when the response is returned.
     always_comb
     begin
-        fiu.c0Tx = afu.c0Tx;
-        fiu.c0Tx.hdr.base.mdata = t_cci_mdata'(rd_scoreboard_enqIdx);
+        fiu_buf.c0Tx = afu.c0Tx;
+        fiu_buf.c0Tx.hdr.base.mdata = t_cci_mdata'(rd_scoreboard_enqIdx);
     end
 
     logic c0_non_rd_valid;
@@ -397,8 +391,8 @@ module cci_mpf_shim_rsp_order
     // that increments the heap index.
     always_comb
     begin
-        fiu.c1Tx = afu.c1Tx;
-        fiu.c1Tx.hdr.base.mdata = t_cci_mdata'(wr_heap_allocIdx);
+        fiu_buf.c1Tx = afu.c1Tx;
+        fiu_buf.c1Tx.hdr.base.mdata = t_cci_mdata'(wr_heap_allocIdx);
     end
 
     // Responses
@@ -424,7 +418,7 @@ module cci_mpf_shim_rsp_order
     //
     // ====================================================================
 
-    assign fiu.c2Tx = afu.c2Tx;
+    assign fiu_buf.c2Tx = afu.c2Tx;
 
 endmodule // cci_mpf_shim_rsp_order
 

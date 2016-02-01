@@ -42,7 +42,9 @@ module cci_mpf_prim_heap
     parameter N_ENTRIES = 32,
     parameter N_DATA_BITS = 64,
     // Threshold below which heap asserts "full"
-    parameter MIN_FREE_SLOTS = 1
+    parameter MIN_FREE_SLOTS = 1,
+    // Number of additional register stages on readRsp
+    parameter N_OUTPUT_REG_STAGES = 0
     )
    (
     input  logic clk,
@@ -75,7 +77,8 @@ module cci_mpf_prim_heap
         .N_ENTRIES(N_ENTRIES),
         .N_DATA_BITS(N_DATA_BITS),
         .N_READ_PORTS(1),
-        .MIN_FREE_SLOTS(MIN_FREE_SLOTS)
+        .MIN_FREE_SLOTS(MIN_FREE_SLOTS),
+        .N_OUTPUT_REG_STAGES(N_OUTPUT_REG_STAGES)
         )
       h(
         .clk,
@@ -103,7 +106,9 @@ module cci_mpf_prim_heap_multi
     parameter N_DATA_BITS = 64,
     parameter N_READ_PORTS = 1,
     // Threshold below which heap asserts "full"
-    parameter MIN_FREE_SLOTS = 1
+    parameter MIN_FREE_SLOTS = 1,
+    // Number of additional register stages on readRsp
+    parameter N_OUTPUT_REG_STAGES = 0
     )
    (
     input  logic clk,
@@ -124,13 +129,13 @@ module cci_mpf_prim_heap_multi
     input  logic [$clog2(N_ENTRIES)-1 : 0] freeIdx[0 : N_READ_PORTS-1]
     );
 
-    typedef logic [N_DATA_BITS-1 : 0] t_DATA;
-    typedef logic [$clog2(N_ENTRIES)-1 : 0] t_IDX;
+    typedef logic [N_DATA_BITS-1 : 0] t_data;
+    typedef logic [$clog2(N_ENTRIES)-1 : 0] t_idx;
 
     // Track whether an entry is free or busy
     logic [N_ENTRIES-1 : 0] notBusy;
 
-    t_IDX nextAlloc;
+    t_idx nextAlloc;
     assign allocIdx = nextAlloc;
 
 
@@ -139,12 +144,13 @@ module cci_mpf_prim_heap_multi
     // Slots are allocated round robin instead of using a complicated free
     // list. There must be at least MIN_FREE_SLOTS in the oldest positions.
     //
-    // For timing we compute notFull in advance.  To guarantee
-    // MIN_FREE_SLOTS next cycle we add one to the requirement, naming
+    // It takes 2 cycles For timing to compute notFull.  To guarantee
+    // MIN_FREE_SLOTS next cycle we add two to the requirement, naming
     // the stronger requirement MIN_FREE_SLOTS_Q.
+    //
     // ====================================================================
 
-    localparam MIN_FREE_SLOTS_Q = MIN_FREE_SLOTS + 1;
+    localparam MIN_FREE_SLOTS_Q = MIN_FREE_SLOTS + 2;
 
     // notBusyRepl replicates the low bits of notBusy at the end to avoid
     // computing wrap-around.
@@ -152,9 +158,11 @@ module cci_mpf_prim_heap_multi
     assign notBusyRepl = {notBusy[MIN_FREE_SLOTS_Q-1 : 0], notBusy};
 
     // The next MIN_FREE_SLOTS_Q entries must be free
+    logic [MIN_FREE_SLOTS_Q-1 : 0] check_bits;
     always_ff @(posedge clk)
     begin
-        notFull <= &(notBusyRepl[nextAlloc +: MIN_FREE_SLOTS_Q]);
+        check_bits <= notBusyRepl[nextAlloc +: MIN_FREE_SLOTS_Q];
+        notFull <= &(check_bits);
     end
 
     always_ff @(posedge clk)
@@ -165,8 +173,8 @@ module cci_mpf_prim_heap_multi
         end
         else if (enq)
         begin
-            nextAlloc <= (nextAlloc == t_IDX'(N_ENTRIES-1)) ?
-                             t_IDX'(0) : nextAlloc + 1;
+            nextAlloc <= (nextAlloc == t_idx'(N_ENTRIES-1)) ?
+                             t_idx'(0) : nextAlloc + 1;
 
             assert (notBusy[nextAlloc]) else
                 $fatal("cci_mpf_prim_heap: Can't ENQ when FULL!");
@@ -181,22 +189,39 @@ module cci_mpf_prim_heap_multi
     //
     // ====================================================================
 
-    t_DATA mem[0 : N_READ_PORTS-1][0 : N_ENTRIES-1];
+    // Memory
+    t_data mem[0 : N_READ_PORTS-1][0 : N_ENTRIES-1];
+
+    // Read response buffer stages
+    t_data mem_rd_rsp[0 : N_READ_PORTS-1][0 : N_OUTPUT_REG_STAGES];
 
     genvar p;
+    genvar s;
     generate
         for (p = 0; p < N_READ_PORTS; p = p + 1)
         begin : memory
+            // This will be inferred as block RAM
             always_ff @(posedge clk)
             begin
                 // Value available one cycle after request.
-                readRsp[p] <= mem[p][readReq[p]];
+                mem_rd_rsp[p][0] <= mem[p][readReq[p]];
 
                 if (enq)
                 begin
                     mem[p][allocIdx] <= enqData;
                 end
             end
+
+            // Read response buffer stages
+            for (s = 0; s < N_OUTPUT_REG_STAGES; s = s + 1)
+            begin : rspbuf
+                always_ff @(posedge clk)
+                begin
+                    mem_rd_rsp[p][s + 1] <= mem_rd_rsp[p][s];
+                end
+            end
+
+            assign readRsp[p] = mem_rd_rsp[p][N_OUTPUT_REG_STAGES];
         end
     endgenerate
 

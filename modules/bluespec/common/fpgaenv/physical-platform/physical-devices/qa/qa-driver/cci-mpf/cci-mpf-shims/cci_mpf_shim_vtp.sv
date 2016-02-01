@@ -251,13 +251,15 @@ module cci_mpf_shim_vtp
     //
 
     // Pipeline stage storage
-    localparam AFU_PIPE_LAST_STAGE = 3;
+    localparam AFU_PIPE_LAST_STAGE = 4;
     t_if_cci_mpf_c0_Tx c0_afu_pipe[0 : AFU_PIPE_LAST_STAGE];
     t_if_cci_mpf_c1_Tx c1_afu_pipe[0 : AFU_PIPE_LAST_STAGE];
 
     // Stage at which request is sent to TLB
-    localparam AFU_PIPE_LOOKUP_STAGE = 0;
+    localparam AFU_PIPE_LOOKUP_STAGE = 1;
 
+    // Stage to which retry wraps back
+    localparam AFU_PIPE_RETRY_STAGE = 1;
 
     //
     // Work backwards in the pipeline.  First decide whether the oldest
@@ -332,33 +334,32 @@ module cci_mpf_shim_vtp
         end
         else
         begin
-            // All but first stage is a simple systolic pipeline
-            for (int i = 0; i < AFU_PIPE_LAST_STAGE; i = i + 1)
+            // All but first two stages are a simple systolic pipeline
+            for (int i = 1; i < AFU_PIPE_LAST_STAGE; i = i + 1)
             begin
                 c0_afu_pipe[i+1] <= c0_afu_pipe[i];
                 c1_afu_pipe[i+1] <= c1_afu_pipe[i];
             end
 
-            // What goes in stage 0 of the pipeline?
-            if (c0_retry_req)
-            begin
-                // Oldest request either failed translation or couldn't
-                // be forwarded due to contention.
-                c0_afu_pipe[0] <= c0_afu_pipe[AFU_PIPE_LAST_STAGE];
-            end
-            else
+            // Ready to accept new entries?
+            if (! c0_retry_req)
             begin
                 c0_afu_pipe[0] <= afu_buf.c0Tx;
             end
 
-            if (c1_retry_req)
-            begin
-                c1_afu_pipe[0] <= c1_afu_pipe[AFU_PIPE_LAST_STAGE];
-            end
-            else
+            if (! c1_retry_req)
             begin
                 c1_afu_pipe[0] <= afu_buf.c1Tx;
             end
+
+            // Rotate failed lookup or advance pipeline?
+            c0_afu_pipe[AFU_PIPE_RETRY_STAGE] <=
+                c0_retry_req ? c0_afu_pipe[AFU_PIPE_LAST_STAGE] :
+                               c0_afu_pipe[0];
+
+            c1_afu_pipe[AFU_PIPE_RETRY_STAGE] <=
+                c1_retry_req ? c1_afu_pipe[AFU_PIPE_LAST_STAGE] :
+                               c1_afu_pipe[0];
         end
     end
 
@@ -799,12 +800,13 @@ module cci_mpf_shim_vtp_assoc
     //
     // ====================================================================
 
-    typedef enum logic [2:0]
+    typedef enum logic [3:0]
     {
         STATE_TLB_IDLE,
         STATE_TLB_READ_REQ,
         STATE_TLB_READ_RSP,
         STATE_TLB_SEARCH_LINE,
+        STATE_TLB_REQ_LRU,
         STATE_TLB_RECV_LRU,
         STATE_TLB_PTE_MATCH,
         STATE_TLB_BUBBLE,
@@ -847,7 +849,7 @@ module cci_mpf_shim_vtp_assoc
     t_PTE_IDX pte_idx[0 : 1];
 
     // Bubble state held for two cycles -- see STATE_TLB_BUBBLE handler.
-    logic bubble_hold;
+    logic [1:0] bubble_hold;
 
     // Miss channel arbiter -- used for fairness
     logic last_miss_channel;
@@ -858,7 +860,7 @@ module cci_mpf_shim_vtp_assoc
         begin
             state <= STATE_TLB_IDLE;
             last_miss_channel <= 1'b0;
-            bubble_hold <= 1'b0;
+            bubble_hold <= 1'b1;
         end
         else
         begin
@@ -984,7 +986,7 @@ module cci_mpf_shim_vtp_assoc
                     else if (cur_pte.vTag == pte_va_tag)
                     begin
                         // Found the requested PTE!
-                        state <= STATE_TLB_RECV_LRU;
+                        state <= STATE_TLB_REQ_LRU;
 
                         if (DEBUG_MESSAGES)
                         begin
@@ -1013,7 +1015,7 @@ module cci_mpf_shim_vtp_assoc
                     end
 
                     // Record the found PTE unconditionally.  It will only be
-                    // used after transition to STATE_TLB_RECV_LRU.
+                    // used after transition to STATE_TLB_REQ_LRU.
                     found_pte <= cur_pte;
 
                     // Shift the line by one PTE so the next iteration
@@ -1029,6 +1031,12 @@ module cci_mpf_shim_vtp_assoc
                     // code above.
                     pte_idx[0] <= t_PTE_IDX'(pt_line);
                     pte_idx[1] <= t_PTE_IDX'(pt_line);
+                end
+
+              STATE_TLB_REQ_LRU:
+                begin
+                    // Request LRU state to pick a victim
+                    state <= STATE_TLB_RECV_LRU;
                 end
 
               STATE_TLB_RECV_LRU:
@@ -1049,8 +1057,8 @@ module cci_mpf_shim_vtp_assoc
                     // Bubble cycles guarantee the TLB is updated before
                     // another miss may be triggered for the same page.
                     // Hold for two cycles.
-                    bubble_hold <= ~ bubble_hold;
-                    if (bubble_hold)
+                    bubble_hold <= bubble_hold + 1;
+                    if (bubble_hold == 0)
                     begin
                         state <= STATE_TLB_IDLE;
                     end
@@ -1200,11 +1208,8 @@ module cci_mpf_shim_vtp_assoc
     //
     // ====================================================================
 
-    // Look up LRU when making the transition to STATE_TLB_RECV_LRU.
     logic lru_lookup_en;
-    assign lru_lookup_en = (state == STATE_TLB_SEARCH_LINE) &&
-                           (pte_num != PTES_PER_LINE'(0)) &&
-                           (cur_pte.vTag == pte_va_tag);
+    assign lru_lookup_en = (state == STATE_TLB_REQ_LRU);
 
     cci_mpf_prim_lru_pseudo
       #(

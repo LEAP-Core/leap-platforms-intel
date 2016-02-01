@@ -179,9 +179,38 @@ module cci_mpf_shim_csr
     logic csr_rd_compat_en;
     t_mpf_csr_offset csr_rd_compat_addr;
 
-    // Give priority to existing MMIO responses from the AFU
+    // Read responses flow through an outbound FIFO for timing
+    t_if_ccip_c2_Tx c2_rsp_in;
+    t_if_ccip_c2_Tx c2_rsp;
+    logic c2_rsp_en;
     logic may_read;
-    assign may_read = ! afu.c2Tx.mmioRdValid;
+    logic c2_rsp_deq;
+    logic c2_rsp_rdy;
+
+    cci_mpf_prim_fifo1
+      #(
+        .N_DATA_BITS($bits(t_if_ccip_c2_Tx))
+        )
+      rd_rsp_fifo
+       (
+        .clk,
+        .reset_n,
+        .enq_data(c2_rsp_in),
+        .enq_en(c2_rsp_en),
+        .notFull(may_read),
+        .first(c2_rsp),
+        .deq_en(c2_rsp_deq),
+        .notEmpty(c2_rsp_rdy)
+        );
+
+    // Give priority to existing MMIO responses from the AFU
+    assign c2_rsp_deq = ! afu.c2Tx.mmioRdValid && c2_rsp_rdy;
+    
+    // Forward responses to host
+    always_ff @(posedge clk)
+    begin
+        fiu.c2Tx <= (c2_rsp_deq ? c2_rsp : afu.c2Tx);
+    end
 
     logic mmio_req_valid;
     t_mpf_csr_offset mmio_req_addr;
@@ -201,6 +230,9 @@ module cci_mpf_shim_csr
     // and is the address in range of the appropriate range?
     logic is_csr_read;
     assign is_csr_read = (mmio_req_valid || csr_rd_compat_en);
+
+    // Actually handling a response?
+    assign c2_rsp_en = may_read && is_csr_read;
 
     always_comb
     begin
@@ -247,55 +279,53 @@ module cci_mpf_shim_csr
             wro_dfh.next = DFH_MMIO_NEXT_ADDR - CCI_MPF_WRO_CSR_BASE;
         end
 
-        // Normal case -- just pass through read response port to FIU
-        fiu.c2Tx = afu.c2Tx;
+        //
+        // Unconditional logic, controlled by c2_rsp_en
+        //
 
-        if (may_read && is_csr_read)
-        begin
-            fiu.c2Tx.hdr.tid = mmio_req_tid;
+        c2_rsp_in.hdr.tid = mmio_req_tid;
 
-            // Address here has been converted to be relative to the start
-            // of the MPF feature list.
-            case (csr_addr)
-              (CCI_MPF_VTP_CSR_OFFSET +
-               CCI_MPF_VTP_CSR_DFH) >> 2: // VTP DFH (device feature header)
-                begin
-                    fiu.c2Tx.mmioRdValid = 1'b1;
-                    fiu.c2Tx.data = vtp_dfh;
-                end
-              (CCI_MPF_VTP_CSR_OFFSET +
-               CCI_MPF_VTP_CSR_ID_L) >> 2: // VTP UID low
-                begin
-                    fiu.c2Tx.mmioRdValid = 1'b1;
-                    fiu.c2Tx.data = vtp_uid[63:0];
-                end
-              (CCI_MPF_VTP_CSR_OFFSET +
-               CCI_MPF_VTP_CSR_ID_H) >> 2: // VTP UID high
-                begin
-                    fiu.c2Tx.mmioRdValid = 1'b1;
-                    fiu.c2Tx.data = vtp_uid[127:64];
-                end
+        // Address here has been converted to be relative to the start
+        // of the MPF feature list.
+        case (csr_addr)
+          (CCI_MPF_VTP_CSR_OFFSET +
+           CCI_MPF_VTP_CSR_DFH) >> 2: // VTP DFH (device feature header)
+            begin
+                c2_rsp_in.mmioRdValid = 1'b1;
+                c2_rsp_in.data = vtp_dfh;
+            end
+          (CCI_MPF_VTP_CSR_OFFSET +
+           CCI_MPF_VTP_CSR_ID_L) >> 2: // VTP UID low
+            begin
+                c2_rsp_in.mmioRdValid = 1'b1;
+                c2_rsp_in.data = vtp_uid[63:0];
+            end
+          (CCI_MPF_VTP_CSR_OFFSET +
+           CCI_MPF_VTP_CSR_ID_H) >> 2: // VTP UID high
+            begin
+                c2_rsp_in.mmioRdValid = 1'b1;
+                c2_rsp_in.data = vtp_uid[127:64];
+            end
 
-              (CCI_MPF_WRO_CSR_OFFSET +
-               CCI_MPF_WRO_CSR_DFH) >> 2: // WRO DFH (device feature header)
-                begin
-                    fiu.c2Tx.mmioRdValid = 1'b1;
-                    fiu.c2Tx.data = wro_dfh;
-                end
-              (CCI_MPF_WRO_CSR_OFFSET +
-               CCI_MPF_WRO_CSR_ID_L) >> 2: // WRO UID low
-                begin
-                    fiu.c2Tx.mmioRdValid = 1'b1;
-                    fiu.c2Tx.data = wro_uid[63:0];
-                end
-              (CCI_MPF_WRO_CSR_OFFSET +
-               CCI_MPF_WRO_CSR_ID_H) >> 2: // WRO UID high
-                begin
-                    fiu.c2Tx.mmioRdValid = 1'b1;
-                    fiu.c2Tx.data = wro_uid[127:64];
-                end
-            endcase
-        end
+          (CCI_MPF_WRO_CSR_OFFSET +
+           CCI_MPF_WRO_CSR_DFH) >> 2: // WRO DFH (device feature header)
+            begin
+                c2_rsp_in.mmioRdValid = 1'b1;
+                c2_rsp_in.data = wro_dfh;
+            end
+          (CCI_MPF_WRO_CSR_OFFSET +
+           CCI_MPF_WRO_CSR_ID_L) >> 2: // WRO UID low
+            begin
+                c2_rsp_in.mmioRdValid = 1'b1;
+                c2_rsp_in.data = wro_uid[63:0];
+            end
+          (CCI_MPF_WRO_CSR_OFFSET +
+           CCI_MPF_WRO_CSR_ID_H) >> 2: // WRO UID high
+            begin
+                c2_rsp_in.mmioRdValid = 1'b1;
+                c2_rsp_in.data = wro_uid[127:64];
+            end
+        endcase
     end
 
 
@@ -307,19 +337,26 @@ module cci_mpf_shim_csr
     // contends with other responders.
     //
 
+    // Register incoming requests
+    t_if_cci_c0_Rx c0_rx;
+    always_ff @(posedge clk)
+    begin
+        c0_rx <= fiu.c0Rx;
+    end
+
     logic mmio_req_enq_en;
     logic mmio_req_not_full;
 
     // Address of incoming request
     t_cci_mmioaddr mmio_req_addr_in;
-    assign mmio_req_addr_in = cci_csr_getAddress(fiu.c0Rx);
+    assign mmio_req_addr_in = cci_csr_getAddress(c0_rx);
 
     t_cci_mmioaddr mmio_req_addr_in_offset;
     assign mmio_req_addr_in_offset = mmio_req_addr_in -
                                      t_cci_mmioaddr'(DFH_MMIO_BASE_ADDR >> 2);
 
     // Store incoming requests only if the address is possibly in range
-    assign mmio_req_enq_en = cci_csr_isRead(fiu.c0Rx) &&
+    assign mmio_req_enq_en = cci_csr_isRead(c0_rx) &&
                              mmio_req_addr_in >= (DFH_MMIO_BASE_ADDR >> 2) &&
                              mmio_req_addr_in < (CCI_MPF_CSR_LAST >> 2);
 
@@ -334,12 +371,12 @@ module cci_mpf_shim_csr
          .reset_n,
          // Store only the MMIO address bits needed for decode
          .enq_data({ t_mpf_csr_offset'(mmio_req_addr_in_offset),
-                     cci_csr_getTid(fiu.c0Rx) }),
+                     cci_csr_getTid(c0_rx) }),
          .enq_en(mmio_req_enq_en),
          .notFull(mmio_req_not_full),
          .almostFull(),
          .first({mmio_req_addr, mmio_req_tid}),
-         .deq_en(may_read && mmio_req_valid),
+         .deq_en(c2_rsp_en),
          .notEmpty(mmio_req_valid)
          );
 
@@ -357,7 +394,7 @@ module cci_mpf_shim_csr
         begin
             csr_rd_compat_en <= 1'b0;
         end
-        else if (csr_rd_compat_en && may_read)
+        else if (c2_rsp_en)
         begin
             // If reading was permitted then the request fired
             csr_rd_compat_en <= 1'b0;

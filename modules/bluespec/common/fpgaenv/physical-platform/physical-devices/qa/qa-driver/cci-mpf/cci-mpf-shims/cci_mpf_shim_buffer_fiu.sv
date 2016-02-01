@@ -50,7 +50,12 @@
 module cci_mpf_shim_buffer_fiu
   #(
     // Register outbound signals if nonzero.
-    parameter REGISTER_OUTBOUND = 0
+    parameter REGISTER_OUTBOUND = 0,
+
+    // Number of RX register stages.  Even 0 works, which is just wires.
+    // This may be useful for incorporating in shims that may or may not
+    // need any buffering.
+    parameter N_RX_REG_STAGES = 1
     )
    (
     input  logic clk,
@@ -73,7 +78,7 @@ module cci_mpf_shim_buffer_fiu
     //
     generate
         if (REGISTER_OUTBOUND == 0)
-        begin
+        begin : tx_nr
             always_comb
             begin
                 fiu_raw.c0Tx = fiu_buf.c0Tx;
@@ -86,7 +91,7 @@ module cci_mpf_shim_buffer_fiu
             end
         end
         else
-        begin
+        begin : tx_r
             always_ff @(posedge clk)
             begin
                 fiu_raw.c0Tx <= fiu_buf.c0Tx;
@@ -101,13 +106,37 @@ module cci_mpf_shim_buffer_fiu
     endgenerate
 
     //
-    // Rx input is registered for a one cycle delay.
+    // Rx
     //
-    always_ff @(posedge clk)
-    begin
-        fiu_buf.c0Rx <= fiu_raw.c0Rx;
-        fiu_buf.c1Rx <= fiu_raw.c1Rx;
-    end
+    t_if_ccip_c0_Rx c0rx[N_RX_REG_STAGES-1 : 0];
+    t_if_ccip_c1_Rx c1rx[N_RX_REG_STAGES-1 : 0];
+
+    generate
+        if (N_RX_REG_STAGES == 0)
+        begin : rx_nr
+            always_comb
+            begin
+                fiu_buf.c0Rx = fiu_raw.c0Rx;
+                fiu_buf.c1Rx = fiu_raw.c1Rx;
+            end
+        end
+        else
+        begin : rx_r
+            always_ff @(posedge clk)
+            begin
+                c0rx[0] <= fiu_raw.c0Rx;
+                c1rx[0] <= fiu_raw.c1Rx;
+
+                for (int s = 1; s < N_RX_REG_STAGES; s = s + 1)
+                begin
+                    c0rx[s] <= c0rx[s-1];
+                    c1rx[s] <= c1rx[s-1];
+                end
+            end
+
+            assign fiu_buf.c0Rx = c0rx[N_RX_REG_STAGES-1];
+            assign fiu_buf.c1Rx = c1rx[N_RX_REG_STAGES-1];
+        end
+    endgenerate
 
 endmodule // cci_mpf_shim_buffer_fiu
-

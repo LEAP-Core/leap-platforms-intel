@@ -50,6 +50,15 @@
     endfunction
 
     // Print CSR data
+    function int csr_len(logic [1:0] length);
+        case (length)
+            2'b0: return 4;
+            2'b1: return 8;
+            2'b10: return 64;
+            default: return 0;
+        endcase
+    endfunction
+
     function string csr_data(int num_bytes, t_cci_cldata rx0_data);
         string str_4;
         string str_8;
@@ -194,15 +203,33 @@
                             c1Rx.hdr.mdata);
                 end
 
-`ifdef FIXME
+`ifdef USE_PLATFORM_CCIP
                 /******************* SW -> AFU Config Write *******************/
                 if (reset_n && c0Rx.mmioWrValid)
                 begin
-                    $fwrite(cci_mpf_if_log_fd, "%t\tMMIOWrReq\t%x\t%d bytes\t%s\n",
+                    t_ccip_Req_MmioHdr mmio_hdr;
+                    mmio_hdr = t_ccip_Req_MmioHdr'(c0Rx.hdr);
+
+                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\tMMIOWrReq\t%x\t%d bytes\t%x\t%s\n",
                             $time,
-                            c0RxMMIOHdr.index,
-                            4^(1 + C0RxMMIOHdr.len),
-                            csr_data(4^(1 + C0RxMMIOHdr.len), C0RxData) );
+                            mmio_hdr.tid,
+                            csr_len(mmio_hdr.length),
+                            mmio_hdr.address,
+                            csr_data(csr_len(mmio_hdr.length), c0Rx.data) );
+                end
+
+                /******************* SW -> AFU Config Read *******************/
+                if (reset_n && c0Rx.mmioRdValid)
+                begin
+                    t_ccip_Req_MmioHdr mmio_hdr;
+                    mmio_hdr = t_ccip_Req_MmioHdr'(c0Rx.hdr);
+
+                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\tMMIORdReq\t%x\t%d bytes\t%x\t%s\n",
+                            $time,
+                            mmio_hdr.tid,
+                            csr_len(mmio_hdr.length),
+                            mmio_hdr.address,
+                            csr_data(csr_len(mmio_hdr.length), c0Rx.data) );
                 end
 `endif
 

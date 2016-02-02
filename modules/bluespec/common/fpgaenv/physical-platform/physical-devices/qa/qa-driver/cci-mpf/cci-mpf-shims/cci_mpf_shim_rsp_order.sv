@@ -345,7 +345,6 @@ module cci_mpf_shim_rsp_order
         // unbuffered.
         if (SORT_READ_RESPONSES)
         begin
-            afu.c0Rx.data = rd_scoreboard_outData;
             afu.c0Rx.rdValid = rd_scoreboard_notEmpty && ! c0_non_rd_valid;
         end
 
@@ -353,9 +352,10 @@ module cci_mpf_shim_rsp_order
         // reconstruct the read response header.  The CCI-E header has the same
         // low bits as CCI-S so we always construct CCI-E and truncate when
         // in CCI-S mode.
-        if (afu.c0Rx.rdValid && SORT_READ_RESPONSES)
+        if (SORT_READ_RESPONSES && ! c0_non_rd_valid)
         begin
             afu.c0Rx.hdr = cci_genRspHdr(eRSP_RDLINE, rd_scoreboard_mdata);
+            afu.c0Rx.data = rd_scoreboard_outData;
         end
         else
         begin

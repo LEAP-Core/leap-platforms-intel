@@ -2,6 +2,12 @@
 // Map CCI-S wires to the MPF interface.
 //
 
+//
+// In addition to mapping CCI-S wires, this module adds a canonicalization layer
+// that shifts all channel 0 write responses to channel 1.  This is the behavior
+// of later CCI versions.
+//
+
 `include "cci_mpf_if.vh"
 
 `ifdef USE_PLATFORM_CCIS
@@ -65,38 +71,48 @@ module ccis_wires_to_mpf
     logic  clk;
     assign clk = vl_clk_LPdomain_32ui;
 
-    assign fiu.reset_n = ffs_vl_LP32ui_lp2sy_SoftReset_n &&
-                         ffs_vl_LP32ui_lp2sy_InitDnForSys;
+    // FIU connection to the external wires
+    cci_mpf_if fiu_ext(.clk);
+
+    logic reset_n;
+    assign reset_n = ffs_vl_LP32ui_lp2sy_SoftReset_n &&
+                     ffs_vl_LP32ui_lp2sy_InitDnForSys;
+    assign fiu_ext.reset_n = reset_n;
+    assign fiu.reset_n = fiu_ext.reset_n;
+
+    // Route AFU Tx lines toward FIU
+    assign fiu_ext.c0Tx = fiu.c0Tx;
+    assign fiu_ext.c1Tx = fiu.c1Tx;
 
     generate
         if (REGISTER_OUTPUTS)
         begin : reg_out
             always_ff @(posedge clk)
             begin
-                ffs_vl61_LP32ui_sy2lp_C0TxHdr <= fiu.c0Tx.hdr.base;
-                ffs_vl_LP32ui_sy2lp_C0TxRdValid <= fiu.c0Tx.rdValid;
-                fiu.c0TxAlmFull <= ffs_vl_LP32ui_lp2sy_C0TxAlmFull;
+                ffs_vl61_LP32ui_sy2lp_C0TxHdr <= fiu_ext.c0Tx.hdr.base;
+                ffs_vl_LP32ui_sy2lp_C0TxRdValid <= fiu_ext.c0Tx.rdValid;
+                fiu_ext.c0TxAlmFull <= ffs_vl_LP32ui_lp2sy_C0TxAlmFull;
 
-                ffs_vl61_LP32ui_sy2lp_C1TxHdr <= fiu.c1Tx.hdr.base;
-                ffs_vl512_LP32ui_sy2lp_C1TxData <= fiu.c1Tx.data;
-                ffs_vl_LP32ui_sy2lp_C1TxWrValid <= fiu.c1Tx.wrValid;
-                ffs_vl_LP32ui_sy2lp_C1TxIrValid <= fiu.c1Tx.intrValid;
-                fiu.c1TxAlmFull <= ffs_vl_LP32ui_lp2sy_C1TxAlmFull;
+                ffs_vl61_LP32ui_sy2lp_C1TxHdr <= fiu_ext.c1Tx.hdr.base;
+                ffs_vl512_LP32ui_sy2lp_C1TxData <= fiu_ext.c1Tx.data;
+                ffs_vl_LP32ui_sy2lp_C1TxWrValid <= fiu_ext.c1Tx.wrValid;
+                ffs_vl_LP32ui_sy2lp_C1TxIrValid <= fiu_ext.c1Tx.intrValid;
+                fiu_ext.c1TxAlmFull <= ffs_vl_LP32ui_lp2sy_C1TxAlmFull;
             end
         end
         else
         begin : wire_out
             always_comb
             begin
-                ffs_vl61_LP32ui_sy2lp_C0TxHdr = fiu.c0Tx.hdr.base;
-                ffs_vl_LP32ui_sy2lp_C0TxRdValid = fiu.c0Tx.rdValid;
-                fiu.c0TxAlmFull = ffs_vl_LP32ui_lp2sy_C0TxAlmFull;
+                ffs_vl61_LP32ui_sy2lp_C0TxHdr = fiu_ext.c0Tx.hdr.base;
+                ffs_vl_LP32ui_sy2lp_C0TxRdValid = fiu_ext.c0Tx.rdValid;
+                fiu_ext.c0TxAlmFull = ffs_vl_LP32ui_lp2sy_C0TxAlmFull;
 
-                ffs_vl61_LP32ui_sy2lp_C1TxHdr = fiu.c1Tx.hdr.base;
-                ffs_vl512_LP32ui_sy2lp_C1TxData = fiu.c1Tx.data;
-                ffs_vl_LP32ui_sy2lp_C1TxWrValid = fiu.c1Tx.wrValid;
-                ffs_vl_LP32ui_sy2lp_C1TxIrValid = fiu.c1Tx.intrValid;
-                fiu.c1TxAlmFull = ffs_vl_LP32ui_lp2sy_C1TxAlmFull;
+                ffs_vl61_LP32ui_sy2lp_C1TxHdr = fiu_ext.c1Tx.hdr.base;
+                ffs_vl512_LP32ui_sy2lp_C1TxData = fiu_ext.c1Tx.data;
+                ffs_vl_LP32ui_sy2lp_C1TxWrValid = fiu_ext.c1Tx.wrValid;
+                ffs_vl_LP32ui_sy2lp_C1TxIrValid = fiu_ext.c1Tx.intrValid;
+                fiu_ext.c1TxAlmFull = ffs_vl_LP32ui_lp2sy_C1TxAlmFull;
             end
         end
     endgenerate
@@ -109,37 +125,129 @@ module ccis_wires_to_mpf
         begin : reg_in
             always_ff @(posedge clk)
             begin
-                fiu.c0Rx.hdr       <= ffs_vl18_LP32ui_lp2sy_C0RxHdr;
-                fiu.c0Rx.data      <= ffs_vl512_LP32ui_lp2sy_C0RxData;
-                fiu.c0Rx.wrValid   <= ffs_vl_LP32ui_lp2sy_C0RxWrValid;
-                fiu.c0Rx.rdValid   <= ffs_vl_LP32ui_lp2sy_C0RxRdValid;
-                fiu.c0Rx.cfgValid  <= ffs_vl_LP32ui_lp2sy_C0RxCgValid;
-                fiu.c0Rx.umsgValid <= ffs_vl_LP32ui_lp2sy_C0RxUgValid;
-                fiu.c0Rx.intrValid <= ffs_vl_LP32ui_lp2sy_C0RxIrValid;
+                fiu_ext.c0Rx.hdr       <= ffs_vl18_LP32ui_lp2sy_C0RxHdr;
+                fiu_ext.c0Rx.data      <= ffs_vl512_LP32ui_lp2sy_C0RxData;
+                fiu_ext.c0Rx.wrValid   <= ffs_vl_LP32ui_lp2sy_C0RxWrValid;
+                fiu_ext.c0Rx.rdValid   <= ffs_vl_LP32ui_lp2sy_C0RxRdValid;
+                fiu_ext.c0Rx.cfgValid  <= ffs_vl_LP32ui_lp2sy_C0RxCgValid;
+                fiu_ext.c0Rx.umsgValid <= ffs_vl_LP32ui_lp2sy_C0RxUgValid;
+                fiu_ext.c0Rx.intrValid <= ffs_vl_LP32ui_lp2sy_C0RxIrValid;
 
-                fiu.c1Rx.hdr       <= ffs_vl18_LP32ui_lp2sy_C1RxHdr;
-                fiu.c1Rx.wrValid   <= ffs_vl_LP32ui_lp2sy_C1RxWrValid;
-                fiu.c1Rx.intrValid <= ffs_vl_LP32ui_lp2sy_C1RxIrValid;
+                fiu_ext.c1Rx.hdr       <= ffs_vl18_LP32ui_lp2sy_C1RxHdr;
+                fiu_ext.c1Rx.wrValid   <= ffs_vl_LP32ui_lp2sy_C1RxWrValid;
+                fiu_ext.c1Rx.intrValid <= ffs_vl_LP32ui_lp2sy_C1RxIrValid;
             end
         end
         else
         begin : wire_in
             always_comb
             begin
-                fiu.c0Rx.hdr       = ffs_vl18_LP32ui_lp2sy_C0RxHdr;
-                fiu.c0Rx.data      = ffs_vl512_LP32ui_lp2sy_C0RxData;
-                fiu.c0Rx.wrValid   = ffs_vl_LP32ui_lp2sy_C0RxWrValid;
-                fiu.c0Rx.rdValid   = ffs_vl_LP32ui_lp2sy_C0RxRdValid;
-                fiu.c0Rx.cfgValid  = ffs_vl_LP32ui_lp2sy_C0RxCgValid;
-                fiu.c0Rx.umsgValid = ffs_vl_LP32ui_lp2sy_C0RxUgValid;
-                fiu.c0Rx.intrValid = ffs_vl_LP32ui_lp2sy_C0RxIrValid;
+                fiu_ext.c0Rx.hdr       = ffs_vl18_LP32ui_lp2sy_C0RxHdr;
+                fiu_ext.c0Rx.data      = ffs_vl512_LP32ui_lp2sy_C0RxData;
+                fiu_ext.c0Rx.wrValid   = ffs_vl_LP32ui_lp2sy_C0RxWrValid;
+                fiu_ext.c0Rx.rdValid   = ffs_vl_LP32ui_lp2sy_C0RxRdValid;
+                fiu_ext.c0Rx.cfgValid  = ffs_vl_LP32ui_lp2sy_C0RxCgValid;
+                fiu_ext.c0Rx.umsgValid = ffs_vl_LP32ui_lp2sy_C0RxUgValid;
+                fiu_ext.c0Rx.intrValid = ffs_vl_LP32ui_lp2sy_C0RxIrValid;
 
-                fiu.c1Rx.hdr       = ffs_vl18_LP32ui_lp2sy_C1RxHdr;
-                fiu.c1Rx.wrValid   = ffs_vl_LP32ui_lp2sy_C1RxWrValid;
-                fiu.c1Rx.intrValid = ffs_vl_LP32ui_lp2sy_C1RxIrValid;
+                fiu_ext.c1Rx.hdr       = ffs_vl18_LP32ui_lp2sy_C1RxHdr;
+                fiu_ext.c1Rx.wrValid   = ffs_vl_LP32ui_lp2sy_C1RxWrValid;
+                fiu_ext.c1Rx.intrValid = ffs_vl_LP32ui_lp2sy_C1RxIrValid;
             end
         end
     endgenerate
+
+
+    //
+    // Interfaces after CCI-S return write responses only on c1.  Move
+    // all c0 write responses to c1.
+    //
+
+    // Limit write requests to the available response buffer space.
+    localparam MAX_WRITE_REQS = 256;
+    logic [$clog2(MAX_WRITE_REQS)-1 : 0] num_active_writes;
+
+    logic wr_valid;
+    assign wr_valid = (fiu.c1Tx.wrValid &&
+                       ((fiu.c1Tx.hdr.base.req_type == eREQ_WRLINE_I) ||
+                        (fiu.c1Tx.hdr.base.req_type == eREQ_WRLINE_M)));
+
+    always_ff @(posedge clk)
+    begin
+        if (! reset_n)
+        begin
+            num_active_writes <= 0;
+        end
+        else
+        begin
+            // The active write request count changes only when there
+            // is a new request without a response or vice versa.
+
+            if (wr_valid && ! fiu.c1Rx.wrValid)
+            begin
+                // New request without corresponding response
+                num_active_writes <= num_active_writes + 1;
+            end
+            else if (! wr_valid && fiu.c1Rx.wrValid)
+            begin
+                // Response without corresponding new request
+                num_active_writes <= num_active_writes - 1;
+            end
+        end
+    end
+    
+    assign fiu.c0TxAlmFull = fiu_ext.c0TxAlmFull;
+    // Signal full to avoid filling the write response FIFO
+    assign fiu.c1TxAlmFull =
+        fiu_ext.c1TxAlmFull ||
+        (num_active_writes >= MAX_WRITE_REQS - CCI_ALMOST_FULL_THRESHOLD);
+
+
+    //
+    // Send c0 write responses to c1 instead.
+    //
+    t_cci_mdata wr_rsp_mdata;
+    logic wr_rsp_deq_en;
+    logic wr_rsp_not_empty;
+
+    cci_mpf_prim_fifo_lutram
+      #(
+        .N_DATA_BITS(CCI_MDATA_WIDTH),
+        .N_ENTRIES(MAX_WRITE_REQS)
+        )
+      c0_wr_rsp
+       (
+        .clk,
+        .reset_n,
+        .enq_data(fiu_ext.c0Rx.hdr.mdata),
+        .enq_en(fiu_ext.c0Rx.wrValid),
+        .first(wr_rsp_mdata),
+        .deq_en(wr_rsp_deq_en),
+        .notEmpty(wr_rsp_not_empty)
+        );
+
+    always_comb
+    begin
+        // Forward c0Rx but drop write responses, which go into the FIFO to
+        // be routed to c1Rx.
+        fiu.c0Rx = fiu_ext.c0Rx;
+        fiu.c0Rx.wrValid = 1'b0;
+
+        if (wr_rsp_not_empty && ! cci_c1RxIsValid(fiu_ext.c1Rx))
+        begin
+            fiu.c1Rx = t_if_cci_c1_Rx'(0);
+            fiu.c1Rx.hdr.resp_type = eRSP_WRLINE;
+            fiu.c1Rx.hdr.mdata = wr_rsp_mdata;
+            fiu.c1Rx.wrValid = 1'b1;
+
+            wr_rsp_deq_en = 1'b1;
+        end
+        else
+        begin
+            fiu.c1Rx = fiu_ext.c1Rx;
+            wr_rsp_deq_en = 1'b0;
+        end
+    end
 
 endmodule // ccis_wires_to_mpf
 

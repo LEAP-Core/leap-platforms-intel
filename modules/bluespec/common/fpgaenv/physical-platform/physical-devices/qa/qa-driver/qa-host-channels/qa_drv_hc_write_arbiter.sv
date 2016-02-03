@@ -35,7 +35,7 @@
 module qa_drv_hc_write_arbiter
    (
     input logic clk,
-    input logic reset_n,
+    input logic reset,
 
     input  t_qa_drv_hc_csrs       csr,
    
@@ -64,17 +64,17 @@ module qa_drv_hc_write_arbiter
     // Issue control FSM
     qa_drv_hc_can_issue issue_control
        (
-        .clk(clk),
-        .reset_n(reset_n),
+        .clk,
+        .reset,
         .almostfull(tx1_almostfull),
-        .can_issue(can_issue),
+        .can_issue,
         .issue(write_grant.readerGrant | write_grant.writerGrant)
         );
 
     // FSM state
     always_ff @(posedge clk)
     begin
-        if (!reset_n)
+        if (reset)
         begin
             state <= FAVOR_FRAME_READER;
         end
@@ -152,7 +152,7 @@ module qa_drv_hc_write_arbiter
     // Some assertions
     always_comb
     begin
-        if (write_grant.writerGrant && write_grant.readerGrant && reset_n && ~clk)
+        if (write_grant.writerGrant && write_grant.readerGrant && ! reset && ~clk)
         begin
             $display("Double grant of reader %d %d.", write_grant.readerGrant, write_grant.writerGrant);        
             $finish;           

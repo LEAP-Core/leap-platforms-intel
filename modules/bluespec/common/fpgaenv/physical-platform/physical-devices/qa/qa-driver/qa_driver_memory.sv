@@ -82,8 +82,8 @@ module qa_driver_memory
     output logic [1:0]        mem_write_ack
     );
 
-    logic  reset_n;
-    assign reset_n = fiu.reset_n;
+    logic  reset;
+    assign reset = fiu.reset;
 
     // ====================================================================
     //
@@ -144,7 +144,7 @@ module qa_driver_memory
 
     always_ff @(posedge clk)
     begin
-        if (! reset_n)
+        if (reset)
         begin
             // Nothing
         end

@@ -69,8 +69,8 @@ module qa_driver_csr_rd
     parameter CSR_RD_COMPATIBILITY_MODE = 0;
 `endif
 
-    logic reset_n;
-    assign reset_n = fiu.reset_n;
+    logic reset;
+    assign reset = fiu.reset;
 
 
     // Use a small address space for the local CSRs, used after verifying
@@ -106,7 +106,7 @@ module qa_driver_csr_rd
     // Is CSR read enabled (either through MMIO or CCI-S compatibility mode)
     // and is the address in range of the appropriate range?
     logic is_csr_read;
-    assign is_csr_read = reset_n && (mmio_req_valid || csr_rd_compat_en);
+    assign is_csr_read = ! reset && (mmio_req_valid || csr_rd_compat_en);
 
     // Compute the address to be read, picking either an MMIO or a compatibility
     // mode address.
@@ -186,7 +186,7 @@ module qa_driver_csr_rd
             //
             always_ff @(posedge clk)
             begin
-                if (! reset_n)
+                if (reset)
                 begin
                     csr_rd_compat_en <= 1'b0;
                 end
@@ -232,7 +232,7 @@ module qa_driver_csr_rd
     // Hold the response until it is emitted
     always_ff @(posedge clk)
     begin
-        if (! reset_n)
+        if (reset)
         begin
             sreg_rsp_enable_q <= 1'b0;
         end

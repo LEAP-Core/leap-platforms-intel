@@ -70,9 +70,9 @@ module cci_mpf_shim_csr
     cci_mpf_csrs.csr csrs
     );
 
-    logic reset_n;
-    assign reset_n = fiu.reset_n;
-    assign afu.reset_n = fiu.reset_n;
+    logic reset;
+    assign reset = fiu.reset;
+    assign afu.reset = fiu.reset;
 
     // Most connections flow straight through and are, at most, read in this shim.
     assign fiu.c0Tx = afu.c0Tx;
@@ -134,7 +134,7 @@ module cci_mpf_shim_csr
 
     always_ff @(posedge clk)
     begin
-        if (! reset_n)
+        if (reset)
         begin
             csrs.vtp_in_mode <= t_cci_mpf_vtp_csr_mode'(0);
             csrs.vtp_in_page_table_base_valid <= 1'b0;
@@ -194,7 +194,7 @@ module cci_mpf_shim_csr
       rd_rsp_fifo
        (
         .clk,
-        .reset_n,
+        .reset,
         .enq_data(c2_rsp_in),
         .enq_en(c2_rsp_en),
         .notFull(may_read),
@@ -368,7 +368,7 @@ module cci_mpf_shim_csr
       req_fifo
         (
          .clk,
-         .reset_n,
+         .reset,
          // Store only the MMIO address bits needed for decode
          .enq_data({ t_mpf_csr_offset'(mmio_req_addr_in_offset),
                      cci_csr_getTid(c0_rx) }),
@@ -390,7 +390,7 @@ module cci_mpf_shim_csr
     //
     always_ff @(posedge clk)
     begin
-        if (! reset_n)
+        if (reset)
         begin
             csr_rd_compat_en <= 1'b0;
         end

@@ -42,7 +42,7 @@ module ccip_wires_to_mpf
     logic  clk;
     assign clk = vl_clk_LPdomain_16ui;
 
-    assign fiu.reset_n = ffs_LP16ui_afu_SoftReset_n;
+    assign fiu.reset = ~ffs_LP16ui_afu_SoftReset_n;
 
     generate
         if (REGISTER_OUTPUTS)

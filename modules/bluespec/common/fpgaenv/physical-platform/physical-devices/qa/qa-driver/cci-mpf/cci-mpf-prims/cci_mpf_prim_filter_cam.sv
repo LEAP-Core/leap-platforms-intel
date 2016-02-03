@@ -47,7 +47,7 @@ module cci_mpf_prim_filter_cam
     )
    (
     input  logic clk,
-    input  logic reset_n,
+    input  logic reset,
 
     // Test values against the set of values stored in the CAM.
     input  logic [0 : N_TEST_CLIENTS-1][BITS_PER_BUCKET-1 : 0] test_value,
@@ -135,7 +135,7 @@ module cci_mpf_prim_filter_cam
     //
     always_ff @(posedge clk)
     begin
-        if (! reset_n)
+        if (reset)
         begin
             valid <= N_BUCKETS'(0);
         end

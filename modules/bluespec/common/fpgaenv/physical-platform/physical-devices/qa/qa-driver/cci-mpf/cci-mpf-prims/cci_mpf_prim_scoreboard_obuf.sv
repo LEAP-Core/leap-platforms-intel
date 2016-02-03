@@ -44,7 +44,7 @@ module cci_mpf_prim_scoreboard_obuf
     )
    (
     input  logic clk,
-    input  logic reset_n,
+    input  logic reset,
 
     // Add a new entry to the scoreboard.  No payload, just control.
     // The scoreboard returns a handle -- the index where the payload should
@@ -88,7 +88,7 @@ module cci_mpf_prim_scoreboard_obuf
       sb
        (
         .clk,
-        .reset_n,
+        .reset,
         .enq_en,
         .enqMeta,
         .notFull,
@@ -130,7 +130,7 @@ module cci_mpf_prim_scoreboard_obuf
       fifo
        (
         .clk,
-        .reset_n,
+        .reset,
         .enq_data({ sc_first_meta_q, sc_first_q }),
         .enq_en(sc_deq_en_q),
         .notFull(),

@@ -102,7 +102,7 @@
             begin
                 // //////////////////////// C0 TX CHANNEL TRANSACTIONS //////////////////////////
                 /******************* AFU -> MEM Read Request ******************/
-                if (reset_n && c0Tx.rdValid)
+                if (! reset && c0Tx.rdValid)
                 begin
                     $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%x\t%s %x\n",
                             $time,
@@ -124,7 +124,7 @@
 
                 //////////////////////// C1 TX CHANNEL TRANSACTIONS //////////////////////////
                 /******************* AFU -> MEM Write Request *****************/
-                if (reset_n && c1Tx.wrValid)
+                if (! reset && c1Tx.wrValid)
                 begin
                     $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%x\t%s %x\t%x\n",
                             $time,
@@ -146,7 +146,7 @@
 
                 //////////////////////// C2 TX CHANNEL TRANSACTIONS //////////////////////////
                 /******************* AFU -> MMIO Read Response *****************/
-                if (reset_n && c2Tx.mmioRdValid)
+                if (! reset && c2Tx.mmioRdValid)
                 begin
                     $fwrite(cci_mpf_if_log_fd, "%m:\t%t\tMMIORdRsp\t%x\t%x\n",
                             $time,
@@ -156,7 +156,7 @@
 
                 //////////////////////// C0 RX CHANNEL TRANSACTIONS //////////////////////////
                 /******************* MEM -> AFU Read Response *****************/
-                if (reset_n && c0Rx.rdValid)
+                if (! reset && c0Rx.rdValid)
                 begin
                     $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%x\t%x\n",
                             $time,
@@ -173,7 +173,7 @@
                 end
 
                 /****************** MEM -> AFU Write Response *****************/
-                if (reset_n && c0Rx.wrValid)
+                if (! reset && c0Rx.wrValid)
                 begin
                     $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%x\n",
                             $time,
@@ -188,7 +188,7 @@
                             c0Rx.hdr.mdata);
                 end
 
-                if (reset_n && c1Rx.wrValid)
+                if (! reset && c1Rx.wrValid)
                 begin
                     $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%x\n",
                             $time,
@@ -205,7 +205,7 @@
 
 `ifdef USE_PLATFORM_CCIP
                 /******************* SW -> AFU Config Write *******************/
-                if (reset_n && c0Rx.mmioWrValid)
+                if (! reset && c0Rx.mmioWrValid)
                 begin
                     t_ccip_Req_MmioHdr mmio_hdr;
                     mmio_hdr = t_ccip_Req_MmioHdr'(c0Rx.hdr);
@@ -219,7 +219,7 @@
                 end
 
                 /******************* SW -> AFU Config Read *******************/
-                if (reset_n && c0Rx.mmioRdValid)
+                if (! reset && c0Rx.mmioRdValid)
                 begin
                     t_ccip_Req_MmioHdr mmio_hdr;
                     mmio_hdr = t_ccip_Req_MmioHdr'(c0Rx.hdr);

@@ -46,7 +46,7 @@ module qa_drv_hc_csr
     )
    (
     input logic clk,
-    input logic reset_n,
+    input logic reset,
 
     // Incoming signals from platform
     input t_if_cci_c0_Rx c0Rx,
@@ -86,7 +86,7 @@ module qa_drv_hc_csr
 
     always_ff @(posedge clk)
     begin
-        if (! reset_n)
+        if (reset)
         begin
             csr.hc_en <= 0;
             csr.hc_en_user_channel <= 0;
@@ -100,7 +100,7 @@ module qa_drv_hc_csr
 
     always_ff @(posedge clk)
     begin
-        if (! reset_n)
+        if (reset)
         begin
             csr.hc_ctrl_frame_valid <= 1'b0;
         end
@@ -152,7 +152,7 @@ module qa_drv_hc_csr
 
     always_ff @(posedge clk)
     begin
-        if (! reset_n)
+        if (reset)
         begin
             csr.hc_enable_test <= 0;
         end

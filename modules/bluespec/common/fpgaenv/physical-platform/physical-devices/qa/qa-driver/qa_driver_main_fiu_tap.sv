@@ -59,9 +59,9 @@ module qa_driver_main_fiu_tap
     input t_csr_afu_state csr
     );
 
-    logic reset_n;
-    assign reset_n = fiu.reset_n;
-    assign afu.reset_n = fiu.reset_n;
+    logic reset;
+    assign reset = fiu.reset;
+    assign afu.reset = fiu.reset;
 
     logic did_afu_id_write;
 
@@ -155,7 +155,7 @@ module qa_driver_main_fiu_tap
     //
     always_ff @(posedge clk)
     begin
-        if (! reset_n)
+        if (reset)
         begin
             did_afu_id_write <= 1'b0;
         end
@@ -174,7 +174,7 @@ module qa_driver_main_fiu_tap
 `ifdef USE_PLATFORM_CCIS
     always_ff @(posedge clk)
     begin
-        if (! reset_n)
+        if (reset)
         begin
             mmio_read_rsp_q.mmioRdValid <= 1'b0;
         end

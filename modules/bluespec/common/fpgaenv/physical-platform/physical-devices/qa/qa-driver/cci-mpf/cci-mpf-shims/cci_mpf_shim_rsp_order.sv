@@ -88,9 +88,9 @@ module cci_mpf_shim_rsp_order
     cci_mpf_if.to_afu afu
     );
 
-    logic reset_n;
-    assign reset_n = fiu.reset_n;
-    assign afu.reset_n = fiu.reset_n;
+    logic reset;
+    assign reset = fiu.reset;
+    assign afu.reset = fiu.reset;
 
     // Index of a scoreboard entry
     localparam N_SCOREBOARD_IDX_BITS = $clog2(N_SCOREBOARD_ENTRIES);
@@ -176,7 +176,7 @@ module cci_mpf_shim_rsp_order
               wr_heap
                (
                 .clk,
-                .reset_n,
+                .reset,
 
                 .enq(afu.c1Tx.wrValid),
                 .enqData(afu.c1Tx.hdr.base.mdata),
@@ -270,7 +270,7 @@ module cci_mpf_shim_rsp_order
               rd_scoreboard
                (
                 .clk,
-                .reset_n,
+                .reset,
 
                 .enq_en(afu.c0Tx.rdValid),
                 .enqMeta(afu.c0Tx.hdr.base.mdata),
@@ -303,7 +303,7 @@ module cci_mpf_shim_rsp_order
               rd_heap
                (
                 .clk,
-                .reset_n,
+                .reset,
 
                 .enq(afu.c0Tx.rdValid),
                 .enqData(afu.c0Tx.hdr.base.mdata),

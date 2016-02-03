@@ -45,7 +45,7 @@ interface cci_mpf_if
     );
 
     // Reset flows from FIU to AFU
-    logic              reset_n;
+    logic              reset;
 
     // Requests to FIU.  All objects are outputs flowing toward FIU except
     // the almost full ports, which provide flow control.
@@ -67,7 +67,7 @@ interface cci_mpf_if
     // Port directions for connections in the direction of the FIU (platform)
     modport to_fiu
       (
-       input  reset_n,
+       input  reset,
 
        output c0Tx,
        input  c0TxAlmFull,
@@ -84,7 +84,7 @@ interface cci_mpf_if
     // Port directions for connections in the direction of the AFU (user code)
     modport to_afu
       (
-       output reset_n,
+       output reset,
 
        input  c0Tx,
        output c0TxAlmFull,
@@ -108,7 +108,7 @@ interface cci_mpf_if
 
     modport to_fiu_snoop
       (
-       input  reset_n,
+       input  reset,
 
        input  c0TxAlmFull,
        input  c1TxAlmFull,
@@ -119,7 +119,7 @@ interface cci_mpf_if
 
     modport to_afu_snoop
       (
-       input  reset_n,
+       input  reset,
 
        input  c0Tx,
        input  c1Tx,

@@ -74,8 +74,8 @@ module qa_drv_hc_root
     // The driver uses structures and shorter names to group the CCI.
     // Map names here.
     //
-    logic  reset_n;
-    assign reset_n = fiu.reset_n;
+    logic  reset;
+    assign reset = fiu.reset;
 
     t_if_cci_c0_Rx rx0;
     // Buffer incoming read responses for timing
@@ -109,7 +109,7 @@ module qa_drv_hc_root
     //
     always_ff @(posedge clk)
     begin
-        if (! reset_n)
+        if (reset)
         begin
             tx0_q <= cci_c0TxClearValids();
             tx1_q <= cci_c1TxClearValids();
@@ -137,7 +137,7 @@ module qa_drv_hc_root
       hcCsr
        (
         .clk,
-        .reset_n,
+        .reset,
         .c0Rx(rx0),
         .csr
         );

@@ -46,7 +46,7 @@ module cci_mpf_shim_null
     cci_mpf_if.to_afu afu
     );
 
-    assign afu.reset_n = fiu.reset_n;
+    assign afu.reset = fiu.reset;
 
     always_comb
     begin

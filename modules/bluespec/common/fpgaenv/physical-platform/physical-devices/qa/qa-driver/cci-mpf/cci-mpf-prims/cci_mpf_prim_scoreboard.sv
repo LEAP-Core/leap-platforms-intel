@@ -47,7 +47,7 @@ module cci_mpf_prim_scoreboard
     )
    (
     input  logic clk,
-    input  logic reset_n,
+    input  logic reset,
 
     // Add a new entry to the scoreboard.  No payload, just control.
     // The scoreboard returns a handle -- the index where the payload should
@@ -95,7 +95,7 @@ module cci_mpf_prim_scoreboard
 
     always_ff @(posedge clk)
     begin
-        if (! reset_n)
+        if (reset)
         begin
             newest <= 0;
         end
@@ -118,7 +118,7 @@ module cci_mpf_prim_scoreboard
 
     always_ff @(posedge clk)
     begin
-        if (! reset_n)
+        if (reset)
             oldest <= 0;
         else
         begin
@@ -209,15 +209,15 @@ module cci_mpf_prim_scoreboard
     // Local reset for output data valid registers since dataValid_q is
     // large enough to be a timing problem. No output can be ready the
     // first cycle after reset is complete, so the delay isn't a problem.
-    logic reset_n_q;
+    logic reset_q;
     always_ff @(posedge clk)
     begin
-        reset_n_q <= reset_n;
+        reset_q <= reset;
     end
 
     always_ff @(posedge clk)
     begin
-        if (! reset_n_q)
+        if (reset_q)
         begin
             dataValid_q <= N_ENTRIES'(0);
             dataValid_sub_q <= 2'b0;
@@ -234,7 +234,7 @@ module cci_mpf_prim_scoreboard
             dataValid_sub_q <= { dataValid_q[t_idx'(oldest + 1)],
                                  dataValid_q[oldest] };
 
-            if (reset_n)
+            if (! reset)
             begin
                 assert(! deq_en || notEmpty) else
                     $fatal("cci_mpf_prim_scoreboard: Can't DEQ when EMPTY!");

@@ -87,8 +87,8 @@ module cci_mpf
     cci_mpf_if.to_afu afu
     );
 
-    logic  reset_n;
-    assign reset_n = fiu.reset_n;
+    logic  reset;
+    assign reset = fiu.reset;
 
 
     // ====================================================================

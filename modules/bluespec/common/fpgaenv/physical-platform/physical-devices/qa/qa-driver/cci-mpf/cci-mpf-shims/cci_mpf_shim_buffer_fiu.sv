@@ -70,7 +70,7 @@ module cci_mpf_shim_buffer_fiu
     cci_mpf_if.to_afu fiu_buf
     );
 
-    assign fiu_buf.reset_n = fiu_raw.reset_n;
+    assign fiu_buf.reset = fiu_raw.reset;
 
     //
     // Tx wires pass through toward the FIU. They are straight assignments

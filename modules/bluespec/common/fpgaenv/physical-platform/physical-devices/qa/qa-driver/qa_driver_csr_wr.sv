@@ -48,8 +48,8 @@ module qa_driver_csr_wr
     output t_csr_afu_state csr
     );
 
-    logic reset_n;
-    assign reset_n = fiu.reset_n;
+    logic reset;
+    assign reset = fiu.reset;
 
     // Check for a CSR address match for a 32-bit object
     function automatic logic csrMatches32(int c);
@@ -85,7 +85,7 @@ module qa_driver_csr_wr
     //
     always_ff @(posedge clk)
     begin
-        if (! reset_n)
+        if (reset)
         begin
             csr.afu_dsm_base_valid <= 0;
             csr.afu_dsm_base[63:58] <= 6'b0;

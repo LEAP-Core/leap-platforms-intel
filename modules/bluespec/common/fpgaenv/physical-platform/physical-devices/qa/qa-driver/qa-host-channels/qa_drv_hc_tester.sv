@@ -41,7 +41,7 @@
 module qa_drv_hc_tester
    (
     input logic clk,
-    input logic reset_n,
+    input logic reset,
 
     input  t_qa_drv_hc_csrs csr,
 
@@ -192,7 +192,7 @@ module qa_drv_hc_tester
     //
     always_ff @(posedge clk)
     begin
-        if (! reset_n)
+        if (reset)
         begin
             state <= NORMAL;
         end

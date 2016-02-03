@@ -39,7 +39,7 @@ module qa_drv_hc_status_manager
     )
    (
     input logic clk,
-    input logic reset_n,
+    input logic reset,
 
     input  t_if_cci_c0_Rx rx0,
 
@@ -133,7 +133,7 @@ module qa_drv_hc_status_manager
     //
     always_ff @(posedge clk)
     begin
-        if (!reset_n)
+        if (reset)
         begin
             newest_read_line_idx <= 0;
             oldest_write_idx <= 0;
@@ -155,7 +155,7 @@ module qa_drv_hc_status_manager
     //
     always_ff @(posedge clk)
     begin
-        if (!reset_n)
+        if (reset)
         begin
             state_rd <= STATE_RD_POLL;
         end
@@ -224,7 +224,7 @@ module qa_drv_hc_status_manager
 
     always_ff @(posedge clk)
     begin
-        if (!reset_n)
+        if (reset)
         begin
             state_wr <= STATE_WR_INIT;
         end
@@ -282,7 +282,7 @@ module qa_drv_hc_status_manager
     //
     always_ff @(posedge clk)
     begin
-        if (!reset_n)
+        if (reset)
         begin
             fifo_from_host_current_idx <= 0;
             fifo_to_host_current_idx <= 0;

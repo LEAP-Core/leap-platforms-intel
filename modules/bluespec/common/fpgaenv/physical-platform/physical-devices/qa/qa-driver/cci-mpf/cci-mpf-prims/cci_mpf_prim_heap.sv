@@ -48,7 +48,7 @@ module cci_mpf_prim_heap
     )
    (
     input  logic clk,
-    input  logic reset_n,
+    input  logic reset,
 
     input  logic enq,                                // Allocate an entry
     input  logic [N_DATA_BITS-1 : 0] enqData,
@@ -82,7 +82,7 @@ module cci_mpf_prim_heap
         )
       h(
         .clk,
-        .reset_n,
+        .reset,
         .enq,
         .enqData,
         .notFull,
@@ -112,7 +112,7 @@ module cci_mpf_prim_heap_multi
     )
    (
     input  logic clk,
-    input  logic reset_n,
+    input  logic reset,
 
     input  logic enq,                                // Allocate an entry
     input  logic [N_DATA_BITS-1 : 0] enqData,
@@ -167,7 +167,7 @@ module cci_mpf_prim_heap_multi
 
     always_ff @(posedge clk)
     begin
-        if (! reset_n)
+        if (reset)
         begin
             nextAlloc <= 0;
         end
@@ -231,7 +231,7 @@ module cci_mpf_prim_heap_multi
     //
     always_ff @(posedge clk)
     begin
-        if (! reset_n)
+        if (reset)
         begin
             notBusy <= ~ (N_ENTRIES'(0));
         end

@@ -44,7 +44,7 @@ module cci_mpf_prim_filter_counting
     )
    (
     input  logic clk,
-    input  logic reset_n,
+    input  logic reset,
 
     // Test a bucket.  The test logic is combinational.  Outputs are available
     // in the same cycle as the request.
@@ -134,7 +134,7 @@ module cci_mpf_prim_filter_counting
         begin : update
             always_ff @(posedge clk)
             begin
-                if (! reset_n)
+                if (reset)
                 begin
                     counters[b] <= BITS_PER_BUCKET'(0);
                 end

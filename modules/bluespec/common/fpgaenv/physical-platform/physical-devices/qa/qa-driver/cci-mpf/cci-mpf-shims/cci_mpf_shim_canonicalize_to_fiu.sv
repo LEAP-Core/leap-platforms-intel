@@ -47,9 +47,9 @@ module cci_mpf_shim_canonicalize_to_fiu
     cci_mpf_if.to_afu afu
     );
 
-    logic reset_n;
-    assign reset_n = fiu.reset_n;
-    assign afu.reset_n = fiu.reset_n;
+    logic reset;
+    assign reset = fiu.reset;
+    assign afu.reset = fiu.reset;
 
     assign fiu.c0Tx = cci_mpf_updC0TxCanonical(afu.c0Tx);
     assign fiu.c1Tx = cci_mpf_updC1TxCanonical(afu.c1Tx);

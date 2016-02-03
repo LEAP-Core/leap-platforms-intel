@@ -54,8 +54,8 @@ module cci_mpf_shim_wro
     cci_mpf_if.to_afu afu
     );
 
-    logic reset_n;
-    assign reset_n = fiu.reset_n;
+    logic reset;
+    assign reset = fiu.reset;
 
     // ====================================================================
     //
@@ -102,7 +102,7 @@ module cci_mpf_shim_wro
         .deqTx(afu_deq)
         );
 
-    assign afu_buf.reset_n = fiu.reset_n;
+    assign afu_buf.reset = fiu.reset;
 
     //
     // Almost full signals in the buffered input are ignored --
@@ -219,7 +219,7 @@ module cci_mpf_shim_wro
         .BYPASS_INSERT_TO_TEST(1)
         )
       rdFilter(.clk,
-               .reset_n,
+               .reset,
                // Only the write request channel checks against outstanding
                // reads. Multiple reads to the same address may be in flight
                // at the same time.
@@ -242,7 +242,7 @@ module cci_mpf_shim_wro
         .BYPASS_INSERT_TO_TEST(1)
         )
       wrFilter(.clk,
-               .reset_n,
+               .reset,
                .test_value(filter_test_req),
                .test_en(filter_test_req_en),
                .test_notPresent(),
@@ -298,7 +298,7 @@ module cci_mpf_shim_wro
         .N_DATA_BITS($bits(t_C0_HEAP_ENTRY))
         )
       c0_heap(.clk,
-              .reset_n,
+              .reset,
               .enq(fiu_buf.c0Tx.rdValid),
               .enqData(c0_heap_enqData),
               .notFull(c0_heap_notFull),
@@ -341,7 +341,7 @@ module cci_mpf_shim_wro
         .N_READ_PORTS(2)
         )
       c1_heap(.clk,
-              .reset_n,
+              .reset,
               .enq(fiu_buf.c1Tx.wrValid),
               .enqData(c1_heap_enqData),
               .notFull(c1_heap_notFull),
@@ -491,7 +491,7 @@ module cci_mpf_shim_wro
 
     always_ff @(posedge clk)
     begin
-        if (! reset_n)
+        if (reset)
         begin
             for (int i = 0; i < AFU_PIPE_DEPTH; i = i + 1)
             begin
@@ -648,7 +648,7 @@ module cci_mpf_shim_wro
 
     always_ff @(posedge clk)
     begin
-        if (! reset_n)
+        if (reset)
         begin
             filter_test_req_en <= 0;
             was_blocked <= 0;
@@ -816,7 +816,7 @@ module cci_mpf_shim_wro
 
     always_ff @(posedge clk)
     begin
-        if (! reset_n)
+        if (reset)
         begin
             c0_prev_heap_allocIdx <= 0;
             c1_prev_heap_allocIdx <= 0;

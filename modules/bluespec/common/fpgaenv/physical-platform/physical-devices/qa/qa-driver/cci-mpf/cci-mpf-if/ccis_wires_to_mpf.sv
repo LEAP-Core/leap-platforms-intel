@@ -74,11 +74,11 @@ module ccis_wires_to_mpf
     // FIU connection to the external wires
     cci_mpf_if fiu_ext(.clk);
 
-    logic reset_n;
-    assign reset_n = ffs_vl_LP32ui_lp2sy_SoftReset_n &&
-                     ffs_vl_LP32ui_lp2sy_InitDnForSys;
-    assign fiu_ext.reset_n = reset_n;
-    assign fiu.reset_n = fiu_ext.reset_n;
+    logic reset;
+    assign reset = ! (ffs_vl_LP32ui_lp2sy_SoftReset_n &&
+                      ffs_vl_LP32ui_lp2sy_InitDnForSys);
+    assign fiu_ext.reset = reset;
+    assign fiu.reset = fiu_ext.reset;
 
     // Route AFU Tx lines toward FIU
     assign fiu_ext.c0Tx = fiu.c0Tx;
@@ -174,7 +174,7 @@ module ccis_wires_to_mpf
 
     always_ff @(posedge clk)
     begin
-        if (! reset_n)
+        if (reset)
         begin
             num_active_writes <= 0;
         end
@@ -218,7 +218,7 @@ module ccis_wires_to_mpf
       c0_wr_rsp
        (
         .clk,
-        .reset_n,
+        .reset,
         .enq_data(fiu_ext.c0Rx.hdr.mdata),
         .enq_en(fiu_ext.c0Rx.wrValid),
         .first(wr_rsp_mdata),

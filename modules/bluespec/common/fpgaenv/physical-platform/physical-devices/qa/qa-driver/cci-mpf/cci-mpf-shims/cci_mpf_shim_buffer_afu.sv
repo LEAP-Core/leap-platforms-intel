@@ -69,7 +69,7 @@ module cci_mpf_shim_buffer_afu
     input logic deqC1Tx
     );
 
-    assign afu_raw.reset_n = afu_buf.reset_n;
+    assign afu_raw.reset = afu_buf.reset;
 
     //
     // Rx wires pass through toward the AFU.  They are latency sensitive
@@ -135,7 +135,7 @@ module cci_mpf_shim_buffer_afu
         .THRESHOLD(THRESHOLD)
         )
       c0_fifo(.clk,
-              .reset_n(afu_buf.reset_n),
+              .reset(afu_buf.reset),
 
               .enq_data(afu_raw.c0Tx.hdr),
               // c0Tx.rdValid is the only incoming valid bit.  Map it through
@@ -180,7 +180,7 @@ module cci_mpf_shim_buffer_afu
         .THRESHOLD(THRESHOLD)
         )
       c1_fifo(.clk,
-              .reset_n(afu_buf.reset_n),
+              .reset(afu_buf.reset),
 
               // The concatenated field order must match the use of c1_first above.
               .enq_data(afu_raw.c1Tx),

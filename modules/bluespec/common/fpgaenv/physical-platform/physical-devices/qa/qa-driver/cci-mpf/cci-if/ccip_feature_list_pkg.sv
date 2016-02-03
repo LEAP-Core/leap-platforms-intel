@@ -22,30 +22,6 @@ package ccip_feature_list_pkg;
     } t_ccip_feature_type;
 
     //
-    // AFU root DFH -- Root AFU Device Feature Header:
-    //   The primary DFH for the AFU, mapped to CSR 0.
-    //
-    typedef struct packed {
-        t_ccip_feature_type f_type;
-        logic [7:0]         rsvd1;
-        logic [3:0]         afu_minor_version;
-        logic [6:0]         rsvd0;
-        logic               eol;
-        t_ccip_feature_next next;
-        logic [3:0]         afu_major_version;
-        t_ccip_feature_id   id;
-    } t_ccip_afu_dfh;
-
-    function automatic t_ccip_afu_dfh ccip_dfh_defaultAFU();
-        t_ccip_afu_dfh dfh;
-        dfh = t_ccip_afu_dfh'(0);
-
-        dfh.f_type = eFTYP_AFU;
-        dfh.id = t_ccip_feature_id'(1);
-        return dfh;
-    endfunction
-
-    //
     // DFH -- Device Feature Header:
     //   Generic headers describe the meaning and size of a region.  They also
     //   point the next DFH, forming a linked list of features.

@@ -54,7 +54,7 @@ CCI_MPF_SHIM_VTP_CLASS::CCI_MPF_SHIM_VTP_CLASS(AFU afu) :
     //
     btCSROffset f_addr = 0;
     // Get the main AFU feature header
-    CCIP_AFU_FEATURE_DFH f_afu(afu->ReadCSR64(f_addr));
+    CCIP_FEATURE_DFH f_afu(afu->ReadCSR64(f_addr));
 
     // Walk the list of features, looking for VTP
     bool is_eol = f_afu.isEOL();

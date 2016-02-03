@@ -117,7 +117,7 @@ module qa_driver_csr_rd
 
     always_comb
     begin
-        t_ccip_afu_dfh afu_dfh;
+        t_ccip_dfh afu_dfh;
 
         // Normal case -- just pass through read response port to FIU
         c2Tx = t_if_cci_c2_Tx'('x);
@@ -134,7 +134,8 @@ module qa_driver_csr_rd
               0: // AFU DFH (device feature header)
                 begin
                     // Construct the DFH (CSR 0)
-                    afu_dfh = ccip_dfh_defaultAFU();
+                    afu_dfh = ccip_dfh_defaultDFH();
+                    afu_dfh.f_type = eFTYP_AFU;
                     afu_dfh.next = QA_DRIVER_DFH_SIZE;
 
                     c2Tx.mmioRdValid = 1'b1;

@@ -17,54 +17,6 @@ typedef enum
 }
 CCIP_FEATURE_TYPE;
 
-//
-// Decode an AFU feature header
-//
-class CCIP_AFU_FEATURE_DFH
-{
-  private:
-    // Encoded feature header
-    bt64bitCSR dfh;
-
-  public:
-    CCIP_AFU_FEATURE_DFH(bt64bitCSR h)
-    {
-        dfh = h;
-    }
-
-    ~CCIP_AFU_FEATURE_DFH() {};
-    
-    CCIP_FEATURE_TYPE getFeatureType()
-    {
-        return CCIP_FEATURE_TYPE((dfh >> 60) & 0xf);
-    }
-    
-    uint32_t getMinorVersion()
-    {
-        return (dfh >> 48) & 0xf;
-    }
-    
-    uint32_t getMajorVersion()
-    {
-        return (dfh >> 12) & 0xf;
-    }
-    
-    uint32_t getID()
-    {
-        return dfh & 0xfff;
-    }
-    
-    uint32_t getNext()
-    {
-        return (dfh >> 16) & 0xffffff;
-    }
-    
-    bool isEOL()
-    {
-        return ((dfh >> 40) & 1) == 1;
-    }
-};
-
 
 //
 // Decode a device feature header (all except AFU headers)

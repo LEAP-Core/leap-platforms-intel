@@ -168,7 +168,7 @@ module cci_mpf_shim_vtp
 
     // Given the virtual address of a line return the shortened VA of a page
     function automatic t_TLB_VA_PAGE pageFromVA;
-        input t_cci_mpf_cl_vaddr addr;
+        input t_cci_claddr addr;
 
         return addr[$high(addr) : LINE_PAGE_OFFSET_BITS];
     endfunction
@@ -176,7 +176,7 @@ module cci_mpf_shim_vtp
     // Given the virtual address of a line return the offset of the line from
     // the containing page.
     function automatic t_VA_PAGE_OFFSET pageOffsetFromVA;
-        input t_cci_mpf_cl_vaddr addr;
+        input t_cci_claddr addr;
 
         return addr[LINE_PAGE_OFFSET_BITS-1 : 0];
     endfunction
@@ -369,14 +369,14 @@ module cci_mpf_shim_vtp
     // skipped if the incoming request already has a physical address.
     //
     assign lookupPageVA[0] =
-        pageFromVA(cci_mpf_getReqVAddr(c0_afu_pipe[AFU_PIPE_LOOKUP_STAGE].hdr));
+        pageFromVA(cci_mpf_getReqAddr(c0_afu_pipe[AFU_PIPE_LOOKUP_STAGE].hdr));
     assign lookupEn[0] =
         lookupRdy[0] &&
         c0_afu_pipe[AFU_PIPE_LOOKUP_STAGE].rdValid &&
         cci_mpf_getReqAddrIsVirtual(c0_afu_pipe[AFU_PIPE_LOOKUP_STAGE].hdr);
 
     assign lookupPageVA[1] =
-        pageFromVA(cci_mpf_getReqVAddr(c1_afu_pipe[AFU_PIPE_LOOKUP_STAGE].hdr));
+        pageFromVA(cci_mpf_getReqAddr(c1_afu_pipe[AFU_PIPE_LOOKUP_STAGE].hdr));
     assign lookupEn[1] =
         lookupRdy[1] &&
         c1_afu_pipe[AFU_PIPE_LOOKUP_STAGE].wrValid &&
@@ -393,7 +393,7 @@ module cci_mpf_shim_vtp
     t_cci_mpf_ReqMemHdr c0_req_hdr;
 
     // Base address of the page table
-    t_cci_cl_paddr page_table_base;
+    t_cci_claddr page_table_base;
     assign page_table_base = csrs.vtp_in_page_table_base;
 
     always_comb
@@ -421,7 +421,7 @@ module cci_mpf_shim_vtp
             // Read for TLB miss.
             //
             c0_req_hdr = cci_mpf_genReqHdr(eREQ_RDLINE_S,
-                                           t_cci_mpf_cl_vaddr'(page_table_base + tlbReadIdx),
+                                           page_table_base + tlbReadIdx,
                                            t_cci_mdata'(0),
                                            cci_mpf_defaultReqHdrParams(0));
 

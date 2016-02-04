@@ -58,6 +58,9 @@
 
 `include "qa_driver_csr.vh"
 
+`ifdef USE_PLATFORM_CCIS
+import ccis_if_pkg::*;
+`endif
 
 module qa_driver
   #(
@@ -137,39 +140,39 @@ module qa_driver
     // -------------------------------------------------------------------
 
 `ifdef USE_PLATFORM_CCIS
-    input  logic           vl_clk_LPdomain_32ui,                // CCI Inteface Clock. 32ui link/protocol clock domain.
-    input  logic           ffs_vl_LP32ui_lp2sy_SoftReset_n,     // CCI-S soft reset
+    input  logic            vl_clk_LPdomain_32ui,                // CCI Inteface Clock. 32ui link/protocol clock domain.
+    input  logic            ffs_vl_LP32ui_lp2sy_SoftReset_n,     // CCI-S soft reset
 
-    input  logic           vl_clk_LPdomain_16ui,                // 2x CCI interface clock. Synchronous.16ui link/protocol clock domain.
-    input  logic           ffs_vl_LP32ui_lp2sy_SystemReset_n,   // System Reset
+    input  logic            vl_clk_LPdomain_16ui,                // 2x CCI interface clock. Synchronous.16ui link/protocol clock domain.
+    input  logic            ffs_vl_LP32ui_lp2sy_SystemReset_n,   // System Reset
 
     // Native CCI Interface (cache line interface for back end)
     /* Channel 0 can receive READ, WRITE, WRITE CSR responses.*/
-    input  t_cci_RspMemHdr ffs_vl18_LP32ui_lp2sy_C0RxHdr,       // System to LP header
-    input  t_cci_cldata    ffs_vl512_LP32ui_lp2sy_C0RxData, // System to LP data 
-    input  logic           ffs_vl_LP32ui_lp2sy_C0RxWrValid,     // RxWrHdr valid signal 
-    input  logic           ffs_vl_LP32ui_lp2sy_C0RxRdValid,     // RxRdHdr valid signal
-    input  logic           ffs_vl_LP32ui_lp2sy_C0RxCgValid,     // RxCgHdr valid signal
-    input  logic           ffs_vl_LP32ui_lp2sy_C0RxUgValid,     // Rx Umsg Valid signal
-    input  logic           ffs_vl_LP32ui_lp2sy_C0RxIrValid,     // Rx Interrupt valid signal
+    input  t_ccis_RspMemHdr ffs_vl18_LP32ui_lp2sy_C0RxHdr,       // System to LP header
+    input  t_ccis_cldata    ffs_vl512_LP32ui_lp2sy_C0RxData, // System to LP data 
+    input  logic            ffs_vl_LP32ui_lp2sy_C0RxWrValid,     // RxWrHdr valid signal 
+    input  logic            ffs_vl_LP32ui_lp2sy_C0RxRdValid,     // RxRdHdr valid signal
+    input  logic            ffs_vl_LP32ui_lp2sy_C0RxCgValid,     // RxCgHdr valid signal
+    input  logic            ffs_vl_LP32ui_lp2sy_C0RxUgValid,     // Rx Umsg Valid signal
+    input  logic            ffs_vl_LP32ui_lp2sy_C0RxIrValid,     // Rx Interrupt valid signal
     /* Channel 1 reserved for WRITE RESPONSE ONLY */
-    input  t_cci_RspMemHdr ffs_vl18_LP32ui_lp2sy_C1RxHdr,       // System to LP header (Channel 1)
-    input  logic           ffs_vl_LP32ui_lp2sy_C1RxWrValid,     // RxData valid signal (Channel 1)
-    input  logic           ffs_vl_LP32ui_lp2sy_C1RxIrValid,     // Rx Interrupt valid signal (Channel 1)
+    input  t_ccis_RspMemHdr ffs_vl18_LP32ui_lp2sy_C1RxHdr,       // System to LP header (Channel 1)
+    input  logic            ffs_vl_LP32ui_lp2sy_C1RxWrValid,     // RxData valid signal (Channel 1)
+    input  logic            ffs_vl_LP32ui_lp2sy_C1RxIrValid,     // Rx Interrupt valid signal (Channel 1)
 
     /*Channel 0 reserved for READ REQUESTS ONLY */        
-    output t_cci_ReqMemHdr ffs_vl61_LP32ui_sy2lp_C0TxHdr,       // System to LP header 
-    output logic           ffs_vl_LP32ui_sy2lp_C0TxRdValid,     // TxRdHdr valid signals 
+    output t_ccis_ReqMemHdr ffs_vl61_LP32ui_sy2lp_C0TxHdr,       // System to LP header 
+    output logic            ffs_vl_LP32ui_sy2lp_C0TxRdValid,     // TxRdHdr valid signals 
     /*Channel 1 reserved for WRITE REQUESTS ONLY */       
-    output t_cci_ReqMemHdr ffs_vl61_LP32ui_sy2lp_C1TxHdr,       // System to LP header
-    output t_cci_cldata    ffs_vl512_LP32ui_sy2lp_C1TxData, // System to LP data 
-    output logic           ffs_vl_LP32ui_sy2lp_C1TxWrValid,     // TxWrHdr valid signal
-    output logic           ffs_vl_LP32ui_sy2lp_C1TxIrValid,     // Tx Interrupt valid signal
+    output t_ccis_ReqMemHdr ffs_vl61_LP32ui_sy2lp_C1TxHdr,       // System to LP header
+    output t_ccis_cldata    ffs_vl512_LP32ui_sy2lp_C1TxData, // System to LP data 
+    output logic            ffs_vl_LP32ui_sy2lp_C1TxWrValid,     // TxWrHdr valid signal
+    output logic            ffs_vl_LP32ui_sy2lp_C1TxIrValid,     // Tx Interrupt valid signal
     /* Tx push flow control */
-    input  logic           ffs_vl_LP32ui_lp2sy_C0TxAlmFull,     // Channel 0 almost full
-    input  logic           ffs_vl_LP32ui_lp2sy_C1TxAlmFull,     // Channel 1 almost full
+    input  logic            ffs_vl_LP32ui_lp2sy_C0TxAlmFull,     // Channel 0 almost full
+    input  logic            ffs_vl_LP32ui_lp2sy_C1TxAlmFull,     // Channel 1 almost full
 
-    input  logic           ffs_vl_LP32ui_lp2sy_InitDnForSys     // System layer is aok to run
+    input  logic            ffs_vl_LP32ui_lp2sy_InitDnForSys     // System layer is aok to run
 `endif
 
 `ifdef USE_PLATFORM_CCIP
@@ -224,15 +227,22 @@ module qa_driver
 
 `ifdef USE_PLATFORM_CCIS
     ccis_wires_to_mpf
+      #(
+        .REGISTER_INPUTS(0),
+        .REGISTER_OUTPUTS(1),
+        .CSR_READ_COMPAT_ADDR(CSR_AFU_MMIO_READ_COMPAT >> 2)
+        )
+      map_ifc(.*);
 `endif
+
 `ifdef USE_PLATFORM_CCIP
     ccip_wires_to_mpf
-`endif
       #(
         .REGISTER_INPUTS(0),
         .REGISTER_OUTPUTS(1)
         )
       map_ifc(.*);
+`endif
 
 
     // ====================================================================
@@ -248,7 +258,7 @@ module qa_driver
     qa_driver_main_fiu_tap
       #(
         .AFU_ID(AFU_ID),
-        .QA_DRIVER_WRITE_TAG(-1)
+        .QA_DRIVER_WRITE_TAG((1 << CCI_MDATA_WIDTH) - 1)
         )
       tap
        (

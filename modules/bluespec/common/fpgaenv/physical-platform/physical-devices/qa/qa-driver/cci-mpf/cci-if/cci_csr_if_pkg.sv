@@ -12,15 +12,7 @@ package cci_csr_if_pkg;
         input t_if_cci_c0_Rx r
         );
 
-`ifdef USE_PLATFORM_CCIS
-        // CCI-S maps CSRs to configuration messages
-        return r.cfgValid;
-`endif
-
-`ifdef USE_PLATFORM_CCIP
-        // CCI-P maps CSRs to mmio reads and writes
         return r.mmioWrValid;
-`endif
     endfunction
 
 
@@ -31,15 +23,7 @@ package cci_csr_if_pkg;
         input t_if_cci_c0_Rx r
         );
 
-`ifdef USE_PLATFORM_CCIS
-        // CCI-S doesn't have CSR reads
-        return 1'b0;
-`endif
-
-`ifdef USE_PLATFORM_CCIP
-        // CCI-P maps CSRs to mmio reads and writes
         return r.mmioRdValid;
-`endif
     endfunction
 
 
@@ -50,14 +34,8 @@ package cci_csr_if_pkg;
         input t_if_cci_c0_Rx r
         );
 
-`ifdef USE_PLATFORM_CCIS
-        return 8'b0;
-`endif
-
-`ifdef USE_PLATFORM_CCIP
         t_cci_Req_MmioHdr h = t_cci_Req_MmioHdr'(r.hdr);
         return h.tid;
-`endif
     endfunction
 
 
@@ -68,16 +46,8 @@ package cci_csr_if_pkg;
         input t_if_cci_c0_Rx r
         );
 
-`ifdef USE_PLATFORM_CCIS
-        // CCI-S maps CSRs to configuration messages
-        return t_cci_mmioaddr'(r.hdr);
-`endif
-
-`ifdef USE_PLATFORM_CCIP
-        // CCI-P maps CSRs to mmio reads and writes
         t_cci_Req_MmioHdr h = t_cci_Req_MmioHdr'(r.hdr);
         return h.address;
-`endif
     endfunction
 
 endpackage // cci_csr_if_pkg

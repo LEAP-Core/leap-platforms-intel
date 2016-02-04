@@ -173,14 +173,14 @@ QA_HOST_CHANNELS_DEVICE_CLASS::Init()
                    readBuffer->physicalAddress / CL(1));
     if (QA_HOST_CHANNELS_DEBUG)
     {
-        printf("Writing Host READ_FRAME base %p (line %p) ...\n", readBuffer->physicalAddress, readBuffer->physicalAddress);
+        printf("Writing Host READ_FRAME base %p (line %p) ...\n", readBuffer->physicalAddress, readBuffer->physicalAddress / CL(1));
     }
 
     afu.WriteCSR64(CSR_HC_BASE_ADDR + CSR_HC_READ_FRAME,
                    writeBuffer->physicalAddress / CL(1));
     if (QA_HOST_CHANNELS_DEBUG)
     {
-        printf("Writing Host WRITE_FRAME base %p (line %p) ...\n", writeBuffer->physicalAddress, writeBuffer->physicalAddress);
+        printf("Writing Host WRITE_FRAME base %p (line %p) ...\n", writeBuffer->physicalAddress, writeBuffer->physicalAddress / CL(1));
     }
 
     // Enable AFU (driver and test only)

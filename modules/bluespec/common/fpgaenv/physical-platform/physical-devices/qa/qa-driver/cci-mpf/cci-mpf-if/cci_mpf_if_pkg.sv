@@ -31,33 +31,40 @@ package cci_mpf_if_pkg;
     import ccip_if_funcs_pkg::*;
 
     //
-    // Most data structures are passed unchanged from the chosen interface
-    // class to the generic name.  The exception is CLADDR becoming
-    // CL_PADDR in order to differentiate between physical and virtual
-    // addresses inside MPF.
+    // MPF's CCI is an extension of the platform's base CCI:
+    //
+    //  - It offers virtual addressing. The base CCI address field is
+    //    defined to be large enough for either virtual or physical
+    //    addresses. MPF adds a flag to indicate whether a given request's
+    //    address is virtual or physical.
+    //
+    //  - MPF provides functions for platform-independent manipulation
+    //    of CCI structures. It defines platform agnostic names,
+    //    e.g. t_cci_claddr instead of t_ccip_claddr. Objects with
+    //    MPF-specific data are given a name that includes "mpf", such
+    //    as t_cci_mpf_ReqMemHdr.
     //
 
-
-    // Unlike base CCI, MPF supports virtual addresses.
     //
-    // Bits in a VA to address a cache line. The number of bits in a VA
-    // is typically not a full 64 bit word since the x86 hardware page
-    // table doesn't support the full word.
-    parameter CCI_MPF_CL_VADDR_WIDTH = 48 - $clog2(CCI_CLDATA_WIDTH >> 3);
-    typedef logic [CCI_MPF_CL_VADDR_WIDTH-1:0] t_cci_mpf_cl_vaddr;
-
-
-`ifdef USE_PLATFORM_CCIP
-    parameter CCI_CL_PADDR_WIDTH = CCIP_CLADDR_WIDTH;
+    // Derive abstract CCI from CCI-P, which is a superset of all previous
+    // platforms.
+    //
+    parameter CCI_CLADDR_WIDTH = CCIP_CLADDR_WIDTH;
     parameter CCI_CLDATA_WIDTH = CCIP_CLDATA_WIDTH;
 
     parameter CCI_MMIOADDR_WIDTH = CCIP_MMIOADDR_WIDTH;
     parameter CCI_MMIODATA_WIDTH = CCIP_MMIODATA_WIDTH;
 
+`ifdef USE_PLATFORM_CCIS
+    parameter CCI_MDATA_WIDTH = CCIS_MDATA_WIDTH;
+    parameter CCI_ALMOST_FULL_THRESHOLD = CCIS_ALMOST_FULL_THRESHOLD;
+`endif
+`ifdef USE_PLATFORM_CCIP
     parameter CCI_MDATA_WIDTH = CCIP_MDATA_WIDTH;
     parameter CCI_ALMOST_FULL_THRESHOLD = CCIP_ALMOST_FULL_THRESHOLD;
+`endif
 
-    typedef t_ccip_claddr t_cci_cl_paddr;
+    typedef t_ccip_claddr t_cci_claddr;
     typedef t_ccip_cldata t_cci_cldata;
     typedef t_ccip_mdata t_cci_mdata;
 
@@ -126,84 +133,6 @@ package cci_mpf_if_pkg;
         return ccip_c1RxIsValid(r);
     endfunction
 
-`endif
-
-`ifdef USE_PLATFORM_CCIS
-    parameter CCI_CL_PADDR_WIDTH = CCIS_CLADDR_WIDTH;
-    parameter CCI_CLDATA_WIDTH = CCIS_CLDATA_WIDTH;
-    parameter CCI_MDATA_WIDTH = CCIS_MDATA_WIDTH;
-    parameter CCI_ALMOST_FULL_THRESHOLD = CCIS_ALMOST_FULL_THRESHOLD;
-
-    typedef t_ccis_claddr t_cci_cl_paddr;
-    typedef t_ccis_cldata t_cci_cldata;
-    typedef t_ccis_mdata t_cci_mdata;
-
-    // Use a few types from CCI-P that aren't in CCI-S
-    typedef ccip_if_pkg::t_ccip_vc t_cci_vc;
-    typedef ccip_if_pkg::t_ccip_cl_num t_cci_cl_num;
-    typedef ccip_if_pkg::t_ccip_tid t_cci_tid;
-
-    // Treat CCI-S CSR addresses like MMIO addresses
-    parameter CCI_MMIOADDR_WIDTH = 14;
-    typedef logic [CCI_MMIOADDR_WIDTH-1:0] t_cci_mmioaddr;
-
-    typedef t_ccis_req t_cci_req;
-    typedef t_ccis_rsp t_cci_rsp;
-
-    typedef t_ccis_ReqMemHdr t_cci_ReqMemHdr;
-    parameter CCI_TX_MEMHDR_WIDTH = CCIS_TX_MEMHDR_WIDTH;
-
-    // CCI-S has too few address bits to support virtual addressing.
-    `define CCI_MPF_NEED_ADDR_EXT 1
-
-    typedef t_ccis_RspMemHdr t_cci_RspMemHdr;
-    parameter CCI_RX_MEMHDR_WIDTH = CCIS_RX_MEMHDR_WIDTH;
-
-    typedef t_if_ccis_c0_Tx t_if_cci_c0_Tx;
-    typedef t_if_ccis_c1_Tx t_if_cci_c1_Tx;
-    // CCI-S has no MMIO channel. Import it from CCI-P to simplify code.
-    typedef t_if_ccip_c2_Tx t_if_cci_c2_Tx;
-    typedef t_if_ccis_Tx t_if_cci_Tx;
-
-    typedef t_if_ccis_c0_Rx t_if_cci_c0_Rx;
-    typedef t_if_ccis_c1_Rx t_if_cci_c1_Rx;
-    typedef t_if_ccis_Rx t_if_cci_Rx;
-
-    function automatic t_cci_ReqMemHdr cci_updMemReqHdrRsvd(
-        input t_cci_ReqMemHdr h
-        );
-        return ccis_updMemReqHdrRsvd(h);
-    endfunction
-
-    function automatic t_if_cci_c0_Tx cci_c0TxClearValids();
-        return ccis_c0TxClearValids();
-    endfunction
-
-    function automatic t_if_cci_c1_Tx cci_c1TxClearValids();
-        return ccis_c1TxClearValids();
-    endfunction
-
-    function automatic t_if_cci_c0_Rx cci_c0RxClearValids();
-        return ccis_c0RxClearValids();
-    endfunction
-
-    function automatic t_if_cci_c1_Rx cci_c1RxClearValids();
-        return ccis_c1RxClearValids();
-    endfunction
-
-    function automatic logic cci_c0RxIsValid(
-        input t_if_cci_c0_Rx r
-        );
-        return ccis_c0RxIsValid(r);
-    endfunction
-
-    function automatic logic cci_c1RxIsValid(
-        input t_if_cci_c1_Rx r
-        );
-        return ccis_c1RxIsValid(r);
-    endfunction
-
-`endif
 
     // ====================================================================
     //
@@ -211,9 +140,14 @@ package cci_mpf_if_pkg;
     //
     // ====================================================================
 
+    // CCI_CL_ADDR_WIDTH must be at least as large as both the virtual
+    // and physical address widths. On CCI-P both are the same.
+    parameter CCI_MPF_CL_PADDR_WIDTH = CCI_CLADDR_WIDTH;
+    parameter CCI_MPF_CL_VADDR_WIDTH = CCI_CLADDR_WIDTH;
+
     //
     // The CCI MPF request header adds fields that are used only for
-    // requests flowing from the AFU and through the memory protocol
+    // requests flowing from the AFU and through the memory properties
     // factory.  As requests leave MPF and enter the physical CCI the
     // extra fields are dropped.
     //
@@ -221,23 +155,12 @@ package cci_mpf_if_pkg;
     // memory ordering controls.
     //
 
-    // Difference in size between PADDR and VADDR.
-`ifdef CCI_MPF_NEED_ADDR_EXT
-    parameter CCI_MPF_CL_VADDR_EXT_WIDTH = CCI_MPF_CL_VADDR_WIDTH - CCI_CL_PADDR_WIDTH;
-    typedef logic [CCI_MPF_CL_VADDR_EXT_WIDTH-1:0] t_cci_mpf_cl_vaddr_ext;
-`endif
-
     //
     // Extension to the request header exposed in the MPF interface to
     // the AFU and used inside MPF.  The extension is dropped before
     // requests reach the FIU.
     //
     typedef struct packed {
-`ifdef CCI_MPF_NEED_ADDR_EXT
-        // Extra bits required to hold a virtual address
-        t_cci_mpf_cl_vaddr_ext addressExt;
-`endif
-
         // Enforce load/store and store/store ordering within lines?
         // Setting this to zero bypasses ordering logic for this request.
         logic checkLoadStoreOrder;
@@ -293,17 +216,11 @@ package cci_mpf_if_pkg;
     //
     // ====================================================================
 
-    // Virtual address is stored in a pair of fields: the field that
-    // will ultimately hold the physical address and an overflow field.
-    function automatic t_cci_mpf_cl_vaddr cci_mpf_getReqVAddr(
+    function automatic t_cci_claddr cci_mpf_getReqAddr(
         input t_cci_mpf_ReqMemHdr h
         );
 
-`ifdef CCI_MPF_NEED_ADDR_EXT
-        return {h.ext.addressExt, h.base.address};
-`else
         return h.base.address;
-`endif
     endfunction
 
 
@@ -326,13 +243,11 @@ package cci_mpf_if_pkg;
     // Update an existing request header with a new virtual address.
     function automatic t_cci_mpf_ReqMemHdr cci_mpf_updReqVAddr(
         input t_cci_mpf_ReqMemHdr h,
-        input t_cci_mpf_cl_vaddr  address
+        input t_cci_claddr        address
         );
 
-`ifdef CCI_MPF_NEED_ADDR_EXT
-        h.ext.addressExt = address[CCI_MPF_CL_VADDR_WIDTH-1 : CCI_CL_PADDR_WIDTH];
-`endif
-        h.base.address = address[CCI_CL_PADDR_WIDTH-1:0];
+        h.ext.addrIsVirtual = 1'b1;
+        h.base.address = address;
 
         return h;
     endfunction
@@ -365,7 +280,7 @@ package cci_mpf_if_pkg;
 
     function automatic t_cci_mpf_ReqMemHdr cci_mpf_genReqHdr(
         input t_cci_req                 requestType,
-        input t_cci_mpf_cl_vaddr        address,
+        input t_cci_claddr              address,
         input t_cci_mdata               mdata,
         input t_cci_mpf_ReqMemHdrParams params
         );
@@ -380,10 +295,8 @@ package cci_mpf_if_pkg;
 
         h.base.req_type = requestType;
         h.base.mdata = mdata;
-`ifdef USE_PLATFORM_CCIP
         h.base.vc_sel = params.vc_sel;
         h.base.cl_num = params.cl_num;
-`endif
 
         return h;
     endfunction
@@ -391,13 +304,13 @@ package cci_mpf_if_pkg;
     // Same as MPF version of genReqHdr but return only the base header
     function automatic t_cci_ReqMemHdr cci_genReqHdr(
         input t_cci_req                 requestType,
-        input t_cci_cl_paddr            address,
+        input t_cci_claddr              address,
         input t_cci_mdata               mdata,
         input t_cci_mpf_ReqMemHdrParams params
         );
 
         t_cci_mpf_ReqMemHdr h = cci_mpf_genReqHdr(requestType,
-                                                  t_cci_mpf_cl_vaddr'(address),
+                                                  address,
                                                   mdata,
                                                   params);
         return h.base;

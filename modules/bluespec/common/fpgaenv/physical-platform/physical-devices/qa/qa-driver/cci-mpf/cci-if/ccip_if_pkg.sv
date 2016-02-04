@@ -68,11 +68,7 @@ typedef struct packed {
     t_ccip_vc       vc_sel;
     logic           sop;
     logic           rsvd1;
-`ifdef CCIP_IF_V0_1
     t_ccip_cl_num   cl_num;
-`else
-    logic [1:0]     length;
-`endif
     t_ccip_req      req_type;
     logic [5:0]     rsvd0;
     t_ccip_claddr   address;
@@ -134,26 +130,9 @@ typedef struct packed {
 
 // Wrap all channels
 typedef struct packed {
-`ifdef CCIP_IF_V0_1
     t_if_ccip_c0_Tx      c0;
     t_if_ccip_c1_Tx      c1;
     t_if_ccip_c2_Tx      c2;
-`else
-    // Channel 0 : Memory Reads
-    t_ccip_ReqMemHdr              C0Hdr;          // Request Header
-    logic                         C0RdValid;      // Request Rd Valid
-
-    // Channel 1 : Memory Writes
-    t_ccip_ReqMemHdr              C1Hdr;          // Request Header
-    logic [CCIP_CLDATA_WIDTH-1:0] C1Data;         // Request Data
-    logic                         C1WrValid;      // Request Wr Valid
-    logic                         C1IntrValid;    // Request Intr Valid
-
-    // Channel 3 : Mmio
-    t_ccip_Rsp_MmioHdr            C2Hdr;          // Response Header
-    logic                         C2MmioRdValid;  // Response Read Valid
-    logic [CCIP_MMIODATA_WIDTH-1:0]C2Data;         // Response Data
-`endif
 } t_if_ccip_Tx;
 
 
@@ -177,29 +156,11 @@ typedef struct packed {
 
 // Wrap all channels
 typedef struct packed {
-`ifdef CCIP_IF_V0_1
     logic                c0TxAlmFull;    //  C0 Request Channel Almost Full
     logic                c1TxAlmFull;    //  C1 Request Channel Almost Full
 
     t_if_ccip_c0_Rx      c0;
     t_if_ccip_c1_Rx      c1;
-`else
-    // Channel 0: Memory Reads, Mmio
-    logic                        C0TxAlmFull;    //  C0 Request Channel Almost Full
-    t_ccip_RspMemHdr             C0Hdr;          //  Response/Request Header
-    logic [CCIP_CLDATA_WIDTH-1:0]C0Data;         //  Response Data
-    logic                        C0WrValid;      //  Response Wr Valid
-    logic                        C0RdValid;      //  Response Rd Valid
-    logic                        C0UMsgValid;    //  Request UMsg Valid
-    logic                        C0MmioRdValid;  //  Request MMIO Rd Valid
-    logic                        C0MmioWrValid;  //  Request MMIO Wr Valid
-
-    // Channel 1: Memory Writes
-    logic                        C1TxAlmFull;    //  C1 Request Channel Almost Full
-    t_ccip_RspMemHdr             C1Hdr;          //  Response Header
-    logic                        C1WrValid;      //  Response Wr Valid
-    logic                        C1IntrValid;    //  Response Interrupt Valid
-`endif
 } t_if_ccip_Rx;
 
 endpackage

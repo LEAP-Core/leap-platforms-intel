@@ -55,30 +55,14 @@ module qa_drv_hc_csr
     output t_qa_drv_hc_csrs csr
     );
 
-    // Check for a CSR address match for a 32-bit object
-    function automatic logic csrMatches32(int c);
+    // Check for a CSR address match
+    function automatic logic csrMatches(int c);
         // Target address.  The CSR space is 4-byte addressable.  The
         // low 2 address bits must be 0 and aren't transmitted.
         t_cci_mmioaddr tgt = t_cci_mmioaddr'((CSR_HC_BASE_ADDR + c) >> 2);
 
         // Actual address sent in CSR write
         t_cci_mmioaddr addr = cci_csr_getAddress(c0Rx);
-
-        return cci_csr_isWrite(c0Rx) && (addr == tgt);
-    endfunction
-
-    // Check for a CSR address match for a 64-bit naturally aligned object
-    function automatic logic csrMatches64(int c);
-        // Target address.  The CSR space is 4-byte addressable.  The
-        // low 2 address bits must be 0 and aren't transmitted.
-        t_cci_mmioaddr tgt = t_cci_mmioaddr'((CSR_HC_BASE_ADDR + c) >> 2);
-
-        // Actual address sent in CSR write.  64 bit writes may be sent
-        // either as a full 64 bit object or as a pair of 32 bit writes,
-        // sending the high half before the low half.  Ignore the low
-        // address bit to check the match.
-        t_cci_mmioaddr addr = cci_csr_getAddress(c0Rx);
-        addr[0] = 1'b0;
 
         return cci_csr_isWrite(c0Rx) && (addr == tgt);
     endfunction
@@ -91,7 +75,7 @@ module qa_drv_hc_csr
             csr.hc_en <= 0;
             csr.hc_en_user_channel <= 0;
         end
-        else if (csrMatches32(CSR_HC_EN))
+        else if (csrMatches(CSR_HC_EN))
         begin
             csr.hc_en <= c0Rx.data[0];
             csr.hc_en_user_channel <= c0Rx.data[1];
@@ -104,48 +88,26 @@ module qa_drv_hc_csr
         begin
             csr.hc_ctrl_frame_valid <= 1'b0;
         end
-        else if (csrMatches64(CSR_HC_CTRL_FRAME))
+        else if (csrMatches(CSR_HC_CTRL_FRAME))
         begin
-`ifdef USE_PLATFORM_CCIS
-            // Shift in by 32 bit chunks
-            csr.hc_ctrl_frame <=
-                t_cci_cl_paddr'({ csr.hc_ctrl_frame, c0Rx.data[31:0] });
-`else
-            csr.hc_ctrl_frame <= t_cci_cl_paddr'(c0Rx.data);
-`endif
-
-            // If the low bit of the address is 0 then the register update
-            // is complete.  When sent as a pair of 32 bit writes the high
-            // half is sent first.
-            csr.hc_ctrl_frame_valid <= ~ c0Rx.hdr[0];
+            csr.hc_ctrl_frame <= t_cci_claddr'(c0Rx.data);
+            csr.hc_ctrl_frame_valid <= 1'b1;
         end
     end
 
     always_ff @(posedge clk)
     begin
-        if (csrMatches64(CSR_HC_READ_FRAME))
+        if (csrMatches(CSR_HC_READ_FRAME))
         begin
-`ifdef USE_PLATFORM_CCIS
-            // Shift in by chunks
-            csr.hc_read_frame <=
-                t_cci_cl_paddr'({ csr.hc_read_frame, c0Rx.data[31:0] });
-`else
-            csr.hc_read_frame <= t_cci_cl_paddr'(c0Rx.data);
-`endif
+            csr.hc_read_frame <= t_cci_claddr'(c0Rx.data);
         end
     end
 
     always_ff @(posedge clk)
     begin
-        if (csrMatches64(CSR_HC_WRITE_FRAME))
+        if (csrMatches(CSR_HC_WRITE_FRAME))
         begin
-`ifdef USE_PLATFORM_CCIS
-            // Shift in by chunks
-            csr.hc_write_frame <=
-                t_cci_cl_paddr'({ csr.hc_write_frame, c0Rx.data[31:0] });
-`else
-            csr.hc_write_frame <= t_cci_cl_paddr'(c0Rx.data);
-`endif
+            csr.hc_write_frame <= t_cci_claddr'(c0Rx.data);
         end
     end
 
@@ -156,7 +118,7 @@ module qa_drv_hc_csr
         begin
             csr.hc_enable_test <= 0;
         end
-        else if (csrMatches32(CSR_HC_ENABLE_TEST))
+        else if (csrMatches(CSR_HC_ENABLE_TEST))
         begin
             csr.hc_enable_test <= c0Rx.data[$bits(t_hc_enable_test)-1 : 0];
         end

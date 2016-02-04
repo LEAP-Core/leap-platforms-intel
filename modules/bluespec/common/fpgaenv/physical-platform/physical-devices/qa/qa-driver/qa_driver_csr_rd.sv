@@ -59,16 +59,6 @@ module qa_driver_csr_rd
     input logic sreg_rsp_enable
     );
 
-`ifdef USE_PLATFORM_CCIS
-    // CCI-S has no CSR read.  Use compatibility mode.  Writes to
-    // CSR_AFU_MMIO_READ_COMPAT are treated as MMIO read requests.  Responses
-    // on c2Tx will be routed to the shared device status memory later
-    // in the pipeline.
-    parameter CSR_RD_COMPATIBILITY_MODE = 1;
-`else
-    parameter CSR_RD_COMPATIBILITY_MODE = 0;
-`endif
-
     logic reset;
     assign reset = fiu.reset;
 
@@ -99,20 +89,13 @@ module qa_driver_csr_rd
     assign mmio_req_valid = cci_csr_isRead(fiu.c0Rx) &&
                             (mmio_req_addr <= 8);
 
-    // CCI-S compatibility mode.  See below.
-    logic csr_rd_compat_en;
-    t_afu_csr_addr csr_rd_compat_addr;
-
-    // Is CSR read enabled (either through MMIO or CCI-S compatibility mode)
-    // and is the address in range of the appropriate range?
+    // Is CSR read enabled and is the address in the appropriate range?
     logic is_csr_read;
-    assign is_csr_read = ! reset && (mmio_req_valid || csr_rd_compat_en);
+    assign is_csr_read = ! reset && mmio_req_valid;
 
-    // Compute the address to be read, picking either an MMIO or a compatibility
-    // mode address.
+    // Compute the address to be read.
     t_afu_csr_addr csr_addr;
-    assign csr_addr =
-        ((CSR_RD_COMPATIBILITY_MODE == 0) ? mmio_req_addr[3:1] : csr_rd_compat_addr);
+    assign csr_addr = mmio_req_addr[3:1];
 
 
     always_comb
@@ -175,43 +158,6 @@ module qa_driver_csr_rd
             c2Tx.data = sreg_rsp_q;
         end
     end
-
-
-    generate
-        if (CSR_RD_COMPATIBILITY_MODE)
-        begin : csr_compat
-            //
-            // Compatibility mode for CCI-S.  Treat write to
-            // CSR_AFU_MMIO_READ_COMPAT as an MMIO read request.
-            //
-            always_ff @(posedge clk)
-            begin
-                if (reset)
-                begin
-                    csr_rd_compat_en <= 1'b0;
-                end
-                else if (csr_rd_compat_en)
-                begin
-                    // If reading was permitted then the request fired
-                    csr_rd_compat_en <= 1'b0;
-                end
-                else if (cci_csr_isWrite(fiu.c0Rx) &&
-                         csrAddrMatches(fiu.c0Rx, CSR_AFU_MMIO_READ_COMPAT) &&
-                         t_cci_mmioaddr'(fiu.c0Rx.data) <= 8)
-                begin
-                    csr_rd_compat_en <= 1'b1;
-                    // Store only the address bits needed for decoding the
-                    // CSR address.
-                    csr_rd_compat_addr <= fiu.c0Rx.data[3:1];
-                end
-            end
-        end
-        else
-        begin : csr_native
-            // Platforms after CCI-S don't need compatibility mode
-            assign csr_rd_compat_en = 1'b0;
-        end
-    endgenerate
 
 
     //

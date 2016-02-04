@@ -106,19 +106,12 @@
                 begin
                     $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%x\t%s %x\n",
                             $time,
-`ifdef USE_PLATFORM_CCIS
-                            print_channel(0),
-                            0,
-`else
                             print_channel(c0Tx.hdr.base.vc_sel),
                             c0Tx.hdr.base.cl_num,
-`endif
                             print_reqtype(c0Tx.hdr.base.req_type),
                             c0Tx.hdr.base.mdata,
                             (c0Tx.hdr.ext.addrIsVirtual ? "V" : "P"),
-                            (c0Tx.hdr.ext.addrIsVirtual ?
-                                cci_mpf_getReqVAddr(c0Tx.hdr) :
-                                c0Tx.hdr.base.address) );
+                            c0Tx.hdr.base.address );
 
                 end
 
@@ -128,19 +121,12 @@
                 begin
                     $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%x\t%s %x\t%x\n",
                             $time,
-`ifdef USE_PLATFORM_CCIS
-                            print_channel(0),
-                            0,
-`else
                             print_channel(c1Tx.hdr.base.vc_sel),
                             c1Tx.hdr.base.cl_num,
-`endif
                             print_reqtype(c1Tx.hdr.base.req_type),
                             c1Tx.hdr.base.mdata,
                             (c1Tx.hdr.ext.addrIsVirtual ? "V" : "P"),
-                            (c1Tx.hdr.ext.addrIsVirtual ?
-                                cci_mpf_getReqVAddr(c1Tx.hdr) :
-                                c1Tx.hdr.base.address),
+                            c1Tx.hdr.base.address,
                             c1Tx.data);
                 end
 
@@ -160,13 +146,8 @@
                 begin
                     $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%x\t%x\n",
                             $time,
-`ifdef USE_PLATFORM_CCIS
-                            print_channel(0),
-                            0,
-`else
                             print_channel(c0Rx.hdr.vc_used),
                             c0Rx.hdr.cl_num,
-`endif
                             print_resptype(c0Rx.hdr.resp_type),
                             c0Rx.hdr.mdata,
                             c0Rx.data);
@@ -177,13 +158,8 @@
                 begin
                     $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%x\n",
                             $time,
-`ifdef USE_PLATFORM_CCIS
-                            print_channel(0),
-                            0,
-`else
                             print_channel(c0Rx.hdr.vc_used),
                             c0Rx.hdr.cl_num,
-`endif
                             print_resptype(c0Rx.hdr.resp_type),
                             c0Rx.hdr.mdata);
                 end
@@ -192,30 +168,24 @@
                 begin
                     $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%x\n",
                             $time,
-`ifdef USE_PLATFORM_CCIS
-                            print_channel(0),
-                            0,
-`else
                             print_channel(c1Rx.hdr.vc_used),
                             c1Rx.hdr.cl_num,
-`endif
                             print_resptype(c1Rx.hdr.resp_type),
                             c1Rx.hdr.mdata);
                 end
 
-`ifdef USE_PLATFORM_CCIP
                 /******************* SW -> AFU Config Write *******************/
                 if (! reset && c0Rx.mmioWrValid)
                 begin
                     t_ccip_Req_MmioHdr mmio_hdr;
                     mmio_hdr = t_ccip_Req_MmioHdr'(c0Rx.hdr);
 
-                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\tMMIOWrReq\t%x\t%d bytes\t%x\t%s\n",
+                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\tMMIOWrReq\t%x\t%d bytes\t%x\t%x\n",
                             $time,
                             mmio_hdr.tid,
                             csr_len(mmio_hdr.length),
                             mmio_hdr.address,
-                            csr_data(csr_len(mmio_hdr.length), c0Rx.data) );
+                            c0Rx.data[63:0]);
                 end
 
                 /******************* SW -> AFU Config Read *******************/
@@ -224,15 +194,12 @@
                     t_ccip_Req_MmioHdr mmio_hdr;
                     mmio_hdr = t_ccip_Req_MmioHdr'(c0Rx.hdr);
 
-                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\tMMIORdReq\t%x\t%d bytes\t%x\t%s\n",
+                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\tMMIORdReq\t%x\t%d bytes\t%x\n",
                             $time,
                             mmio_hdr.tid,
                             csr_len(mmio_hdr.length),
-                            mmio_hdr.address,
-                            csr_data(csr_len(mmio_hdr.length), c0Rx.data) );
+                            mmio_hdr.address);
                 end
-`endif
-
             end
         end
     end

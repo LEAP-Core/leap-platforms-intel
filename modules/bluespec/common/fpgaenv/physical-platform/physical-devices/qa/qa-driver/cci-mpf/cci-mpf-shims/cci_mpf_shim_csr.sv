@@ -108,8 +108,8 @@ module cci_mpf_shim_csr
     //
     // ====================================================================
 
-    // Check for a CSR address match for a 64-bit naturally aligned object
-    function automatic logic csrAddrMatches64(
+    // Check for a CSR address match
+    function automatic logic csrAddrMatches(
         input t_if_cci_c0_Rx c0Rx,
         input int c);
 
@@ -117,12 +117,8 @@ module cci_mpf_shim_csr
         // low 2 address bits must be 0 and aren't transmitted.
         t_cci_mmioaddr tgt = t_cci_mmioaddr'(c >> 2);
 
-        // Actual address sent in CSR write.  64 bit writes may be sent
-        // either as a full 64 bit object or as a pair of 32 bit writes,
-        // sending the high half before the low half.  Ignore the low
-        // address bit to check the match.
+        // Actual address sent in CSR write.
         t_cci_mmioaddr addr = cci_csr_getAddress(c0Rx);
-        addr[0] = 1'b0;
 
         return cci_csr_isWrite(c0Rx) && (addr == tgt);
     endfunction
@@ -130,7 +126,7 @@ module cci_mpf_shim_csr
     //
     // VTP CSR writes (host to FPGA)
     //
-    t_cci_cl_paddr page_table_base;
+    t_cci_claddr page_table_base;
 
     always_ff @(posedge clk)
     begin
@@ -141,28 +137,16 @@ module cci_mpf_shim_csr
         end
         else if (cci_csr_isWrite(fiu.c0Rx))
         begin
-            if (csrAddrMatches64(fiu.c0Rx, CCI_MPF_VTP_CSR_BASE +
-                                           CCI_MPF_VTP_CSR_MODE))
+            if (csrAddrMatches(fiu.c0Rx, CCI_MPF_VTP_CSR_BASE +
+                                         CCI_MPF_VTP_CSR_MODE))
             begin
                  csrs.vtp_in_mode <= t_cci_mpf_vtp_csr_mode'(fiu.c0Rx.data);
             end
-            else if (csrAddrMatches64(fiu.c0Rx, CCI_MPF_VTP_CSR_BASE +
-                                                CCI_MPF_VTP_CSR_PAGE_TABLE_PADDR))
+            else if (csrAddrMatches(fiu.c0Rx, CCI_MPF_VTP_CSR_BASE +
+                                              CCI_MPF_VTP_CSR_PAGE_TABLE_PADDR))
             begin
-`ifdef USE_PLATFORM_CCIS
-                // Shift address into page_table_base
-                page_table_base <= t_cci_cl_paddr'(fiu.c0Rx.data);
-                csrs.vtp_in_page_table_base <=
-                    t_cci_cl_paddr'({ page_table_base, fiu.c0Rx.data[31:0]});
-`else
-                // Interface supports full sized update in a single operation
-                csrs.vtp_in_page_table_base <= t_cci_cl_paddr'(fiu.c0Rx.data);
-`endif
-
-                // If the low bit of the address is 0 then the register update
-                // is complete.  When sent as a pair of 32 bit writes the high
-                // half is sent first.
-                csrs.vtp_in_page_table_base_valid <= ~ (1'(cci_csr_getAddress(fiu.c0Rx)));
+                csrs.vtp_in_page_table_base <= t_cci_claddr'(fiu.c0Rx.data);
+                csrs.vtp_in_page_table_base_valid <= 1'b1;
             end
         end
     end
@@ -174,10 +158,6 @@ module cci_mpf_shim_csr
     //
     // ====================================================================
 
-
-    // CCI-S compatibility mode.  See below.
-    logic csr_rd_compat_en;
-    t_mpf_csr_offset csr_rd_compat_addr;
 
     // Read responses flow through an outbound FIFO for timing
     t_if_ccip_c2_Tx c2_rsp_in;
@@ -217,19 +197,11 @@ module cci_mpf_shim_csr
     t_ccip_tid mmio_req_tid;
 
     t_mpf_csr_offset csr_addr;
-    always_comb
-    begin
-        csr_addr = mmio_req_addr;
-        if (csr_rd_compat_en)
-        begin
-            csr_addr = csr_rd_compat_addr;
-        end
-    end
+    assign csr_addr = mmio_req_addr;
 
-    // Is CSR read enabled (either through MMIO or CCI-S compatibility mode)
-    // and is the address in range of the appropriate range?
+    // Is CSR read enabled and is the address in the appropriate range?
     logic is_csr_read;
-    assign is_csr_read = (mmio_req_valid || csr_rd_compat_en);
+    assign is_csr_read = mmio_req_valid;
 
     // Actually handling a response?
     assign c2_rsp_en = may_read && is_csr_read;
@@ -329,8 +301,6 @@ module cci_mpf_shim_csr
     end
 
 
-`ifndef USE_PLATFORM_CCIS
-
     //
     // This platform has MMIO.  Up to 64 MMIO reads may be in flight.
     // Buffer incoming read requests since the read response port
@@ -379,41 +349,5 @@ module cci_mpf_shim_csr
          .deq_en(c2_rsp_en),
          .notEmpty(mmio_req_valid)
          );
-
-    assign csr_rd_compat_en = 1'b0;
-
-`else
-
-    //
-    // Compatibility mode for CCI-S.  Treat write to CSR_AFU_MMIO_READ_COMPAT
-    // as an MMIO read request.
-    //
-    always_ff @(posedge clk)
-    begin
-        if (reset)
-        begin
-            csr_rd_compat_en <= 1'b0;
-        end
-        else if (c2_rsp_en)
-        begin
-            // If reading was permitted then the request fired
-            csr_rd_compat_en <= 1'b0;
-        end
-        else if (cci_csr_isWrite(fiu.c0Rx) &&
-                 csrAddrMatches(fiu.c0Rx, CSR_AFU_MMIO_READ_COMPAT) &&
-                 t_cci_mmioaddr'(fiu.c0Rx.data) >= (DFH_MMIO_BASE_ADDR >> 2) &&
-                 t_cci_mmioaddr'(fiu.c0Rx.data) < (CCI_MPF_CSR_LAST >> 2))
-        begin
-            csr_rd_compat_en <= 1'b1;
-            // Store only the address bits needed for decoding the CSR address
-            csr_rd_compat_addr <=
-                t_mpf_csr_offset'(t_cci_mmioaddr'(fiu.c0Rx.data) -
-                                  (DFH_MMIO_BASE_ADDR >> 2));
-        end
-    end
-
-    assign mmio_req_valid = 1'b0;
-
-`endif
 
 endmodule // cci_mpf_shim_csr

@@ -158,10 +158,10 @@ module cci_mpf_shim_wro
     // as the buffer in order to reduce timing pressure at the point the
     // filter is checked and updated.
     logic [63:0] c0_req_addr;
-    assign c0_req_addr = 64'(cci_mpf_getReqVAddr(afu_buf.c0Tx.hdr));
+    assign c0_req_addr = 64'(cci_mpf_getReqAddr(afu_buf.c0Tx.hdr));
 
     logic [63:0] c1_req_addr;
-    assign c1_req_addr = 64'(cci_mpf_getReqVAddr(afu_buf.c1Tx.hdr));
+    assign c1_req_addr = 64'(cci_mpf_getReqAddr(afu_buf.c1Tx.hdr));
 
     assign c0_hash_calc =
         t_HASH'(hash32(c0_req_addr[63:32] ^ c0_req_addr[31:0]));

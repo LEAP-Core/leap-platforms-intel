@@ -54,7 +54,7 @@ module qa_driver_memory
     //
     // Memory read
     //
-    input  t_cci_mpf_cl_vaddr mem_read_req_addr,
+    input  t_cci_claddr       mem_read_req_addr,
     // Use CCI's cache if true
     input  logic              mem_read_req_cached,
     // Enforce order of references to the same address?
@@ -68,7 +68,7 @@ module qa_driver_memory
     //
     // Memory write request
     //
-    input  t_cci_mpf_cl_vaddr mem_write_addr,
+    input  t_cci_claddr       mem_write_addr,
     input  t_cci_cldata       mem_write_data,
     // Use CCI's cache if true
     input  logic              mem_write_req_cached,

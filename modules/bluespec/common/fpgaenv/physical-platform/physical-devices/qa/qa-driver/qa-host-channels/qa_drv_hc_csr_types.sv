@@ -34,14 +34,14 @@
 //
 
 package qa_drv_hc_csr_types;
-    import cci_mpf_if_pkg::t_cci_cl_paddr;
+    import cci_mpf_if_pkg::t_cci_claddr;
 
     // CSR_HC_ENABLE_TEST passes a tag that may trigger a test in the
     // driver.
     typedef struct packed
     {
         // Count of messages to send for SOURCE mode test.
-        logic [30:0] count;
+        logic [29:0] count;
         // Test -- must match t_STATE in qa_drv_tester.
         logic [1:0]  test_state;
     }
@@ -54,11 +54,11 @@ package qa_drv_hc_csr_types;
         // Enable channel I/O connection to user code
         logic        hc_en_user_channel;
 
-        t_cci_cl_paddr hc_ctrl_frame;
+        t_cci_claddr hc_ctrl_frame;
         logic hc_ctrl_frame_valid;
 
-        t_cci_cl_paddr hc_write_frame;
-        t_cci_cl_paddr hc_read_frame;
+        t_cci_claddr hc_write_frame;
+        t_cci_claddr hc_read_frame;
 
         // Test request.  The manager will hold the idx field in this
         // register for one cycle after a request is received and

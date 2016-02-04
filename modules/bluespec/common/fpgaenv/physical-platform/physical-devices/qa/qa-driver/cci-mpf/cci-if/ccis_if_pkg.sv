@@ -23,21 +23,21 @@ typedef logic [CCIS_MDATA_WIDTH-1:0] t_ccis_mdata;
 // Request Type  Encodings
 //----------------------------------------------------------------------
 typedef enum logic [3:0] {
-    eREQ_WRLINE_I  = 4'h1,      // Memory Write with FPGA Cache Hint=Invalid
-    eREQ_WRLINE_M  = 4'h2,      // Memory Write with FPGA Cache Hint=Modified
-    eREQ_WRFENCE   = 4'h5,      // Memory Write Fence ** NOT SUPPORTED FOR VC_VA channel **
-    eREQ_RDLINE_S  = 4'h4,      // Memory Read with FPGA Cache Hint=Shared
-    eREQ_RDLINE_I  = 4'h6,      // Memory Read with FPGA Cache Hint=Invalid
-    eREQ_INTR      = 4'h8       // Interrupt the CPU ** NOT SUPPORTED CURRENTLY **
+    esREQ_WRLINE_I  = 4'h1,      // Memory Write with FPGA Cache Hint=Invalid
+    esREQ_WRLINE_M  = 4'h2,      // Memory Write with FPGA Cache Hint=Modified
+    esREQ_WRFENCE   = 4'h5,      // Memory Write Fence ** NOT SUPPORTED FOR VC_VA channel **
+    esREQ_RDLINE_S  = 4'h4,      // Memory Read with FPGA Cache Hint=Shared
+    esREQ_RDLINE_I  = 4'h6,      // Memory Read with FPGA Cache Hint=Invalid
+    esREQ_INTR      = 4'h8       // Interrupt the CPU ** NOT SUPPORTED CURRENTLY **
 } t_ccis_req;
 
 // Response Type  Encodings
 //----------------------------------------------------------------------
 typedef enum logic [3:0] {
-    eRSP_WRLINE = 4'h1,         // Memory Write
-    eRSP_RDLINE = 4'h4,         // Memory Read
-    eRSP_INTR   = 4'h8,         // Interrupt delivered to the CPU ** NOT SUPPORTED CURRENTLY **
-    eRSP_UMSG   = 4'hF          // UMsg received ** NOT SUPPORTED CURRENTLY **
+    esRSP_WRLINE = 4'h1,         // Memory Write
+    esRSP_RDLINE = 4'h4,         // Memory Read
+    esRSP_INTR   = 4'h8,         // Interrupt delivered to the CPU ** NOT SUPPORTED CURRENTLY **
+    esRSP_UMSG   = 4'hF          // UMsg received ** NOT SUPPORTED CURRENTLY **
 } t_ccis_rsp;
 
 //

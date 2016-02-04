@@ -88,7 +88,7 @@ module qa_drv_hc_fifo_to_host
     //=====================================================================
 
     // Base address of the ring buffer
-    t_cci_cl_paddr buffer_base_addr;
+    t_cci_claddr buffer_base_addr;
     assign buffer_base_addr = csr.hc_write_frame;
 
     // Pointer to the oldest live entry in the ring buffer.  This pointer
@@ -279,7 +279,7 @@ module qa_drv_hc_fifo_to_host
             begin
                 frame_writer.writeHeader =
                     cci_genReqHdr(eREQ_WRFENCE,
-                                  t_cci_cl_paddr'(0),
+                                  t_cci_claddr'(0),
                                   t_cci_mdata'(0),
                                   write_params);
             end

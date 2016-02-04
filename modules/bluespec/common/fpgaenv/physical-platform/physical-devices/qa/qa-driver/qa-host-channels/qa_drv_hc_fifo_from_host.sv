@@ -190,7 +190,7 @@ module qa_drv_hc_fifo_from_host
     // ====================================================================
 
     // Base address of the ring buffer
-    t_cci_cl_paddr buffer_base_addr;
+    t_cci_claddr buffer_base_addr;
     assign buffer_base_addr = csr.hc_read_frame;
 
     t_read_metadata data_read_metadata;

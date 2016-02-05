@@ -71,8 +71,8 @@ module cci_mpf_shim_rsp_order
     parameter PRESERVE_WRITE_MDATA = 1,
 
     // Maximum number of in-flight reads and writes. (Per category - the
-    // total number of in-flight operations is 2 * N_SCOREBOARD_ENTRIES.)
-    parameter N_SCOREBOARD_ENTRIES = 256,
+    // total number of in-flight operations is 2 * N_ROB_ENTRIES.)
+    parameter N_ROB_ENTRIES = 256,
 
     // Synchronize request channels if non-zero. Channel synchronization is
     // required to preserve load/store ordering.
@@ -92,21 +92,21 @@ module cci_mpf_shim_rsp_order
     assign reset = fiu.reset;
     assign afu.reset = fiu.reset;
 
-    // Index of a scoreboard entry
-    localparam N_SCOREBOARD_IDX_BITS = $clog2(N_SCOREBOARD_ENTRIES);
-    typedef logic [N_SCOREBOARD_IDX_BITS-1 : 0] t_scoreboard_idx;
+    // Index of a ROB entry
+    localparam N_ROB_IDX_BITS = $clog2(N_ROB_ENTRIES);
+    typedef logic [N_ROB_IDX_BITS-1 : 0] t_rob_idx;
 
-    typedef logic [N_SCOREBOARD_IDX_BITS-1 : 0] t_heap_idx;
+    typedef logic [N_ROB_IDX_BITS-1 : 0] t_heap_idx;
 
-    // Full signals that will come from the scoreboard and heap used to
+    // Full signals that will come from the ROB and heap used to
     // sort responses.
-    logic rd_scoreboard_notFull;
+    logic rd_rob_notFull;
     logic wr_heap_notFull;
 
 
     // ====================================================================
     //
-    //  The scoreboard is allocated with enough reserve space so that
+    //  The ROB is allocated with enough reserve space so that
     //  it honors the almost full semantics. No other buffering is
     //  required.
     //
@@ -117,7 +117,7 @@ module cci_mpf_shim_rsp_order
     // ====================================================================
 
     logic c0_TxAlmFull;
-    assign c0_TxAlmFull = fiu.c0TxAlmFull || ! rd_scoreboard_notFull;
+    assign c0_TxAlmFull = fiu.c0TxAlmFull || ! rd_rob_notFull;
 
     logic c1_TxAlmFull;
     assign c1_TxAlmFull = fiu.c1TxAlmFull || ! wr_heap_notFull;
@@ -167,7 +167,7 @@ module cci_mpf_shim_rsp_order
 
             cci_mpf_prim_heap
               #(
-                .N_ENTRIES(N_SCOREBOARD_ENTRIES),
+                .N_ENTRIES(N_ROB_ENTRIES),
                 .N_DATA_BITS(CCI_MDATA_WIDTH),
                 .MIN_FREE_SLOTS(CCI_TX_ALMOST_FULL_THRESHOLD + 1),
                 .N_OUTPUT_REG_STAGES(2)
@@ -235,37 +235,37 @@ module cci_mpf_shim_rsp_order
     //
     // ====================================================================
 
-    t_scoreboard_idx rd_scoreboard_enqIdx;
+    t_rob_idx rd_rob_enqIdx;
 
-    logic rd_scoreboard_notEmpty;
-    t_cci_mdata rd_scoreboard_mdata;
+    logic rd_rob_notEmpty;
+    t_cci_mdata rd_rob_mdata;
     t_cci_mdata rd_heap_readMdata;
 
-    t_cci_clData rd_scoreboard_outData;
+    t_cci_clData rd_rob_outData;
 
     // Buffer not full for timing.  An extra free slot is added to the
-    // scoreboard to account for latency of the not full signal.
+    // ROB to account for latency of the not full signal.
     logic rd_not_full;
     always_ff @(posedge clk)
     begin
-        rd_scoreboard_notFull <= rd_not_full;
+        rd_rob_notFull <= rd_not_full;
     end
 
     generate
         if (SORT_READ_RESPONSES)
-        begin : gen_rd_scoreboard
+        begin : gen_rd_rob
             //
-            // Read responses are sorted.  Allocate a scoreboard as
+            // Read responses are sorted.  Allocate a ROB as
             // a reorder buffer.
             //
-            cci_mpf_prim_scoreboard_obuf
+            cci_mpf_prim_rob_obuf
               #(
-                .N_ENTRIES(N_SCOREBOARD_ENTRIES),
+                .N_ENTRIES(N_ROB_ENTRIES),
                 .N_DATA_BITS(CCI_CLDATA_WIDTH),
                 .N_META_BITS(CCI_MDATA_WIDTH),
                 .MIN_FREE_SLOTS(CCI_TX_ALMOST_FULL_THRESHOLD + 1)
                 )
-              rd_scoreboard
+              rd_rob
                (
                 .clk,
                 .reset,
@@ -273,16 +273,16 @@ module cci_mpf_shim_rsp_order
                 .enq_en(cci_mpf_c0TxIsReadReq(afu.c0Tx)),
                 .enqMeta(afu.c0Tx.hdr.base.mdata),
                 .notFull(rd_not_full),
-                .enqIdx(rd_scoreboard_enqIdx),
+                .enqIdx(rd_rob_enqIdx),
 
                 .enqData_en(cci_c0Rx_isReadRsp(fiu.c0Rx)),
-                .enqDataIdx(t_scoreboard_idx'(fiu.c0Rx.hdr.mdata)),
+                .enqDataIdx(t_rob_idx'(fiu.c0Rx.hdr.mdata)),
                 .enqData(fiu.c0Rx.data),
 
                 .deq_en(cci_c0Rx_isReadRsp(afu.c0Rx)),
-                .notEmpty(rd_scoreboard_notEmpty),
-                .first(rd_scoreboard_outData),
-                .firstMeta(rd_scoreboard_mdata)
+                .notEmpty(rd_rob_notEmpty),
+                .first(rd_rob_outData),
+                .firstMeta(rd_rob_mdata)
                 );
         end
         else
@@ -293,7 +293,7 @@ module cci_mpf_shim_rsp_order
             //
             cci_mpf_prim_heap
               #(
-                .N_ENTRIES(N_SCOREBOARD_ENTRIES),
+                .N_ENTRIES(N_ROB_ENTRIES),
                 .N_DATA_BITS(CCI_MDATA_WIDTH),
                 .MIN_FREE_SLOTS(CCI_TX_ALMOST_FULL_THRESHOLD + 1),
                 .N_OUTPUT_REG_STAGES(2)
@@ -306,23 +306,23 @@ module cci_mpf_shim_rsp_order
                 .enq(cci_mpf_c0TxIsReadReq(afu.c0Tx)),
                 .enqData(afu.c0Tx.hdr.base.mdata),
                 .notFull(rd_not_full),
-                .allocIdx(rd_scoreboard_enqIdx),
+                .allocIdx(rd_rob_enqIdx),
 
-                .readReq(t_scoreboard_idx'(fiu.c0Rx.hdr.mdata)),
+                .readReq(t_rob_idx'(fiu.c0Rx.hdr.mdata)),
                 .readRsp(rd_heap_readMdata),
                 .free(cci_c0Rx_isReadRsp(fiu.c0Rx)),
-                .freeIdx(t_scoreboard_idx'(fiu.c0Rx.hdr.mdata))
+                .freeIdx(t_rob_idx'(fiu.c0Rx.hdr.mdata))
                 );
         end
     endgenerate
 
     // Forward requests toward the FIU.  Replace the Mdata entry with the
-    // scoreboard index.  The original Mdata is saved in the scoreboard
+    // ROB index.  The original Mdata is saved in the rob
     // and restored when the response is returned.
     always_comb
     begin
         fiu_buf.c0Tx = afu.c0Tx;
-        fiu_buf.c0Tx.hdr.base.mdata = t_cci_mdata'(rd_scoreboard_enqIdx);
+        fiu_buf.c0Tx.hdr.base.mdata = t_cci_mdata'(rd_rob_enqIdx);
     end
 
     logic c0_non_rd_valid;
@@ -343,7 +343,7 @@ module cci_mpf_shim_rsp_order
         // unbuffered.
         if (SORT_READ_RESPONSES)
         begin
-            afu.c0Rx.rspValid = rd_scoreboard_notEmpty && ! c0_non_rd_valid;
+            afu.c0Rx.rspValid = rd_rob_notEmpty && ! c0_non_rd_valid;
         end
 
         // Either forward the header from the FIU for non-read responses or
@@ -352,8 +352,8 @@ module cci_mpf_shim_rsp_order
         // in CCI-S mode.
         if (SORT_READ_RESPONSES && ! c0_non_rd_valid)
         begin
-            afu.c0Rx.hdr = cci_c0_genRspHdr(eRSP_RDLINE, rd_scoreboard_mdata);
-            afu.c0Rx.data = rd_scoreboard_outData;
+            afu.c0Rx.hdr = cci_c0_genRspHdr(eRSP_RDLINE, rd_rob_mdata);
+            afu.c0Rx.data = rd_rob_outData;
         end
         else
         begin

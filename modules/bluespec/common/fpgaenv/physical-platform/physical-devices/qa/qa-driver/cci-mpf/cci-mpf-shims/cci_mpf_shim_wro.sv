@@ -40,9 +40,7 @@
 
 module cci_mpf_shim_wro
   #(
-    // Size of the incoming buffer.  It must be at least as large as the
-    // almost full threshold.
-    parameter N_AFU_BUF_ENTRIES = CCI_TX_ALMOST_FULL_THRESHOLD + 2
+    parameter AFU_BUF_THRESHOLD = CCI_TX_ALMOST_FULL_THRESHOLD
     )
    (
     input  logic clk,
@@ -91,8 +89,7 @@ module cci_mpf_shim_wro
 
     cci_mpf_shim_buffer_lockstep_afu
       #(
-        .N_ENTRIES(N_AFU_BUF_ENTRIES),
-        .THRESHOLD(CCI_TX_ALMOST_FULL_THRESHOLD)
+        .THRESHOLD(AFU_BUF_THRESHOLD)
         )
       bufafu
        (

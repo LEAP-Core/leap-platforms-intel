@@ -36,7 +36,7 @@
 
 module qa_drv_hc_fifo_from_host
   #(
-    parameter N_SCOREBOARD_ENTRIES=256,
+    parameter N_ROB_ENTRIES=256,
 
     // Which virtual channel should be used?
     parameter MEM_VIRTUAL_CHANNEL = 1
@@ -103,22 +103,22 @@ module qa_drv_hc_fifo_from_host
     t_fifo_from_host_idx newest_read_line_idx;
     assign newest_read_line_idx = status_to_fifo_from_host.newestReadLineIdx;
 
-    // Index of a scoreboard entry
-    localparam N_SCOREBOARD_IDX_BITS = $clog2(N_SCOREBOARD_ENTRIES);
-    typedef logic [N_SCOREBOARD_IDX_BITS-1 : 0] t_SCOREBOARD_IDX;
+    // Index of a ROB entry
+    localparam N_ROB_IDX_BITS = $clog2(N_ROB_ENTRIES);
+    typedef logic [N_ROB_IDX_BITS-1 : 0] t_ROB_IDX;
 
 
     // ====================================================================
     //
-    //   Reads are not returned in order.  The scoreboard sorts read
+    //   Reads are not returned in order.  The ROB sorts read
     //   responses.
     //
     // ====================================================================
 
-    t_SCOREBOARD_IDX scoreboard_slot_idx;
-    logic            scoreboard_slot_rdy;
+    t_ROB_IDX rob_slot_idx;
+    logic rob_slot_rdy;
 
-    // Pass data from scoreboard toward the FPGA-side client when a message
+    // Pass data from ROB toward the FPGA-side client when a message
     // is available and space is available in outQ.
     logic sc_notEmpty;
     assign outQ_enq_en = sc_notEmpty && outQ_notFull;
@@ -138,9 +138,9 @@ module qa_drv_hc_fifo_from_host
     // host by the status manager.  It tells the host when a buffer slot
     // has been consumed and may be overwritten.
     //
-    // The pointer is updated as responses exit the scoreboard.  This is
+    // The pointer is updated as responses exit the ROB.  This is
     // much simpler than tracking out of order responses as they enter
-    // the scoreboard.
+    // the ROB.
     //
     always_ff @(posedge clk)
     begin
@@ -156,24 +156,24 @@ module qa_drv_hc_fifo_from_host
     end
 
 
-    cci_mpf_prim_scoreboard
+    cci_mpf_prim_rob
       #(
-        .N_ENTRIES(N_SCOREBOARD_ENTRIES),
+        .N_ENTRIES(N_ROB_ENTRIES),
         .N_DATA_BITS(CCI_CLDATA_WIDTH),
         .N_META_BITS(0)
         )
-      scoreboard
+      rob
         (
          .clk,
          .reset,
 
          .enq_en(read_grant.readerGrant),
          .enqMeta(2'b0),
-         .notFull(scoreboard_slot_rdy),
-         .enqIdx(scoreboard_slot_idx),
+         .notFull(rob_slot_rdy),
+         .enqIdx(rob_slot_idx),
 
          .enqData_en(incoming_read_valid),
-         .enqDataIdx(t_SCOREBOARD_IDX'(response_read_metadata.robAddr)),
+         .enqDataIdx(t_ROB_IDX'(response_read_metadata.robAddr)),
          .enqData(rx0.data),
 
          .deq_en(outQ_enq_en),
@@ -205,15 +205,15 @@ module qa_drv_hc_fifo_from_host
         frame_reader.write.request = 0;
 
         // Request a read when the incoming ring buffer has data and the
-        // scoreboard has space.
+        // ROB has space.
         frame_reader.read.request = (next_read_req_idx != newest_read_line_idx) &&
-                                    scoreboard_slot_rdy;
+                                    rob_slot_rdy;
 
         // Read metadata
         data_read_metadata.reserved = 1'b0;
         data_read_metadata.isRead   = 1'b1;
         data_read_metadata.isHeader = 1'b0;
-        data_read_metadata.robAddr  = scoreboard_slot_idx;
+        data_read_metadata.robAddr  = rob_slot_idx;
 
         // By adding to form the address instead of replacing low bits we avoid
         // the requirement that the buffer be aligned to the buffer size.

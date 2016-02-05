@@ -29,15 +29,15 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 //
-// Scoreboard that returns data FIFO by sorting out of order arrival of
-// the payload.  The scoreboard combines two pieces of data with each entry:
+// ROB that returns data FIFO by sorting out of order arrival of
+// the payload.  The ROB combines two pieces of data with each entry:
 // meta-data that is supplied at the time an index is allocated and the
 // late-arriving data.  Both are returned together through first and first_meta.
 // Within the driver this is typically used to combine a parent's Mdata
 // field for the response header in combination with read data.
 //
 
-module cci_mpf_prim_scoreboard
+module cci_mpf_prim_rob
   #(
     parameter N_ENTRIES = 32,
     parameter N_DATA_BITS = 64,
@@ -49,15 +49,15 @@ module cci_mpf_prim_scoreboard
     input  logic clk,
     input  logic reset,
 
-    // Add a new entry to the scoreboard.  No payload, just control.
-    // The scoreboard returns a handle -- the index where the payload should
+    // Add a new entry to the ROB.  No payload, just control.
+    // The ROB returns a handle -- the index where the payload should
     // be written.
     input  logic enq_en,                            // Allocate an entry
     input  logic [N_META_BITS-1 : 0] enqMeta,       // Save meta-data for new entry
-    output logic notFull,                           // Is scoreboard full?
+    output logic notFull,                           // Is ROB full?
     output logic [$clog2(N_ENTRIES)-1 : 0] enqIdx,  // Index of new entry
 
-    // Payload write.  No ready signal.  The scoreboard must always be ready
+    // Payload write.  No ready signal.  The ROB must always be ready
     // to receive data.
     input  logic enqData_en,                        // Store data for existing entry
     input  logic [$clog2(N_ENTRIES)-1 : 0] enqDataIdx,
@@ -104,9 +104,9 @@ module cci_mpf_prim_scoreboard
             newest <= newest + 1;
 
             assert ((newest + t_idx'(1)) != oldest) else
-                $fatal("cci_mpf_prim_scoreboard: Can't ENQ when FULL!");
+                $fatal("cci_mpf_prim_rob: Can't ENQ when FULL!");
             assert ((N_ENTRIES & (N_ENTRIES - 1)) == 0) else
-                $fatal("cci_mpf_prim_scoreboard: N_ENTRIES must be a power of 2!");
+                $fatal("cci_mpf_prim_rob: N_ENTRIES must be a power of 2!");
         end
     end
 
@@ -243,7 +243,7 @@ module cci_mpf_prim_scoreboard
         if (! reset)
         begin
             assert(! deq_en || notEmpty) else
-              $fatal("cci_mpf_prim_scoreboard: Can't DEQ when EMPTY!");
+              $fatal("cci_mpf_prim_rob: Can't DEQ when EMPTY!");
         end
     end
 
@@ -251,4 +251,124 @@ module cci_mpf_prim_scoreboard
     // the oldest entry was dequeued last cycle.
     assign notEmpty = dataValid_sub_q[deq_en_q];
 
-endmodule // cci_mpf_prim_scoreboard
+endmodule // cci_mpf_prim_rob
+
+
+
+//
+// Output buffered ROB that registers the data coming from the
+// ROB BRAM and sends it to a FIFO in order to maintain full
+// throughput while avoiding a combinational control loop.
+//
+
+module cci_mpf_prim_rob_obuf
+  #(
+    parameter N_ENTRIES = 32,
+    parameter N_DATA_BITS = 64,
+    parameter N_META_BITS = 1,
+    // Threshold below which heap asserts "full"
+    parameter MIN_FREE_SLOTS = 1
+    )
+   (
+    input  logic clk,
+    input  logic reset,
+
+    // Add a new entry to the ROB.  No payload, just control.
+    // The ROB returns a handle -- the index where the payload should
+    // be written.
+    input  logic enq_en,                            // Allocate an entry
+    input  logic [N_META_BITS-1 : 0] enqMeta,       // Save meta-data for new entry
+    output logic notFull,                           // Is ROB full?
+    output logic [$clog2(N_ENTRIES)-1 : 0] enqIdx,  // Index of new entry
+
+    // Payload write.  No ready signal.  The ROB must always be ready
+    // to receive data.
+    input  logic enqData_en,                        // Store data for existing entry
+    input  logic [$clog2(N_ENTRIES)-1 : 0] enqDataIdx,
+    input  logic [N_DATA_BITS-1 : 0] enqData,
+
+    // Ordered output
+    input  logic deq_en,                            // Deq oldest entry
+    output logic notEmpty,                          // Is oldest entry ready?
+    output logic [N_DATA_BITS-1 : 0] first,         // Data for oldest entry
+    output logic [N_META_BITS-1 : 0] firstMeta      // Meta-data for oldest entry
+    );
+
+    typedef logic [N_DATA_BITS-1 : 0] t_data;
+    typedef logic [N_META_BITS-1 : 0] t_meta_data;
+
+    logic sc_deq_en;
+    logic sc_not_empty;
+    t_data sc_first;
+    t_meta_data sc_first_meta;
+
+    //
+    // Instantiate the ROB.
+    //
+    cci_mpf_prim_rob
+      #(
+        .N_ENTRIES(N_ENTRIES),
+        .N_DATA_BITS(N_DATA_BITS),
+        .N_META_BITS(N_META_BITS),
+        .MIN_FREE_SLOTS(MIN_FREE_SLOTS)
+        )
+      sb
+       (
+        .clk,
+        .reset,
+        .enq_en,
+        .enqMeta,
+        .notFull,
+        .enqIdx,
+        .enqData_en,
+        .enqDataIdx,
+        .enqData,
+        .deq_en(sc_deq_en),
+        .notEmpty(sc_not_empty),
+        .first(sc_first),
+        .firstMeta(sc_first_meta)
+        );
+
+    //
+    // Register stage.
+    //
+    logic sc_deq_en_q;
+    t_data sc_first_q;
+    t_meta_data sc_first_meta_q;
+
+    always_ff @(posedge clk)
+    begin
+        sc_deq_en_q <= sc_deq_en;
+        sc_first_q <= sc_first;
+        sc_first_meta_q <= sc_first_meta;
+    end
+
+    //
+    // Output FIFO stage.
+    //
+    logic fifo_full;
+
+    cci_mpf_prim_fifo_lutram
+      #(
+        .N_DATA_BITS(N_DATA_BITS + N_META_BITS),
+        .N_ENTRIES(4),
+        .THRESHOLD(2)
+        )
+      fifo
+       (
+        .clk,
+        .reset,
+        .enq_data({ sc_first_meta_q, sc_first_q }),
+        .enq_en(sc_deq_en_q),
+        .notFull(),
+        .almostFull(fifo_full),
+        .first({ firstMeta, first }),
+        .deq_en,
+        .notEmpty
+        );
+
+    // Transfer from ROB to FIFO when data is ready and the FIFO
+    // has space for new data plus whatever may be in flight already.
+    assign sc_deq_en = sc_not_empty && ! fifo_full;
+
+endmodule // cci_mpf_prim_rob_obuf

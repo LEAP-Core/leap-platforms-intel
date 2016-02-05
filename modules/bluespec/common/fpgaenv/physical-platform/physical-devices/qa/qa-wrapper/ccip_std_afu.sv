@@ -35,16 +35,18 @@ import ccip_if_pkg::*;
 module ccip_std_afu
    (
     // CCI-P Clocks and Resets
-    input  logic        vl_clk_LPdomain_16ui,       // CCI interface clock
-    input  logic        vl_clk_LPdomain_64ui,       // 1/4x Frequency of interface clock. Synchronous.
-    input  logic        vl_clk_LPdomain_32ui,       // 1/2x Frequency of interface clock. Synchronous.
-    input  logic        ffs_LP16ui_afu_SoftReset_n, // CCI-P Soft Reset
-    input  logic [1:0]  ffs_LP16ui_afu_PwrState,    // CCI-P AFU Power State
-    input  logic        ffs_LP16ui_afu_Error,       // CCI-P Protocol Error Detected
+    input           logic             pClk,              // 400MHz - CCI-P clock domain. Primary interface clock
+    input           logic             pClkDiv2,          // 200MHz - CCI-P clock domain.
+    input           logic             pClkDiv4,          // 100MHz - CCI-P clock domain.
+    input           logic             uClk_usr,          // User clock domain. Refer to clock programming guide  ** Currently provides fixed 300MHz clock **
+    input           logic             uClk_usrDiv2,      // User clock domain. Half the programmed frequency  ** Currently provides fixed 150MHz clock **
+    input           logic             pck_cp2af_softReset,      // CCI-P ACTIVE HIGH Soft Reset
+    input           logic [1:0]       pck_cp2af_pwrState,       // CCI-P AFU Power State
+    input           logic             pck_cp2af_error,          // CCI-P Protocol Error Detected
 
-    // Data ports
-    output t_if_ccip_Tx ffs_LP16ui_sTxData_afu,     // CCI-P Tx Port
-    input  t_if_ccip_Rx ffs_LP16ui_sRxData_afu      // CCI-P Rx Port
+    // Interface structures
+    input           t_if_ccip_Rx      pck_cp2af_sRx,        // CCI-P Rx Port
+    output          t_if_ccip_Tx      pck_af2cp_sTx         // CCI-P Tx Port
     );
 
     // Instantiate LEAP top level.

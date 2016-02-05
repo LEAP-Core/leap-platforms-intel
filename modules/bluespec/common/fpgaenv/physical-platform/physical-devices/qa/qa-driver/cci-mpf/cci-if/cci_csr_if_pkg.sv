@@ -34,7 +34,7 @@ package cci_csr_if_pkg;
         input t_if_cci_c0_Rx r
         );
 
-        t_cci_Req_MmioHdr h = t_cci_Req_MmioHdr'(r.hdr);
+        t_cci_c0_ReqMmioHdr h = t_cci_c0_ReqMmioHdr'(r.hdr);
         return h.tid;
     endfunction
 
@@ -42,11 +42,11 @@ package cci_csr_if_pkg;
     //
     // Get the CSR tid from a read request.
     //
-    function automatic t_cci_mmioaddr cci_csr_getAddress(
+    function automatic t_cci_mmioAddr cci_csr_getAddress(
         input t_if_cci_c0_Rx r
         );
 
-        t_cci_Req_MmioHdr h = t_cci_Req_MmioHdr'(r.hdr);
+        t_cci_c0_ReqMmioHdr h = t_cci_c0_ReqMmioHdr'(r.hdr);
         return h.address;
     endfunction
 

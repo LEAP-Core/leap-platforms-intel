@@ -52,8 +52,8 @@ module qa_drv_hc_write_arbiter
     // since the FPGA must write the configuration information to CTRL[0].
     logic can_issue;
 
-    t_cci_ReqMemHdr header;
-    t_cci_cldata data;   
+    t_cci_c1_ReqMemHdr header;
+    t_cci_clData data;   
     logic wrvalid;
     
     typedef enum logic {FAVOR_FRAME_READER, FAVOR_FRAME_WRITER} state_t;
@@ -136,16 +136,10 @@ module qa_drv_hc_write_arbiter
 
     always_comb
     begin
-        tx1_upd = cci_c1TxClearValids();
+        tx1_upd = cci_c1Tx_clearValids();
         tx1_upd.hdr = header;
         tx1_upd.data = data;
-        tx1_upd.wrValid = wrvalid;
-
-        if (! tx1_upd.wrValid)
-        begin
-            // req_type should match one-hot valid signal
-            tx1_upd.hdr.req_type = t_cci_req'(0);
-        end
+        tx1_upd.valid = wrvalid;
     end
 
 

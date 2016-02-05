@@ -56,7 +56,7 @@ module qa_drv_hc_read_arbiter
     logic can_issue;
     assign can_issue = cci_can_issue && csr.hc_en;
 
-    t_cci_ReqMemHdr header;
+    t_cci_c0_ReqMemHdr header;
     logic rdvalid;
 
     typedef enum logic {FAVOR_FRAME_READER, FAVOR_FRAME_WRITER} state_t;
@@ -137,15 +137,9 @@ module qa_drv_hc_read_arbiter
 
     always_comb
     begin
-        tx0_upd = cci_c0TxClearValids();
+        tx0_upd = cci_c0Tx_clearValids();
         tx0_upd.hdr = header;
-        tx0_upd.rdValid = rdvalid && ! reset;
-
-        if (! tx0_upd.rdValid)
-        begin
-            // req_type should match one-hot valid signal
-            tx0_upd.hdr.req_type = t_cci_req'(0);
-        end
+        tx0_upd.valid = rdvalid && ! reset;
     end
     
 endmodule // qa_drv_hc_read_arbiter

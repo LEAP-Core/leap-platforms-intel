@@ -100,7 +100,7 @@ module cci_mpf_shim_sort_write_rsp
         .N_ENTRIES(N_SCOREBOARD_ENTRIES),
         .N_DATA_BITS(0),
         .N_META_BITS(CCI_MDATA_WIDTH),
-        .MIN_FREE_SLOTS(CCI_ALMOST_FULL_THRESHOLD)
+        .MIN_FREE_SLOTS(CCI_TX_ALMOST_FULL_THRESHOLD)
         )
       c1_scoreboard(.clk,
                     .reset,

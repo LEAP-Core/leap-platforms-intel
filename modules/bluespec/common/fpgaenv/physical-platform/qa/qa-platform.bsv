@@ -111,8 +111,7 @@ module [CONNECTED_MODULE] mkPhysicalPlatform
     // course of action should be to instantiate the Clocks Physical Device
     // and obtain interfaces to clock and reset the other devices with.
     //
-    // The clock is derived from the QuickAssist vl_clk_LPDomain_32ui.
-    // Reset is derived from ffs_vl_LP32ui_lp2sy_SoftReset_n.
+    // The clock and reset are derived from the incoming CCI signals.
     //
     CLOCKS_DEVICE clocks <- mkClocksDevice();
     

@@ -76,14 +76,14 @@ module qa_driver
     //
     // To client FIFO
     //
-    output t_cci_cldata rx_fifo_data,
+    output t_cci_clData rx_fifo_data,
     output logic        rx_fifo_rdy,
     input  logic        rx_fifo_enable,
    
     //
     // From client FIFO
     //
-    input  t_cci_cldata tx_fifo_data,
+    input  t_cci_clData tx_fifo_data,
     output logic        tx_fifo_rdy,
     input  logic        tx_fifo_enable,
 
@@ -98,14 +98,14 @@ module qa_driver
     output logic        mem_read_req_rdy,
     input  logic        mem_read_req_enable,
 
-    output t_cci_cldata mem_read_rsp_data,
+    output t_cci_clData mem_read_rsp_data,
     output logic        mem_read_rsp_rdy,
 
     //
     // Memory write request
     //
     input  logic [CCI_ADDR_WIDTH-1:0] mem_write_addr,
-    input  t_cci_cldata mem_write_data,
+    input  t_cci_clData mem_write_data,
     // Use CCI's cache if true
     input  logic        mem_write_req_cached,
     // Enforce order of references to the same address?
@@ -149,7 +149,7 @@ module qa_driver
     // Native CCI Interface (cache line interface for back end)
     /* Channel 0 can receive READ, WRITE, WRITE CSR responses.*/
     input  t_ccis_RspMemHdr ffs_vl18_LP32ui_lp2sy_C0RxHdr,       // System to LP header
-    input  t_ccis_cldata    ffs_vl512_LP32ui_lp2sy_C0RxData, // System to LP data 
+    input  t_ccis_clData    ffs_vl512_LP32ui_lp2sy_C0RxData, // System to LP data 
     input  logic            ffs_vl_LP32ui_lp2sy_C0RxWrValid,     // RxWrHdr valid signal 
     input  logic            ffs_vl_LP32ui_lp2sy_C0RxRdValid,     // RxRdHdr valid signal
     input  logic            ffs_vl_LP32ui_lp2sy_C0RxCgValid,     // RxCgHdr valid signal
@@ -165,7 +165,7 @@ module qa_driver
     output logic            ffs_vl_LP32ui_sy2lp_C0TxRdValid,     // TxRdHdr valid signals 
     /*Channel 1 reserved for WRITE REQUESTS ONLY */       
     output t_ccis_ReqMemHdr ffs_vl61_LP32ui_sy2lp_C1TxHdr,       // System to LP header
-    output t_ccis_cldata    ffs_vl512_LP32ui_sy2lp_C1TxData, // System to LP data 
+    output t_ccis_clData    ffs_vl512_LP32ui_sy2lp_C1TxData, // System to LP data 
     output logic            ffs_vl_LP32ui_sy2lp_C1TxWrValid,     // TxWrHdr valid signal
     output logic            ffs_vl_LP32ui_sy2lp_C1TxIrValid,     // Tx Interrupt valid signal
     /* Tx push flow control */
@@ -177,16 +177,18 @@ module qa_driver
 
 `ifdef USE_PLATFORM_CCIP
     // CCI-P Clocks and Resets
-    input  logic        vl_clk_LPdomain_16ui,       // CCI interface clock
-    input  logic        vl_clk_LPdomain_64ui,       // 1/4x Frequency of interface clock. Synchronous.
-    input  logic        vl_clk_LPdomain_32ui,       // 1/2x Frequency of interface clock. Synchronous.
-    input  logic        ffs_LP16ui_afu_SoftReset_n, // CCI-P Soft Reset
-    input  logic [1:0]  ffs_LP16ui_afu_PwrState,    // CCI-P AFU Power State
-    input  logic        ffs_LP16ui_afu_Error,       // CCI-P Protocol Error Detected
+    input  logic        pClk,                // 400MHz - CCI-P clock domain. Primary interface clock
+    input  logic        pClkDiv2,            // 200MHz - CCI-P clock domain.
+    input  logic        pClkDiv4,            // 100MHz - CCI-P clock domain.
+    input  logic        uClk_usr,            // User clock domain. Refer to clock programming guide  ** Currently provides fixed 300MHz clock **
+    input  logic        uClk_usrDiv2,        // User clock domain. Half the programmed frequency  ** Currently provides fixed 150MHz clock **
+    input  logic        pck_cp2af_softReset, // CCI-P ACTIVE HIGH Soft Reset
+    input  logic [1:0]  pck_cp2af_pwrState,  // CCI-P AFU Power State
+    input  logic        pck_cp2af_error,     // CCI-P Protocol Error Detected
 
-    // Data ports
-    output t_if_ccip_Tx ffs_LP16ui_sTxData_afu,     // CCI-P Tx Port
-    input  t_if_ccip_Rx ffs_LP16ui_sRxData_afu      // CCI-P Rx Port
+    // Interface structures
+    input  t_if_ccip_Rx pck_cp2af_sRx,       // CCI-P Rx Port
+    output t_if_ccip_Tx pck_af2cp_sTx        // CCI-P Tx Port
 `endif
 
     );
@@ -198,7 +200,7 @@ module qa_driver
     assign clk = vl_clk_LPdomain_32ui;
 `endif
 `ifdef USE_PLATFORM_CCIP
-    assign clk = vl_clk_LPdomain_16ui;
+    assign clk = pClk;
 `endif
 
 
@@ -210,9 +212,9 @@ module qa_driver
 
     // Virtual addresses exposed to the client
     initial begin
-        assert (CCI_ADDR_WIDTH == CCI_MPF_CL_VADDR_WIDTH) else
+        assert (CCI_ADDR_WIDTH == CCI_MPF_CLADDR_WIDTH) else
             $fatal("qa_driver.sv expects CCI_ADDR_WIDTH %d but configured with %d",
-                   CCI_MPF_CL_VADDR_WIDTH, CCI_ADDR_WIDTH);
+                   CCI_MPF_CLADDR_WIDTH, CCI_ADDR_WIDTH);
     end
 
 

@@ -77,7 +77,7 @@ module qa_driver_csr_rd
 
     // Address of incoming MMIO request, truncated to only the bits needed
     // to compute local CSR addresses.
-    t_cci_mmioaddr mmio_req_addr;
+    t_cci_mmioAddr mmio_req_addr;
     assign mmio_req_addr = cci_csr_getAddress(fiu.c0Rx);
       
     // TID of incoming MMIO request
@@ -137,12 +137,12 @@ module qa_driver_csr_rd
               3: // DFH_RSVD0
                 begin
                     c2Tx.mmioRdValid = 1'b1;
-                    c2Tx.data = t_ccip_mmiodata'(0);
+                    c2Tx.data = t_ccip_mmioData'(0);
                 end
               4: // DFH_RSVD1
                 begin
                     c2Tx.mmioRdValid = 1'b1;
-                    c2Tx.data = t_ccip_mmiodata'(0);
+                    c2Tx.data = t_ccip_mmioData'(0);
                 end
             endcase
         end

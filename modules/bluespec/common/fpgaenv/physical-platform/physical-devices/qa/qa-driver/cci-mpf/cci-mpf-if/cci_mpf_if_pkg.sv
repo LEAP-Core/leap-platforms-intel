@@ -40,7 +40,7 @@ package cci_mpf_if_pkg;
     //
     //  - MPF provides functions for platform-independent manipulation
     //    of CCI structures. It defines platform agnostic names,
-    //    e.g. t_cci_claddr instead of t_ccip_claddr. Objects with
+    //    e.g. t_cci_clAddr instead of t_ccip_clAddr. Objects with
     //    MPF-specific data are given a name that includes "mpf", such
     //    as t_cci_mpf_ReqMemHdr.
     //
@@ -57,38 +57,45 @@ package cci_mpf_if_pkg;
 
 `ifdef USE_PLATFORM_CCIS
     parameter CCI_MDATA_WIDTH = CCIS_MDATA_WIDTH;
-    parameter CCI_ALMOST_FULL_THRESHOLD = CCIS_ALMOST_FULL_THRESHOLD;
+    parameter CCI_TX_ALMOST_FULL_THRESHOLD = CCIS_TX_ALMOST_FULL_THRESHOLD;
 `endif
 `ifdef USE_PLATFORM_CCIP
     parameter CCI_MDATA_WIDTH = CCIP_MDATA_WIDTH;
-    parameter CCI_ALMOST_FULL_THRESHOLD = CCIP_ALMOST_FULL_THRESHOLD;
+    parameter CCI_TX_ALMOST_FULL_THRESHOLD = CCIP_TX_ALMOST_FULL_THRESHOLD;
 `endif
 
-    typedef t_ccip_claddr t_cci_claddr;
-    typedef t_ccip_cldata t_cci_cldata;
+    typedef t_ccip_clAddr t_cci_clAddr;
+    typedef t_ccip_clData t_cci_clData;
     typedef t_ccip_mdata t_cci_mdata;
 
     typedef t_ccip_vc t_cci_vc;
-    typedef t_ccip_cl_num t_cci_cl_num;
+    typedef t_ccip_clLen t_cci_clLen;
+    typedef t_ccip_clNum t_cci_clNum;
 
-    typedef t_ccip_mmioaddr t_cci_mmioaddr;
-    typedef t_ccip_mmiodata t_cci_mmiodata;
+    typedef t_ccip_mmioAddr t_cci_mmioAddr;
+    typedef t_ccip_mmioData t_cci_mmioData;
     typedef t_ccip_tid t_cci_tid;
 
-    typedef t_ccip_req t_cci_req;
-    typedef t_ccip_rsp t_cci_rsp;
+    typedef t_ccip_c0_req t_cci_c0_req;
+    typedef t_ccip_c1_req t_cci_c1_req;
+    typedef t_ccip_c0_rsp t_cci_c0_rsp;
+    typedef t_ccip_c1_rsp t_cci_c1_rsp;
 
-    typedef t_ccip_ReqMemHdr t_cci_ReqMemHdr;
-    parameter CCI_TX_MEMHDR_WIDTH = CCIP_TX_MEMHDR_WIDTH;
+    typedef t_ccip_c0_ReqMemHdr t_cci_c0_ReqMemHdr;
+    parameter CCI_C0TX_MEMHDR_WIDTH = CCIP_C0TX_MEMHDR_WIDTH;
+    typedef t_ccip_c1_ReqMemHdr t_cci_c1_ReqMemHdr;
+    parameter CCI_C1TX_MEMHDR_WIDTH = CCIP_C1TX_MEMHDR_WIDTH;
 
-    typedef t_ccip_RspMemHdr t_cci_RspMemHdr;
-    parameter CCI_RX_MEMHDR_WIDTH = CCIP_RX_MEMHDR_WIDTH;
+    typedef t_ccip_c0_RspMemHdr t_cci_c0_RspMemHdr;
+    parameter CCI_C0RX_MEMHDR_WIDTH = CCIP_C0RX_MEMHDR_WIDTH;
+    typedef t_ccip_c1_RspMemHdr t_cci_c1_RspMemHdr;
+    parameter CCI_C1RX_MEMHDR_WIDTH = CCIP_C1RX_MEMHDR_WIDTH;
 
-    typedef t_ccip_Req_MmioHdr t_cci_Req_MmioHdr;
-    parameter CCI_RX_MMIOHDR_WIDTH = CCIP_RX_MMIOHDR_WIDTH;
+    typedef t_ccip_c0_ReqMmioHdr t_cci_c0_ReqMmioHdr;
+    parameter CCI_C0RX_MMIOHDR_WIDTH = CCIP_C0RX_MMIOHDR_WIDTH;
 
-    typedef t_ccip_Rsp_MmioHdr t_cci_Rsp_MmioHdr;
-    parameter CCI_TX_MMIOHDR_WIDTH = CCIP_TX_MMIOHDR_WIDTH;
+    typedef t_ccip_c2_RspMmioHdr t_cci_c2_RspMmioHdr;
+    parameter CCI_C2TX_MMIOHDR_WIDTH = CCIP_C2TX_MMIOHDR_WIDTH;
 
     typedef t_if_ccip_c0_Tx t_if_cci_c0_Tx;
     typedef t_if_ccip_c1_Tx t_if_cci_c1_Tx;
@@ -99,38 +106,56 @@ package cci_mpf_if_pkg;
     typedef t_if_ccip_c1_Rx t_if_cci_c1_Rx;
     typedef t_if_ccip_Rx t_if_cci_Rx;
 
-    function automatic t_cci_ReqMemHdr cci_updMemReqHdrRsvd(
-        input t_cci_ReqMemHdr h
+    function automatic t_cci_c0_ReqMemHdr cci_c0_updMemReqHdrRsvd(
+        input t_cci_c0_ReqMemHdr h
         );
-        return ccip_updMemReqHdrRsvd(h);
+        return ccip_c0_updMemReqHdrRsvd(h);
     endfunction
 
-    function automatic t_if_cci_c0_Tx cci_c0TxClearValids();
-        return ccip_c0TxClearValids();
+    function automatic t_cci_c1_ReqMemHdr cci_c1_updMemReqHdrRsvd(
+        input t_cci_c1_ReqMemHdr h
+        );
+        return ccip_c1_updMemReqHdrRsvd(h);
     endfunction
 
-    function automatic t_if_cci_c1_Tx cci_c1TxClearValids();
-        return ccip_c1TxClearValids();
+    function automatic t_if_cci_c0_Tx cci_c0Tx_clearValids();
+        return ccip_c0Tx_clearValids();
     endfunction
 
-    function automatic t_if_cci_c0_Rx cci_c0RxClearValids();
-        return ccip_c0RxClearValids();
+    function automatic t_if_cci_c1_Tx cci_c1Tx_clearValids();
+        return ccip_c1Tx_clearValids();
     endfunction
 
-    function automatic t_if_cci_c1_Rx cci_c1RxClearValids();
-        return ccip_c1RxClearValids();
+    function automatic t_if_cci_c0_Rx cci_c0Rx_clearValids();
+        return ccip_c0Rx_clearValids();
     endfunction
 
-    function automatic logic cci_c0RxIsValid(
+    function automatic t_if_cci_c1_Rx cci_c1Rx_clearValids();
+        return ccip_c1Rx_clearValids();
+    endfunction
+
+    function automatic logic cci_c0Rx_isValid(
         input t_if_cci_c0_Rx r
         );
-        return ccip_c0RxIsValid(r);
+        return ccip_c0Rx_isValid(r);
     endfunction
 
-    function automatic logic cci_c1RxIsValid(
+    function automatic logic cci_c1Rx_isValid(
         input t_if_cci_c1_Rx r
         );
-        return ccip_c1RxIsValid(r);
+        return ccip_c1Rx_isValid(r);
+    endfunction
+
+    function automatic logic cci_c0Rx_isReadRsp(
+        input t_if_cci_c0_Rx r
+        );
+        return ccip_c0Rx_isReadRsp(r);
+    endfunction
+
+    function automatic logic cci_c1Rx_isWriteRsp(
+        input t_if_cci_c1_Rx r
+        );
+        return ccip_c1Rx_isWriteRsp(r);
     endfunction
 
 
@@ -141,9 +166,8 @@ package cci_mpf_if_pkg;
     // ====================================================================
 
     // CCI_CL_ADDR_WIDTH must be at least as large as both the virtual
-    // and physical address widths. On CCI-P both are the same.
-    parameter CCI_MPF_CL_PADDR_WIDTH = CCI_CLADDR_WIDTH;
-    parameter CCI_MPF_CL_VADDR_WIDTH = CCI_CLADDR_WIDTH;
+    // and physical address widths.
+    parameter CCI_MPF_CLADDR_WIDTH = CCI_CLADDR_WIDTH;
 
     //
     // The CCI MPF request header adds fields that are used only for
@@ -179,10 +203,15 @@ package cci_mpf_if_pkg;
         // property that mdata is in the low bits.  Some code treats the
         // header as opaque and manipulates the mdata bits without using
         // the struct fields.
-        t_cci_ReqMemHdr        base;
-    } t_cci_mpf_ReqMemHdr;
+        t_cci_c0_ReqMemHdr     base;
+    } t_cci_mpf_c0_ReqMemHdr;
+    parameter CCI_MPF_C0TX_MEMHDR_WIDTH = $bits(t_cci_mpf_c0_ReqMemHdr);
 
-    parameter CCI_MPF_TX_MEMHDR_WIDTH = $bits(t_cci_mpf_ReqMemHdr);
+    typedef struct packed {
+        t_cci_mpf_ReqMemHdrExt ext;
+        t_cci_c1_ReqMemHdr     base;
+    } t_cci_mpf_c1_ReqMemHdr;
+    parameter CCI_MPF_C1TX_MEMHDR_WIDTH = $bits(t_cci_mpf_c1_ReqMemHdr);
 
 
     // ====================================================================
@@ -197,16 +226,15 @@ package cci_mpf_if_pkg;
 
     // Channel 0 : Memory Reads
     typedef struct packed {
-        t_cci_mpf_ReqMemHdr  hdr;            // Request Header
-        logic                rdValid;        // Request Rd Valid
+        t_cci_mpf_c0_ReqMemHdr hdr;            // Request Header
+        logic                  valid;          // Request Valid 
     } t_if_cci_mpf_c0_Tx;
 
     // Channel 1 : Memory Writes
     typedef struct packed {
-        t_cci_mpf_ReqMemHdr  hdr;            // Request Header
-        t_cci_cldata         data;           // Request Data
-        logic                wrValid;        // Request Wr Valid
-        logic                intrValid;      // Request Intr Valid
+        t_cci_mpf_c1_ReqMemHdr hdr;            // Request Header
+        t_cci_clData           data;           // Request Data
+        logic                  valid;          // Request Valid 
     } t_if_cci_mpf_c1_Tx;
 
 
@@ -216,24 +244,45 @@ package cci_mpf_if_pkg;
     //
     // ====================================================================
 
-    function automatic t_cci_claddr cci_mpf_getReqAddr(
-        input t_cci_mpf_ReqMemHdr h
+    function automatic t_cci_clAddr cci_mpf_c0_getReqAddr(
+        input t_cci_mpf_c0_ReqMemHdr h
+        );
+
+        return h.base.address;
+    endfunction
+
+    function automatic t_cci_clAddr cci_mpf_c1_getReqAddr(
+        input t_cci_mpf_c1_ReqMemHdr h
         );
 
         return h.base.address;
     endfunction
 
 
-    function automatic logic cci_mpf_getReqCheckOrder(
-        input t_cci_mpf_ReqMemHdr h
+    function automatic logic cci_mpf_c0_getReqCheckOrder(
+        input t_cci_mpf_c0_ReqMemHdr h
+        );
+
+        return h.ext.checkLoadStoreOrder;
+    endfunction
+
+    function automatic logic cci_mpf_c1_getReqCheckOrder(
+        input t_cci_mpf_c1_ReqMemHdr h
         );
 
         return h.ext.checkLoadStoreOrder;
     endfunction
 
 
-    function automatic logic cci_mpf_getReqAddrIsVirtual(
-        input t_cci_mpf_ReqMemHdr h
+    function automatic logic cci_mpf_c0_getReqAddrIsVirtual(
+        input t_cci_mpf_c0_ReqMemHdr h
+        );
+
+        return h.ext.addrIsVirtual;
+    endfunction
+
+    function automatic logic cci_mpf_c1_getReqAddrIsVirtual(
+        input t_cci_mpf_c1_ReqMemHdr h
         );
 
         return h.ext.addrIsVirtual;
@@ -241,9 +290,20 @@ package cci_mpf_if_pkg;
 
 
     // Update an existing request header with a new virtual address.
-    function automatic t_cci_mpf_ReqMemHdr cci_mpf_updReqVAddr(
-        input t_cci_mpf_ReqMemHdr h,
-        input t_cci_claddr        address
+    function automatic t_cci_mpf_c0_ReqMemHdr cci_mpf_c0_updReqVAddr(
+        input t_cci_mpf_c0_ReqMemHdr h,
+        input t_cci_clAddr           address
+        );
+
+        h.ext.addrIsVirtual = 1'b1;
+        h.base.address = address;
+
+        return h;
+    endfunction
+
+    function automatic t_cci_mpf_c0_ReqMemHdr cci_mpf_c1_updReqVAddr(
+        input t_cci_mpf_c1_ReqMemHdr h,
+        input t_cci_clAddr           address
         );
 
         h.ext.addrIsVirtual = 1'b1;
@@ -256,10 +316,10 @@ package cci_mpf_if_pkg;
     // Generate a new request header.  With so many parameters and defaults
     // we use a struct to pass non-basic parameters.
     typedef struct {
-        logic         checkLoadStoreOrder;
-        logic         addrIsVirtual;
-        t_cci_vc      vc_sel;
-        t_cci_cl_num  cl_num;
+        logic       checkLoadStoreOrder;
+        logic       addrIsVirtual;
+        t_cci_vc    vc_sel;
+        t_cci_clLen cl_len;
     } t_cci_mpf_ReqMemHdrParams;
 
     // Default value for request header construction. It takes only one
@@ -274,21 +334,21 @@ package cci_mpf_if_pkg;
         p.checkLoadStoreOrder = 1'b0;      // Default hardware behavior
         p.addrIsVirtual = 1'(addrIsVirtual);
         p.vc_sel = eVC_VL0;
-        p.cl_num = 0;
+        p.cl_len = eCL_LEN_1;
         return p;
     endfunction
 
-    function automatic t_cci_mpf_ReqMemHdr cci_mpf_genReqHdr(
-        input t_cci_req                 requestType,
-        input t_cci_claddr              address,
+    function automatic t_cci_mpf_c0_ReqMemHdr cci_mpf_c0_genReqHdr(
+        input t_cci_c0_req              requestType,
+        input t_cci_clAddr              address,
         input t_cci_mdata               mdata,
         input t_cci_mpf_ReqMemHdrParams params
         );
 
-        t_cci_mpf_ReqMemHdr h;
+        t_cci_mpf_c0_ReqMemHdr h;
 
-        h.base = t_cci_ReqMemHdr'(0);
-        h = cci_mpf_updReqVAddr(h, address);
+        h.base = t_cci_c0_ReqMemHdr'(0);
+        h = cci_mpf_c0_updReqVAddr(h, address);
 
         h.ext.checkLoadStoreOrder = params.checkLoadStoreOrder;
         h.ext.addrIsVirtual = params.addrIsVirtual;
@@ -296,33 +356,87 @@ package cci_mpf_if_pkg;
         h.base.req_type = requestType;
         h.base.mdata = mdata;
         h.base.vc_sel = params.vc_sel;
-        h.base.cl_num = params.cl_num;
+        h.base.cl_len = params.cl_len;
+
+        return h;
+    endfunction
+
+    function automatic t_cci_mpf_c1_ReqMemHdr cci_mpf_c1_genReqHdr(
+        input t_cci_c1_req              requestType,
+        input t_cci_clAddr              address,
+        input t_cci_mdata               mdata,
+        input t_cci_mpf_ReqMemHdrParams params
+        );
+
+        t_cci_mpf_c1_ReqMemHdr h;
+
+        h.base = t_cci_c1_ReqMemHdr'(0);
+        h = cci_mpf_c1_updReqVAddr(h, address);
+
+        h.ext.checkLoadStoreOrder = params.checkLoadStoreOrder;
+        h.ext.addrIsVirtual = params.addrIsVirtual;
+
+        h.base.req_type = requestType;
+        h.base.mdata = mdata;
+        h.base.vc_sel = params.vc_sel;
+        h.base.cl_len = params.cl_len;
 
         return h;
     endfunction
 
     // Same as MPF version of genReqHdr but return only the base header
-    function automatic t_cci_ReqMemHdr cci_genReqHdr(
-        input t_cci_req                 requestType,
-        input t_cci_claddr              address,
+    function automatic t_cci_c0_ReqMemHdr cci_c0_genReqHdr(
+        input t_cci_c0_req              requestType,
+        input t_cci_clAddr              address,
         input t_cci_mdata               mdata,
         input t_cci_mpf_ReqMemHdrParams params
         );
 
-        t_cci_mpf_ReqMemHdr h = cci_mpf_genReqHdr(requestType,
-                                                  address,
-                                                  mdata,
-                                                  params);
+        t_cci_mpf_c0_ReqMemHdr h = cci_mpf_c0_genReqHdr(requestType,
+                                                        address,
+                                                        mdata,
+                                                        params);
+        return h.base;
+    endfunction
+
+    function automatic t_cci_c1_ReqMemHdr cci_c1_genReqHdr(
+        input t_cci_c1_req              requestType,
+        input t_cci_clAddr              address,
+        input t_cci_mdata               mdata,
+        input t_cci_mpf_ReqMemHdrParams params
+        );
+
+        t_cci_mpf_c1_ReqMemHdr h = cci_mpf_c1_genReqHdr(requestType,
+                                                        address,
+                                                        mdata,
+                                                        params);
         return h.base;
     endfunction
 
 
     // Generate a new request header from a base CCI header
-    function automatic t_cci_mpf_ReqMemHdr cci_mpf_cvtReqHdrFromBase(
-        input t_cci_ReqMemHdr baseHdr
+    function automatic t_cci_mpf_c0_ReqMemHdr cci_mpf_c0_cvtReqHdrFromBase(
+        input t_cci_c0_ReqMemHdr baseHdr
         );
 
-        t_cci_mpf_ReqMemHdr h;
+        t_cci_mpf_c0_ReqMemHdr h;
+
+        h.base = baseHdr;
+
+        // Clear the MPF-specific flags in the MPF extended header so
+        // that MPF treats the request as a standard CCI request.
+        h.ext = 'x;
+        h.ext.checkLoadStoreOrder = 0;
+        h.ext.addrIsVirtual = 0;
+
+        return h;
+    endfunction
+
+    function automatic t_cci_mpf_c1_ReqMemHdr cci_mpf_c1_cvtReqHdrFromBase(
+        input t_cci_c1_ReqMemHdr baseHdr
+        );
+
+        t_cci_mpf_c1_ReqMemHdr h;
 
         h.base = baseHdr;
 
@@ -337,13 +451,27 @@ package cci_mpf_if_pkg;
 
 
     // Generate a new response header
-    function automatic t_cci_RspMemHdr cci_genRspHdr(
-        input t_cci_rsp     responseType,
-        input t_cci_mdata   mdata
+    function automatic t_cci_c0_RspMemHdr cci_c0_genRspHdr(
+        input t_cci_c0_rsp responseType,
+        input t_cci_mdata  mdata
         );
 
-        t_cci_RspMemHdr h;
-        h = t_cci_RspMemHdr'(0);
+        t_cci_c0_RspMemHdr h;
+        h = t_cci_c0_RspMemHdr'(0);
+
+        h.resp_type = responseType;
+        h.mdata = mdata;
+
+        return h;
+    endfunction
+
+    function automatic t_cci_c1_RspMemHdr cci_c1_genRspHdr(
+        input t_cci_c1_rsp responseType,
+        input t_cci_mdata  mdata
+        );
+
+        t_cci_c1_RspMemHdr h;
+        h = t_cci_c1_RspMemHdr'(0);
 
         h.resp_type = responseType;
         h.mdata = mdata;
@@ -359,8 +487,8 @@ package cci_mpf_if_pkg;
 
         t_if_cci_mpf_c0_Tx m;
 
-        m.hdr = cci_mpf_cvtReqHdrFromBase(b.hdr);
-        m.rdValid = b.rdValid;
+        m.hdr = cci_mpf_c0_cvtReqHdrFromBase(b.hdr);
+        m.valid = b.valid;
 
         return m;
     endfunction
@@ -373,10 +501,9 @@ package cci_mpf_if_pkg;
 
         t_if_cci_mpf_c1_Tx m;
 
-        m.hdr = cci_mpf_cvtReqHdrFromBase(b.hdr);
+        m.hdr = cci_mpf_c1_cvtReqHdrFromBase(b.hdr);
         m.data = b.data;
-        m.wrValid = b.wrValid;
-        m.intrValid = b.intrValid;
+        m.valid = b.valid;
 
         return m;
     endfunction
@@ -392,7 +519,7 @@ package cci_mpf_if_pkg;
         t_if_cci_c0_Tx b;
 
         b.hdr = m.hdr.base;
-        b.rdValid = m.rdValid;
+        b.valid = m.valid;
 
         return b;
     endfunction
@@ -409,25 +536,23 @@ package cci_mpf_if_pkg;
 
         b.hdr = m.hdr.base;
         b.data = m.data;
-        b.wrValid = m.wrValid;
-        b.intrValid = m.intrValid;
+        b.valid = m.valid;
 
         return b;
     endfunction
 
 
     // Initialize an MPF C0 TX with all valid bits clear
-    function automatic t_if_cci_mpf_c0_Tx cci_mpf_c0TxClearValids();
+    function automatic t_if_cci_mpf_c0_Tx cci_mpf_c0Tx_clearValids();
         t_if_cci_mpf_c0_Tx r = 'x;
-        r.rdValid = 0;
+        r.valid = 1'b0;
         return r;
     endfunction
 
     // Initialize an MPF C1 TX with all valid bits clear
-    function automatic t_if_cci_mpf_c1_Tx cci_mpf_c1TxClearValids();
+    function automatic t_if_cci_mpf_c1_Tx cci_mpf_c1Tx_clearValids();
         t_if_cci_mpf_c1_Tx r = 'x;
-        r.wrValid = 0;
-        r.intrValid = 0;
+        r.valid = 1'b0;
         return r;
     endfunction
 
@@ -438,7 +563,7 @@ package cci_mpf_if_pkg;
         input logic mask
         );
 
-        r.rdValid = r.rdValid && mask;
+        r.valid = r.valid && mask;
         return r;
     endfunction
 
@@ -448,8 +573,7 @@ package cci_mpf_if_pkg;
         input logic mask
         );
 
-        r.wrValid = r.wrValid && mask;
-        r.intrValid = r.intrValid && mask;
+        r.valid = r.valid && mask;
         return r;
     endfunction
 
@@ -459,42 +583,68 @@ package cci_mpf_if_pkg;
         input t_if_cci_mpf_c0_Tx r
         );
 
-        return r.rdValid;
+        return r.valid;
     endfunction
+
+    // Does an MPF C0 TX have a valid read request?
+    function automatic logic cci_mpf_c0TxIsReadReq(
+        input t_if_cci_mpf_c0_Tx r
+        );
+
+        return r.valid && ((r.hdr.base.req_type == eREQ_RDLINE_I) ||
+                           (r.hdr.base.req_type == eREQ_RDLINE_S));
+    endfunction
+
 
     // Does an MPF C1 TX have a valid request?
     function automatic logic cci_mpf_c1TxIsValid(
         input t_if_cci_mpf_c1_Tx r
         );
 
-        return r.wrValid || r.intrValid;
+        return r.valid;
+    endfunction
+
+    // Does an MPF C0 TX have a valid write request?
+    function automatic logic cci_mpf_c1TxIsWriteReq(
+        input t_if_cci_mpf_c1_Tx r
+        );
+
+        return r.valid && ((r.hdr.base.req_type == eREQ_WRLINE_I) ||
+                           (r.hdr.base.req_type == eREQ_WRLINE_M));
+    endfunction
+
+    function automatic logic cci_mpf_c1TxIsWriteFence(
+        input t_if_cci_mpf_c1_Tx r
+        );
+
+        return r.valid && (r.hdr.base.req_type == eREQ_WRFENCE);
     endfunction
 
 
     // Generate an MPF C0 TX read request given a header
     function automatic t_if_cci_mpf_c0_Tx cci_mpf_genC0TxReadReq(
-        input t_cci_mpf_ReqMemHdr h,
-        input logic rdValid
+        input t_cci_mpf_c0_ReqMemHdr h,
+        input logic valid
         );
 
-        t_if_cci_mpf_c0_Tx r = cci_mpf_c0TxClearValids();
+        t_if_cci_mpf_c0_Tx r = cci_mpf_c0Tx_clearValids();
         r.hdr = h;
-        r.rdValid = rdValid;
+        r.valid = valid;
 
         return r;
     endfunction
 
     // Generate an MPF C1 TX write request given a header and data
     function automatic t_if_cci_mpf_c1_Tx cci_mpf_genC1TxWriteReq(
-        input t_cci_mpf_ReqMemHdr h,
-        input t_cci_cldata data,
-        input logic wrValid
+        input t_cci_mpf_c1_ReqMemHdr h,
+        input t_cci_clData data,
+        input logic valid
         );
 
-        t_if_cci_mpf_c1_Tx r = cci_mpf_c1TxClearValids();
+        t_if_cci_mpf_c1_Tx r = cci_mpf_c1Tx_clearValids();
         r.hdr = h;
         r.data = data;
-        r.wrValid = wrValid;
+        r.valid = valid;
 
         return r;
     endfunction
@@ -506,15 +656,8 @@ package cci_mpf_if_pkg;
         );
 
         t_if_cci_mpf_c0_Tx r_out = r;
-        t_cci_ReqMemHdr h = r.hdr.base;
-
-        // Make sure req_type matches one-hot flags
-        if (! cci_mpf_c0TxIsValid(r))
-        begin
-            h.req_type = t_cci_req'(0);
-        end
-
-        r_out.hdr.base = h;
+        r_out.hdr.base.rsvd1 = 0;
+        r_out.hdr.base.rsvd0 = 0;
 
         return r_out;
     endfunction
@@ -524,17 +667,9 @@ package cci_mpf_if_pkg;
         input t_if_cci_mpf_c1_Tx r
         );
 
-
         t_if_cci_mpf_c1_Tx r_out = r;
-        t_cci_ReqMemHdr h = r.hdr.base;
-
-        // Make sure req_type matches one-hot flags
-        if (! cci_mpf_c1TxIsValid(r))
-        begin
-            h.req_type = t_cci_req'(0);
-        end
-
-        r_out.hdr.base = cci_updMemReqHdrRsvd(h);
+        r_out.hdr.base.rsvd1 = 0;
+        r_out.hdr.base.rsvd0 = 0;
 
         return r_out;
     endfunction

@@ -53,6 +53,7 @@ class PostSynthesize():
             prjFile.write('set_global_assignment -name VERILOG_MACRO "USE_PLATFORM_CCIS=1"\n')
         if (moduleList.getAWBParamSafe('qa_platform_libs', 'CCI_P_IFC')):
             prjFile.write('set_global_assignment -name VERILOG_MACRO "USE_PLATFORM_CCIP=1"\n')
+            prjFile.write('set_global_assignment -name VERILOG_MACRO "BSV_POSITIVE_RESET=1"\n')
 
         prjFile.write('source ' + rel_qsf_src_dir + '/ome2_ivt.qsf\n')
         prjFile.write('source ' + rel_qsf_src_dir + '/qsf_env_settings.qsf\n')

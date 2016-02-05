@@ -233,15 +233,18 @@ module cci_mpf_prim_scoreboard
             // this cycle.
             dataValid_sub_q <= { dataValid_q[t_idx'(oldest + 1)],
                                  dataValid_q[oldest] };
-
-            if (! reset)
-            begin
-                assert(! deq_en || notEmpty) else
-                    $fatal("cci_mpf_prim_scoreboard: Can't DEQ when EMPTY!");
-            end
         end
 
         oldest_q <= oldest;
+    end
+
+    always_ff @(negedge clk)
+    begin
+        if (! reset)
+        begin
+            assert(! deq_en || notEmpty) else
+              $fatal("cci_mpf_prim_scoreboard: Can't DEQ when EMPTY!");
+        end
     end
 
     // Check one of two valid bits to determine notEmpty, depending on whether

@@ -45,7 +45,7 @@ package qa_drv_hc_types;
     // Cache line as a vector of 32 bit objects
     //
     localparam N_BIT32_PER_CACHE_LINE = CCI_CLDATA_WIDTH / 32;
-    typedef logic [N_BIT32_PER_CACHE_LINE-1 : 0][31:0] t_cci_cldata_vec32;
+    typedef logic [N_BIT32_PER_CACHE_LINE-1 : 0][31:0] t_cci_clData_vec32;
 
 
     //
@@ -97,11 +97,11 @@ package qa_drv_hc_types;
 
     typedef struct
     {
-        t_channel_req_arb read;
-        t_cci_ReqMemHdr   readHeader;  
-        t_channel_req_arb write;
-        t_cci_ReqMemHdr   writeHeader;
-        t_cci_cldata      data;
+        t_channel_req_arb  read;
+        t_cci_c0_ReqMemHdr readHeader;  
+        t_channel_req_arb  write;
+        t_cci_c1_ReqMemHdr writeHeader;
+        t_cci_clData       data;
     }
     t_frame_arb;
 

@@ -115,10 +115,10 @@ module cci_mpf_shim_csr
 
         // Target address.  The CSR space is 4-byte addressable.  The
         // low 2 address bits must be 0 and aren't transmitted.
-        t_cci_mmioaddr tgt = t_cci_mmioaddr'(c >> 2);
+        t_cci_mmioAddr tgt = t_cci_mmioAddr'(c >> 2);
 
         // Actual address sent in CSR write.
-        t_cci_mmioaddr addr = cci_csr_getAddress(c0Rx);
+        t_cci_mmioAddr addr = cci_csr_getAddress(c0Rx);
 
         return cci_csr_isWrite(c0Rx) && (addr == tgt);
     endfunction
@@ -126,7 +126,7 @@ module cci_mpf_shim_csr
     //
     // VTP CSR writes (host to FPGA)
     //
-    t_cci_claddr page_table_base;
+    t_cci_clAddr page_table_base;
 
     always_ff @(posedge clk)
     begin
@@ -145,7 +145,7 @@ module cci_mpf_shim_csr
             else if (csrAddrMatches(fiu.c0Rx, CCI_MPF_VTP_CSR_BASE +
                                               CCI_MPF_VTP_CSR_PAGE_TABLE_PADDR))
             begin
-                csrs.vtp_in_page_table_base <= t_cci_claddr'(fiu.c0Rx.data);
+                csrs.vtp_in_page_table_base <= t_cci_clAddr'(fiu.c0Rx.data);
                 csrs.vtp_in_page_table_base_valid <= 1'b1;
             end
         end
@@ -318,12 +318,12 @@ module cci_mpf_shim_csr
     logic mmio_req_not_full;
 
     // Address of incoming request
-    t_cci_mmioaddr mmio_req_addr_in;
+    t_cci_mmioAddr mmio_req_addr_in;
     assign mmio_req_addr_in = cci_csr_getAddress(c0_rx);
 
-    t_cci_mmioaddr mmio_req_addr_in_offset;
+    t_cci_mmioAddr mmio_req_addr_in_offset;
     assign mmio_req_addr_in_offset = mmio_req_addr_in -
-                                     t_cci_mmioaddr'(DFH_MMIO_BASE_ADDR >> 2);
+                                     t_cci_mmioAddr'(DFH_MMIO_BASE_ADDR >> 2);
 
     // Store incoming requests only if the address is possibly in range
     assign mmio_req_enq_en = cci_csr_isRead(c0_rx) &&

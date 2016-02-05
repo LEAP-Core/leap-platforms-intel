@@ -46,22 +46,22 @@ module qa_drv_hc_tester
     input  t_qa_drv_hc_csrs csr,
 
     // To-client FIFO
-    output t_cci_cldata rx_fifo_data,
+    output t_cci_clData rx_fifo_data,
     output logic        rx_fifo_rdy,
     input  logic        rx_fifo_enable,
 
     // From-client FIFO
-    input  t_cci_cldata tx_fifo_data,
+    input  t_cci_clData tx_fifo_data,
     output logic        tx_fifo_rdy,
     input  logic        tx_fifo_enable,
 
     // Internal wires for to-client FIFO
-    input  t_cci_cldata rx_data,
+    input  t_cci_clData rx_data,
     input  logic        rx_rdy,
     output logic        rx_enable,
 
     // Internal wires for from-client FIFO
-    output t_cci_cldata tx_data,
+    output t_cci_clData tx_data,
     input  logic        tx_rdy,
     output logic        tx_enable,
 

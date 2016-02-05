@@ -63,41 +63,48 @@ module qa_sim_top_level(CLK,
     // CCI-P emulation.  The emulator exports wires, which we pass to
     // the design's top level.
     //
-    logic vl_clk_LPdomain_64ui;
-    logic vl_clk_LPdomain_32ui;
-    logic vl_clk_LPdomain_16ui;
-    logic ffs_LP16ui_afu_SoftReset_n;
-    t_if_ccip_Tx ffs_LP16ui_sTxData_afu;
-    t_if_ccip_Rx ffs_LP16ui_sRxData_afu;
+    logic pClk;
+    logic pClkDiv2;
+    logic pClkDiv4;
+    logic uClk_usr;
+    assign uClk_usr = pClk;
+    logic uClk_usrDiv2;
+    assign uClk_usrDiv2 = pClkDiv2;
 
-    logic [1:0] ffs_LP16ui_afu_PwrState;   // CCI-P AFU Power State
-    logic       ffs_LP16ui_afu_Error;      // CCI-P Protocol Error Detected
+    logic       pck_cp2af_softReset;
+    logic [1:0] pck_cp2af_pwrState;   // CCI-P AFU Power State
+    logic       pck_cp2af_error;      // CCI-P Protocol Error Detected
+   
+    t_if_ccip_Tx pck_af2cp_sTx;
+    t_if_ccip_Rx pck_cp2af_sRx;
    
     // CCI-P emulator
-    ccip_emulator emulator
+    ccip_emulator ccip_emulator
        (
-        .vl_clk_LPdomain_64ui        (vl_clk_LPdomain_64ui         ),
-        .vl_clk_LPdomain_32ui        (vl_clk_LPdomain_32ui         ),
-        .vl_clk_LPdomain_16ui        (vl_clk_LPdomain_16ui         ),
-        .ffs_LP16ui_afu_SoftReset_n  (ffs_LP16ui_afu_SoftReset_n   ),
-        .ffs_LP16ui_afu_PwrState     (ffs_LP16ui_afu_PwrState      ),
-        .ffs_LP16ui_afu_Error        (ffs_LP16ui_afu_Error         ),
-        .ffs_LP16ui_sTxData_afu      (ffs_LP16ui_sTxData_afu       ),
-        .ffs_LP16ui_sRxData_afu      (ffs_LP16ui_sRxData_afu       )
+        .pClk,
+        .pClkDiv2,
+        .pClkDiv4,
+        .pck_cp2af_softReset,
+        .pck_cp2af_pwrState,
+        .pck_cp2af_error,
+        .pck_cp2af_sRx,
+        .pck_af2cp_sTx
         );
 
 
     // CCIP AFU
     ccip_std_afu ccip_std_afu
        (
-        .vl_clk_LPdomain_64ui        (vl_clk_LPdomain_64ui         ),
-        .vl_clk_LPdomain_32ui        (vl_clk_LPdomain_32ui         ),
-        .vl_clk_LPdomain_16ui        (vl_clk_LPdomain_16ui         ),
-        .ffs_LP16ui_afu_SoftReset_n  (ffs_LP16ui_afu_SoftReset_n   ),
-        .ffs_LP16ui_afu_PwrState     (ffs_LP16ui_afu_PwrState      ),
-        .ffs_LP16ui_afu_Error        (ffs_LP16ui_afu_Error         ),
-        .ffs_LP16ui_sTxData_afu      (ffs_LP16ui_sTxData_afu       ),
-        .ffs_LP16ui_sRxData_afu      (ffs_LP16ui_sRxData_afu       )
+        .pClk,
+        .pClkDiv2,
+        .pClkDiv4,
+        .uClk_usr,
+        .uClk_usrDiv2,
+        .pck_cp2af_softReset,
+        .pck_cp2af_pwrState,
+        .pck_cp2af_error,
+        .pck_cp2af_sRx,
+        .pck_af2cp_sTx
         );
 `endif
 

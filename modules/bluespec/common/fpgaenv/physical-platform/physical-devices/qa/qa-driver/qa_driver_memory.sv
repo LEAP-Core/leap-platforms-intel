@@ -54,7 +54,7 @@ module qa_driver_memory
     //
     // Memory read
     //
-    input  t_cci_claddr       mem_read_req_addr,
+    input  t_cci_clAddr       mem_read_req_addr,
     // Use CCI's cache if true
     input  logic              mem_read_req_cached,
     // Enforce order of references to the same address?
@@ -62,14 +62,14 @@ module qa_driver_memory
     output logic              mem_read_req_rdy,
     input  logic              mem_read_req_enable,
 
-    output t_cci_cldata       mem_read_rsp_data,
+    output t_cci_clData       mem_read_rsp_data,
     output logic              mem_read_rsp_rdy,
 
     //
     // Memory write request
     //
-    input  t_cci_claddr       mem_write_addr,
-    input  t_cci_cldata       mem_write_data,
+    input  t_cci_clAddr       mem_write_addr,
+    input  t_cci_clData       mem_write_data,
     // Use CCI's cache if true
     input  logic              mem_write_req_cached,
     // Enforce order of references to the same address?
@@ -108,16 +108,16 @@ module qa_driver_memory
 
     assign afu_if.c0Tx =
         cci_mpf_genC0TxReadReq(
-            cci_mpf_genReqHdr(mem_read_req_cached ? eREQ_RDLINE_S : eREQ_RDLINE_I,
-                              mem_read_req_addr,
-                              t_cci_mdata'(0),
-                              rd_req_params),
+            cci_mpf_c0_genReqHdr(mem_read_req_cached ? eREQ_RDLINE_S : eREQ_RDLINE_I,
+                                 mem_read_req_addr,
+                                 t_cci_mdata'(0),
+                                 rd_req_params),
             mem_read_req_enable);
 
     assign mem_read_req_rdy = ! afu_if.c0TxAlmFull;
 
     assign mem_read_rsp_data = afu_if.c0Rx.data;
-    assign mem_read_rsp_rdy = afu_if.c0Rx.rdValid;
+    assign mem_read_rsp_rdy = cci_c0Rx_isReadRsp(afu_if.c0Rx);
 
 
     t_cci_mpf_ReqMemHdrParams wr_req_params;
@@ -130,25 +130,19 @@ module qa_driver_memory
 
     assign afu_if.c1Tx =
         cci_mpf_genC1TxWriteReq(
-            cci_mpf_genReqHdr(mem_write_req_cached ? eREQ_WRLINE_M : eREQ_WRLINE_I,
-                              mem_write_addr,
-                              t_cci_mdata'(0),
-                              wr_req_params),
+            cci_mpf_c1_genReqHdr(mem_write_req_cached ? eREQ_WRLINE_M : eREQ_WRLINE_I,
+                                 mem_write_addr,
+                                 t_cci_mdata'(0),
+                                 wr_req_params),
             mem_write_data,
             mem_write_enable);
 
     assign mem_write_rdy = ! afu_if.c1TxAlmFull;
+    assign mem_write_ack = cci_c1Rx_isWriteRsp(afu_if.c1Rx);
 
-    assign mem_write_ack = 2'(afu_if.c0Rx.wrValid) +
-                           2'(afu_if.c1Rx.wrValid);
-
-    always_ff @(posedge clk)
+    always_ff @(negedge clk)
     begin
-        if (reset)
-        begin
-            // Nothing
-        end
-        else
+        if (! reset)
         begin
             assert(mem_read_req_rdy || ! mem_read_req_enable) else
                 $fatal("qa_drv_memory: Memory read not ready!");

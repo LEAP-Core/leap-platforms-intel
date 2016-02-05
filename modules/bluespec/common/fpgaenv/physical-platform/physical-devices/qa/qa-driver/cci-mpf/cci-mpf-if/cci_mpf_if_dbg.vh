@@ -26,26 +26,42 @@
     endfunction
 
     // Print Req Type
-    function string print_reqtype (logic [3:0] req);
+    function string print_c0_reqtype (t_cci_c0_req req);
+        case (req)
+            eREQ_RDLINE_S: return "RdLine_S ";
+            eREQ_RDLINE_I: return "RdLine_I ";
+            default:       return "* ERROR *";
+        endcase
+    endfunction
+
+    function string print_c1_reqtype (t_cci_c1_req req);
         case (req)
             eREQ_WRLINE_I: return "WrLine_I ";
             eREQ_WRLINE_M: return "WrLine_M ";
+         // eREQ_WRPUSH_I: return "WRPush_I ";
             eREQ_WRFENCE:  return "WrFence  ";
-            eREQ_RDLINE_S: return "RdLine_S ";
-            eREQ_RDLINE_I: return "RdLine_I ";
+         // eREQ_ATOMIC:   return "Atomic   ";
             eREQ_INTR:     return "IntrReq  ";
             default:       return "* ERROR *";
         endcase
     endfunction
 
     // Print resp type
-    function string print_resptype (logic [3:0] resp);
-        case (resp)
-            eRSP_WRLINE: return "WrResp   ";
-            eRSP_RDLINE: return "RdResp   ";
-            eRSP_INTR:   return "IntrResp ";
-            eRSP_UMSG:   return "UmsgResp ";
-            default:     return "* ERROR *";
+    function string print_c0_resptype (t_cci_c0_rsp rsp);
+        case (rsp)
+            eRSP_RDLINE:  return "RdRsp     ";
+            eRSP_UMSG:    return "UmsgRsp   ";
+         // eRSP_ATOMIC:  return "AtomicRsp ";
+            default:      return "* ERROR * ";
+        endcase
+    endfunction
+
+    function string print_c1_resptype (t_cci_c1_rsp rsp);
+        case (rsp)
+            eRSP_WRLINE:  return "WrRsp     ";
+            eRSP_WRFENCE: return "WrFenceRsp";
+            eRSP_INTR:    return "IntrResp  ";
+            default:      return "* ERROR * ";
         endcase
     endfunction
 
@@ -57,34 +73,6 @@
             2'b10: return 64;
             default: return 0;
         endcase
-    endfunction
-
-    function string csr_data(int num_bytes, t_cci_cldata rx0_data);
-        string str_4;
-        string str_8;
-        string str_64;
-
-        begin
-          case (num_bytes)
-            4 :
-            begin
-                str_4.hextoa(rx0_data[31:0]);
-                return str_4;
-            end
-
-            8 :
-            begin
-                str_8.hextoa(rx0_data[63:0]);
-                return str_8;
-            end
-
-            64 :
-            begin
-                str_64.hextoa(rx0_data[511:0]);
-                return str_64;
-            end
-          endcase
-        end
     endfunction
 
  
@@ -102,13 +90,13 @@
             begin
                 // //////////////////////// C0 TX CHANNEL TRANSACTIONS //////////////////////////
                 /******************* AFU -> MEM Read Request ******************/
-                if (! reset && c0Tx.rdValid)
+                if (! reset && c0Tx.valid)
                 begin
                     $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%x\t%s %x\n",
                             $time,
                             print_channel(c0Tx.hdr.base.vc_sel),
-                            c0Tx.hdr.base.cl_num,
-                            print_reqtype(c0Tx.hdr.base.req_type),
+                            c0Tx.hdr.base.cl_len,
+                            print_c0_reqtype(c0Tx.hdr.base.req_type),
                             c0Tx.hdr.base.mdata,
                             (c0Tx.hdr.ext.addrIsVirtual ? "V" : "P"),
                             c0Tx.hdr.base.address );
@@ -117,13 +105,13 @@
 
                 //////////////////////// C1 TX CHANNEL TRANSACTIONS //////////////////////////
                 /******************* AFU -> MEM Write Request *****************/
-                if (! reset && c1Tx.wrValid)
+                if (! reset && c1Tx.valid)
                 begin
                     $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%x\t%s %x\t%x\n",
                             $time,
                             print_channel(c1Tx.hdr.base.vc_sel),
-                            c1Tx.hdr.base.cl_num,
-                            print_reqtype(c1Tx.hdr.base.req_type),
+                            c1Tx.hdr.base.cl_len,
+                            print_c1_reqtype(c1Tx.hdr.base.req_type),
                             c1Tx.hdr.base.mdata,
                             (c1Tx.hdr.ext.addrIsVirtual ? "V" : "P"),
                             c1Tx.hdr.base.address,
@@ -142,43 +130,33 @@
 
                 //////////////////////// C0 RX CHANNEL TRANSACTIONS //////////////////////////
                 /******************* MEM -> AFU Read Response *****************/
-                if (! reset && c0Rx.rdValid)
+                if (! reset && c0Rx.rspValid)
                 begin
                     $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%x\t%x\n",
                             $time,
                             print_channel(c0Rx.hdr.vc_used),
                             c0Rx.hdr.cl_num,
-                            print_resptype(c0Rx.hdr.resp_type),
+                            print_c0_resptype(c0Rx.hdr.resp_type),
                             c0Rx.hdr.mdata,
                             c0Rx.data);
                 end
 
                 /****************** MEM -> AFU Write Response *****************/
-                if (! reset && c0Rx.wrValid)
-                begin
-                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%x\n",
-                            $time,
-                            print_channel(c0Rx.hdr.vc_used),
-                            c0Rx.hdr.cl_num,
-                            print_resptype(c0Rx.hdr.resp_type),
-                            c0Rx.hdr.mdata);
-                end
-
-                if (! reset && c1Rx.wrValid)
+                if (! reset && c1Rx.rspValid)
                 begin
                     $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%x\n",
                             $time,
                             print_channel(c1Rx.hdr.vc_used),
                             c1Rx.hdr.cl_num,
-                            print_resptype(c1Rx.hdr.resp_type),
+                            print_c1_resptype(c1Rx.hdr.resp_type),
                             c1Rx.hdr.mdata);
                 end
 
                 /******************* SW -> AFU Config Write *******************/
                 if (! reset && c0Rx.mmioWrValid)
                 begin
-                    t_ccip_Req_MmioHdr mmio_hdr;
-                    mmio_hdr = t_ccip_Req_MmioHdr'(c0Rx.hdr);
+                    t_cci_c0_ReqMmioHdr mmio_hdr;
+                    mmio_hdr = t_cci_c0_ReqMmioHdr'(c0Rx.hdr);
 
                     $fwrite(cci_mpf_if_log_fd, "%m:\t%t\tMMIOWrReq\t%x\t%d bytes\t%x\t%x\n",
                             $time,
@@ -191,8 +169,8 @@
                 /******************* SW -> AFU Config Read *******************/
                 if (! reset && c0Rx.mmioRdValid)
                 begin
-                    t_ccip_Req_MmioHdr mmio_hdr;
-                    mmio_hdr = t_ccip_Req_MmioHdr'(c0Rx.hdr);
+                    t_cci_c0_ReqMmioHdr mmio_hdr;
+                    mmio_hdr = t_cci_c0_ReqMmioHdr'(c0Rx.hdr);
 
                     $fwrite(cci_mpf_if_log_fd, "%m:\t%t\tMMIORdReq\t%x\t%d bytes\t%x\n",
                             $time,

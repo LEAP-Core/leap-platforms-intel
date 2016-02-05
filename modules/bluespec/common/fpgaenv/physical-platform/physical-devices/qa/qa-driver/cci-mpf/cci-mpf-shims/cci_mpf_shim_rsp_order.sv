@@ -170,7 +170,7 @@ module cci_mpf_shim_rsp_order
                 .N_ENTRIES(N_SCOREBOARD_ENTRIES),
                 .N_DATA_BITS(CCI_MDATA_WIDTH),
                 .N_READ_PORTS(2),
-                .MIN_FREE_SLOTS(CCI_ALMOST_FULL_THRESHOLD + 1),
+                .MIN_FREE_SLOTS(CCI_TX_ALMOST_FULL_THRESHOLD + 1),
                 .N_OUTPUT_REG_STAGES(2)
                 )
               wr_heap
@@ -178,7 +178,7 @@ module cci_mpf_shim_rsp_order
                 .clk,
                 .reset,
 
-                .enq(afu.c1Tx.wrValid),
+                .enq(cci_mpf_c1TxIsWriteReq(afu.c1Tx)),
                 .enqData(afu.c1Tx.hdr.base.mdata),
                 .notFull(wr_not_full),
                 .allocIdx(wr_heap_allocIdx),
@@ -243,7 +243,7 @@ module cci_mpf_shim_rsp_order
     t_cci_mdata rd_scoreboard_mdata;
     t_cci_mdata rd_heap_readMdata;
 
-    t_cci_cldata rd_scoreboard_outData;
+    t_cci_clData rd_scoreboard_outData;
 
     // Buffer not full for timing.  An extra free slot is added to the
     // scoreboard to account for latency of the not full signal.
@@ -265,23 +265,23 @@ module cci_mpf_shim_rsp_order
                 .N_ENTRIES(N_SCOREBOARD_ENTRIES),
                 .N_DATA_BITS(CCI_CLDATA_WIDTH),
                 .N_META_BITS(CCI_MDATA_WIDTH),
-                .MIN_FREE_SLOTS(CCI_ALMOST_FULL_THRESHOLD + 1)
+                .MIN_FREE_SLOTS(CCI_TX_ALMOST_FULL_THRESHOLD + 1)
                 )
               rd_scoreboard
                (
                 .clk,
                 .reset,
 
-                .enq_en(afu.c0Tx.rdValid),
+                .enq_en(cci_mpf_c0TxIsReadReq(afu.c0Tx)),
                 .enqMeta(afu.c0Tx.hdr.base.mdata),
                 .notFull(rd_not_full),
                 .enqIdx(rd_scoreboard_enqIdx),
 
-                .enqData_en(fiu.c0Rx.rdValid),
+                .enqData_en(cci_c0Rx_isReadRsp(fiu.c0Rx)),
                 .enqDataIdx(t_scoreboard_idx'(fiu.c0Rx.hdr.mdata)),
                 .enqData(fiu.c0Rx.data),
 
-                .deq_en(afu.c0Rx.rdValid),
+                .deq_en(cci_c0Rx_isReadRsp(afu.c0Rx)),
                 .notEmpty(rd_scoreboard_notEmpty),
                 .first(rd_scoreboard_outData),
                 .firstMeta(rd_scoreboard_mdata)
@@ -297,7 +297,7 @@ module cci_mpf_shim_rsp_order
               #(
                 .N_ENTRIES(N_SCOREBOARD_ENTRIES),
                 .N_DATA_BITS(CCI_MDATA_WIDTH),
-                .MIN_FREE_SLOTS(CCI_ALMOST_FULL_THRESHOLD + 1),
+                .MIN_FREE_SLOTS(CCI_TX_ALMOST_FULL_THRESHOLD + 1),
                 .N_OUTPUT_REG_STAGES(2)
                 )
               rd_heap
@@ -305,14 +305,14 @@ module cci_mpf_shim_rsp_order
                 .clk,
                 .reset,
 
-                .enq(afu.c0Tx.rdValid),
+                .enq(cci_mpf_c0TxIsReadReq(afu.c0Tx)),
                 .enqData(afu.c0Tx.hdr.base.mdata),
                 .notFull(rd_not_full),
                 .allocIdx(rd_scoreboard_enqIdx),
 
                 .readReq(t_scoreboard_idx'(fiu.c0Rx.hdr.mdata)),
                 .readRsp(rd_heap_readMdata),
-                .free(fiu.c0Rx.rdValid),
+                .free(cci_c0Rx_isReadRsp(fiu.c0Rx)),
                 .freeIdx(t_scoreboard_idx'(fiu.c0Rx.hdr.mdata))
                 );
         end
@@ -337,15 +337,15 @@ module cci_mpf_shim_rsp_order
         afu.c0Rx = fiu_buf.c0Rx;
 
         // Is there a non-read response active?
-        c0_non_rd_valid = cci_c0RxIsValid(fiu_buf.c0Rx) &&
-                          ! fiu_buf.c0Rx.rdValid;
+        c0_non_rd_valid = cci_c0Rx_isValid(fiu_buf.c0Rx) &&
+                          ! cci_c0Rx_isReadRsp(fiu_buf.c0Rx);
 
         // Forward responses toward AFU as they become available in sorted order.
         // Non-read responses on the channel have priority since they are
         // unbuffered.
         if (SORT_READ_RESPONSES)
         begin
-            afu.c0Rx.rdValid = rd_scoreboard_notEmpty && ! c0_non_rd_valid;
+            afu.c0Rx.rspValid = rd_scoreboard_notEmpty && ! c0_non_rd_valid;
         end
 
         // Either forward the header from the FIU for non-read responses or
@@ -354,7 +354,7 @@ module cci_mpf_shim_rsp_order
         // in CCI-S mode.
         if (SORT_READ_RESPONSES && ! c0_non_rd_valid)
         begin
-            afu.c0Rx.hdr = cci_genRspHdr(eRSP_RDLINE, rd_scoreboard_mdata);
+            afu.c0Rx.hdr = cci_c0_genRspHdr(eRSP_RDLINE, rd_scoreboard_mdata);
             afu.c0Rx.data = rd_scoreboard_outData;
         end
         else
@@ -362,21 +362,18 @@ module cci_mpf_shim_rsp_order
             afu.c0Rx.hdr = fiu_buf.c0Rx.hdr;
 
             // Return preserved Mdata
-            if (afu.c0Rx.rdValid)
+            if (cci_c0Rx_isReadRsp(afu.c0Rx))
             begin
                 // This path reached only when SORT_READ_RESPONSES == 0.
                 afu.c0Rx.hdr.mdata = rd_heap_readMdata;
-            end
-            else if (afu.c0Rx.wrValid)
-            begin
-                afu.c0Rx.hdr.mdata = wr_heap_readMdata[0];
             end
         end
     end
 
     // Lookup write heap to restore Mdata
+// FIXME
     assign wr_heap_readIdx[0] = t_heap_idx'(fiu.c0Rx.hdr.mdata);
-    assign wr_heap_free[0] = fiu.c0Rx.wrValid;
+    assign wr_heap_free[0] = 1'b0;
 
 
     // ====================================================================
@@ -386,13 +383,14 @@ module cci_mpf_shim_rsp_order
     // ====================================================================
 
     // Requests: replace the Mdata field with the heap index that holds
-    // the preserved value.  This can be done unconditionally since only
-    // writes use Mdata on the channel and only wrValid is the enq signal
-    // that increments the heap index.
+    // the preserved value.
     always_comb
     begin
         fiu_buf.c1Tx = afu.c1Tx;
-        fiu_buf.c1Tx.hdr.base.mdata = t_cci_mdata'(wr_heap_allocIdx);
+        if (cci_mpf_c1TxIsWriteReq(afu.c1Tx))
+        begin
+            fiu_buf.c1Tx.hdr.base.mdata = t_cci_mdata'(wr_heap_allocIdx);
+        end
     end
 
     // Responses
@@ -401,7 +399,7 @@ module cci_mpf_shim_rsp_order
         afu.c1Rx = fiu_buf.c1Rx;
 
         // If a write response return the preserved Mdata
-        if (afu.c1Rx.wrValid)
+        if (cci_c1Rx_isWriteRsp(afu.c1Rx))
         begin
             afu.c1Rx.hdr.mdata = wr_heap_readMdata[1];
         end
@@ -409,7 +407,7 @@ module cci_mpf_shim_rsp_order
 
     // Lookup write heap to restore Mdata
     assign wr_heap_readIdx[1] = t_heap_idx'(fiu.c1Rx.hdr.mdata);
-    assign wr_heap_free[1] = fiu.c1Rx.wrValid;
+    assign wr_heap_free[1] = cci_c1Rx_isWriteRsp(fiu.c1Rx);
 
 
     // ====================================================================

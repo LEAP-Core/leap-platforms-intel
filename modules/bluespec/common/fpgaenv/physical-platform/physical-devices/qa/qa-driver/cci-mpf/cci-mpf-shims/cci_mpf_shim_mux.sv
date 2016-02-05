@@ -211,7 +211,7 @@ module cci_mpf_shim_mux
         if (fiu.c0TxAlmFull || ! (|c0_request))
         begin
             // No request
-            fiu.c0Tx = cci_mpf_c0TxClearValids();
+            fiu.c0Tx = cci_mpf_c0Tx_clearValids();
             check_hdr0 = 'x;
         end
         else if (c0_winner_idx == 0)
@@ -233,7 +233,7 @@ module cci_mpf_shim_mux
         if (fiu.c1TxAlmFull || ! (|c1_request))
         begin
             // No request
-            fiu.c1Tx = cci_mpf_c1TxClearValids();
+            fiu.c1Tx = cci_mpf_c1Tx_clearValids();
             check_hdr1 = 'x;
         end
         else if (c1_winner_idx == 0)
@@ -276,16 +276,30 @@ module cci_mpf_shim_mux
     //   Restore the Mdata field used by this MUX before forwarding to the AFU.
     //   The field was required to be zero, so restoring it is easy.
     //
-    function automatic t_cci_RspMemHdr untagRequest;
-        input t_cci_RspMemHdr header;
-        input isResponse;
+    function automatic t_cci_c0_RspMemHdr c0_untagRequest(
+        input t_if_cci_c0_Rx rx
+        );
 
-        untagRequest = header;
-        if (isResponse)
+        t_cci_c0_RspMemHdr h = rx.hdr;
+        if (rx.rspValid)
         begin
-            untagRequest.mdata[RESERVED_MDATA_IDX] = 0;
+            h.mdata[RESERVED_MDATA_IDX] = 0;
         end
+        return h;
     endfunction
+
+    function automatic t_cci_c1_RspMemHdr c1_untagRequest(
+        input t_if_cci_c1_Rx rx
+        );
+
+        t_cci_c1_RspMemHdr h = rx.hdr;
+        if (rx.rspValid)
+        begin
+            h.mdata[RESERVED_MDATA_IDX] = 0;
+        end
+        return h;
+    endfunction
+
 
     // To which AFU are the channel responses going?  We will route the
     // data and header to both unconditionally and use the control bits
@@ -304,17 +318,11 @@ module cci_mpf_shim_mux
                 afu_buf[p].c0Rx = fiu.c0Rx;
                 afu_buf[p].c1Rx = fiu.c1Rx;
 
-                afu_buf[p].c0Rx.hdr = untagRequest(fiu.c0Rx.hdr,
-                                                   fiu.c0Rx.wrValid ||
-                                                   fiu.c0Rx.rdValid);
+                afu_buf[p].c0Rx.hdr = c0_untagRequest(fiu.c0Rx);
+                afu_buf[p].c0Rx.rspValid = fiu.c0Rx.rspValid && (p[0] == c0_rsp_idx);
 
-                afu_buf[p].c0Rx.wrValid = fiu.c0Rx.wrValid && (p[0] == c0_rsp_idx);
-                afu_buf[p].c0Rx.rdValid = fiu.c0Rx.rdValid && (p[0] == c0_rsp_idx);
-
-                afu_buf[p].c1Rx.hdr = untagRequest(fiu.c1Rx.hdr,
-                                                   fiu.c1Rx.wrValid);
-
-                afu_buf[p].c1Rx.wrValid = fiu.c1Rx.wrValid && (p[0] == c1_rsp_idx);
+                afu_buf[p].c1Rx.hdr = c1_untagRequest(fiu.c1Rx);
+                afu_buf[p].c1Rx.rspValid = fiu.c1Rx.rspValid && (p[0] == c1_rsp_idx);
             end
         end
     endgenerate

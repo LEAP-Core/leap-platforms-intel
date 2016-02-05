@@ -58,14 +58,14 @@ module qa_drv_hc_root
     //
     // To client FIFO
     //
-    output t_cci_cldata rx_fifo_data,
+    output t_cci_clData rx_fifo_data,
     output logic        rx_fifo_rdy,
     input  logic        rx_fifo_enable,
 
     //
     // From client FIFO
     //
-    input  t_cci_cldata tx_fifo_data,
+    input  t_cci_clData tx_fifo_data,
     output logic        tx_fifo_rdy,
     input  logic        tx_fifo_enable
     );
@@ -111,8 +111,8 @@ module qa_drv_hc_root
     begin
         if (reset)
         begin
-            tx0_q <= cci_c0TxClearValids();
-            tx1_q <= cci_c1TxClearValids();
+            tx0_q <= cci_c0Tx_clearValids();
+            tx1_q <= cci_c1Tx_clearValids();
         end
         else
         begin
@@ -151,11 +151,11 @@ module qa_drv_hc_root
 
     // FIFO wires inside the driver.  They will be mapped to the wires
     // exported to the client in the qa_drv_tester module.
-    t_cci_cldata rx_data;
+    t_cci_clData rx_data;
     logic        rx_rdy;
     logic        rx_enable;
 
-    t_cci_cldata tx_data;
+    t_cci_clData tx_data;
     logic        tx_rdy;
     logic        tx_enable;
 

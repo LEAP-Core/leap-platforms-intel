@@ -52,7 +52,7 @@ interface cci_mpf_csrs();
     // Input: page table mode (see cci_mpf_csrs.h)
     t_cci_mpf_vtp_csr_mode vtp_in_mode;
     // Input: page table base address (line address)
-    t_cci_claddr vtp_in_page_table_base;
+    t_cci_clAddr vtp_in_page_table_base;
     logic        vtp_in_page_table_base_valid;
     // Output: number of hits
     logic [63:0] vtp_out_num_hits;

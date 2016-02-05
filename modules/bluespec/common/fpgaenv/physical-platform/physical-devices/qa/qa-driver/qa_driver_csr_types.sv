@@ -73,11 +73,11 @@ package qa_driver_csr_types;
         input t_ccis_csr_afu_map idx
         );
 
-        t_cci_mmioaddr req_addr = cci_csr_getAddress(req);
+        t_cci_mmioAddr req_addr = cci_csr_getAddress(req);
 
         // The low 2 bits of the address are dropped because addresses
         // are 4-byte aligned.
-        return (req_addr == t_cci_mmioaddr'(idx >> 2));
+        return (req_addr == t_cci_mmioAddr'(idx >> 2));
     endfunction
 
     typedef struct

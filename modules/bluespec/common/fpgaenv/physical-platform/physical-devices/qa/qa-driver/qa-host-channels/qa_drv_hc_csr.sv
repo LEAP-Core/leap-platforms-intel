@@ -59,10 +59,10 @@ module qa_drv_hc_csr
     function automatic logic csrMatches(int c);
         // Target address.  The CSR space is 4-byte addressable.  The
         // low 2 address bits must be 0 and aren't transmitted.
-        t_cci_mmioaddr tgt = t_cci_mmioaddr'((CSR_HC_BASE_ADDR + c) >> 2);
+        t_cci_mmioAddr tgt = t_cci_mmioAddr'((CSR_HC_BASE_ADDR + c) >> 2);
 
         // Actual address sent in CSR write
-        t_cci_mmioaddr addr = cci_csr_getAddress(c0Rx);
+        t_cci_mmioAddr addr = cci_csr_getAddress(c0Rx);
 
         return cci_csr_isWrite(c0Rx) && (addr == tgt);
     endfunction
@@ -90,7 +90,7 @@ module qa_drv_hc_csr
         end
         else if (csrMatches(CSR_HC_CTRL_FRAME))
         begin
-            csr.hc_ctrl_frame <= t_cci_claddr'(c0Rx.data);
+            csr.hc_ctrl_frame <= t_cci_clAddr'(c0Rx.data);
             csr.hc_ctrl_frame_valid <= 1'b1;
         end
     end
@@ -99,7 +99,7 @@ module qa_drv_hc_csr
     begin
         if (csrMatches(CSR_HC_READ_FRAME))
         begin
-            csr.hc_read_frame <= t_cci_claddr'(c0Rx.data);
+            csr.hc_read_frame <= t_cci_clAddr'(c0Rx.data);
         end
     end
 
@@ -107,7 +107,7 @@ module qa_drv_hc_csr
     begin
         if (csrMatches(CSR_HC_WRITE_FRAME))
         begin
-            csr.hc_write_frame <= t_cci_claddr'(c0Rx.data);
+            csr.hc_write_frame <= t_cci_clAddr'(c0Rx.data);
         end
     end
 

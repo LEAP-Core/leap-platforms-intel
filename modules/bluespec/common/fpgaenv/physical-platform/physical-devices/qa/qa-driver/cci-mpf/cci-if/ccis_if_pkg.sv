@@ -11,13 +11,13 @@ parameter CCIS_CLDATA_WIDTH      = 512;
 parameter CCIS_MDATA_WIDTH       = 13;
 
 // Number of requests that can be accepted after almost full is asserted.
-parameter CCIS_ALMOST_FULL_THRESHOLD = 4;
+parameter CCIS_TX_ALMOST_FULL_THRESHOLD = 4;
 
 
 // Base types
 //----------------------------------------------------------------------
-typedef logic [CCIS_CLADDR_WIDTH-1:0] t_ccis_claddr;
-typedef logic [CCIS_CLDATA_WIDTH-1:0] t_ccis_cldata;
+typedef logic [CCIS_CLADDR_WIDTH-1:0] t_ccis_clAddr;
+typedef logic [CCIS_CLDATA_WIDTH-1:0] t_ccis_clData;
 typedef logic [CCIS_MDATA_WIDTH-1:0] t_ccis_mdata;
 
 // Request Type  Encodings
@@ -47,7 +47,7 @@ typedef struct packed {
     logic [4:0]     rsvd2;
     t_ccis_req      req_type;
     logic [5:0]     rsvd1;
-    t_ccis_claddr   address;
+    t_ccis_clAddr   address;
     logic           rsvd0;
     t_ccis_mdata    mdata;
 } t_ccis_ReqMemHdr;
@@ -75,7 +75,7 @@ typedef struct packed {
 // Channel 1 : Memory Writes
 typedef struct packed {
     t_ccis_ReqMemHdr     hdr;            // Request Header
-    t_ccis_cldata        data;           // Request Data
+    t_ccis_clData        data;           // Request Data
     logic                wrValid;        // Request Wr Valid
     logic                intrValid;      // Request Intr Valid
 } t_if_ccis_c1_Tx;
@@ -90,7 +90,7 @@ typedef struct packed {
 // Channel 0: Memory Reads
 typedef struct packed {
     t_ccis_RspMemHdr     hdr;            //  Response/Request Header
-    t_ccis_cldata        data;           //  Response Data
+    t_ccis_clData        data;           //  Response Data
     logic                wrValid;        //  Response Wr Valid
     logic                rdValid;        //  Response Rd Valid
     logic                cfgValid;       //  Configuration write request

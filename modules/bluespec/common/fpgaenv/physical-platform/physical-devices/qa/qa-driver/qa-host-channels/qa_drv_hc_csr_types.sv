@@ -34,7 +34,7 @@
 //
 
 package qa_drv_hc_csr_types;
-    import cci_mpf_if_pkg::t_cci_claddr;
+    import cci_mpf_if_pkg::t_cci_clAddr;
 
     // CSR_HC_ENABLE_TEST passes a tag that may trigger a test in the
     // driver.
@@ -54,11 +54,11 @@ package qa_drv_hc_csr_types;
         // Enable channel I/O connection to user code
         logic        hc_en_user_channel;
 
-        t_cci_claddr hc_ctrl_frame;
+        t_cci_clAddr hc_ctrl_frame;
         logic hc_ctrl_frame_valid;
 
-        t_cci_claddr hc_write_frame;
-        t_cci_claddr hc_read_frame;
+        t_cci_clAddr hc_write_frame;
+        t_cci_clAddr hc_read_frame;
 
         // Test request.  The manager will hold the idx field in this
         // register for one cycle after a request is received and

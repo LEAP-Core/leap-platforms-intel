@@ -217,14 +217,16 @@ interface QA_WIRES;
     //
 
     (* prefix = "" *)
-    method Action inputWires(Bit#(1)   vl_clk_LPdomain_64ui,
-                             Bit#(1)   vl_clk_LPdomain_32ui,
-                             Bit#(2)   ffs_LP16ui_afu_PwrState,
-                             Bit#(1)   ffs_LP16ui_afu_Error,
-                             Bit#(577) ffs_LP16ui_sRxData_afu);
+    method Action inputWires(Bit#(1)   pClkDiv2,
+                             Bit#(1)   pClkDiv4,
+                             Bit#(1)   uClk_usr,
+                             Bit#(1)   uClk_usrDiv2,
+                             Bit#(2)   pck_cp2af_pwrState,
+                             Bit#(1)   pck_cp2af_error,
+                             Bit#(574) pck_cp2af_sRx);
 
     (* prefix = "", always_ready *)
-    method Bit#(737) ffs_LP16ui_sTxData_afu;
+    method Bit#(736) pck_af2cp_sTx;
 `endif
 endinterface
 
@@ -265,10 +267,10 @@ module mkQADeviceImport#(Clock qaClk, Reset qaRst)
 `endif
 
 `ifdef USE_PLATFORM_CCIP
-    input_clock (vl_clk_LPdomain_16ui) = qaClk;
+    input_clock (pClk) = qaClk;
     default_clock qaClk;
 
-    input_reset (ffs_LP16ui_afu_SoftReset_n) = qaRst;
+    input_reset (pck_cp2af_softReset) = qaRst;
     default_reset qaRst;
 `endif
 
@@ -326,14 +328,16 @@ module mkQADeviceImport#(Clock qaClk, Reset qaRst)
 `endif
 
 `ifdef USE_PLATFORM_CCIP
-        method inputWires(vl_clk_LPdomain_64ui,
-                          vl_clk_LPdomain_32ui,
-                          ffs_LP16ui_afu_PwrState,
-                          ffs_LP16ui_afu_Error,
-                          ffs_LP16ui_sRxData_afu)
+        method inputWires(pClkDiv2,
+                          pClkDiv4,
+                          uClk_usr,
+                          uClk_usrDiv2,
+                          pck_cp2af_pwrState,
+                          pck_cp2af_error,
+                          pck_cp2af_sRx)
             enable((*inhigh*) EN);
 
-        method ffs_LP16ui_sTxData_afu ffs_LP16ui_sTxData_afu() clocked_by(no_clock);
+        method pck_af2cp_sTx pck_af2cp_sTx() clocked_by(no_clock);
 `endif
     endinterface
 
@@ -371,7 +375,7 @@ module mkQADeviceImport#(Clock qaClk, Reset qaRst)
 `endif
 
 `ifdef USE_PLATFORM_CCIP
-              wires_ffs_LP16ui_sTxData_afu
+              wires_pck_af2cp_sTx
 `endif
               )
              CF
@@ -386,7 +390,7 @@ module mkQADeviceImport#(Clock qaClk, Reset qaRst)
 `endif
 
 `ifdef USE_PLATFORM_CCIP
-              wires_ffs_LP16ui_sTxData_afu,
+              wires_pck_af2cp_sTx,
 `endif
 
               channelDriver_deq, channelDriver_first, channelDriver_write,

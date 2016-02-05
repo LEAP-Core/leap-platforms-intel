@@ -138,7 +138,7 @@ module cci_mpf_shim_vtp
     // Validate parameter settings and that the Mdata reserved bit is 0
     // on all incoming read requests.
     //
-    always_ff @(posedge clk)
+    always_ff @(negedge clk)
     begin
         assert ((RESERVED_MDATA_IDX > 0) && (RESERVED_MDATA_IDX < CCI_MDATA_WIDTH)) else
             $fatal("cci_mpf_shim_vtp.sv: Illegal RESERVED_MDATA_IDX value: %d", RESERVED_MDATA_IDX);
@@ -146,7 +146,7 @@ module cci_mpf_shim_vtp
         if (! reset)
         begin
             assert((afu_buf.c0Tx.hdr[RESERVED_MDATA_IDX] == 0) ||
-                   ! afu_buf.c0Tx.rdValid) else
+                   ! afu_buf.c0Tx.valid) else
                 $fatal("cci_mpf_shim_vtp.sv: AFU C0 Mdata[%d] must be zero", RESERVED_MDATA_IDX);
         end
     end
@@ -168,7 +168,7 @@ module cci_mpf_shim_vtp
 
     // Given the virtual address of a line return the shortened VA of a page
     function automatic t_TLB_VA_PAGE pageFromVA;
-        input t_cci_claddr addr;
+        input t_cci_clAddr addr;
 
         return addr[$high(addr) : LINE_PAGE_OFFSET_BITS];
     endfunction
@@ -176,7 +176,7 @@ module cci_mpf_shim_vtp
     // Given the virtual address of a line return the offset of the line from
     // the containing page.
     function automatic t_VA_PAGE_OFFSET pageOffsetFromVA;
-        input t_cci_claddr addr;
+        input t_cci_clAddr addr;
 
         return addr[LINE_PAGE_OFFSET_BITS-1 : 0];
     endfunction
@@ -210,7 +210,7 @@ module cci_mpf_shim_vtp
     logic tlbReadIdxEn;
 
     // Response to page table read request
-    t_cci_cldata tlbReadData;
+    t_cci_clData tlbReadData;
     logic tlbReadDataEn;
 
     cci_mpf_shim_vtp_assoc
@@ -231,7 +231,7 @@ module cci_mpf_shim_vtp
          .tlbReadDataEn
          );
 
-    always_ff @(posedge clk)
+    always_ff @(negedge clk)
     begin
         if (! reset)
         begin
@@ -282,7 +282,9 @@ module cci_mpf_shim_vtp
     logic c0_fwd_req;
     assign c0_fwd_req =
         c0_request_rdy &&
-        (lookupValid[0] || ! cci_mpf_getReqAddrIsVirtual(c0_afu_pipe[AFU_PIPE_LAST_STAGE].hdr)) &&
+        (lookupValid[0] ||
+         ! cci_mpf_c0TxIsReadReq(c0_afu_pipe[AFU_PIPE_LAST_STAGE]) ||
+         ! cci_mpf_c0_getReqAddrIsVirtual(c0_afu_pipe[AFU_PIPE_LAST_STAGE].hdr)) &&
         ! fiu.c0TxAlmFull &&
         ! tlbReadIdxEn;
 
@@ -290,8 +292,8 @@ module cci_mpf_shim_vtp
     assign c1_fwd_req =
         c1_request_rdy &&
         (lookupValid[1] ||
-         c1_afu_pipe[AFU_PIPE_LAST_STAGE].intrValid ||
-         ! cci_mpf_getReqAddrIsVirtual(c1_afu_pipe[AFU_PIPE_LAST_STAGE].hdr)) &&
+         ! cci_mpf_c1TxIsWriteReq(c1_afu_pipe[AFU_PIPE_LAST_STAGE]) ||
+         ! cci_mpf_c1_getReqAddrIsVirtual(c1_afu_pipe[AFU_PIPE_LAST_STAGE].hdr)) &&
         ! fiu.c1TxAlmFull;
 
     // Did a request miss in the TLB or fail arbitration?  It will be rotated
@@ -328,8 +330,8 @@ module cci_mpf_shim_vtp
         begin
             for (int i = 0; i <= AFU_PIPE_LAST_STAGE; i = i + 1)
             begin
-                c0_afu_pipe[i] <= cci_mpf_c0TxClearValids();
-                c1_afu_pipe[i] <= cci_mpf_c1TxClearValids();
+                c0_afu_pipe[i] <= cci_mpf_c0Tx_clearValids();
+                c1_afu_pipe[i] <= cci_mpf_c1Tx_clearValids();
             end
         end
         else
@@ -369,18 +371,18 @@ module cci_mpf_shim_vtp
     // skipped if the incoming request already has a physical address.
     //
     assign lookupPageVA[0] =
-        pageFromVA(cci_mpf_getReqAddr(c0_afu_pipe[AFU_PIPE_LOOKUP_STAGE].hdr));
+        pageFromVA(cci_mpf_c0_getReqAddr(c0_afu_pipe[AFU_PIPE_LOOKUP_STAGE].hdr));
     assign lookupEn[0] =
         lookupRdy[0] &&
-        c0_afu_pipe[AFU_PIPE_LOOKUP_STAGE].rdValid &&
-        cci_mpf_getReqAddrIsVirtual(c0_afu_pipe[AFU_PIPE_LOOKUP_STAGE].hdr);
+        cci_mpf_c0TxIsReadReq(c0_afu_pipe[AFU_PIPE_LOOKUP_STAGE]) &&
+        cci_mpf_c0_getReqAddrIsVirtual(c0_afu_pipe[AFU_PIPE_LOOKUP_STAGE].hdr);
 
     assign lookupPageVA[1] =
-        pageFromVA(cci_mpf_getReqAddr(c1_afu_pipe[AFU_PIPE_LOOKUP_STAGE].hdr));
+        pageFromVA(cci_mpf_c1_getReqAddr(c1_afu_pipe[AFU_PIPE_LOOKUP_STAGE].hdr));
     assign lookupEn[1] =
         lookupRdy[1] &&
-        c1_afu_pipe[AFU_PIPE_LOOKUP_STAGE].wrValid &&
-        cci_mpf_getReqAddrIsVirtual(c1_afu_pipe[AFU_PIPE_LOOKUP_STAGE].hdr);
+        cci_mpf_c1TxIsWriteReq(c1_afu_pipe[AFU_PIPE_LOOKUP_STAGE]) &&
+        cci_mpf_c1_getReqAddrIsVirtual(c1_afu_pipe[AFU_PIPE_LOOKUP_STAGE].hdr);
 
 
     // ====================================================================
@@ -390,10 +392,10 @@ module cci_mpf_shim_vtp
     // ====================================================================
 
     // Construct the read request header.
-    t_cci_mpf_ReqMemHdr c0_req_hdr;
+    t_cci_mpf_c0_ReqMemHdr c0_req_hdr;
 
     // Base address of the page table
-    t_cci_claddr page_table_base;
+    t_cci_clAddr page_table_base;
     assign page_table_base = csrs.vtp_in_page_table_base;
 
     always_comb
@@ -406,7 +408,7 @@ module cci_mpf_shim_vtp
             c0_req_hdr = c0_afu_pipe[AFU_PIPE_LAST_STAGE].hdr;
 
             // Replace the address with the physical address
-            if (cci_mpf_getReqAddrIsVirtual(c0_req_hdr))
+            if (cci_mpf_c0_getReqAddrIsVirtual(c0_req_hdr))
             begin
                 // Page offset remains the same in VA and PA
                 c0_req_hdr.base.address =
@@ -420,10 +422,10 @@ module cci_mpf_shim_vtp
             //
             // Read for TLB miss.
             //
-            c0_req_hdr = cci_mpf_genReqHdr(eREQ_RDLINE_S,
-                                           page_table_base + tlbReadIdx,
-                                           t_cci_mdata'(0),
-                                           cci_mpf_defaultReqHdrParams(0));
+            c0_req_hdr = cci_mpf_c0_genReqHdr(eREQ_RDLINE_S,
+                                              page_table_base + tlbReadIdx,
+                                              t_cci_mdata'(0),
+                                              cci_mpf_defaultReqHdrParams(0));
 
             // Tag the request as a local page table walk
             c0_req_hdr[RESERVED_MDATA_IDX] = 1'b1;
@@ -434,7 +436,7 @@ module cci_mpf_shim_vtp
     assign fiu.c0Tx = cci_mpf_genC0TxReadReq(c0_req_hdr, c0_fwd_req || tlbReadIdxEn);
 
     // Channel 1 request logic
-    t_cci_mpf_ReqMemHdr c1_req_hdr;
+    t_cci_mpf_c1_ReqMemHdr c1_req_hdr;
     t_VA_PAGE_OFFSET c1_req_offset;
 
     always_comb
@@ -445,7 +447,7 @@ module cci_mpf_shim_vtp
         c1_req_offset = pageOffsetFromVA(c1_req_hdr.base.address);
 
         // Replace the address with the physical address
-        if (cci_mpf_getReqAddrIsVirtual(c1_req_hdr))
+        if (cci_mpf_c1_getReqAddrIsVirtual(c1_req_hdr))
         begin
             c1_req_hdr.base.address = { lookupRspPagePA[1], c1_req_offset };
             c1_req_hdr.ext.addrIsVirtual = 0;
@@ -459,8 +461,8 @@ module cci_mpf_shim_vtp
         fiu.c1Tx = cci_mpf_c1TxMaskValids(c1_afu_pipe[AFU_PIPE_LAST_STAGE],
                                          c1_fwd_req);
 
-        // Is the header rewritten for a virtually address write?
-        if (c1_afu_pipe[AFU_PIPE_LAST_STAGE].wrValid)
+        // Is the header rewritten for a virtually addressed write?
+        if (cci_mpf_c1TxIsWriteReq(c1_afu_pipe[AFU_PIPE_LAST_STAGE]))
         begin
             fiu.c1Tx.hdr = c1_req_hdr;
         end
@@ -481,12 +483,12 @@ module cci_mpf_shim_vtp
     begin
         afu_buf.c0Rx = fiu.c0Rx;
 
-        // Only forward client-generated read responses
-        afu_buf.c0Rx.rdValid = fiu.c0Rx.rdValid && ! is_pt_rsp;
-
         // Connect read responses to the TLB management code
         tlbReadData = fiu.c0Rx.data;
-        tlbReadDataEn = fiu.c0Rx.rdValid && is_pt_rsp;
+        tlbReadDataEn = cci_c0Rx_isReadRsp(fiu.c0Rx) && is_pt_rsp;
+
+        // Only forward client-generated read responses
+        afu_buf.c0Rx.rspValid = fiu.c0Rx.rspValid && ! tlbReadDataEn;
 
         // Channel 1 (write) responses can flow directly from the FIU
         // port since there is no processing needed here.
@@ -553,7 +555,7 @@ module cci_mpf_shim_vtp_assoc
     input  logic tlbReadIdxRdy,
 
     // Response to page table read request
-    input t_cci_cldata tlbReadData,
+    input t_cci_clData tlbReadData,
     input logic tlbReadDataEn
     );
 
@@ -594,7 +596,7 @@ module cci_mpf_shim_vtp_assoc
     initial begin
         // Confirm that the VA size specified in VTP matches CCI.  The CCI
         // version is line addresses, so the units must be converted.
-        assert (CCI_MPF_CL_VADDR_WIDTH + $clog2(CCI_CLDATA_WIDTH >> 3) ==
+        assert (CCI_MPF_CLADDR_WIDTH + $clog2(CCI_CLDATA_WIDTH >> 3) ==
                 CCI_PT_VA_BITS) else
             $fatal("cci_mpf_shim_vtp.sv: VA address size mismatch!");
     end
@@ -824,7 +826,7 @@ module cci_mpf_shim_vtp_assoc
     localparam PTES_PER_LINE = ((CCI_CLDATA_WIDTH / 8) - PT_IDX_BYTES) / PTE_BYTES;
 
     // Buffer for storing the line being searched in the page table
-    t_cci_cldata pt_line;
+    t_cci_clData pt_line;
     // Counter to track number of PTEs active in pt_line
     logic [PTES_PER_LINE : 0] pte_num;
 

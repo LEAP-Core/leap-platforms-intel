@@ -39,8 +39,8 @@
 
 module cci_mpf_shim_buffer_lockstep_afu
   #(
-    parameter N_ENTRIES = CCI_ALMOST_FULL_THRESHOLD + 2,
-    parameter THRESHOLD = CCI_ALMOST_FULL_THRESHOLD
+    parameter N_ENTRIES = CCI_TX_ALMOST_FULL_THRESHOLD + 2,
+    parameter THRESHOLD = CCI_TX_ALMOST_FULL_THRESHOLD
     )
    (
     input  logic clk,

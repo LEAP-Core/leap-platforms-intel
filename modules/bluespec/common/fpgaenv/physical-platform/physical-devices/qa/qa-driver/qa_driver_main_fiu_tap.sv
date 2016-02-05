@@ -103,11 +103,11 @@ module qa_driver_main_fiu_tap
             // the AFU won't be active until the DSM is initialized.
             if (! did_afu_id_write && csr.afu_dsm_base_valid)
             begin
-                fiu.c1Tx.wrValid = 1'b1;
-                fiu.c1Tx.hdr = cci_mpf_genReqHdr(eREQ_WRLINE_I,
-                                                 csr.afu_dsm_base,
-                                                 t_cci_mdata'(QA_DRIVER_WRITE_TAG),
-                                                 cci_mpf_defaultReqHdrParams(0));
+                fiu.c1Tx.valid = 1'b1;
+                fiu.c1Tx.hdr = cci_mpf_c1_genReqHdr(eREQ_WRLINE_I,
+                                                    csr.afu_dsm_base,
+                                                    t_cci_mdata'(QA_DRIVER_WRITE_TAG),
+                                                    cci_mpf_defaultReqHdrParams(0));
                 fiu.c1Tx.data[127:0] = AFU_ID;
             end
 `ifdef USE_PLATFORM_CCIS
@@ -119,11 +119,11 @@ module qa_driver_main_fiu_tap
 
                 // Write to DSM line 1.  The value goes in the low 64 bits.
                 // Use the bit 64 to note that the write happend.
-                fiu.c1Tx.wrValid = 1'b1;
-                fiu.c1Tx.hdr = cci_mpf_genReqHdr(eREQ_WRLINE_I,
-                                                 csr.afu_dsm_base | 1'b1,
-                                                 t_cci_mdata'(QA_DRIVER_WRITE_TAG),
-                                                 cci_mpf_defaultReqHdrParams(0));
+                fiu.c1Tx.valid = 1'b1;
+                fiu.c1Tx.hdr = cci_mpf_c1_genReqHdr(eREQ_WRLINE_I,
+                                                    csr.afu_dsm_base | 1'b1,
+                                                    t_cci_mdata'(QA_DRIVER_WRITE_TAG),
+                                                    cci_mpf_defaultReqHdrParams(0));
                 fiu.c1Tx.data[CCIP_MMIODATA_WIDTH-1:0] = mmio_read_rsp_q.data;
                 fiu.c1Tx.data[64] = 1'b1;
             end
@@ -136,16 +136,10 @@ module qa_driver_main_fiu_tap
         afu.c1Rx = fiu.c1Rx;
 
         // Drop the driver write responses
-        if (fiu.c0Rx.wrValid &&
-            (fiu.c0Rx.hdr.mdata == t_cci_mdata'(QA_DRIVER_WRITE_TAG)))
-        begin
-            afu.c0Rx.wrValid = 1'b0;
-        end
-
-        if (fiu.c1Rx.wrValid &&
+        if (cci_c1Rx_isWriteRsp(fiu.c1Rx) &&
             (fiu.c1Rx.hdr.mdata == t_cci_mdata'(QA_DRIVER_WRITE_TAG)))
         begin
-            afu.c1Rx.wrValid = 1'b0;
+            afu.c1Rx.rspValid = 1'b0;
         end
     end
 

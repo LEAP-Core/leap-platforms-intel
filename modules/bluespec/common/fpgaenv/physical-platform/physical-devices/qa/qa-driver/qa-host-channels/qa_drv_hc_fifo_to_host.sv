@@ -52,12 +52,12 @@ module qa_drv_hc_fifo_to_host
     output t_to_status_mgr_fifo_to_host     fifo_to_host_to_status,
 
     // LEAP-facing interface
-    input  t_cci_cldata tx_data,
+    input  t_cci_clData tx_data,
     output logic        tx_rdy,
     input  logic        tx_enable
     );
 
-    t_cci_cldata lineIn_data;
+    t_cci_clData lineIn_data;
     logic lineIn_notEmpty;
     logic lineIn_deq;
 
@@ -88,7 +88,7 @@ module qa_drv_hc_fifo_to_host
     //=====================================================================
 
     // Base address of the ring buffer
-    t_cci_claddr buffer_base_addr;
+    t_cci_clAddr buffer_base_addr;
     assign buffer_base_addr = csr.hc_write_frame;
 
     // Pointer to the oldest live entry in the ring buffer.  This pointer
@@ -278,18 +278,18 @@ module qa_drv_hc_fifo_to_host
           STATE_EMIT_FENCE:
             begin
                 frame_writer.writeHeader =
-                    cci_genReqHdr(eREQ_WRFENCE,
-                                  t_cci_claddr'(0),
-                                  t_cci_mdata'(0),
-                                  write_params);
+                    cci_c1_genReqHdr(eREQ_WRFENCE,
+                                     t_cci_clAddr'(0),
+                                     t_cci_mdata'(0),
+                                     write_params);
             end
           default:
             begin
                 frame_writer.writeHeader =
-                    cci_genReqHdr(eREQ_WRLINE_I,
-                                  buffer_base_addr + cur_data_idx,
-                                  t_cci_mdata'(0),
-                                  write_params);
+                    cci_c1_genReqHdr(eREQ_WRLINE_I,
+                                     buffer_base_addr + cur_data_idx,
+                                     t_cci_mdata'(0),
+                                     write_params);
             end
         endcase
     end

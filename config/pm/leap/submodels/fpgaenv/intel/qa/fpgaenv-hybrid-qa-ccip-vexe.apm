@@ -141,8 +141,8 @@ Packagehint=leap-platforms
 [Single-Ended Crystal Clocks Device/Params]
 CRYSTAL_CLOCK_FREQ=400
 MODEL_CLOCK_FREQ=400
-SINGLE_ENDED_CLOCKS_CLK="vl_clk_LPdomain_16ui"
-SINGLE_ENDED_CLOCKS_RST_N="ffs_LP16ui_afu_SoftReset_n"
+SINGLE_ENDED_CLOCKS_CLK="pClk"
+SINGLE_ENDED_CLOCKS_RST_N="pck_cp2af_softReset"
 
 [Intel QuickAssist Device/Requires]
 qa_driver=Intel QuickAssist Driver
@@ -205,7 +205,6 @@ qa_cci_if=Intel CCI Interface
 qa_cci_mpf_shims=Intel MPF Shims
 qa_cci_mpf_prims=Primitive Modules for MPF
 qa_cci_mpf_if=Intel MPF CCI Abstract Interface
-
 
 [Intel MPF Shims]
 File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/cci-mpf-shims/cci-mpf-shims.awb

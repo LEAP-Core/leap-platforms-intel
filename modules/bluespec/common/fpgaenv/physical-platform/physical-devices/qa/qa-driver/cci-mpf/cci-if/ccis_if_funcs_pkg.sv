@@ -18,20 +18,20 @@ package ccis_if_funcs_pkg;
         return h_out;
     endfunction
 
-    function automatic t_if_ccis_c0_Tx ccis_c0TxClearValids();
+    function automatic t_if_ccis_c0_Tx ccis_c0Tx_clearValids();
         t_if_ccis_c0_Tx r = 'x;
         r.rdValid = 0;
         return r;
     endfunction
 
-    function automatic t_if_ccis_c1_Tx ccis_c1TxClearValids();
+    function automatic t_if_ccis_c1_Tx ccis_c1Tx_clearValids();
         t_if_ccis_c1_Tx r = 'x;
         r.wrValid = 0;
         r.intrValid = 0;
         return r;
     endfunction
 
-    function automatic t_if_ccis_c0_Rx ccis_c0RxClearValids();
+    function automatic t_if_ccis_c0_Rx ccis_c0Rx_clearValids();
         t_if_ccis_c0_Rx r = 'x;
         r.wrValid = 0;
         r.rdValid = 0;
@@ -41,14 +41,14 @@ package ccis_if_funcs_pkg;
         return r;
     endfunction
 
-    function automatic t_if_ccis_c1_Rx ccis_c1RxClearValids();
+    function automatic t_if_ccis_c1_Rx ccis_c1Rx_clearValids();
         t_if_ccis_c1_Rx r = 'x;
         r.wrValid = 0;
         r.intrValid = 0;
         return r;
     endfunction
 
-    function automatic logic ccis_c0RxIsValid(
+    function automatic logic ccis_c0Rx_isValid(
         input t_if_ccis_c0_Rx r
         );
 
@@ -59,7 +59,7 @@ package ccis_if_funcs_pkg;
                r.intrValid;
     endfunction
 
-    function automatic logic ccis_c1RxIsValid(
+    function automatic logic ccis_c1Rx_isValid(
         input t_if_ccis_c1_Rx r
         );
 

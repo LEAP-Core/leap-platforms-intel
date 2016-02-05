@@ -55,10 +55,10 @@ module qa_driver_csr_wr
     function automatic logic csrMatches(int c);
         // Target address.  The CSR space is 4-byte addressable.  The
         // low 2 address bits must be 0 and aren't transmitted.
-        t_cci_mmioaddr tgt = t_cci_mmioaddr'(c >> 2);
+        t_cci_mmioAddr tgt = t_cci_mmioAddr'(c >> 2);
 
         // Actual address sent in CSR write
-        t_cci_mmioaddr addr = cci_csr_getAddress(fiu.c0Rx);
+        t_cci_mmioAddr addr = cci_csr_getAddress(fiu.c0Rx);
 
         return cci_csr_isWrite(fiu.c0Rx) && (addr == tgt);
     endfunction
@@ -76,7 +76,7 @@ module qa_driver_csr_wr
         end
         else if (csrMatches(CSR_AFU_DSM_BASE))
         begin
-            csr.afu_dsm_base <= t_cci_claddr'(fiu.c0Rx.data[63:6]);
+            csr.afu_dsm_base <= t_cci_clAddr'(fiu.c0Rx.data[63:6]);
             csr.afu_dsm_base_valid <= 1'b1;
         end
     end

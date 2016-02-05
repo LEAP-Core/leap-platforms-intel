@@ -119,12 +119,12 @@ module qa_drv_hc_status_manager
 
     // Compute when a read response is available
     logic reader_data_rdy;
-    assign reader_data_rdy = rx0.rdValid &&
+    assign reader_data_rdy = cci_c0Rx_isReadRsp(rx0) &&
                              reader_meta_rsp.isRead &&
                              reader_meta_rsp.isHeader;
 
     // View incoming read data as a vector of 32 bit objects
-    t_cci_cldata_vec32 read_data_vec32;
+    t_cci_clData_vec32 read_data_vec32;
     assign read_data_vec32 = rx0.data;
 
 
@@ -177,10 +177,10 @@ module qa_drv_hc_status_manager
         read_params.vc_sel = eVC_VL0;
 
         status_mgr_req.readHeader =
-            cci_mpf_genReqHdr(eREQ_RDLINE_S,
-                              ctrl_line_offset_to_addr(CTRL_OFFSET_POLL_STATE),
-                              pack_read_metadata(reader_meta_req),
-                              read_params);
+            cci_mpf_c0_genReqHdr(eREQ_RDLINE_S,
+                                 ctrl_line_offset_to_addr(CTRL_OFFSET_POLL_STATE),
+                                 pack_read_metadata(reader_meta_req),
+                                 read_params);
 
         reader_meta_req.reserved = 1'b0;
         reader_meta_req.isRead   = 1'b1;
@@ -324,8 +324,8 @@ module qa_drv_hc_status_manager
     end
 
     // The FIFO status to write to CTRL
-    t_cci_cldata fifo_status;
-    assign fifo_status = t_cci_cldata'({ 32'(fifo_to_host_next_write_idx),
+    t_cci_clData fifo_status;
+    assign fifo_status = t_cci_clData'({ 32'(fifo_to_host_next_write_idx),
                                          32'(fifo_from_host_oldest_read_idx) });
 
 
@@ -334,7 +334,7 @@ module qa_drv_hc_status_manager
     //=================================================================
 
     int offset;
-    t_cci_cldata data;
+    t_cci_clData data;
 
     always_comb
     begin
@@ -365,10 +365,10 @@ module qa_drv_hc_status_manager
         write_params = cci_mpf_defaultReqHdrParams(0);
         write_params.vc_sel = t_ccip_vc'(MEM_VIRTUAL_CHANNEL);
         status_mgr_req.writeHeader =
-            cci_mpf_genReqHdr(eREQ_WRLINE_I,
-                              ctrl_line_offset_to_addr(offset),
-                              t_cci_mdata'(0),
-                              write_params);
+            cci_mpf_c1_genReqHdr(eREQ_WRLINE_I,
+                                 ctrl_line_offset_to_addr(offset),
+                                 t_cci_mdata'(0),
+                                 write_params);
 
         status_mgr_req.data = data;
     end

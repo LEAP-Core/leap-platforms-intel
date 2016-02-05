@@ -41,8 +41,8 @@
 
 module cci_mpf_shim_buffer_afu
   #(
-    parameter N_ENTRIES = CCI_ALMOST_FULL_THRESHOLD + 2,
-    parameter THRESHOLD = CCI_ALMOST_FULL_THRESHOLD,
+    parameter N_ENTRIES = CCI_TX_ALMOST_FULL_THRESHOLD + 2,
+    parameter THRESHOLD = CCI_TX_ALMOST_FULL_THRESHOLD,
     // If nonzero, incoming requests from afu_raw on channel 0 may bypass
     // the FIFO and be received in the same cycle through afu_buf.  This
     // is offered only on channel 0.  Bypassing is not offered on channel
@@ -91,9 +91,9 @@ module cci_mpf_shim_buffer_afu
     //
     // ====================================================================
 
-    localparam C0TX_BITS = CCI_MPF_TX_MEMHDR_WIDTH;
+    localparam C0TX_BITS = CCI_MPF_C0TX_MEMHDR_WIDTH;
 
-    t_cci_mpf_ReqMemHdr c0_fifo_first;
+    t_cci_mpf_c0_ReqMemHdr c0_fifo_first;
     logic c0_fifo_notEmpty;
     logic c0_fifo_enq;
     logic c0_fifo_deq;
@@ -108,7 +108,7 @@ module cci_mpf_shim_buffer_afu
             assign afu_buf.c0Tx =
                 cci_mpf_genC0TxReadReq(c0_fifo_first, c0_fifo_notEmpty);
 
-            assign c0_fifo_enq = afu_raw.c0Tx.rdValid;
+            assign c0_fifo_enq = afu_raw.c0Tx.valid;
             assign c0_fifo_deq = deqC0Tx;
         end
         else
@@ -122,7 +122,7 @@ module cci_mpf_shim_buffer_afu
             // Enq to the FIFO if a new request has arrived and it wasn't
             // consumed immediately through afu_buf.
             assign c0_fifo_enq =
-                afu_raw.c0Tx.rdValid && (c0_fifo_notEmpty || ! deqC0Tx);
+                afu_raw.c0Tx.valid && (c0_fifo_notEmpty || ! deqC0Tx);
 
             assign c0_fifo_deq = deqC0Tx && c0_fifo_notEmpty;
         end
@@ -138,8 +138,7 @@ module cci_mpf_shim_buffer_afu
               .reset(afu_buf.reset),
 
               .enq_data(afu_raw.c0Tx.hdr),
-              // c0Tx.rdValid is the only incoming valid bit.  Map it through
-              // as enq here and notEmpty below.
+              // Map the valid bit through as enq here and notEmpty below.
               .enq_en(c0_fifo_enq),
               .notFull(),
               .almostFull(afu_raw.c0TxAlmFull),
@@ -162,7 +161,7 @@ module cci_mpf_shim_buffer_afu
 
     // Request payload exists when one of the valid bits is set.
     logic c1_enq_en;
-    assign c1_enq_en = cci_mpf_c1TxIsValid(afu_raw.c1Tx);
+    assign c1_enq_en = afu_raw.c1Tx.valid;
 
     logic c1_notEmpty;
 

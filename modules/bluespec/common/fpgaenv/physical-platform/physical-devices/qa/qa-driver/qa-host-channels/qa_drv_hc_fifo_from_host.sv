@@ -51,7 +51,7 @@ module qa_drv_hc_fifo_from_host
     output t_frame_arb         frame_reader,
     input  t_channel_grant_arb read_grant,
 
-    output t_cci_cldata rx_data,
+    output t_cci_clData rx_data,
     output logic        rx_rdy,
     input  logic        rx_enable,
 
@@ -59,7 +59,7 @@ module qa_drv_hc_fifo_from_host
     input  t_from_status_mgr_fifo_from_host status_to_fifo_from_host
     );
 
-    t_cci_cldata outQ_enq_data;
+    t_cci_clData outQ_enq_data;
     logic outQ_enq_en;
     logic outQ_notFull;
 
@@ -128,7 +128,7 @@ module qa_drv_hc_fifo_from_host
     assign response_read_metadata = unpack_read_metadata(rx0.hdr);
 
     logic incoming_read_valid;
-    assign incoming_read_valid = rx0.rdValid &&
+    assign incoming_read_valid = cci_c0Rx_isReadRsp(rx0) &&
                                  response_read_metadata.isRead &&
                                  ! response_read_metadata.isHeader;
 
@@ -190,7 +190,7 @@ module qa_drv_hc_fifo_from_host
     // ====================================================================
 
     // Base address of the ring buffer
-    t_cci_claddr buffer_base_addr;
+    t_cci_clAddr buffer_base_addr;
     assign buffer_base_addr = csr.hc_read_frame;
 
     t_read_metadata data_read_metadata;
@@ -220,10 +220,10 @@ module qa_drv_hc_fifo_from_host
         // The buffer size must still be a power of two because we depend on
         // pointers wrapping from the last to the first entry.
         frame_reader.readHeader =
-            cci_genReqHdr(eREQ_RDLINE_I,
-                          buffer_base_addr + next_read_req_idx,
-                          pack_read_metadata(data_read_metadata),
-                          read_params);
+            cci_c0_genReqHdr(eREQ_RDLINE_I,
+                             buffer_base_addr + next_read_req_idx,
+                             pack_read_metadata(data_read_metadata),
+                             read_params);
     end
 
 

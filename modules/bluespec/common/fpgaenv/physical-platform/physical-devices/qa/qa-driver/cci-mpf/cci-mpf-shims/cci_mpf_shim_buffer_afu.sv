@@ -41,7 +41,6 @@
 
 module cci_mpf_shim_buffer_afu
   #(
-    parameter N_ENTRIES = CCI_TX_ALMOST_FULL_THRESHOLD + 2,
     parameter THRESHOLD = CCI_TX_ALMOST_FULL_THRESHOLD,
     // If nonzero, incoming requests from afu_raw on channel 0 may bypass
     // the FIFO and be received in the same cycle through afu_buf.  This
@@ -69,6 +68,8 @@ module cci_mpf_shim_buffer_afu
     input logic deqC1Tx
     );
 
+    localparam N_ENTRIES = THRESHOLD + 2;
+
     assign afu_raw.reset = afu_buf.reset;
 
     //
@@ -83,8 +84,8 @@ module cci_mpf_shim_buffer_afu
     //
     // Channel 0 Tx buffer.
     //
-    //   The buffer triggers c0TxAlmFull when there are 4 or fewer slots
-    //   available, as required by the CCI specification.  Unlike the
+    //   The buffer triggers c0TxAlmFull when there are THRESHOLD or fewer
+    //   slots available, as required by the CCI specification.  Unlike the
     //   usual CCI request interface, movement through the pipeline is
     //   explicit.  The code that instantiates this buffer must dequeue
     //   the head of the FIFO using deqC0Tx in order to consume a request.
@@ -103,21 +104,29 @@ module cci_mpf_shim_buffer_afu
     // a new message from afu_raw immediately.
     generate
         if (ENABLE_C0_BYPASS == 0)
-        begin
+        begin : nb
             // No bypass.  All messages flow through the FIFO.
-            assign afu_buf.c0Tx =
-                cci_mpf_genC0TxReadReq(c0_fifo_first, c0_fifo_notEmpty);
+            assign afu_buf.c0Tx.hdr = c0_fifo_first;
+            assign afu_buf.c0Tx.valid = c0_fifo_notEmpty;
 
             assign c0_fifo_enq = afu_raw.c0Tx.valid;
             assign c0_fifo_deq = deqC0Tx;
         end
         else
-        begin
+        begin : b
             // Bypass FIFO when possible.
-            assign afu_buf.c0Tx =
-                c0_fifo_notEmpty ?
-                    cci_mpf_genC0TxReadReq(c0_fifo_first, 1) :
-                    afu_raw.c0Tx;
+            always_comb
+            begin
+                if (c0_fifo_notEmpty)
+                begin
+                    afu_buf.c0Tx.hdr = c0_fifo_first;
+                    afu_buf.c0Tx.valid = 1'b1;
+                end
+                else
+                begin
+                    afu_buf.c0Tx = afu_raw.c0Tx;
+                end
+            end
 
             // Enq to the FIFO if a new request has arrived and it wasn't
             // consumed immediately through afu_buf.
@@ -168,7 +177,7 @@ module cci_mpf_shim_buffer_afu
     // Pull request details out of the head of the FIFO.
     t_if_cci_mpf_c1_Tx c1_first;
 
-    // Forward the FIFO to the buffered output.  The valid bits are
+    // Forward the FIFO to the buffered output.  The valid bit is
     // only meaningful when the FIFO isn't empty.
     assign afu_buf.c1Tx = cci_mpf_c1TxMaskValids(c1_first, c1_notEmpty);
 

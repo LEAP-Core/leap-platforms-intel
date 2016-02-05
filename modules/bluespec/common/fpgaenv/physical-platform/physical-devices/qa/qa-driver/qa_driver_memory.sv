@@ -140,7 +140,7 @@ module qa_driver_memory
     assign mem_write_rdy = ! afu_if.c1TxAlmFull;
     assign mem_write_ack = cci_c1Rx_isWriteRsp(afu_if.c1Rx);
 
-    always_ff @(negedge clk)
+    always_ff @(posedge clk)
     begin
         if (! reset)
         begin

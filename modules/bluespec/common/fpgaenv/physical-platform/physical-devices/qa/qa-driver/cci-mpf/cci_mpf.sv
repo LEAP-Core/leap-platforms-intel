@@ -46,6 +46,7 @@
 
 //
 // This wrapper is a reference implementation of the composition of shims.
+// Developers are free to compose memories with other properties.
 //
 
 module cci_mpf
@@ -90,21 +91,33 @@ module cci_mpf
     logic  reset;
     assign reset = fiu.reset;
 
+    // ====================================================================
+    //
+    //  Stages here form a pipeline, transforming requests as they enter
+    //  from the AFU through stages that compose to provide a complete
+    //  memory subsystem.
+    //
+    //  The request (Tx) pipeline flows up from the bottom of the stages.
+    //  The response (Rx) pipeline flows down from the top of the file.
+    //
+    // ====================================================================
+
 
     // ====================================================================
     //
-    //  Canonicalize requests on exit toward the FIU.
+    //  Canonicalize requests on exit toward the FIU. This stage must be
+    //  inserted at both ends of the pipeline.
     //
     // ====================================================================
 
-    cci_mpf_if fiu_canonical (.clk);
+    cci_mpf_if stg1_fiu_canonical (.clk);
 
     cci_mpf_shim_canonicalize_to_fiu
-      canonicalize
+      canonicalize_out
        (
         .clk,
         .fiu,
-        .afu(fiu_canonical)
+        .afu(stg1_fiu_canonical)
         );
 
 
@@ -114,7 +127,7 @@ module cci_mpf
     //
     // ====================================================================
 
-    cci_mpf_if fiu_csrs (.clk);
+    cci_mpf_if stg2_fiu_csrs (.clk);
     cci_mpf_csrs mpf_csrs ();
 
     cci_mpf_shim_csr
@@ -127,23 +140,28 @@ module cci_mpf
       csr
        (
         .clk,
-        .fiu(fiu_canonical),
-        .afu(fiu_csrs),
+        .fiu(stg1_fiu_canonical),
+        .afu(stg2_fiu_csrs),
         .csrs(mpf_csrs)
         );
 
 
     // ====================================================================
     //
-    //  Virtual to physical translation. This is the lowest level of
-    //  the hierarchy, nearest the FIU connection. The translation layer
-    //  can thus depend on a few properties, such as that only one
-    //  request is outstanding to a given line. The virtual to physical
-    //  translator is thus free to reorder any requests.
+    //  Virtual to physical translation.
+    //
+    //  *** This stage may reorder requests relative to each other,
+    //  *** including requests to the same line. Reordering occurs
+    //  *** only on translation miss in order to allow hits to flow
+    //  *** around misses.
+    //  ***
+    //  *** If strict ordering is required within cache lines then
+    //  *** the write order shim (cci_mpf_shim_wro) must be closer
+    //  *** to the AFU than this VTP stage.
     //
     // ====================================================================
 
-    cci_mpf_if fiu_virtual (.clk);
+    cci_mpf_if stg3_fiu_virtual (.clk);
 
     cci_mpf_shim_vtp
       #(
@@ -159,8 +177,8 @@ module cci_mpf
       v_to_p
        (
         .clk,
-        .fiu(fiu_csrs),
-        .afu(fiu_virtual),
+        .fiu(stg2_fiu_csrs),
+        .afu(stg3_fiu_virtual),
         .csrs(mpf_csrs)
         );
 
@@ -169,10 +187,11 @@ module cci_mpf
     //
     //  Maintain read/write and write/write order to matching addresses.
     //  This level of the hierarchy operates on virtual addresses.
+    //  Order preservation is optional, controlled by ENFORCE_WR_ORDER.
     //
     // ====================================================================
 
-    cci_mpf_if fiu_wro (.clk);
+    cci_mpf_if stg4_fiu_wro (.clk);
 
     generate
         if (ENFORCE_WR_ORDER)
@@ -181,8 +200,8 @@ module cci_mpf
               order
                (
                 .clk,
-                .fiu(fiu_virtual),
-                .afu(fiu_wro)
+                .fiu(stg3_fiu_virtual),
+                .afu(stg4_fiu_wro)
                 );
         end
         else
@@ -191,11 +210,12 @@ module cci_mpf
               filter
                (
                 .clk,
-                .fiu(fiu_virtual),
-                .afu(fiu_wro)
+                .fiu(stg3_fiu_virtual),
+                .afu(stg4_fiu_wro)
                 );
         end
     endgenerate
+
 
     // ====================================================================
     //
@@ -204,9 +224,16 @@ module cci_mpf
     //
     //  Operates on virtual addresses.
     //
+    //  *** In addition to sorting responses this stage preserves
+    //  *** Mdata values for both read and write requests.  Mdata
+    //  *** preservation is required early in the flow from the AFU.
+    //  *** If no read response sorting is needed this module may
+    //  *** still be used to preserve Mdata by setting the parameter
+    //  *** SORT_READ_RESPONSES to 0.
+    //
     // ====================================================================
 
-    cci_mpf_if fiu_rsp_order (.clk);
+    cci_mpf_if stg5_fiu_rsp_order (.clk);
 
     cci_mpf_shim_rsp_order
       #(
@@ -216,23 +243,41 @@ module cci_mpf
       rspOrder
        (
         .clk,
-        .fiu(fiu_wro),
-        .afu(fiu_rsp_order)
+        .fiu(stg4_fiu_wro),
+        .afu(stg5_fiu_rsp_order)
         );
 
 
     // ====================================================================
     //
-    //  Register responses to AFU.
+    //  Register responses to AFU. The stage is inserted for timing.
     //
     // ====================================================================
+
+    cci_mpf_if stg6_fiu_reg_rsp (.clk);
 
     cci_mpf_shim_buffer_fiu
       regRsp
        (
         .clk,
-        .fiu_raw(fiu_rsp_order),
-        .fiu_buf(afu)
+        .fiu_raw(stg5_fiu_rsp_order),
+        .fiu_buf(stg6_fiu_reg_rsp)
+        );
+
+
+    // ====================================================================
+    //
+    //  Canonicalize requests on entry from the AFU. This stage must be
+    //  inserted at both ends of the pipeline.
+    //
+    // ====================================================================
+
+    cci_mpf_shim_canonicalize_to_fiu
+      canonicalize_in
+       (
+        .clk,
+        .fiu(stg6_fiu_reg_rsp),
+        .afu(afu)
         );
 
 endmodule // cci_mpf

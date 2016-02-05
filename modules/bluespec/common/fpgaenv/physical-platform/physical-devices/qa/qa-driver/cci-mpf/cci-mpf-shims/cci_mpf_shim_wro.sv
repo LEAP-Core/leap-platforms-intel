@@ -204,8 +204,8 @@ module cci_mpf_shim_wro
     logic        [0 : 0] rd_filter_remove_en;
 
     // Write responses arrive on both response channels.
-    t_C1_REQ_IDX [0 : 1] wr_filter_remove_idx;
-    logic        [0 : 1] wr_filter_remove_en;
+    t_C1_REQ_IDX [0 : 0] wr_filter_remove_idx;
+    logic        [0 : 0] wr_filter_remove_en;
 
     //
     // Generate the read and write filters.
@@ -238,7 +238,7 @@ module cci_mpf_shim_wro
         .N_BUCKETS(N_C1_CAM_IDX_ENTRIES),
         .BITS_PER_BUCKET(ADDRESS_HASH_BITS),
         .N_TEST_CLIENTS(2),
-        .N_REMOVE_CLIENTS(2),
+        .N_REMOVE_CLIENTS(1),
         .BYPASS_INSERT_TO_TEST(1)
         )
       wrFilter(.clk,
@@ -311,8 +311,7 @@ module cci_mpf_shim_wro
 
 
     //
-    // The channel 1 (write request) heap is dual ported since write
-    // responses may arrive on either response channel.
+    // The channel 1 (write request) heap.
     //
 
     typedef struct packed
@@ -328,17 +327,16 @@ module cci_mpf_shim_wro
 
     logic c1_heap_notFull;
 
-    t_C1_REQ_IDX c1_heap_readReq[0:1];
-    t_C1_HEAP_ENTRY c1_heap_readRsp[0:1];
+    t_C1_REQ_IDX c1_heap_readReq;
+    t_C1_HEAP_ENTRY c1_heap_readRsp;
 
-    logic c1_heap_free[0:1];
-    t_C1_REQ_IDX c1_heap_freeIdx[0:1];
+    logic c1_heap_free;
+    t_C1_REQ_IDX c1_heap_freeIdx;
 
-    cci_mpf_prim_heap_multi
+    cci_mpf_prim_heap
       #(
         .N_ENTRIES(N_C1_CAM_IDX_ENTRIES),
-        .N_DATA_BITS($bits(t_C1_HEAP_ENTRY)),
-        .N_READ_PORTS(2)
+        .N_DATA_BITS($bits(t_C1_HEAP_ENTRY))
         )
       c1_heap(.clk,
               .reset,
@@ -359,10 +357,8 @@ module cci_mpf_shim_wro
     assign rd_filter_remove_idx[0] = c0_heap_freeIdx;
     assign rd_filter_remove_en[0]  = c0_heap_free;
 
-    assign wr_filter_remove_idx[0] = c1_heap_freeIdx[0];
-    assign wr_filter_remove_idx[1] = c1_heap_freeIdx[1];
-    assign wr_filter_remove_en[0]  = c1_heap_free[0];
-    assign wr_filter_remove_en[1]  = c1_heap_free[1];
+    assign wr_filter_remove_idx[0] = c1_heap_freeIdx;
+    assign wr_filter_remove_en[0]  = c1_heap_free;
 
 
     // ====================================================================
@@ -765,12 +761,6 @@ module cci_mpf_shim_wro
         begin
             afu_buf.c0Rx.hdr = { fiu_buf.c0Rx.hdr[CCI_C0RX_MEMHDR_WIDTH-1 : $bits(t_C0_REQ_IDX)], c0_heap_readRsp.mdata };
         end
-// FIXME
-//        else if (cci_mpf_c0Rx_isWriteReq(fiu_buf.c0Rx))
-//        begin
-//            // This is a write response. The request came in on channel 1.
-//            afu_buf.c0Rx.hdr = { fiu_buf.c0Rx.hdr[CCI_C0RX_MEMHDR_WIDTH-1 : $bits(t_C1_REQ_IDX)], c1_heap_readRsp[0].mdata };
-//        end
     end
 
 
@@ -798,15 +788,11 @@ module cci_mpf_shim_wro
     // Request heap read as fiu responses arrive. The heap's value will be
     // available the cycle fiu_buf is read. Responses may arrive on either
     // channel!
-    assign c1_heap_readReq[0] = t_C1_REQ_IDX'(fiu.c0Rx.hdr);
-    assign c1_heap_readReq[1] = t_C1_REQ_IDX'(fiu.c1Rx.hdr);
+    assign c1_heap_readReq = t_C1_REQ_IDX'(fiu.c1Rx.hdr);
 
-    // Free heap entries as read responses arrive.
-    assign c1_heap_freeIdx[0] = t_C1_REQ_IDX'(fiu.c0Rx.hdr);
-// FIXME
-    assign c1_heap_free[0] = 1'b0;
-    assign c1_heap_freeIdx[1] = t_C1_REQ_IDX'(fiu.c1Rx.hdr);
-    assign c1_heap_free[1] = cci_c1Rx_isWriteRsp(fiu.c1Rx);
+    // Free heap entries as write responses arrive.
+    assign c1_heap_freeIdx = t_C1_REQ_IDX'(fiu.c1Rx.hdr);
+    assign c1_heap_free = cci_c1Rx_isWriteRsp(fiu.c1Rx);
 
     // Either forward the header from the FIU for non-read responses or
     // reconstruct the read response header.
@@ -816,7 +802,7 @@ module cci_mpf_shim_wro
 
         if (cci_c1Rx_isWriteRsp(fiu_buf.c1Rx))
         begin
-            afu_buf.c1Rx.hdr = { fiu_buf.c1Rx.hdr[CCI_C1RX_MEMHDR_WIDTH-1 : $bits(t_C1_REQ_IDX)], c1_heap_readRsp[1].mdata };
+            afu_buf.c1Rx.hdr = { fiu_buf.c1Rx.hdr[CCI_C1RX_MEMHDR_WIDTH-1 : $bits(t_C1_REQ_IDX)], c1_heap_readRsp.mdata };
         end
     end
 
@@ -868,15 +854,10 @@ module cci_mpf_shim_wro
                 $display("XX R 0 %0d %d",
                          c0_heap_freeIdx, cycle);
             end
-            if (c1_heap_free[0])
-            begin
-                $display("XX W 0 %0d %d",
-                         c1_heap_freeIdx[0], cycle);
-            end
-            if (c1_heap_free[1])
+            if (c1_heap_free)
             begin
                 $display("XX W 1 %0d %d",
-                         c1_heap_freeIdx[1], cycle);
+                         c1_heap_freeIdx, cycle);
             end
         end
     end

@@ -659,6 +659,13 @@ package cci_mpf_if_pkg;
         r_out.hdr.base.rsvd1 = 0;
         r_out.hdr.base.rsvd0 = 0;
 
+        // Extension flags may only be set on read requests
+        if (! cci_mpf_c0TxIsReadReq(r))
+        begin
+            r_out.hdr.ext.checkLoadStoreOrder = 0;
+            r_out.hdr.ext.addrIsVirtual = 0;
+        end
+
         return r_out;
     endfunction
 
@@ -670,6 +677,13 @@ package cci_mpf_if_pkg;
         t_if_cci_mpf_c1_Tx r_out = r;
         r_out.hdr.base.rsvd1 = 0;
         r_out.hdr.base.rsvd0 = 0;
+
+        // Extension flags may only be set on write requests
+        if (! cci_mpf_c1TxIsWriteReq(r))
+        begin
+            r_out.hdr.ext.checkLoadStoreOrder = 0;
+            r_out.hdr.ext.addrIsVirtual = 0;
+        end
 
         return r_out;
     endfunction

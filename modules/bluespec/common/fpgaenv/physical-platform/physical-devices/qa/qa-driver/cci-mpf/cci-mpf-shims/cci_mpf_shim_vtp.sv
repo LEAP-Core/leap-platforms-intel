@@ -138,7 +138,7 @@ module cci_mpf_shim_vtp
     // Validate parameter settings and that the Mdata reserved bit is 0
     // on all incoming read requests.
     //
-    always_ff @(negedge clk)
+    always_ff @(posedge clk)
     begin
         assert ((RESERVED_MDATA_IDX > 0) && (RESERVED_MDATA_IDX < CCI_MDATA_WIDTH)) else
             $fatal("cci_mpf_shim_vtp.sv: Illegal RESERVED_MDATA_IDX value: %d", RESERVED_MDATA_IDX);
@@ -231,7 +231,7 @@ module cci_mpf_shim_vtp
          .tlbReadDataEn
          );
 
-    always_ff @(negedge clk)
+    always_ff @(posedge clk)
     begin
         if (! reset)
         begin

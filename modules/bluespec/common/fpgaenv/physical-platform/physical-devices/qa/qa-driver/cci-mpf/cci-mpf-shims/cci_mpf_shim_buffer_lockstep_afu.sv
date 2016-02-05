@@ -39,7 +39,6 @@
 
 module cci_mpf_shim_buffer_lockstep_afu
   #(
-    parameter N_ENTRIES = CCI_TX_ALMOST_FULL_THRESHOLD + 2,
     parameter THRESHOLD = CCI_TX_ALMOST_FULL_THRESHOLD
     )
    (
@@ -62,6 +61,8 @@ module cci_mpf_shim_buffer_lockstep_afu
     // The client must be prepared to move both channels or none.
     input logic deqTx
     );
+
+    localparam N_ENTRIES = THRESHOLD + 2;
 
     assign afu_raw.reset = afu_buf.reset;
 

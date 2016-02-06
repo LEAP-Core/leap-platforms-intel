@@ -315,10 +315,33 @@ module cci_mpf_shim_vtp
     logic c1_new_req;
     assign c1_new_req = cci_mpf_c1TxIsValid(afu_buf.c1Tx);
 
+
+    // Is there a WrFence request coming in on channel 1?  Since
+    // the pipeline may reorder requests, all pending requests on
+    // the channel 1 pipeline must drain before the fence can
+    // proceed.
+    logic c1_block_wrfence;
+
+    always_comb
+    begin
+        c1_block_wrfence = 1'b0;
+
+        // Is there something in the pipeline?
+        for (int i = 0; i <= AFU_PIPE_LAST_STAGE; i = i + 1)
+        begin
+            c1_block_wrfence = c1_block_wrfence || c1_afu_pipe[i].valid;
+        end
+
+        // Is the next request a WrFence?
+        c1_block_wrfence = c1_block_wrfence &&
+                           cci_mpf_c1TxIsWriteFenceReq(afu_buf.c1Tx);
+    end
+
+
     // Pass new requests to the afu_pipe?  Old retries have priority over
     // new requests.
     assign deqC0Tx = c0_new_req && ! c0_retry_req;
-    assign deqC1Tx = c1_new_req && ! c1_retry_req;
+    assign deqC1Tx = c1_new_req && ! c1_retry_req && ! c1_block_wrfence;
 
 
     //
@@ -351,7 +374,11 @@ module cci_mpf_shim_vtp
 
             if (! c1_retry_req)
             begin
-                c1_afu_pipe[0] <= afu_buf.c1Tx;
+                // Channel 1 is more complicated because it must block when
+                // a WrFence is arriving until this pipeline is quiet.
+                c1_afu_pipe[0].hdr   <= afu_buf.c1Tx.hdr;
+                c1_afu_pipe[0].data  <= afu_buf.c1Tx.data;
+                c1_afu_pipe[0].valid <= afu_buf.c1Tx.valid && ! c1_block_wrfence;
             end
 
             // Rotate failed lookup or advance pipeline?

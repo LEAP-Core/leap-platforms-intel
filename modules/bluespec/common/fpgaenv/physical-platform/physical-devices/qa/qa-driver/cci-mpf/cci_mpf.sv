@@ -91,6 +91,28 @@ module cci_mpf
     logic  reset;
     assign reset = fiu.reset;
 
+
+    // ====================================================================
+    //
+    //  Mandatory MPF edge connection to both the external AFU and FIU
+    //  links and to both ends of the MPF pipeline defined in this module.
+    //
+    // ====================================================================
+
+    cci_mpf_if stg1_mpf_fiu (.clk);
+    cci_mpf_if stg6_mpf_afu (.clk);
+
+    cci_mpf_shim_edge_connect
+      mpf_edge
+       (
+        .clk,
+        .fiu_edge(fiu),
+        .afu_edge(afu),
+        .fiu(stg1_mpf_fiu),
+        .afu(stg6_mpf_afu)
+        );
+
+
     // ====================================================================
     //
     //  Stages here form a pipeline, transforming requests as they enter
@@ -101,24 +123,6 @@ module cci_mpf
     //  The response (Rx) pipeline flows down from the top of the file.
     //
     // ====================================================================
-
-
-    // ====================================================================
-    //
-    //  Canonicalize requests on exit toward the FIU. This stage must be
-    //  inserted at both ends of the pipeline.
-    //
-    // ====================================================================
-
-    cci_mpf_if stg1_fiu_canonical (.clk);
-
-    cci_mpf_shim_canonicalize_to_fiu
-      canonicalize_out
-       (
-        .clk,
-        .fiu,
-        .afu(stg1_fiu_canonical)
-        );
 
 
     // ====================================================================
@@ -140,7 +144,7 @@ module cci_mpf
       csr
        (
         .clk,
-        .fiu(stg1_fiu_canonical),
+        .fiu(stg1_mpf_fiu),
         .afu(stg2_fiu_csrs),
         .csrs(mpf_csrs)
         );
@@ -261,23 +265,7 @@ module cci_mpf
        (
         .clk,
         .fiu_raw(stg5_fiu_rsp_order),
-        .fiu_buf(stg6_fiu_reg_rsp)
-        );
-
-
-    // ====================================================================
-    //
-    //  Canonicalize requests on entry from the AFU. This stage must be
-    //  inserted at both ends of the pipeline.
-    //
-    // ====================================================================
-
-    cci_mpf_shim_canonicalize_to_fiu
-      canonicalize_in
-       (
-        .clk,
-        .fiu(stg6_fiu_reg_rsp),
-        .afu(afu)
+        .fiu_buf(stg6_mpf_afu)
         );
 
 endmodule // cci_mpf

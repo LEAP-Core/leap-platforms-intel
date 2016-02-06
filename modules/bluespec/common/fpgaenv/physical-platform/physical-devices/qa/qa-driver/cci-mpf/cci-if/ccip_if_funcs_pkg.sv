@@ -90,4 +90,11 @@ package ccip_if_funcs_pkg;
         return r.rspValid && (r.hdr.resp_type == eRSP_WRLINE);
     endfunction
 
+    function automatic logic ccip_c1Rx_isWriteFenceRsp(
+        input t_if_ccip_c1_Rx r
+        );
+
+        return r.rspValid && (r.hdr.resp_type == eRSP_WRFENCE);
+    endfunction
+
 endpackage // ccip_if_funcs_pkg

@@ -28,40 +28,40 @@
     // Print Req Type
     function string print_c0_reqtype (t_cci_c0_req req);
         case (req)
-            eREQ_RDLINE_S: return "RdLine_S ";
-            eREQ_RDLINE_I: return "RdLine_I ";
-            default:       return "* ERROR *";
+            eREQ_RDLINE_S: return "RdLine_S  ";
+            eREQ_RDLINE_I: return "RdLine_I  ";
+            default:       return "* ERROR * ";
         endcase
     endfunction
 
     function string print_c1_reqtype (t_cci_c1_req req);
         case (req)
-            eREQ_WRLINE_I: return "WrLine_I ";
-            eREQ_WRLINE_M: return "WrLine_M ";
-         // eREQ_WRPUSH_I: return "WRPush_I ";
-            eREQ_WRFENCE:  return "WrFence  ";
-         // eREQ_ATOMIC:   return "Atomic   ";
-            eREQ_INTR:     return "IntrReq  ";
-            default:       return "* ERROR *";
+            eREQ_WRLINE_I: return "WrLine_I  ";
+            eREQ_WRLINE_M: return "WrLine_M  ";
+         // eREQ_WRPUSH_I: return "WRPush_I  ";
+            eREQ_WRFENCE:  return "WrFence   ";
+         // eREQ_ATOMIC:   return "Atomic    ";
+            eREQ_INTR:     return "IntrReq   ";
+            default:       return "* ERROR * ";
         endcase
     endfunction
 
     // Print resp type
     function string print_c0_resptype (t_cci_c0_rsp rsp);
         case (rsp)
-            eRSP_RDLINE:  return "RdRsp     ";
-            eRSP_UMSG:    return "UmsgRsp   ";
-         // eRSP_ATOMIC:  return "AtomicRsp ";
-            default:      return "* ERROR * ";
+            eRSP_RDLINE:  return "RdRsp      ";
+            eRSP_UMSG:    return "UmsgRsp    ";
+         // eRSP_ATOMIC:  return "AtomicRsp  ";
+            default:      return "* ERROR *  ";
         endcase
     endfunction
 
     function string print_c1_resptype (t_cci_c1_rsp rsp);
         case (rsp)
-            eRSP_WRLINE:  return "WrRsp     ";
-            eRSP_WRFENCE: return "WrFenceRsp";
-            eRSP_INTR:    return "IntrResp  ";
-            default:      return "* ERROR * ";
+            eRSP_WRLINE:  return "WrRsp      ";
+            eRSP_WRFENCE: return "WrFenceRsp ";
+            eRSP_INTR:    return "IntrResp   ";
+            default:      return "* ERROR *  ";
         endcase
     endfunction
 

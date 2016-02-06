@@ -176,7 +176,7 @@ module ccis_wires_to_mpf
                 ffs_vl61_LP32ui_sy2lp_C1TxHdr <= c1TxHdr;
                 ffs_vl512_LP32ui_sy2lp_C1TxData <= fiu_ext.c1Tx.data;
                 ffs_vl_LP32ui_sy2lp_C1TxWrValid <= cci_mpf_c1TxIsWriteReq(fiu_ext.c1Tx) ||
-                                                   cci_mpf_c1TxIsWriteFence(fiu_ext.c1Tx);
+                                                   cci_mpf_c1TxIsWriteFenceReq(fiu_ext.c1Tx);
                 ffs_vl_LP32ui_sy2lp_C1TxIrValid <= 1'b0;
                 fiu_ext.c1TxAlmFull <= ffs_vl_LP32ui_lp2sy_C1TxAlmFull;
             end
@@ -192,7 +192,7 @@ module ccis_wires_to_mpf
                 ffs_vl61_LP32ui_sy2lp_C1TxHdr = c1TxHdr;
                 ffs_vl512_LP32ui_sy2lp_C1TxData = fiu_ext.c1Tx.data;
                 ffs_vl_LP32ui_sy2lp_C1TxWrValid = cci_mpf_c1TxIsWriteReq(fiu_ext.c1Tx) ||
-                                                  cci_mpf_c1TxIsWriteFence(fiu_ext.c1Tx);
+                                                  cci_mpf_c1TxIsWriteFenceReq(fiu_ext.c1Tx);
                 ffs_vl_LP32ui_sy2lp_C1TxIrValid = 1'b0;
                 fiu_ext.c1TxAlmFull = ffs_vl_LP32ui_lp2sy_C1TxAlmFull;
             end
@@ -308,8 +308,7 @@ module ccis_wires_to_mpf
                 fiu_ext.c0Rx.mmioRdValid <= csr_rd_en;
 
                 fiu_ext.c1Rx.hdr         <= c1RxHdr;
-                fiu_ext.c1Rx.rspValid    <= ffs_vl_LP32ui_lp2sy_C1RxWrValid ||
-                                            ffs_vl_LP32ui_lp2sy_C1RxIrValid;
+                fiu_ext.c1Rx.rspValid    <= ffs_vl_LP32ui_lp2sy_C1RxWrValid;
             end
         end
         else
@@ -324,8 +323,7 @@ module ccis_wires_to_mpf
                 fiu_ext.c0Rx.mmioRdValid = csr_rd_en;
 
                 fiu_ext.c1Rx.hdr         = c1RxHdr;
-                fiu_ext.c1Rx.rspValid    = ffs_vl_LP32ui_lp2sy_C1RxWrValid ||
-                                           ffs_vl_LP32ui_lp2sy_C1RxIrValid;
+                fiu_ext.c1Rx.rspValid    = ffs_vl_LP32ui_lp2sy_C1RxWrValid;
             end
         end
     endgenerate
@@ -333,12 +331,13 @@ module ccis_wires_to_mpf
 
     //
     // Interfaces after CCI-S return write responses only on c1.  Move
-    // all c0 write responses to c1.
+    // all c0 write responses to c1.  Also fake a WrFence response.
     //
 
     // Limit write requests to the available response buffer space.
     localparam MAX_WRITE_REQS = 256;
     logic [$clog2(MAX_WRITE_REQS)-1 : 0] num_active_writes;
+    logic wrfence_alm_full;
 
     logic wr0_valid;
     assign wr0_valid = cci_mpf_c1TxIsWriteReq(fiu.c1Tx);
@@ -373,7 +372,9 @@ module ccis_wires_to_mpf
     // Signal full to avoid filling the write response FIFO
     assign fiu.c1TxAlmFull =
         fiu_ext.c1TxAlmFull ||
-        (num_active_writes >= MAX_WRITE_REQS - CCI_TX_ALMOST_FULL_THRESHOLD);
+        (num_active_writes >= MAX_WRITE_REQS - CCI_TX_ALMOST_FULL_THRESHOLD) ||
+        wrfence_alm_full;
+
 
 
     //
@@ -401,23 +402,65 @@ module ccis_wires_to_mpf
         .almostFull()
         );
 
+
+    //
+    // Record WrFence and send a response.
+    //
+    t_ccis_mdata wr_fence_mdata;
+    t_cci_vc wr_fence_vc_used;
+    logic wr_fence_deq_en;
+    logic wr_fence_not_empty;
+
+    cci_mpf_prim_fifo_lutram
+      #(
+        .N_DATA_BITS(CCI_MDATA_WIDTH + $bits(t_cci_vc)),
+        .N_ENTRIES(16),
+        .THRESHOLD(CCI_TX_ALMOST_FULL_THRESHOLD+2)
+        )
+      c1_wr_fence
+       (
+        .clk,
+        .reset,
+        .enq_data({fiu_ext.c1Tx.hdr.base.mdata, fiu_ext.c1Tx.hdr.base.vc_sel}),
+        .enq_en(cci_mpf_c1TxIsWriteFenceReq(fiu_ext.c1Tx)),
+        .first({wr_fence_mdata, wr_fence_vc_used}),
+        .deq_en(wr_fence_deq_en),
+        .notEmpty(wr_fence_not_empty),
+        .notFull(),
+        .almostFull(wrfence_alm_full)
+        );
+
+
     always_comb
     begin
         fiu.c0Rx = fiu_ext.c0Rx;
+
+        wr_rsp_deq_en = 1'b0;
+        wr_fence_deq_en = 1'b0;
 
         if (wr_rsp_not_empty && ! cci_c1Rx_isValid(fiu_ext.c1Rx))
         begin
             fiu.c1Rx = t_if_cci_c1_Rx'(0);
             fiu.c1Rx.hdr.resp_type = eRSP_WRLINE;
+            fiu.c1Rx.hdr.vc_used = eVC_VL0;
             fiu.c1Rx.hdr.mdata = t_cci_mdata'(wr_rsp_mdata);
             fiu.c1Rx.rspValid = 1'b1;
 
             wr_rsp_deq_en = 1'b1;
         end
+        else if (wr_fence_not_empty && ! cci_c1Rx_isValid(fiu_ext.c1Rx))
+        begin
+            fiu.c1Rx = t_if_cci_c1_Rx'(0);
+            fiu.c1Rx.hdr.resp_type = eRSP_WRFENCE;
+            fiu.c1Rx.hdr.vc_used = wr_fence_vc_used;
+            fiu.c1Rx.hdr.mdata = t_cci_mdata'(wr_fence_mdata);
+            fiu.c1Rx.rspValid = 1'b1;
+
+            wr_fence_deq_en = 1'b1;
+        end
         else
         begin
             fiu.c1Rx = fiu_ext.c1Rx;
-            wr_rsp_deq_en = 1'b0;
         end
     end
 

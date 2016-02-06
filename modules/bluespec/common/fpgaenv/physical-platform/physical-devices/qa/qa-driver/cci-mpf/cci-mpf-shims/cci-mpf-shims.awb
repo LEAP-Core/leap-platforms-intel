@@ -17,8 +17,8 @@
 %sources -t VERILOG    -v PRIVATE cci_mpf_shim_buffer_afu.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_shim_buffer_lockstep_afu.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_shim_buffer_fiu.sv
-%sources -t VERILOG    -v PRIVATE cci_mpf_shim_canonicalize_to_fiu.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_shim_csr.sv
+%sources -t VERILOG    -v PRIVATE cci_mpf_shim_edge_connect.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_shim_mux.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_shim_null.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_shim_rsp_order.sv

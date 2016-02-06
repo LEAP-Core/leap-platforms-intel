@@ -91,7 +91,7 @@ module qa_driver_memory
     //
     // ====================================================================
 
-    cci_mpf_if afu_if(.clk);
+    cci_mpf_if#(.ENABLE_LOG(1)) afu_if(.clk);
 
 
     t_cci_mpf_ReqMemHdrParams rd_req_params;
@@ -106,11 +106,17 @@ module qa_driver_memory
         end
     end
 
+    // Tag requests.  This is pointless since they come back ordered but useful
+    // for debugging.
+    t_cci_mdata_platform read_req_tag;
+    t_cci_mdata_platform read_rsp_tag;
+    t_cci_mdata_platform write_req_tag;
+
     assign afu_if.c0Tx =
         cci_mpf_genC0TxReadReq(
             cci_mpf_c0_genReqHdr(mem_read_req_cached ? eREQ_RDLINE_S : eREQ_RDLINE_I,
                                  mem_read_req_addr,
-                                 t_cci_mdata'(0),
+                                 t_cci_mdata'(read_req_tag),
                                  rd_req_params),
             mem_read_req_enable);
 
@@ -132,7 +138,7 @@ module qa_driver_memory
         cci_mpf_genC1TxWriteReq(
             cci_mpf_c1_genReqHdr(mem_write_req_cached ? eREQ_WRLINE_M : eREQ_WRLINE_I,
                                  mem_write_addr,
-                                 t_cci_mdata'(0),
+                                 t_cci_mdata'(write_req_tag),
                                  wr_req_params),
             mem_write_data,
             mem_write_enable);
@@ -151,6 +157,40 @@ module qa_driver_memory
         end
     end
 
+    // Error checking on read tags, used mostly for checking MPF.
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            // Strange starting value, picked so it isn't aligned with MPF
+            // counters in order to look for MPF bugs.
+            write_req_tag <= t_cci_mdata_platform'(13);
+            read_req_tag <= t_cci_mdata_platform'(27);
+            read_rsp_tag <= t_cci_mdata_platform'(27);
+        end
+        else
+        begin
+            if (mem_write_enable)
+            begin
+                write_req_tag <= write_req_tag + 1;
+            end
+
+            if (mem_read_req_enable)
+            begin
+                read_req_tag <= read_req_tag + 1;
+            end
+
+            if (mem_read_rsp_rdy)
+            begin
+                read_rsp_tag <= read_rsp_tag + 1;
+
+                assert(afu_if.c0Rx.hdr.mdata == read_rsp_tag) else
+                    $fatal("qa_driver_memory: Incorrect tag (0x%x), expected 0x%x",
+                        afu_if.c0Rx.hdr.mdata, read_rsp_tag);
+            end
+        end
+    end
+
     assign afu_if.c2Tx = afu_mmio_rd_rsp;
 
 
@@ -164,6 +204,7 @@ module qa_driver_memory
       #(
         .DFH_MMIO_BASE_ADDR(QA_DRIVER_DFH_SIZE),
         .SORT_READ_RESPONSES(1),
+        .ENFORCE_WR_ORDER(1),
         .PRESERVE_WRITE_MDATA(0)
         )
       mpf

@@ -149,6 +149,7 @@ module cci_mpf_shim_rsp_order
     t_heap_idx wr_heap_readIdx;
     t_cci_mdata wr_heap_readMdata;
 
+    logic wr_heap_alloc;
     logic wr_heap_free;
 
     generate
@@ -170,14 +171,14 @@ module cci_mpf_shim_rsp_order
                 .N_ENTRIES(N_ROB_ENTRIES),
                 .N_DATA_BITS(CCI_MDATA_WIDTH),
                 .MIN_FREE_SLOTS(CCI_TX_ALMOST_FULL_THRESHOLD + 1),
-                .N_OUTPUT_REG_STAGES(2)
+                .N_OUTPUT_REG_STAGES(1)
                 )
               wr_heap
                (
                 .clk,
                 .reset,
 
-                .enq(cci_mpf_c1TxIsWriteReq(afu.c1Tx)),
+                .enq(wr_heap_alloc),
                 .enqData(afu.c1Tx.hdr.base.mdata),
                 .notFull(wr_not_full),
                 .allocIdx(wr_heap_allocIdx),
@@ -296,7 +297,7 @@ module cci_mpf_shim_rsp_order
                 .N_ENTRIES(N_ROB_ENTRIES),
                 .N_DATA_BITS(CCI_MDATA_WIDTH),
                 .MIN_FREE_SLOTS(CCI_TX_ALMOST_FULL_THRESHOLD + 1),
-                .N_OUTPUT_REG_STAGES(2)
+                .N_OUTPUT_REG_STAGES(1)
                 )
               rd_heap
                (
@@ -380,7 +381,10 @@ module cci_mpf_shim_rsp_order
     always_comb
     begin
         fiu_buf.c1Tx = afu.c1Tx;
-        if (cci_mpf_c1TxIsWriteReq(afu.c1Tx))
+
+        wr_heap_alloc = cci_mpf_c1TxIsWriteReq(afu.c1Tx) ||
+                        cci_mpf_c1TxIsWriteFenceReq(afu.c1Tx);
+        if (wr_heap_alloc)
         begin
             fiu_buf.c1Tx.hdr.base.mdata = t_cci_mdata'(wr_heap_allocIdx);
         end
@@ -392,7 +396,7 @@ module cci_mpf_shim_rsp_order
         afu.c1Rx = fiu_buf.c1Rx;
 
         // If a write response return the preserved Mdata
-        if (cci_c1Rx_isWriteRsp(afu.c1Rx))
+        if (cci_c1Rx_isWriteRsp(afu.c1Rx) || cci_c1Rx_isWriteFenceRsp(afu.c1Rx))
         begin
             afu.c1Rx.hdr.mdata = wr_heap_readMdata;
         end
@@ -400,7 +404,8 @@ module cci_mpf_shim_rsp_order
 
     // Lookup write heap to restore Mdata
     assign wr_heap_readIdx = t_heap_idx'(fiu.c1Rx.hdr.mdata);
-    assign wr_heap_free = cci_c1Rx_isWriteRsp(fiu.c1Rx);
+    assign wr_heap_free = cci_c1Rx_isWriteRsp(fiu.c1Rx) ||
+                          cci_c1Rx_isWriteFenceRsp(fiu.c1Rx);
 
 
     // ====================================================================

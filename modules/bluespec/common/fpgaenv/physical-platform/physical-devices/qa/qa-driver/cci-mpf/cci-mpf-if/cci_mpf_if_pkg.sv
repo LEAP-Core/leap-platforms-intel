@@ -68,6 +68,9 @@ package cci_mpf_if_pkg;
     typedef t_ccip_clData t_cci_clData;
     typedef t_ccip_mdata t_cci_mdata;
 
+    // True platform mdata width, which is less on CCI-S
+    typedef logic [CCI_MDATA_WIDTH-1 : 0] t_cci_mdata_platform;
+
     typedef t_ccip_vc t_cci_vc;
     typedef t_ccip_clLen t_cci_clLen;
     typedef t_ccip_clNum t_cci_clNum;
@@ -156,6 +159,12 @@ package cci_mpf_if_pkg;
         input t_if_cci_c1_Rx r
         );
         return ccip_c1Rx_isWriteRsp(r);
+    endfunction
+
+    function automatic logic cci_c1Rx_isWriteFenceRsp(
+        input t_if_cci_c1_Rx r
+        );
+        return ccip_c1Rx_isWriteFenceRsp(r);
     endfunction
 
 
@@ -613,7 +622,7 @@ package cci_mpf_if_pkg;
                            (r.hdr.base.req_type == eREQ_WRLINE_M));
     endfunction
 
-    function automatic logic cci_mpf_c1TxIsWriteFence(
+    function automatic logic cci_mpf_c1TxIsWriteFenceReq(
         input t_if_cci_mpf_c1_Tx r
         );
 

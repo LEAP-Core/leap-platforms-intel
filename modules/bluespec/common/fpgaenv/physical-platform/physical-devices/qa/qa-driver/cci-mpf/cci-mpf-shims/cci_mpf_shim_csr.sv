@@ -102,6 +102,14 @@ module cci_mpf_shim_csr
     typedef logic [$clog2(CCI_MPF_CSR_SIZE)-1:0] t_mpf_csr_offset;
 
 
+    // Register incoming requests
+    t_if_cci_c0_Rx c0_rx;
+    always_ff @(posedge clk)
+    begin
+        c0_rx <= fiu.c0Rx;
+    end
+
+
     // ====================================================================
     //
     //  CSR writes from host to FPGA
@@ -135,17 +143,17 @@ module cci_mpf_shim_csr
             csrs.vtp_in_mode <= t_cci_mpf_vtp_csr_mode'(0);
             csrs.vtp_in_page_table_base_valid <= 1'b0;
         end
-        else if (cci_csr_isWrite(fiu.c0Rx))
+        else if (cci_csr_isWrite(c0_rx))
         begin
-            if (csrAddrMatches(fiu.c0Rx, CCI_MPF_VTP_CSR_BASE +
-                                         CCI_MPF_VTP_CSR_MODE))
+            if (csrAddrMatches(c0_rx, CCI_MPF_VTP_CSR_BASE +
+                                      CCI_MPF_VTP_CSR_MODE))
             begin
-                 csrs.vtp_in_mode <= t_cci_mpf_vtp_csr_mode'(fiu.c0Rx.data);
+                 csrs.vtp_in_mode <= t_cci_mpf_vtp_csr_mode'(c0_rx.data);
             end
-            else if (csrAddrMatches(fiu.c0Rx, CCI_MPF_VTP_CSR_BASE +
-                                              CCI_MPF_VTP_CSR_PAGE_TABLE_PADDR))
+            else if (csrAddrMatches(c0_rx, CCI_MPF_VTP_CSR_BASE +
+                                           CCI_MPF_VTP_CSR_PAGE_TABLE_PADDR))
             begin
-                csrs.vtp_in_page_table_base <= t_cci_clAddr'(fiu.c0Rx.data);
+                csrs.vtp_in_page_table_base <= t_cci_clAddr'(c0_rx.data);
                 csrs.vtp_in_page_table_base_valid <= 1'b1;
             end
         end
@@ -307,15 +315,7 @@ module cci_mpf_shim_csr
     // contends with other responders.
     //
 
-    // Register incoming requests
-    t_if_cci_c0_Rx c0_rx;
-    always_ff @(posedge clk)
-    begin
-        c0_rx <= fiu.c0Rx;
-    end
-
     logic mmio_req_enq_en;
-    logic mmio_req_not_full;
 
     // Address of incoming request
     t_cci_mmioAddr mmio_req_addr_in;
@@ -330,6 +330,17 @@ module cci_mpf_shim_csr
                              mmio_req_addr_in >= (DFH_MMIO_BASE_ADDR >> 2) &&
                              mmio_req_addr_in < (CCI_MPF_CSR_LAST >> 2);
 
+    // Register FIFO input for timing
+    logic [$bits(t_mpf_csr_offset) + CCIP_TID_WIDTH - 1 : 0] req_fifo_in;
+    logic req_fifo_in_en;
+
+    always_ff @(posedge clk)
+    begin
+        req_fifo_in <= { t_mpf_csr_offset'(mmio_req_addr_in_offset),
+                         cci_csr_getTid(c0_rx) };
+        req_fifo_in_en <= mmio_req_enq_en;
+    end
+
     cci_mpf_prim_fifo_lutram
       #(
         .N_DATA_BITS($bits(t_mpf_csr_offset) + CCIP_TID_WIDTH),
@@ -340,10 +351,9 @@ module cci_mpf_shim_csr
          .clk,
          .reset,
          // Store only the MMIO address bits needed for decode
-         .enq_data({ t_mpf_csr_offset'(mmio_req_addr_in_offset),
-                     cci_csr_getTid(c0_rx) }),
-         .enq_en(mmio_req_enq_en),
-         .notFull(mmio_req_not_full),
+         .enq_data(req_fifo_in),
+         .enq_en(req_fifo_in_en),
+         .notFull(),
          .almostFull(),
          .first({mmio_req_addr, mmio_req_tid}),
          .deq_en(c2_rsp_en),

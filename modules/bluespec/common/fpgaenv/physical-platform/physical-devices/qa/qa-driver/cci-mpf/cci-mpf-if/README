@@ -15,9 +15,9 @@ interface.  One shim connects in the direction of the FIU and the other
 in the direction of the AFU.  cci_mpf_if.vh holds the interface.
 
 cci_mpf_if_pkg.sv maps platform-specific CCI structures and functions
-to platform-agnostic objects with similar names.  E.g., t_ccip_ReqMemHdr
-becomes t_cci_ReqMemHdr.  Constructor and accessor functions offer cross-
-platform compatibility.  The cci_mpf_genReqHdr() initializes a memory
+to platform-agnostic objects with similar names.  E.g., t_ccip_c0_ReqMemHdr
+becomes t_cci_c0_ReqMemHdr.  Constructor and accessor functions offer cross-
+platform compatibility.  The cci_mpf_c0_genReqHdr() initializes a memory
 request header with default values appropriate to the target platform.
 
 cci_mpf_if_pkg.sv also defines the CCI-MPF header extension.  The MPF
@@ -36,10 +36,12 @@ For modules holding wires with standard CCI names, the following code
 remaps those wires to a CCI-MPF object named fiu:
 
     //
-    // Expose FIU as MPF interface
+    // Expose FIU as an MPF interface
     //
-    cci_mpf_if fiu(.clk);
+    cci_mpf_if fiu(.clk(pClk));
 
+    // The CCI wires to MPF mapping connections have identical naming to
+    // the standard AFU.  The module exports an interface named "fiu".
     ccip_wires_to_mpf
       #(
         .REGISTER_INPUTS(0),
@@ -47,50 +49,113 @@ remaps those wires to a CCI-MPF object named fiu:
         )
       map_ifc(.*);
 
+
 The fiu object can be connected to MPF:
 
     //
-    // Put MPF between AFU and FIU.
+    // Instantiate MPF with the desired properties.
     //
-    cci_mpf_if afu(.clk);
+    cci_mpf_if afu(.clk(pClk));
 
     cci_mpf
       #(
+        // Should read responses be returned in the same order that
+        // the reads were requested?
         .SORT_READ_RESPONSES(1),
-        .PRESERVE_WRITE_MDATA(1)
+
+        // Should the Mdata from write requests be returned in write
+        // responses?  If the AFU is simply counting write responses
+        // and isn't consuming Mdata, then setting this to 0 eliminates
+        // the memory and logic inside MPF for preserving Mdata.
+        .PRESERVE_WRITE_MDATA(1),
+
+        // Enable virtual to physical translation?  When enabled, MPF
+        // accepts requests with either virtual or physical addresses.
+        // Virtual addresses are indicated by setting the
+        // addrIsVirtual flag in the MPF extended Tx channel
+        // request header.
+        .ENABLE_VTP(1),
+
+        // Should write/write and write/read ordering within a cache
+        // be enforced?  By default CCI makes no guarantees on the order
+        // in which operations to the same cache line return.  Setting
+        // this to 1 adds logic to filter reads and writes to ensure
+        // that writes retire in order and the reads correspond to the
+        // most recent write.
+        //
+        // ***  Even when set to 1, MPF guarantees order only within
+        // ***  a given virtual channel.  There is no guarantee of
+        // ***  order across virtual channels and no guarantee when
+        // ***  using eVC_VA, since it spreads requests across all
+        // ***  channels.  Synchronizing writes across virtual channels
+        // ***  can be accomplished only by requesting a write fence on
+        // ***  eVC_VA.  Syncronizing writes across virtual channels
+        // ***  and then reading back the same data requires both
+        // ***  requesting a write fence on eVC_VA and waiting for the
+        // ***  corresponding write fence response.
+        //
+        .ENFORCE_WR_ORDER(0),
+
+        // Address of the MPF feature header.  See comment above.
+        .DFH_MMIO_BASE_ADDR(MPF_DFH_MMIO_ADDR)
         )
       mpf
        (
-        .clk,
+        .clk(pClk),
         .fiu,
         .afu
         );
 
-The afu interface can then be connected to the user design, where afu_rx
-and afu_tx are standard CCI structs:
 
-    t_if_ccip_Rx afu_rx;
-    t_if_ccip_Tx afu_tx;
+The afu interface can then be connected to the user design:
 
+    // ====================================================================
+    //
+    //  Now CCI is exposed as an MPF interface through the object named
+    //  "afu".  Two primary strategies are available for connecting
+    //  a design to the interface:
+    //
+    //    (1) Use the MPF-provided constructor functions to generate
+    //        CCI request structures and pass them directly to MPF.
+    //        See, for example, cci_mpf_defaultReqHdrParams() and
+    //        cci_c0_genReqHdr() in cci_mpf_if_pkg.sv.
+    //
+    //    (1) Map "afu" back to standard CCI wires.  This is the strategy
+    //        used below to map an existing AFU to MPF.
+    //
+    // ====================================================================
+
+    //
+    // Convert MPF interfaces back to the standard CCI structures.
+    //
+    t_if_ccip_Rx mpf2af_sRxPort;
+    t_if_ccip_Tx af2mpf_sTxPort;
+
+    //
+    // The cci_mpf module has already registered the Rx wires heading
+    // toward the AFU, so wires are acceptable.
+    //
     always_comb
     begin
-        afu_rx.c0 = afu.c0Rx;
-        afu_rx.c1 = afu.c1Rx;
+        mpf2af_sRxPort.c0 = afu.c0Rx;
+        mpf2af_sRxPort.c1 = afu.c1Rx;
 
-        afu_rx.c0TxAlmFull = afu.c0TxAlmFull;
-        afu_rx.c1TxAlmFull = afu.c1TxAlmFull;
+        mpf2af_sRxPort.c0TxAlmFull = afu.c0TxAlmFull;
+        mpf2af_sRxPort.c1TxAlmFull = afu.c1TxAlmFull;
 
-        // Convert c0 header to MPF, request virtual to physical
-        // translation and preserve ordering within lines.
-        afu.c0Tx = cci_mpf_cvtC0TxFromBase(afu_tx.c0);
-        afu.c0Tx.hdr.ext.checkLoadStoreOrder = 1'b1;
-        afu.c0Tx.hdr.ext.addrIsVirtual = 1'b1;
+        afu.c0Tx = cci_mpf_cvtC0TxFromBase(af2mpf_sTxPort.c0);
+        if (cci_mpf_c0TxIsReadReq(afu.c0Tx))
+        begin
+            // Treat all addresses as virtual.
+            afu.c0Tx.hdr.ext.addrIsVirtual = 1'b1;
+        end
 
-        // Convert c1 header to MPF, request virtual to physical
-        // translation and preserve ordering within lines.
-        afu.c1Tx = cci_mpf_cvtC1TxFromBase(afu_tx.c1);
-        afu.c1Tx.hdr.ext.checkLoadStoreOrder = 1'b1;
-        afu.c1Tx.hdr.ext.addrIsVirtual = 1'b1;
+        afu.c1Tx = cci_mpf_cvtC1TxFromBase(af2mpf_sTxPort.c1);
+        if (cci_mpf_c1TxIsWriteReq(afu.c1Tx))
+        begin
+            // Treat all addresses as virtual.
+            afu.c1Tx.hdr.ext.addrIsVirtual = 1'b1;
+        end
 
-        afu.c2Tx = afu_tx.c2;
+        afu.c2Tx = af2mpf_sTxPort.c2;
     end

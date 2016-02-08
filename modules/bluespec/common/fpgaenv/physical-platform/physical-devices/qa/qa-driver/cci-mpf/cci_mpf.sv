@@ -64,6 +64,9 @@ module cci_mpf
     // terminate the feature list if the next address is 0.
     parameter DFH_MMIO_NEXT_ADDR = 0,
 
+    // Enable virtual to physical translation?
+    parameter ENABLE_VTP = 1,
+
     // Enforce write/write and write/read ordering with cache lines?
     parameter ENFORCE_WR_ORDER = 1,
 
@@ -138,8 +141,8 @@ module cci_mpf
       #(
         .DFH_MMIO_BASE_ADDR(DFH_MMIO_BASE_ADDR),
         .DFH_MMIO_NEXT_ADDR(DFH_MMIO_NEXT_ADDR),
-        .MPF_ENABLE_VTP(1),
-        .MPF_ENABLE_WRO(1)
+        .MPF_ENABLE_VTP(ENABLE_VTP),
+        .MPF_ENABLE_WRO(ENFORCE_WR_ORDER)
         )
       csr
        (
@@ -167,24 +170,40 @@ module cci_mpf
 
     cci_mpf_if stg3_fiu_virtual (.clk);
 
-    cci_mpf_shim_vtp
-      #(
-        // VTP needs to generate loads internally in order to walk the
-        // page table.  The reserved bit in Mdata is a location offered
-        // to the page table walker to tag internal loads.  The Mdata location
-        // is guaranteed to be zero on all requests flowing in to VTP
-        // from the AFU.  In the composition here, qa_shim_sort_responses
-        // provides this guarantee by rewriting Mdata as requests and
-        // responses as they flow in and out of the stack.
-        .RESERVED_MDATA_IDX(CCI_MDATA_WIDTH-2)
-        )
-      v_to_p
-       (
-        .clk,
-        .fiu(stg2_fiu_csrs),
-        .afu(stg3_fiu_virtual),
-        .csrs(mpf_csrs)
-        );
+    generate
+        if (ENABLE_VTP)
+        begin : vtp
+            cci_mpf_shim_vtp
+              #(
+                // VTP needs to generate loads internally in order to walk the
+                // page table.  The reserved bit in Mdata is a location offered
+                // to the page table walker to tag internal loads.  The Mdata
+                // location is guaranteed to be zero on all requests flowing
+                // in to VTP from the AFU.  In the composition here,
+                // qa_shim_sort_responses provides this guarantee by rewriting
+                // Mdata as requests and responses as they flow in and out
+                // of the stack.
+                .RESERVED_MDATA_IDX(CCI_MDATA_WIDTH-2)
+                )
+              v_to_p
+               (
+                .clk,
+                .fiu(stg2_fiu_csrs),
+                .afu(stg3_fiu_virtual),
+                .csrs(mpf_csrs)
+                );
+        end
+        else
+        begin : no_vtp
+            cci_mpf_shim_null
+              physical
+               (
+                .clk,
+                .fiu(stg2_fiu_csrs),
+                .afu(stg3_fiu_virtual)
+                );
+        end
+    endgenerate
 
 
     // ====================================================================
@@ -211,7 +230,7 @@ module cci_mpf
         else
         begin : no_wro
             cci_mpf_shim_null
-              filter
+              unordered
                (
                 .clk,
                 .fiu(stg3_fiu_virtual),
@@ -257,8 +276,6 @@ module cci_mpf
     //  Register responses to AFU. The stage is inserted for timing.
     //
     // ====================================================================
-
-    cci_mpf_if stg6_fiu_reg_rsp (.clk);
 
     cci_mpf_shim_buffer_fiu
       regRsp

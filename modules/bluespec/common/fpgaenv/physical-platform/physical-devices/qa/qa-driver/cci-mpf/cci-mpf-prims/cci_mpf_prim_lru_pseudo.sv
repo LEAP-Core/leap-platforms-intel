@@ -345,21 +345,12 @@ module cci_mpf_prim_lru_pseudo
             update1_idx_q <= update1_idx;
             update1_ref_q <= update1_ref;
 
-            // Consume read response for update.  Moving the pipeline
-            // conditionally allows updates to sit in the qq slot until
-            // a write cycle becomes available.
-            if (update1_en_q)
-            begin
-                update1_en_qq <= update1_en_q;
-                update1_idx_qq <= update1_idx_q;
-                update1_ref_qq <= update1_ref_q;
-                update1_cur_lru_qq <= rdata1;
-            end
-            else if (! lookupEn)
-            begin
-                // If a write for update was pending it completed this cycle
-                update1_en_qq <= 1'b0;
-            end
+            // Register read response to avoid block RAM read response ->
+            // block RAM write in a single cycle.
+            update1_en_qq <= update1_en_q;
+            update1_idx_qq <= update1_idx_q;
+            update1_ref_qq <= update1_ref_q;
+            update1_cur_lru_qq <= rdata1;
         end 
     end
 

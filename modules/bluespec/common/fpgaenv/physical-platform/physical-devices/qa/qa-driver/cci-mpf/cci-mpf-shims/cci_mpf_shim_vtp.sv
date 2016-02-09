@@ -251,7 +251,7 @@ module cci_mpf_shim_vtp
     //
 
     // Pipeline stage storage
-    localparam AFU_PIPE_LAST_STAGE = 4;
+    localparam AFU_PIPE_LAST_STAGE = 5;
     t_if_cci_mpf_c0_Tx c0_afu_pipe[0 : AFU_PIPE_LAST_STAGE];
     t_if_cci_mpf_c1_Tx c1_afu_pipe[0 : AFU_PIPE_LAST_STAGE];
 
@@ -645,11 +645,10 @@ module cci_mpf_shim_vtp_assoc
     // Read response.  We label registers in this pipeline relative to
     // the head of the flow.  The data is returned from the block RAM in
     // the second cycle, so we label the output tlb_rdata_qq to match
-    // other registered signals.  The register is tagged "keep" because
-    // fit would otherwise merge the next register stage into the
-    // block RAM logic, which has been causing timing problems.
+    // other registered signals.
     t_TLB_ENTRY tlb_rdata_qq[0 : 1][0 : NUM_TLB_SET_WAYS-1];
     t_TLB_ENTRY tlb_rdata_qqq[0 : 1][0 : NUM_TLB_SET_WAYS-1];
+    t_TLB_ENTRY tlb_rdata_qqqq[0 : 1][0 : NUM_TLB_SET_WAYS-1];
 
     genvar w;
     generate
@@ -712,9 +711,11 @@ module cci_mpf_shim_vtp_assoc
     logic did_lookup_q[0 : 1];
     logic did_lookup_qq[0 : 1];
     logic did_lookup_qqq[0 : 1];
+    logic did_lookup_qqqq[0 : 1];
     logic [$bits(lookupPageVA)-1 : 0] lookup_page_va_q[0 : 1];
     logic [$bits(lookupPageVA)-1 : 0] lookup_page_va_qq[0 : 1];
     logic [$bits(lookupPageVA)-1 : 0] lookup_page_va_qqq[0 : 1];
+    logic [$bits(lookupPageVA)-1 : 0] lookup_page_va_qqqq[0 : 1];
 
     // Record whether there was a lookup miss.  The result will be
     // consumed by the miss handler in a later section below.
@@ -734,8 +735,17 @@ module cci_mpf_shim_vtp_assoc
 
     t_TLB_IDX test_idx_qq[0 : 1];
     t_TLB_IDX test_idx_qqq[0 : 1];
+    t_TLB_IDX test_idx_qqqq[0 : 1];
     t_TLB_VIRTUAL_TAG test_tag_qq[0 : 1];
 
+    // The bit reduction of tag comparision is too involved to complete
+    // in a single cycle at the desired frequency.  This register holds
+    // the first stage of comparison, with each way's comparison reduced
+    // to as a a bitwise XOR. The consuming stage must simply NOR the bits
+    // together.
+    t_TLB_VIRTUAL_TAG xor_tag_qqq[0 : 1][NUM_TLB_SET_WAYS-1 : 0];
+
+    // Split target address into TLB tag and index.
     always_comb
     begin
         for (int p = 0; p < 2; p = p + 1)
@@ -744,7 +754,10 @@ module cci_mpf_shim_vtp_assoc
         end
     end
 
-    // Tag comparison stage
+    //
+    // Tag comparison stages
+    //
+
     always_ff @(posedge clk)
     begin
         for (int p = 0; p < 2; p = p + 1)
@@ -752,16 +765,40 @@ module cci_mpf_shim_vtp_assoc
             // Look for a match in each of the ways in the TLB set
             for (int way = 0; way < NUM_TLB_SET_WAYS; way = way + 1)
             begin
-                lookup_way_hit_vec[p][way] <=
-                    did_lookup_qq[p] &&
-                    (tlb_rdata_qq[p][way].tag == test_tag_qq[p]);
+                // Partial comparion of tags this stage.  The remainder
+                // of the bit reduction will complete in the next cycle.
+                xor_tag_qqq[p][way] <=
+                    tlb_rdata_qq[p][way].tag ^ test_tag_qq[p];
             end
 
             test_idx_qqq[p] <= test_idx_qq[p];
         end
     end
 
+
+    //
+    // Next stage: reduce XOR tag matching to a single bit
+    //
+
+    always_ff @(posedge clk)
+    begin
+        for (int p = 0; p < 2; p = p + 1)
+        begin
+            for (int way = 0; way < NUM_TLB_SET_WAYS; way = way + 1)
+            begin
+                // Last cycle did a partial comparison, leaving multiple
+                // bits per way that all must be 1 for a match.
+                lookup_way_hit_vec[p][way] <=
+                    did_lookup_qqq[p] && ~ (|(xor_tag_qqq[p][way]));
+            end
+        end
+    end
+
+
+    //
     // Final stage, follows tag comparison
+    //
+
     always_comb
     begin
         // Set result for both ports (one for reads one for writes)
@@ -771,7 +808,7 @@ module cci_mpf_shim_vtp_assoc
             lookupValid[p] = |(lookup_way_hit_vec[p]);
 
             // Flag misses.
-            lookup_page_miss[p] = did_lookup_qqq[p] && ! lookupValid[p];
+            lookup_page_miss[p] = did_lookup_qqqq[p] && ! lookupValid[p];
 
             // Get the physical page index from the chosen way
             lookupRspPagePA[p] = 'x;
@@ -783,7 +820,7 @@ module cci_mpf_shim_vtp_assoc
                     lookup_way_hit[p] = way;
 
                     // Get the physical page index
-                    lookupRspPagePA[p] = tlb_rdata_qqq[p][way].idx;
+                    lookupRspPagePA[p] = tlb_rdata_qqqq[p][way].idx;
                     break;
                 end
             end
@@ -800,16 +837,19 @@ module cci_mpf_shim_vtp_assoc
         for (int p = 0; p < 2; p = p + 1)
         begin
             tlb_rdata_qqq[p] <= tlb_rdata_qq[p];
+            tlb_rdata_qqqq[p] <= tlb_rdata_qqq[p];
 
             lookup_page_va_q[p] <= lookupPageVA[p];
             lookup_page_va_qq[p] <= lookup_page_va_q[p];
             lookup_page_va_qqq[p] <= lookup_page_va_qq[p];
+            lookup_page_va_qqqq[p] <= lookup_page_va_qqq[p];
 
             if (reset)
             begin
                 did_lookup_q[p] <= 0;
                 did_lookup_qq[p] <= 0;
                 did_lookup_qqq[p] <= 0;
+                did_lookup_qqqq[p] <= 0;
             end
             else
             begin
@@ -818,6 +858,7 @@ module cci_mpf_shim_vtp_assoc
                 did_lookup_q[p] <= lookupEn[p];
                 did_lookup_qq[p] <= did_lookup_q[p];
                 did_lookup_qqq[p] <= did_lookup_qq[p];
+                did_lookup_qqqq[p] <= did_lookup_qqq[p];
             end 
         end
     end
@@ -883,6 +924,9 @@ module cci_mpf_shim_vtp_assoc
     // Miss channel arbiter -- used for fairness
     logic last_miss_channel;
 
+    logic lru_rdy;
+    logic lru_lookup_rsp_rdy;
+
     always_ff @(posedge clk)
     begin
         if (reset)
@@ -908,7 +952,7 @@ module cci_mpf_shim_vtp_assoc
                         if (DEBUG_MESSAGES)
                         begin
                             $display("TLB: Lookup for miss chan 0, VA 0x%x",
-                                     {lookup_page_va_qqq[0], CCI_PT_PAGE_OFFSET_BITS'(0)});
+                                     {lookup_page_va_qqqq[0], CCI_PT_PAGE_OFFSET_BITS'(0)});
                         end
                     end
                     else
@@ -918,7 +962,7 @@ module cci_mpf_shim_vtp_assoc
                         if (DEBUG_MESSAGES && lookup_page_miss[1])
                         begin
                             $display("TLB: Lookup for miss chan 1, VA 0x%x",
-                                     {lookup_page_va_qqq[1], CCI_PT_PAGE_OFFSET_BITS'(0)});
+                                     {lookup_page_va_qqqq[1], CCI_PT_PAGE_OFFSET_BITS'(0)});
                         end
                     end
 
@@ -936,7 +980,7 @@ module cci_mpf_shim_vtp_assoc
                     for (int c = 0; c < 2; c = c + 1)
                     begin
                         {pte_va_tag_vec[c], pte_hash_idx_vec[c]} <=
-                            lookup_page_va_qqq[c];
+                            lookup_page_va_qqqq[c];
 
                         // Why the double application of types to lookup_page_va?
                         // The hash index isolates the proper bits of the page
@@ -946,7 +990,7 @@ module cci_mpf_shim_vtp_assoc
                         // and overflow space to which hash entries can point
                         // in order to construct longer linked lists.)
                         pte_idx[c] <=
-                            t_PTE_IDX'(t_PTE_VA_HASH_IDX'(lookup_page_va_qqq[c]));
+                            t_PTE_IDX'(t_PTE_VA_HASH_IDX'(lookup_page_va_qqqq[c]));
                     end
                 end
 
@@ -1065,13 +1109,19 @@ module cci_mpf_shim_vtp_assoc
               STATE_TLB_REQ_LRU:
                 begin
                     // Request LRU state to pick a victim
-                    state <= STATE_TLB_RECV_LRU;
+                    if (lru_rdy)
+                    begin
+                        state <= STATE_TLB_RECV_LRU;
+                    end
                 end
 
               STATE_TLB_RECV_LRU:
                 begin
                     // Receive the response from the LRU lookup
-                    state <= STATE_TLB_PTE_MATCH;
+                    if (lru_lookup_rsp_rdy)
+                    begin
+                        state <= STATE_TLB_PTE_MATCH;
+                    end
                 end
 
               STATE_TLB_PTE_MATCH:
@@ -1142,14 +1192,9 @@ module cci_mpf_shim_vtp_assoc
     // Port 1 is used for updates in addition to lookups.
     assign lookupRdy[1] = initialized && (state != STATE_TLB_PTE_MATCH);
 
-    // LRU replacement
-    logic [NUM_TLB_SET_WAYS-1 : 0] lru_lookup_vec_rsp;
-    logic [NUM_TLB_SET_WAYS-1 : 0] lru_lookup_vec_rsp_q;
-
-    always_ff @(posedge clk)
-    begin
-        lru_lookup_vec_rsp_q <= lru_lookup_vec_rsp;
-    end
+    // LRU replacement.  Determine which way to replace when inserting
+    // a new translation in the TLB.
+    logic [NUM_TLB_SET_WAYS-1 : 0] lru_repl_vec;
 
     always_comb
     begin
@@ -1166,12 +1211,14 @@ module cci_mpf_shim_vtp_assoc
             tlb_wdata.idx = found_pte.pIdx;
         end
 
-        // Pick the LRU way
+        // Pick the LRU way when writing.  This happens only during
+        // initialization and when a new translation is being added to
+        // the TLB:  state == STATE_TLB_PTE_MATCH.
         for (int way = 0; way < NUM_TLB_SET_WAYS; way = way + 1)
         begin
             tlb_wen[way] = ! initialized ||
                            ((state == STATE_TLB_PTE_MATCH) &&
-                            lru_lookup_vec_rsp_q[way]);
+                            lru_repl_vec[way]);
         end
 
         // Address is the update address if writing and the read address
@@ -1206,7 +1253,7 @@ module cci_mpf_shim_vtp_assoc
                 if (lookupValid[p])
                 begin
                     $display("TLB: Hit chan %0d, idx %0d, way %0d, PA 0x%x",
-                             p, test_idx_qqq[p], lookup_way_hit[p],
+                             p, test_idx_qqqq[p], lookup_way_hit[p],
                              {lookupRspPagePA[p], CCI_PT_PAGE_OFFSET_BITS'(0)});
                 end
             end
@@ -1237,8 +1284,19 @@ module cci_mpf_shim_vtp_assoc
     //
     // ====================================================================
 
+    // Do a lookup in STATE_TLB_REQ_LRU
     logic lru_lookup_en;
     assign lru_lookup_en = (state == STATE_TLB_REQ_LRU);
+
+    // Register the response when it arrives
+    logic [NUM_TLB_SET_WAYS-1 : 0] lru_lookup_vec_rsp;
+    always_ff @(posedge clk)
+    begin
+        if (lru_lookup_rsp_rdy)
+        begin
+            lru_repl_vec <= lru_lookup_vec_rsp;
+        end
+    end
 
     cci_mpf_prim_lru_pseudo
       #(
@@ -1249,15 +1307,16 @@ module cci_mpf_shim_vtp_assoc
         (
          .clk,
          .reset,
-         .rdy(),
+         .rdy(lru_rdy),
          .lookupIdx(insert_idx),
          .lookupEn(lru_lookup_en),
          .lookupVecRsp(lru_lookup_vec_rsp),
          .lookupRsp(),
-         .refIdx0(test_idx_qqq[0]),
+         .lookupRspRdy(lru_lookup_rsp_rdy),
+         .refIdx0(test_idx_qqqq[0]),
          .refWayVec0(lookup_way_hit_vec[0]),
          .refEn0(lookupValid[0]),
-         .refIdx1(test_idx_qqq[1]),
+         .refIdx1(test_idx_qqqq[1]),
          .refWayVec1(lookup_way_hit_vec[1]),
          .refEn1(lookupValid[1])
          );

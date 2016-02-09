@@ -39,7 +39,9 @@
 // the code makes a best effort to update the vector when requested.
 // Lookup requests are always processed correctly.  The assumption is
 // there are few lookups compared to updates and that sampling the
-// updates instead of recording each one is sufficient.
+// updates instead of recording each one is sufficient.  A fully accurate
+// implementation would require one block RAM for each way.  This
+// version requires only one block RAM.
 //
 
 module cci_mpf_prim_lru_pseudo
@@ -67,6 +69,7 @@ module cci_mpf_prim_lru_pseudo
     // other is an index.
     output logic [N_WAYS-1 : 0] lookupVecRsp,
     output logic [$clog2(N_WAYS)-1 : 0] lookupRsp,
+    output logic lookupRspRdy,
 
     // Port 0 update.
     input  logic [$clog2(N_ENTRIES)-1 : 0] refIdx0,
@@ -82,7 +85,6 @@ module cci_mpf_prim_lru_pseudo
 
     typedef logic [$clog2(N_ENTRIES)-1 : 0] t_ENTRY_IDX;
     typedef logic [N_WAYS-1 : 0] t_WAY_VEC;
-
 
     //
     // Pseudo-LRU update function.
@@ -268,27 +270,49 @@ module cci_mpf_prim_lru_pseudo
     t_WAY_VEC update1_ref_q;
     t_WAY_VEC update1_ref_qq;
 
-    // Current state into which new reference is added
+    // Current state into which new reference is added.  Also holds the
+    // buffered state of table reads for LRU lookup.
     t_WAY_VEC update1_cur_lru_qq;
 
     // Compute the lookup response
+    t_WAY_VEC lookup_vec_rsp;
+    t_ENTRY_IDX lookup_rsp;
+
     always_comb
     begin
-        lookupVecRsp = t_WAY_VEC'(0);
-        lookupRsp = 'x;
+        lookup_vec_rsp = t_WAY_VEC'(0);
+        lookup_rsp = 'x;
 
         for (int w = 0; w < N_WAYS; w = w + 1)
         begin
-            if (rdata1[w] == 0)
+            if (update1_cur_lru_qq[w] == 0)
             begin
                 // One hot vector response
-                lookupVecRsp[w] = 1;
+                lookup_vec_rsp[w] = 1;
                 // Index response
-                lookupRsp = w;
+                lookup_rsp = w;
                 break;
             end
         end
     end
+
+    //
+    // Delay from lookup request to response is 3 cycles.  The first reads
+    // the table, the second registers the table read response, the third
+    // registers the LRU computation.
+    //
+    logic lookup_en_q;
+    logic lookup_en_qq;
+    always_ff @(posedge clk)
+    begin
+        lookup_en_q <= lookupEn;
+        lookup_en_qq <= lookup_en_q;
+
+        lookupRspRdy <= lookup_en_qq;
+        lookupRsp <= lookup_rsp;
+        lookupVecRsp <= lookup_vec_rsp;
+    end
+
 
     // Lookup request has priority of writes
     assign wen1 = update1_en_qq && ! lookupEn &&

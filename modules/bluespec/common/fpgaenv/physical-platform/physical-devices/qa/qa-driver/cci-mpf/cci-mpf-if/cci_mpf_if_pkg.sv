@@ -389,6 +389,7 @@ package cci_mpf_if_pkg;
         h.base.mdata = mdata;
         h.base.vc_sel = params.vc_sel;
         h.base.cl_len = params.cl_len;
+        h.base.sop = 1'b1;
 
         return h;
     endfunction

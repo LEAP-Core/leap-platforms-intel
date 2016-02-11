@@ -72,11 +72,7 @@ module cci_mpf_shim_rsp_order
 
     // Maximum number of in-flight reads and writes. (Per category - the
     // total number of in-flight operations is 2 * N_ROB_ENTRIES.)
-    parameter N_ROB_ENTRIES = 256,
-
-    // Synchronize request channels if non-zero. Channel synchronization is
-    // required to preserve load/store ordering.
-    parameter SYNC_REQ_CHANNELS = 1
+    parameter N_ROB_ENTRIES = 256
     )
    (
     input  logic clk,
@@ -110,30 +106,10 @@ module cci_mpf_shim_rsp_order
     //  it honors the almost full semantics. No other buffering is
     //  required.
     //
-    //  When SYNC_REQ_CHANNELS is true, Assert almost full if either
-    //  request channel is filling so that the two channels stay
-    //  synchronized. This maintains load/store order.
-    //
     // ====================================================================
 
-    logic c0_TxAlmFull;
-    assign c0_TxAlmFull = fiu.c0TxAlmFull || ! rd_rob_notFull;
-
-    logic c1_TxAlmFull;
-    assign c1_TxAlmFull = fiu.c1TxAlmFull || ! wr_heap_notFull;
-
-    generate
-        if (SYNC_REQ_CHANNELS == 0)
-        begin
-            assign afu.c0TxAlmFull = c0_TxAlmFull;
-            assign afu.c1TxAlmFull = c1_TxAlmFull;
-        end
-        else
-        begin
-            assign afu.c0TxAlmFull = c0_TxAlmFull || c1_TxAlmFull;
-            assign afu.c1TxAlmFull = c0_TxAlmFull || c1_TxAlmFull;
-        end
-    endgenerate
+    assign afu.c0TxAlmFull = fiu.c0TxAlmFull || ! rd_rob_notFull;
+    assign afu.c1TxAlmFull = fiu.c1TxAlmFull || ! wr_heap_notFull;
 
 
     // ====================================================================

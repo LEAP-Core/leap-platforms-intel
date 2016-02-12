@@ -648,50 +648,39 @@ module cci_mpf_shim_vtp_assoc
     // other registered signals.
     t_TLB_ENTRY tlb_rdata[0 : 1][0 : NUM_TLB_SET_WAYS-1];
 
+    // Each way is ready at the same time since the init logic is the same
+    logic tlb_rdy[0 : NUM_TLB_SET_WAYS-1];
+    logic initialized;
+    assign initialized = tlb_rdy[0];
+
     genvar w;
     generate
         for (w = 0; w < NUM_TLB_SET_WAYS; w = w + 1)
         begin: gen_tlb
-            cci_mpf_prim_dualport_ram
+            cci_mpf_prim_dualport_ram_init
               #(
                 .N_ENTRIES(NUM_TLB_SETS),
                 .N_DATA_BITS($bits(t_TLB_ENTRY)),
                 .N_OUTPUT_REG_STAGES(1)
                 )
-              tlb(.clk0(clk),
-                  .addr0(tlb_addr[0]),
-                  .wen0(1'b0),
-                  .wdata0('x),
-                  .rdata0(tlb_rdata[0][w]),
-                  .clk1(clk),
-                  .addr1(tlb_addr[1]),
-                  .wen1(tlb_wen[w]),
-                  .wdata1(tlb_wdata),
-                  .rdata1(tlb_rdata[1][w])
-                  );
+              tlb
+               (
+                .reset,
+                .rdy(tlb_rdy[w]),
+
+                .clk0(clk),
+                .addr0(tlb_addr[0]),
+                .wen0(1'b0),
+                .wdata0('x),
+                .rdata0(tlb_rdata[0][w]),
+                .clk1(clk),
+                .addr1(tlb_addr[1]),
+                .wen1(tlb_wen[w]),
+                .wdata1(tlb_wdata),
+                .rdata1(tlb_rdata[1][w])
+                );
         end
     endgenerate
-
-
-    //
-    // Initialize the TLB.  The actual write will happen in a rule later
-    // that arbitrates among read and write requests for port 1.
-    //
-    logic [$bits(t_TLB_IDX) : 0] init_idx;
-    logic initialized;
-    assign initialized = init_idx[$high(init_idx)];
-
-    always_ff @(posedge clk)
-    begin
-        if (reset)
-        begin
-            init_idx <= 0;
-        end
-        else if (! initialized)
-        begin
-            init_idx <= init_idx + 1;
-        end
-    end
 
 
     // ====================================================================
@@ -1214,36 +1203,22 @@ module cci_mpf_shim_vtp_assoc
 
     always_comb
     begin
-        if (! initialized)
-        begin
-            // Initialization loop
-            tlb_wdata.tag = 0;
-            tlb_wdata.idx = 'x;
-        end
-        else
-        begin
-            // TLB update -- write virtual address TAG and physical page index.
-            tlb_wdata.tag = insert_tag;
-            tlb_wdata.idx = found_pte.pIdx;
-        end
+        // TLB update -- write virtual address TAG and physical page index.
+        tlb_wdata.tag = insert_tag;
+        tlb_wdata.idx = found_pte.pIdx;
 
         // Pick the LRU way when writing.  This happens only during
         // initialization and when a new translation is being added to
         // the TLB:  state == STATE_TLB_PTE_MATCH.
         for (int way = 0; way < NUM_TLB_SET_WAYS; way = way + 1)
         begin
-            tlb_wen[way] = ! initialized ||
-                           ((state == STATE_TLB_PTE_MATCH) &&
+            tlb_wen[way] = ((state == STATE_TLB_PTE_MATCH) &&
                             lru_repl_vec[way]);
         end
 
         // Address is the update address if writing and the read address
         // otherwise.
-        if (! initialized)
-        begin
-            tlb_addr[1] = t_TLB_IDX'(init_idx);
-        end
-        else if (state == STATE_TLB_PTE_MATCH)
+        if (state == STATE_TLB_PTE_MATCH)
         begin
             tlb_addr[1] = t_TLB_IDX'(insert_idx);
         end

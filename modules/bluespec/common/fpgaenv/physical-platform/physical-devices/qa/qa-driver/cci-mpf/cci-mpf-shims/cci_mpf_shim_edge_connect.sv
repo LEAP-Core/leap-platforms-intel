@@ -84,7 +84,17 @@ module cci_mpf_shim_edge_connect
     t_cci_clData wr_heap_data;
 
     logic wr_heap_deq_en;
+    logic wr_heap_deq_en_q;
     t_write_heap_idx wr_heap_deq_idx;
+    t_write_heap_idx wr_heap_deq_idx_q;
+
+    // Dequeue delayed one cycle for timing
+    always_ff @(posedge clk)
+    begin
+        wr_heap_deq_en_q <= wr_heap_deq_en;
+        wr_heap_deq_idx_q <= wr_heap_deq_idx;
+    end
+
 
     cci_mpf_prim_heap
       #(
@@ -109,8 +119,8 @@ module cci_mpf_shim_edge_connect
         // field that would have held the data itself.
         .readReq(wr_heap_deq_idx),
         .readRsp(wr_heap_data),
-        .free(wr_heap_deq_en),
-        .freeIdx(wr_heap_deq_idx)
+        .free(wr_heap_deq_en_q),
+        .freeIdx(wr_heap_deq_idx_q)
         );
 
 
@@ -165,116 +175,111 @@ module cci_mpf_shim_edge_connect
     // a synthesized request to complete a multi-beat write or it is
     // a new request from the FIFO.
     //
-    t_ccip_clNum fiu_wr_beats_rem;
-    logic fiu_c1Tx_sop;
-    t_write_heap_idx fiu_c1Tx_heap_idx;
+    t_ccip_clNum stg1_fiu_wr_beats_rem;
+    logic stg1_fiu_c1Tx_sop;
+    logic stg1_packet_done;
+    logic stg1_packet_is_new;
+    logic wr_heap_data_rdy;
+    logic wr_req_may_fire;
+
+    // Pipeline stages
+    t_if_cci_mpf_c1_Tx stg1_fiu_c1Tx;
+    t_if_cci_mpf_c1_Tx stg2_fiu_c1Tx;
+    t_if_cci_mpf_c1_Tx stg3_fiu_c1Tx;
 
     always_comb
     begin
-        // Read from the write data heap if there is a request to process.
-        wr_heap_deq_en = ! fiu_edge.c1TxAlmFull &&
-                         fiu_c1Tx_not_empty &&
-                         cci_mpf_c1TxIsWriteReq(fiu_c1Tx_first);
+        wr_req_may_fire = ! fiu_edge.c1TxAlmFull && wr_heap_data_rdy;
 
-        // Dequeue the request from the FIFO if processing is complete.
         // Processing is complete when all beats have been emitted.
-        fiu_c1Tx_deq = ! fiu_edge.c1TxAlmFull &&
-                       fiu_c1Tx_not_empty &&
-                       ((fiu_wr_beats_rem == 1) ||
-                        (fiu_c1Tx_sop &&
-                         (fiu_c1Tx_first.hdr.base.cl_len == eCL_LEN_1)));
+        stg1_packet_done = wr_req_may_fire && (stg1_fiu_wr_beats_rem == 0);
 
-        // What index should be read from the write data heap?  If starting
-        // a new packet then use the address from the head of the incoming
-        // request FIFO.  If continuing an existing packet use the previous
-        // index + 1.
-        wr_heap_deq_idx =
-            (fiu_c1Tx_sop ? t_write_heap_idx'(fiu_c1Tx_first.data) :
-                            fiu_c1Tx_heap_idx);
+        // Read from the write data heap if there is a write request to process.
+        wr_heap_deq_en = wr_req_may_fire && cci_mpf_c1TxIsWriteReq(stg1_fiu_c1Tx);
+
+        // Take the next request from the buffering FIFO when the current
+        // packet is done or there is no packet being processed.
+        fiu_c1Tx_deq = fiu_c1Tx_not_empty &&
+                       (stg1_packet_done || ! cci_mpf_c1TxIsValid(stg1_fiu_c1Tx));
     end
 
-    always_ff @(posedge clk)
-    begin
-        if (reset)
-        begin
-            fiu_c1Tx_sop <= 1'b1;
-            fiu_wr_beats_rem <= 1'b0;
-        end
-        else
-        begin
-            if (fiu_c1Tx_deq)
-            begin
-                // Finished current request.  Start a new one next cycle.
-                fiu_c1Tx_sop <= 1'b1;
-            end
-            else if (wr_heap_deq_en)
-            begin
-                // In the middle of a multi-beat request
-                fiu_c1Tx_sop <= 1'b0;
-            end
-
-            // Update count of packets remaining
-            if (wr_heap_deq_en)
-            begin
-                if (fiu_c1Tx_sop)
-                begin
-                    fiu_wr_beats_rem <= fiu_c1Tx_first.hdr.base.cl_len;
-                end
-                else
-                begin
-                    fiu_wr_beats_rem <= fiu_wr_beats_rem - 1;
-                end
-            end
-
-            // Record next write data heap index in case of multi-beat packets
-            fiu_c1Tx_heap_idx <= wr_heap_deq_idx + 1;
-        end
-    end
-
-
-    // Reading the write data from block RAM takes a couple cycles.
-    t_if_cci_mpf_c1_Tx fiu_c1Tx;
-    t_if_cci_mpf_c1_Tx fiu_c1Tx_q;
-    t_if_cci_mpf_c1_Tx fiu_c1Tx_qq;
-
-    // Generate the header for a write.  The header comes from the incoming
-    // FIFO and the sop field is cleared for everything but the first beat
-    // in multi-beat writes.
-    always_comb
-    begin
-        fiu_c1Tx = fiu_c1Tx_first;
-        fiu_c1Tx.hdr.base.sop = fiu_c1Tx_sop;
-    end
 
     // Pipeline c1 Tx requests, waiting for heap data.
     always_ff @(posedge clk)
     begin
         if (reset)
         begin
-            fiu_c1Tx_q <= cci_c1Tx_clearValids();
-            fiu_c1Tx_qq <= cci_c1Tx_clearValids();
+            stg1_fiu_c1Tx_sop <= 1'b1;
+            stg1_fiu_wr_beats_rem <= 1'b0;
+
+            stg1_packet_is_new <= 1'b0;
+            stg1_fiu_c1Tx <= cci_c1Tx_clearValids();
+            stg2_fiu_c1Tx <= cci_c1Tx_clearValids();
+            stg3_fiu_c1Tx <= cci_c1Tx_clearValids();
         end
         else
         begin
-            if (wr_heap_deq_en || fiu_c1Tx_deq)
+            stg1_packet_is_new <= fiu_c1Tx_deq;
+
+            // Head of the pipeline
+            if (fiu_c1Tx_deq)
+            begin
+                // Pipeline is moving and a new request is available
+                stg1_fiu_c1Tx <= fiu_c1Tx_first;
+
+                // The heap data for the SOP is definitely available
+                // since it arrived with the header.
+                stg1_fiu_c1Tx_sop <= 1'b1;
+                stg1_fiu_wr_beats_rem <= fiu_c1Tx_first.hdr.base.cl_len;
+
+                wr_heap_data_rdy <= cci_mpf_c1TxIsValid(fiu_c1Tx_first);
+                wr_heap_deq_idx <= t_write_heap_idx'(fiu_c1Tx_first.data);
+            end
+            else if (stg1_packet_done)
+            begin
+                // Pipeline is moving but no new request is available
+                stg1_fiu_c1Tx <= cci_c1Tx_clearValids();
+                wr_heap_data_rdy <= 1'b0;
+            end
+            else if (wr_heap_deq_en)
+            begin
+                // In the middle of a multi-beat request
+                stg1_fiu_c1Tx_sop <= 1'b0;
+                stg1_fiu_wr_beats_rem <= stg1_fiu_wr_beats_rem - 1;
+
+                wr_heap_deq_idx <= wr_heap_deq_idx + 1;
+                wr_heap_data_rdy <=
+                    ((wr_heap_deq_idx + t_write_heap_idx'(1)) != wr_heap_enq_idx);
+            end
+            else
+            begin
+                wr_heap_data_rdy <=
+                    cci_mpf_c1TxIsValid(stg1_fiu_c1Tx) &&
+                    (wr_heap_deq_idx != wr_heap_enq_idx);
+            end
+
+            if (wr_req_may_fire)
             begin
                 // Write request this cycle
-                fiu_c1Tx_q <= fiu_c1Tx;
+                stg2_fiu_c1Tx <= stg1_fiu_c1Tx;
+                // SOP set only first first beat in a multi-beat packet
+                stg2_fiu_c1Tx.hdr.base.sop <= stg1_fiu_c1Tx_sop;
             end
             else
             begin
                 // Nothing starting this cycle
-                fiu_c1Tx_q <= cci_c1Tx_clearValids();
+                stg2_fiu_c1Tx <= cci_c1Tx_clearValids();
             end
 
-            fiu_c1Tx_qq <= fiu_c1Tx_q;
+            stg3_fiu_c1Tx <= stg2_fiu_c1Tx;
         end
     end
 
-    // Merge data with request
+
+    // Merge FIU-bound data with request
     always_comb
     begin
-        fiu_edge.c1Tx = fiu_c1Tx_qq;
+        fiu_edge.c1Tx = stg3_fiu_c1Tx;
         fiu_edge.c1Tx.data = wr_heap_data;
     end
 
@@ -312,7 +317,6 @@ module cci_mpf_shim_edge_connect
                          (afu_edge.c1Tx.hdr.base.sop ||
                           (afu_edge.c1Tx.hdr.base.cl_len == eCL_LEN_1));
     end
-
 
 
     //

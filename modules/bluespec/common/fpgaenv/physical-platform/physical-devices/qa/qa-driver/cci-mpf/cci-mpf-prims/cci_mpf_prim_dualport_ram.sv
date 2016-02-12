@@ -112,3 +112,86 @@ module cci_mpf_prim_dualport_ram
     endgenerate
 
 endmodule // cci_mpf_prim_dualport_ram
+
+
+//
+// Dual port RAM initialized with a constant on reset.
+//
+module cci_mpf_prim_dualport_ram_init
+  #(
+    parameter N_ENTRIES = 32,
+    parameter N_DATA_BITS = 64,
+    // Number of extra stages of output register buffering to add
+    parameter N_OUTPUT_REG_STAGES = 0,
+
+    parameter INIT_VALUE = N_DATA_BITS'(0)
+    )
+   (
+    input  logic reset,
+    // Goes high after initialization complete and stays high.
+    output logic rdy,
+
+    input  logic clk0,
+    input  logic [$clog2(N_ENTRIES)-1 : 0] addr0,
+    input  logic wen0,
+    input  logic [N_DATA_BITS-1 : 0] wdata0,
+    output logic [N_DATA_BITS-1 : 0] rdata0,
+
+    input  logic clk1,
+    input  logic [$clog2(N_ENTRIES)-1 : 0] addr1,
+    input  logic wen1,
+    input  logic [N_DATA_BITS-1 : 0] wdata1,
+    output logic [N_DATA_BITS-1 : 0] rdata1
+    );
+
+    logic [$clog2(N_ENTRIES)-1 : 0] addr1_local;
+    logic wen1_local;
+    logic [N_DATA_BITS-1 : 0] wdata1_local;
+
+    cci_mpf_prim_dualport_ram
+      #(
+        .N_ENTRIES(N_ENTRIES),
+        .N_DATA_BITS(N_DATA_BITS),
+        .N_OUTPUT_REG_STAGES(N_OUTPUT_REG_STAGES)
+        )
+      ram
+       (
+        .clk0,
+        .addr0,
+        .wen0,
+        .wdata0,
+        .rdata0,
+
+        .clk1,
+        .addr1(addr1_local),
+        .wen1(wen1_local),
+        .wdata1(wdata1_local),
+        .rdata1
+        );
+
+
+    //
+    // Initialization loop
+    //
+
+    logic [$clog2(N_ENTRIES)-1 : 0] addr1_init;
+
+    assign addr1_local = rdy ? addr1 : addr1_init;
+    assign wen1_local = rdy ? wen1 : 1'b1;
+    assign wdata1_local = rdy ? wdata1 : INIT_VALUE;
+
+    always_ff @(posedge clk1)
+    begin
+        if (reset)
+        begin
+            rdy <= 1'b0;
+            addr1_init <= 0;
+        end
+        else if (! rdy)
+        begin
+            addr1_init <= addr1_init + 1;
+            rdy <= &(addr1_init);
+        end
+    end
+
+endmodule // cci_mpf_prim_dualport_ram_init

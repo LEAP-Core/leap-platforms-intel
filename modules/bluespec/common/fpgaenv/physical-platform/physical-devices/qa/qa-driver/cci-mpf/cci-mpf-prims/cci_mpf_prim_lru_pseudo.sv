@@ -118,13 +118,16 @@ module cci_mpf_prim_lru_pseudo
     logic wen1;
     t_WAY_VEC rdata1;
 
-    cci_mpf_prim_dualport_ram
+    cci_mpf_prim_dualport_ram_init
       #(
         .N_ENTRIES(N_ENTRIES),
         .N_DATA_BITS($bits(t_WAY_VEC))
         )
       lru_data
         (
+         .reset,
+         .rdy,
+
          .clk0(clk),
          .addr0,
          .wen0,
@@ -136,30 +139,6 @@ module cci_mpf_prim_lru_pseudo
          .wdata1,
          .rdata1
          );
-
-
-    // ====================================================================
-    //
-    //   Initialization logic.  Port 0 will use it.
-    //
-    // ====================================================================
-
-    logic [$clog2(N_ENTRIES) : 0] init_idx;
-    logic initialized;
-    assign initialized = init_idx[$high(init_idx)];
-    assign rdy = initialized;
-
-    always_ff @(posedge clk)
-    begin
-        if (reset)
-        begin
-            init_idx <= 0;
-        end
-        else if (! initialized)
-        begin
-            init_idx <= init_idx + 1;
-        end
-    end
 
 
     // ====================================================================
@@ -200,21 +179,11 @@ module cci_mpf_prim_lru_pseudo
         wdata0 = 'x;
         wen0 = 1'b0;
 
-        update0_en  = refEn0;
+        update0_en  = refEn0 && rdy;
         update0_idx = refIdx0;
         update0_ref = refWayVec0;
 
-        if (! initialized)
-        begin
-            // Initializing
-            addr0 = t_ENTRY_IDX'(init_idx);
-            wdata0 = t_WAY_VEC'(0);
-            wen0 = 1'b1;
-
-            // No new update can start since can't read for update
-            update0_en = 1'b0;
-        end
-        else if (update0_en_qq)
+        if (update0_en_qq)
         begin
             // Updating
             addr0 = update0_idx_qq;
@@ -328,7 +297,7 @@ module cci_mpf_prim_lru_pseudo
         addr1 = refIdx1;
         wdata1 = 'x;
 
-        update1_en  = refEn1 && initialized;
+        update1_en  = refEn1 && rdy;
         update1_idx = refIdx1;
         update1_ref = refWayVec1;
 

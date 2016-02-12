@@ -235,7 +235,7 @@ module cci_mpf_shim_rsp_order
             // Read responses are sorted.  Allocate a ROB as
             // a reorder buffer.
             //
-            cci_mpf_prim_rob_obuf
+            cci_mpf_prim_rob
               #(
                 .N_ENTRIES(N_ROB_ENTRIES),
                 .N_DATA_BITS(CCI_CLDATA_WIDTH),

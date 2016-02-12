@@ -322,19 +322,33 @@ module cci_mpf_shim_vtp
     // proceed.
     logic c1_block_wrfence;
 
+    logic c1_afu_pipe_has_valid;
+    logic c1_afu_pipe_has_valid_next;
+
+    // Block if the next request is a WrFence and there is a pending write
+    assign c1_block_wrfence = c1_afu_pipe_has_valid &&
+                              cci_mpf_c1TxIsWriteFenceReq(afu_buf.c1Tx);
+
     always_comb
     begin
-        c1_block_wrfence = 1'b0;
+        c1_afu_pipe_has_valid_next = 1'b0;
 
-        // Is there something in the pipeline?
         for (int i = 0; i <= AFU_PIPE_LAST_STAGE; i = i + 1)
         begin
-            c1_block_wrfence = c1_block_wrfence || c1_afu_pipe[i].valid;
+            c1_afu_pipe_has_valid_next = c1_afu_pipe_has_valid_next ||
+                                         c1_afu_pipe[i].valid;
         end
+    end
 
-        // Is the next request a WrFence?
-        c1_block_wrfence = c1_block_wrfence &&
-                           cci_mpf_c1TxIsWriteFenceReq(afu_buf.c1Tx);
+    always_ff @(posedge clk)
+    begin
+        // Use the conservative test here that afu_buf.c1Tx is a write
+        // instead of the real test that deqC1Tx fired since afu_buf.c1Tx
+        // has a shorter dependence path and correctly predicts whether
+        // the next request after afu_buf.c1Tx should block if it is a
+        // WrFence.
+        c1_afu_pipe_has_valid <= c1_afu_pipe_has_valid_next ||
+                                 cci_mpf_c1TxIsWriteReq(afu_buf.c1Tx);
     end
 
 
@@ -460,7 +474,11 @@ module cci_mpf_shim_vtp
     end
 
     // Channel 0 (read) is either client requests or reads for TLB misses
-    assign fiu.c0Tx = cci_mpf_genC0TxReadReq(c0_req_hdr, c0_fwd_req || tlbReadIdxEn);
+    always_ff @(posedge clk)
+    begin
+        fiu.c0Tx <= cci_mpf_genC0TxReadReq(c0_req_hdr,
+                                           c0_fwd_req || tlbReadIdxEn);
+    end
 
     // Channel 1 request logic
     t_cci_mpf_c1_ReqMemHdr c1_req_hdr;
@@ -483,15 +501,15 @@ module cci_mpf_shim_vtp
 
     // Update channel 1 header with translated address (writes) or pass
     // through original request (interrupt).
-    always_comb
+    always_ff @(posedge clk)
     begin
-        fiu.c1Tx = cci_mpf_c1TxMaskValids(c1_afu_pipe[AFU_PIPE_LAST_STAGE],
-                                         c1_fwd_req);
+        fiu.c1Tx <= cci_mpf_c1TxMaskValids(c1_afu_pipe[AFU_PIPE_LAST_STAGE],
+                                           c1_fwd_req);
 
         // Is the header rewritten for a virtually addressed write?
         if (cci_mpf_c1TxIsWriteReq(c1_afu_pipe[AFU_PIPE_LAST_STAGE]))
         begin
-            fiu.c1Tx.hdr = c1_req_hdr;
+            fiu.c1Tx.hdr <= c1_req_hdr;
         end
     end
 

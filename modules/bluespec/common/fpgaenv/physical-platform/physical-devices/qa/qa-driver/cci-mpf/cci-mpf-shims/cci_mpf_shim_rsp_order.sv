@@ -70,9 +70,8 @@ module cci_mpf_shim_rsp_order
     // required for preservation can be saved.
     parameter PRESERVE_WRITE_MDATA = 1,
 
-    // Maximum number of in-flight reads and writes. (Per category - the
-    // total number of in-flight operations is 2 * N_ROB_ENTRIES.)
-    parameter N_ROB_ENTRIES = 256
+    // Maximum number in-flight requests per channel.
+    parameter MAX_ACTIVE_REQS = 128
     )
    (
     input  logic clk,
@@ -88,11 +87,9 @@ module cci_mpf_shim_rsp_order
     assign reset = fiu.reset;
     assign afu.reset = fiu.reset;
 
-    // Index of a ROB entry
-    localparam N_ROB_IDX_BITS = $clog2(N_ROB_ENTRIES);
-    typedef logic [N_ROB_IDX_BITS-1 : 0] t_rob_idx;
-
-    typedef logic [N_ROB_IDX_BITS-1 : 0] t_heap_idx;
+    // Index of a request
+    localparam N_REQ_IDX_BITS = $clog2(MAX_ACTIVE_REQS);
+    typedef logic [N_REQ_IDX_BITS-1 : 0] t_req_idx;
 
     // Full signals that will come from the ROB and heap used to
     // sort responses.
@@ -119,62 +116,53 @@ module cci_mpf_shim_rsp_order
     //  extra cycle in load responses in order to read the Mdata out of
     //  block RAM.
     //
+    //   *** The heap is allocated even when PRESERVE_WRITE_MDATA is
+    //   *** false because downstream code depends on requests being
+    //   *** uniquely numbered in the low N_REQ_IDX_BITS of Mdata.
+    //   *** The heap control logic guarantees this.  When
+    //   *** PRESERVE_WRITE_MDATA is false the heap's memory
+    //   *** is never read, allowing synthesis tools to delete
+    //   *** the memory but preserve the control logic.
+    //
     // ====================================================================
 
-    t_heap_idx wr_heap_allocIdx;
-    t_heap_idx wr_heap_readIdx;
+    t_req_idx wr_heap_allocIdx;
+    t_req_idx wr_heap_readIdx;
     t_cci_mdata wr_heap_readMdata;
 
     logic wr_heap_alloc;
     logic wr_heap_free;
 
-    generate
-        //
-        // Does the configuration require preserving Mdata for writes?
-        //
-        if (PRESERVE_WRITE_MDATA)
-        begin : gen_wr_heap
-            // Buffer not full for timing.  An extra free slot is added to
-            // the heap to account for latency of the not full signal.
-            logic wr_not_full;
-            always_ff @(posedge clk)
-            begin
-                wr_heap_notFull <= wr_not_full;
-            end
+    // Buffer not full for timing.  An extra free slot is added to
+    // the heap to account for latency of the not full signal.
+    logic wr_not_full;
+    always_ff @(posedge clk)
+    begin
+        wr_heap_notFull <= wr_not_full;
+    end
 
-            cci_mpf_prim_heap
-              #(
-                .N_ENTRIES(N_ROB_ENTRIES),
-                .N_DATA_BITS(CCI_MDATA_WIDTH),
-                .MIN_FREE_SLOTS(CCI_TX_ALMOST_FULL_THRESHOLD + 1),
-                .N_OUTPUT_REG_STAGES(1)
-                )
-              wr_heap
-               (
-                .clk,
-                .reset,
+    cci_mpf_prim_heap
+      #(
+        .N_ENTRIES(MAX_ACTIVE_REQS),
+        .N_DATA_BITS(CCI_MDATA_WIDTH),
+        .MIN_FREE_SLOTS(CCI_TX_ALMOST_FULL_THRESHOLD + 1),
+        .N_OUTPUT_REG_STAGES(1)
+        )
+      wr_heap
+       (
+        .clk,
+        .reset,
 
-                .enq(wr_heap_alloc),
-                .enqData(afu.c1Tx.hdr.base.mdata),
-                .notFull(wr_not_full),
-                .allocIdx(wr_heap_allocIdx),
+        .enq(wr_heap_alloc),
+        .enqData(afu.c1Tx.hdr.base.mdata),
+        .notFull(wr_not_full),
+        .allocIdx(wr_heap_allocIdx),
 
-                .readReq(wr_heap_readIdx),
-                .readRsp(wr_heap_readMdata),
-                .free(wr_heap_free),
-                .freeIdx(wr_heap_readIdx)
-                );
-        end
-        else
-        begin : no_wr_heap
-            //
-            // Can overwrite Mdata without preserving it.
-            //
-            assign wr_heap_notFull = 1'b1;
-            assign wr_heap_allocIdx = t_heap_idx'(0);
-            assign wr_heap_readMdata = t_cci_mdata'(0);
-        end
-    endgenerate
+        .readReq(wr_heap_readIdx),
+        .readRsp(wr_heap_readMdata),
+        .free(wr_heap_free),
+        .freeIdx(wr_heap_readIdx)
+        );
 
 
     // ====================================================================
@@ -212,7 +200,7 @@ module cci_mpf_shim_rsp_order
     //
     // ====================================================================
 
-    t_rob_idx rd_rob_enqIdx;
+    t_req_idx rd_rob_enqIdx;
 
     logic rd_rob_notEmpty;
     t_cci_mdata rd_rob_mdata;
@@ -237,7 +225,7 @@ module cci_mpf_shim_rsp_order
             //
             cci_mpf_prim_rob
               #(
-                .N_ENTRIES(N_ROB_ENTRIES),
+                .N_ENTRIES(MAX_ACTIVE_REQS),
                 .N_DATA_BITS(CCI_CLDATA_WIDTH),
                 .N_META_BITS(CCI_MDATA_WIDTH),
                 .MIN_FREE_SLOTS(CCI_TX_ALMOST_FULL_THRESHOLD + 1)
@@ -253,7 +241,7 @@ module cci_mpf_shim_rsp_order
                 .enqIdx(rd_rob_enqIdx),
 
                 .enqData_en(cci_c0Rx_isReadRsp(fiu.c0Rx)),
-                .enqDataIdx(t_rob_idx'(fiu.c0Rx.hdr.mdata)),
+                .enqDataIdx(t_req_idx'(fiu.c0Rx.hdr.mdata)),
                 .enqData(fiu.c0Rx.data),
 
                 .deq_en(cci_c0Rx_isReadRsp(afu.c0Rx)),
@@ -270,7 +258,7 @@ module cci_mpf_shim_rsp_order
             //
             cci_mpf_prim_heap
               #(
-                .N_ENTRIES(N_ROB_ENTRIES),
+                .N_ENTRIES(MAX_ACTIVE_REQS),
                 .N_DATA_BITS(CCI_MDATA_WIDTH),
                 .MIN_FREE_SLOTS(CCI_TX_ALMOST_FULL_THRESHOLD + 1),
                 .N_OUTPUT_REG_STAGES(1)
@@ -285,10 +273,10 @@ module cci_mpf_shim_rsp_order
                 .notFull(rd_not_full),
                 .allocIdx(rd_rob_enqIdx),
 
-                .readReq(t_rob_idx'(fiu.c0Rx.hdr.mdata)),
+                .readReq(t_req_idx'(fiu.c0Rx.hdr.mdata)),
                 .readRsp(rd_heap_readMdata),
                 .free(cci_c0Rx_isReadRsp(fiu.c0Rx)),
-                .freeIdx(t_rob_idx'(fiu.c0Rx.hdr.mdata))
+                .freeIdx(t_req_idx'(fiu.c0Rx.hdr.mdata))
                 );
         end
     endgenerate
@@ -371,15 +359,20 @@ module cci_mpf_shim_rsp_order
     begin
         afu.c1Rx = fiu_buf.c1Rx;
 
-        // If a write response return the preserved Mdata
-        if (cci_c1Rx_isWriteRsp(afu.c1Rx) || cci_c1Rx_isWriteFenceRsp(afu.c1Rx))
+        // If a write response return then preserved Mdata if the
+        // configuration requires it.
+        if (PRESERVE_WRITE_MDATA)
         begin
-            afu.c1Rx.hdr.mdata = wr_heap_readMdata;
+            if (cci_c1Rx_isWriteRsp(afu.c1Rx) ||
+                cci_c1Rx_isWriteFenceRsp(afu.c1Rx))
+            begin
+                afu.c1Rx.hdr.mdata = wr_heap_readMdata;
+            end
         end
     end
 
     // Lookup write heap to restore Mdata
-    assign wr_heap_readIdx = t_heap_idx'(fiu.c1Rx.hdr.mdata);
+    assign wr_heap_readIdx = t_req_idx'(fiu.c1Rx.hdr.mdata);
     assign wr_heap_free = cci_c1Rx_isWriteRsp(fiu.c1Rx) ||
                           cci_c1Rx_isWriteFenceRsp(fiu.c1Rx);
 

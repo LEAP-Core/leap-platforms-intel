@@ -91,6 +91,9 @@ module cci_mpf
     cci_mpf_if.to_afu afu
     );
 
+    // Maximum number of outstanding read and write requests per channel
+    localparam MAX_ACTIVE_REQS = 128;
+
     logic  reset;
     assign reset = fiu.reset;
 
@@ -103,7 +106,7 @@ module cci_mpf
     // ====================================================================
 
     cci_mpf_if stg1_mpf_fiu (.clk);
-    cci_mpf_if stg6_mpf_afu (.clk);
+    cci_mpf_if stg7_mpf_afu (.clk);
 
     cci_mpf_shim_edge_connect
       mpf_edge
@@ -112,7 +115,7 @@ module cci_mpf
         .fiu_edge(fiu),
         .afu_edge(afu),
         .fiu(stg1_mpf_fiu),
-        .afu(stg6_mpf_afu)
+        .afu(stg7_mpf_afu)
         );
 
 
@@ -155,6 +158,27 @@ module cci_mpf
 
     // ====================================================================
     //
+    //  Detect the end of responses for a multi-beat packet (EOP).
+    //  Single-beat responses will also be tagged EOP.
+    //
+    // ====================================================================
+
+    cci_mpf_if stg3_fiu_eop (.clk);
+
+    cci_mpf_shim_detect_eop
+      #(
+        .MAX_ACTIVE_REQS(MAX_ACTIVE_REQS)
+        )
+      eop
+       (
+        .clk,
+        .fiu(stg2_fiu_csrs),
+        .afu(stg3_fiu_eop)
+        );
+
+
+    // ====================================================================
+    //
     //  Virtual to physical translation.
     //
     //  *** This stage may reorder requests relative to each other,
@@ -168,7 +192,7 @@ module cci_mpf
     //
     // ====================================================================
 
-    cci_mpf_if stg3_fiu_virtual (.clk);
+    cci_mpf_if stg4_fiu_virtual (.clk);
 
     generate
         if (ENABLE_VTP)
@@ -188,8 +212,8 @@ module cci_mpf
               v_to_p
                (
                 .clk,
-                .fiu(stg2_fiu_csrs),
-                .afu(stg3_fiu_virtual),
+                .fiu(stg3_fiu_eop),
+                .afu(stg4_fiu_virtual),
                 .csrs(mpf_csrs)
                 );
         end
@@ -199,8 +223,8 @@ module cci_mpf
               physical
                (
                 .clk,
-                .fiu(stg2_fiu_csrs),
-                .afu(stg3_fiu_virtual)
+                .fiu(stg3_fiu_eop),
+                .afu(stg4_fiu_virtual)
                 );
         end
     endgenerate
@@ -214,7 +238,7 @@ module cci_mpf
     //
     // ====================================================================
 
-    cci_mpf_if stg4_fiu_wro (.clk);
+    cci_mpf_if stg5_fiu_wro (.clk);
 
     generate
         if (ENFORCE_WR_ORDER)
@@ -223,8 +247,8 @@ module cci_mpf
               order
                (
                 .clk,
-                .fiu(stg3_fiu_virtual),
-                .afu(stg4_fiu_wro)
+                .fiu(stg4_fiu_virtual),
+                .afu(stg5_fiu_wro)
                 );
         end
         else
@@ -233,8 +257,8 @@ module cci_mpf
               unordered
                (
                 .clk,
-                .fiu(stg3_fiu_virtual),
-                .afu(stg4_fiu_wro)
+                .fiu(stg4_fiu_virtual),
+                .afu(stg5_fiu_wro)
                 );
         end
     endgenerate
@@ -256,18 +280,19 @@ module cci_mpf
     //
     // ====================================================================
 
-    cci_mpf_if stg5_fiu_rsp_order (.clk);
+    cci_mpf_if stg6_fiu_rsp_order (.clk);
 
     cci_mpf_shim_rsp_order
       #(
         .SORT_READ_RESPONSES(SORT_READ_RESPONSES),
-        .PRESERVE_WRITE_MDATA(PRESERVE_WRITE_MDATA)
+        .PRESERVE_WRITE_MDATA(PRESERVE_WRITE_MDATA),
+        .MAX_ACTIVE_REQS(MAX_ACTIVE_REQS)
         )
       rspOrder
        (
         .clk,
-        .fiu(stg4_fiu_wro),
-        .afu(stg5_fiu_rsp_order)
+        .fiu(stg5_fiu_wro),
+        .afu(stg6_fiu_rsp_order)
         );
 
 
@@ -281,8 +306,8 @@ module cci_mpf
       regRsp
        (
         .clk,
-        .fiu_raw(stg5_fiu_rsp_order),
-        .fiu_buf(stg6_mpf_afu)
+        .fiu_raw(stg6_fiu_rsp_order),
+        .fiu_buf(stg7_mpf_afu)
         );
 
 endmodule // cci_mpf

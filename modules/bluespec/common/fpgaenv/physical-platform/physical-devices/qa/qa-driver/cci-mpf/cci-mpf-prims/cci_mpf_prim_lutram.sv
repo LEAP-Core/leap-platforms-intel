@@ -40,6 +40,7 @@ module cci_mpf_prim_lutram
     )
    (
     input  logic clk,
+    input  logic reset,
 
     input  logic [$clog2(N_ENTRIES)-1 : 0] raddr,
     output logic [N_DATA_BITS-1 : 0] rdata,
@@ -49,14 +50,28 @@ module cci_mpf_prim_lutram
     input  logic [N_DATA_BITS-1 : 0] wdata
     );
 
-    logic [N_DATA_BITS-1 : 0] data[0 : N_ENTRIES-1];
+    logic [N_DATA_BITS-1 : 0] data[0 : N_ENTRIES-1] /* synthesis ramstyle = "MLAB, no_rw_check" */;
 
-    assign rdata = data[raddr];
+    //
+    // Delay writes by a cycle for for timing and add a bypass to guarantee
+    // there is never a read/write of the same location in a single cycle.
+    //
+    logic [$clog2(N_ENTRIES)-1 : 0] waddr_q;
+    logic wen_q;
+    logic [N_DATA_BITS-1 : 0] wdata_q;
+
+    // Bypass read response when writing the same location
+    assign rdata = (! wen_q || (raddr != waddr_q)) ? data[raddr] : wdata_q;
+
     always_ff @(posedge clk)
     begin
-        if (wen)
+        waddr_q <= waddr;
+        wen_q <= wen;
+        wdata_q <= wdata;
+
+        if (wen_q)
         begin
-            data[waddr] <= wdata;
+            data[waddr_q] <= wdata_q;
         end
     end
 
@@ -101,6 +116,7 @@ module cci_mpf_prim_lutram_init
       ram
        (
         .clk,
+        .reset,
 
         .raddr,
         .rdata,

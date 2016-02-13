@@ -698,4 +698,27 @@ package cci_mpf_if_pkg;
         return r_out;
     endfunction
 
+
+    //
+    // End of packet (EOP) marks the last response corresponding to a single
+    // or multi-beat read request.  This is computed by MPF in module
+    // cci_mpf_shim_detect_eop since it is not provided by CCI.  The location
+    // used to store EOP is subject to change, so use these test functions.
+    //
+    // There are no functions for c1Rx because the same eop shim merges
+    // unpacked write response flits into a single packed response.
+    //
+
+    function automatic logic cci_mpf_c0Rx_isEOP(input t_if_cci_c0_Rx r);
+        // EOP stored in hdr.rsvd1
+        return cci_c0Rx_isValid(r) && r.hdr.rsvd1;
+    endfunction
+
+    function automatic t_if_cci_c0_Rx cci_mpf_c0Rx_updEOP(input t_if_cci_c0_Rx r,
+                                                          logic eop);
+        t_if_cci_c0_Rx r_out = r;
+        r_out.hdr.rsvd1 = eop;
+        return r_out;
+    endfunction
+
 endpackage // cci_mpf_if

@@ -167,10 +167,10 @@ module qa_drv_hc_fifo_from_host
          .clk,
          .reset,
 
-         .enq_en(read_grant.readerGrant),
-         .enqMeta(2'b0),
+         .alloc(read_grant.readerGrant),
+         .allocMeta(2'b0),
          .notFull(rob_slot_rdy),
-         .enqIdx(rob_slot_idx),
+         .allocIdx(rob_slot_idx),
 
          .enqData_en(incoming_read_valid),
          .enqDataIdx(t_ROB_IDX'(response_read_metadata.robAddr)),

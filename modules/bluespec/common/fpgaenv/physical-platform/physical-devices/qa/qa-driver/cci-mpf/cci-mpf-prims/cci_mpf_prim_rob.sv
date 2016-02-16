@@ -43,19 +43,23 @@ module cci_mpf_prim_rob
     parameter N_DATA_BITS = 64,
     parameter N_META_BITS = 1,
     // Threshold below which heap asserts "full"
-    parameter MIN_FREE_SLOTS = 1
+    parameter MIN_FREE_SLOTS = 1,
+    // Maximum number of entries that can be allocated in a single cycle.
+    // This is used for multi-line requests.
+    parameter MAX_ALLOC_PER_CYCLE = 1
     )
    (
     input  logic clk,
     input  logic reset,
 
-    // Add a new entry to the ROB.  No payload, just control.
+    // Add one or more new entries in the ROB.  No payload, just control.
     // The ROB returns a handle -- the index where the payload should
-    // be written.
-    input  logic enq_en,                            // Allocate an entry
-    input  logic [N_META_BITS-1 : 0] enqMeta,       // Save meta-data for new entry
-    output logic notFull,                           // Is ROB full?
-    output logic [$clog2(N_ENTRIES)-1 : 0] enqIdx,  // Index of new entry
+    // be written.  When allocating multiple entries the indices are
+    // sequential.
+    input  logic [$clog2(MAX_ALLOC_PER_CYCLE) : 0] alloc,
+    input  logic [N_META_BITS-1 : 0] allocMeta,      // Save meta-data for new entry
+    output logic notFull,                            // Is ROB full?
+    output logic [$clog2(N_ENTRIES)-1 : 0] allocIdx, // Index of new entry
 
     // Payload write.  No ready signal.  The ROB must always be ready
     // to receive data.
@@ -82,15 +86,16 @@ module cci_mpf_prim_rob
     cci_mpf_prim_rob_ctrl
       #(
         .N_ENTRIES(N_ENTRIES),
-        .MIN_FREE_SLOTS(MIN_FREE_SLOTS)
+        .MIN_FREE_SLOTS(MIN_FREE_SLOTS),
+        .MAX_ALLOC_PER_CYCLE(MAX_ALLOC_PER_CYCLE)
         )
       ctrl
        (
         .clk,
         .reset,
-        .enq_en,
+        .alloc,
         .notFull,
-        .enqIdx,
+        .allocIdx,
         .enqData_en,
         .enqDataIdx,
 
@@ -112,9 +117,9 @@ module cci_mpf_prim_rob
        (
         .clk,
         .reset,
-        .enq_en,
-        .enqMeta,
-        .enqMetaIdx(enqIdx),
+        .enq_en(alloc != 0),
+        .enqMeta(allocMeta),
+        .enqMetaIdx(allocIdx),
         .enqData_en,
         .enqDataIdx,
         .enqData,
@@ -135,17 +140,19 @@ endmodule // cci_mpf_prim_rob
 module cci_mpf_prim_rob_ctrl
   #(
     parameter N_ENTRIES = 32,
-
     // Threshold below which heap asserts "full"
-    parameter MIN_FREE_SLOTS = 1
+    parameter MIN_FREE_SLOTS = 1,
+    // Maximum number of entries that can be allocated in a single cycle.
+    // This is used for multi-line requests.
+    parameter MAX_ALLOC_PER_CYCLE = 1
     )
    (
     input  logic clk,
     input  logic reset,
 
-    input  logic enq_en,                              // Allocate an entry
+    input  logic [$clog2(MAX_ALLOC_PER_CYCLE) : 0] alloc,
     output logic notFull,                             // Is ROB full?
-    output logic [$clog2(N_ENTRIES)-1 : 0] enqIdx,    // Index of new entry
+    output logic [$clog2(N_ENTRIES)-1 : 0] allocIdx,  // Index of new entry
 
     input  logic enqData_en,                          // Store data for existing entry
     input  logic [$clog2(N_ENTRIES)-1 : 0] enqDataIdx,
@@ -174,7 +181,7 @@ module cci_mpf_prim_rob_ctrl
         ({1'b0, newest} + t_idx_nowrap'(MIN_FREE_SLOTS)) < {newest_ge_oldest, oldest};
 
     // enq allocates a slot and returns the index of the slot.
-    assign enqIdx = newest;
+    assign allocIdx = newest;
 
     always_ff @(posedge clk)
     begin
@@ -182,11 +189,11 @@ module cci_mpf_prim_rob_ctrl
         begin
             newest <= 0;
         end
-        else if (enq_en)
+        else
         begin
-            newest <= newest + 1;
+            newest <= newest + t_idx'(alloc);
 
-            assert ((newest + t_idx'(1)) != oldest) else
+            assert ((alloc == 0) || ((newest + t_idx'(alloc)) != oldest)) else
                 $fatal("cci_mpf_prim_rob: Can't ENQ when FULL!");
             assert ((N_ENTRIES & (N_ENTRIES - 1)) == 0) else
                 $fatal("cci_mpf_prim_rob: N_ENTRIES must be a power of 2!");
@@ -416,6 +423,24 @@ module cci_mpf_prim_rob_data
     //
     // Output FIFO stage.
     //
+    logic [N_META_BITS + N_DATA_BITS - 1 : 0] fifo_in;
+    logic [N_META_BITS + N_DATA_BITS - 1 : 0] fifo_out;
+
+    generate
+        // Avoid warnings on size mismatch when N_META_BITS == 0
+        if (N_META_BITS == 0)
+        begin : mz
+            assign fifo_in = mem_first;
+            assign first = fifo_out;
+            assign firstMeta = 'x;
+        end
+        else
+        begin : mnz
+            assign fifo_in = { mem_meta_first, mem_first };
+            assign { firstMeta, first } = fifo_out;
+        end
+    endgenerate
+
     cci_mpf_prim_fifo_lutram
       #(
         .N_DATA_BITS(N_META_BITS + N_DATA_BITS),
@@ -426,11 +451,11 @@ module cci_mpf_prim_rob_data
        (
         .clk,
         .reset,
-        .enq_data({ mem_meta_first, mem_first }),
+        .enq_data(fifo_in),
         .enq_en(did_oldest_deq_q),
         .notFull(),
         .almostFull(fifo_full),
-        .first({ firstMeta, first }),
+        .first(fifo_out),
         .deq_en,
         .notEmpty
         );

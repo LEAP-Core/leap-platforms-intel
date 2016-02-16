@@ -46,13 +46,28 @@ module ccip_wires_to_mpf
 
     assign fiu.reset = pck_cp2af_softReset;
 
+    // Track multi-beat writes and optionally turn them into single-beat
+    // writes.  (Useful for debugging)
+    t_if_cci_mpf_c1_Tx fiu_c1_tx;
+    cci_mpf_multi_line_write_to_single
+     #(
+       .CONVERT_TO_SINGLE(0)
+       )
+     wr_beats
+      (
+       .clk,
+       .reset(pck_cp2af_softReset),
+       .fiu_c1_tx,
+       .afu_c1_tx(fiu.c1Tx)
+       );
+
     generate
         if (REGISTER_OUTPUTS)
         begin : reg_out
             always_ff @(posedge clk)
             begin
                 pck_af2cp_sTx.c0 <= cci_mpf_cvtC0TxToBase(fiu.c0Tx);
-                pck_af2cp_sTx.c1 <= cci_mpf_cvtC1TxToBase(fiu.c1Tx);
+                pck_af2cp_sTx.c1 <= cci_mpf_cvtC1TxToBase(fiu_c1_tx);
                 pck_af2cp_sTx.c2 <= fiu.c2Tx;
 
                 fiu.c0TxAlmFull <= pck_cp2af_sRx.c0TxAlmFull;
@@ -64,7 +79,7 @@ module ccip_wires_to_mpf
             always_comb
             begin
                 pck_af2cp_sTx.c0 = cci_mpf_cvtC0TxToBase(fiu.c0Tx);
-                pck_af2cp_sTx.c1 = cci_mpf_cvtC1TxToBase(fiu.c1Tx);
+                pck_af2cp_sTx.c1 = cci_mpf_cvtC1TxToBase(fiu_c1_tx);
                 pck_af2cp_sTx.c2 = fiu.c2Tx;
 
                 fiu.c0TxAlmFull = pck_cp2af_sRx.c0TxAlmFull;
@@ -96,5 +111,76 @@ module ccip_wires_to_mpf
     endgenerate
 
 endmodule // ccip_wires_to_mpf
+
+//
+// Optionally convert beats of a multi-line write request to individual
+// requests.  This can be useful for debugging.
+//
+// The module always tracks the order in which multi-beat writes are
+// received and verifies that beats are received together.
+//
+module cci_mpf_multi_line_write_to_single
+  #(
+    CONVERT_TO_SINGLE = 0
+    )
+   (
+    input  logic clk,
+    input  logic reset,
+
+    output t_if_cci_mpf_c1_Tx fiu_c1_tx,
+    input  t_if_cci_mpf_c1_Tx afu_c1_tx
+    );
+
+    t_cci_clNum beat_num;
+
+    generate
+        if (CONVERT_TO_SINGLE == 0)
+        begin : std
+            // Normal mode.  Keep multi-beat writes.
+            always_comb
+            begin
+                fiu_c1_tx = afu_c1_tx;
+            end
+        end
+        else
+        begin : no_multi
+            always_comb
+            begin
+                fiu_c1_tx = afu_c1_tx;
+
+                // Convert to a single line request
+                fiu_c1_tx.hdr.base.sop = 1'b1;
+                fiu_c1_tx.hdr.base.cl_len = eCL_LEN_1;
+                fiu_c1_tx.hdr.base.address[1:0] = fiu_c1_tx.hdr.base.address[1:0] |
+                                                  beat_num;
+            end
+        end
+    endgenerate
+
+    // Track the beat number
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            beat_num <= t_cci_clNum'(0);
+        end
+        else if (cci_mpf_c1TxIsWriteReq(afu_c1_tx))
+        begin
+            if (beat_num == afu_c1_tx.hdr.base.cl_len)
+            begin
+                // Last beat in the packet
+                beat_num <= t_cci_clNum'(0);
+            end
+            else
+            begin
+                beat_num <= beat_num + t_cci_clNum'(1);
+            end
+
+            assert(afu_c1_tx.hdr.base.sop == (beat_num == 0)) else
+                $fatal("ccip_wires_to_mpf: SOP out of phase");
+        end
+    end
+
+endmodule
 
 `endif

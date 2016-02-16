@@ -71,6 +71,7 @@ typedef Bit#(64) QA_SREG;
 
 typedef Bit#(`CCI_ADDR_WIDTH) QA_CCI_ADDR;
 typedef Bit#(`CCI_DATA_WIDTH) QA_CCI_DATA;
+typedef Bit#(2) QA_CCI_NUM_LINES;
 
 
 //
@@ -81,6 +82,8 @@ typedef Bit#(`CCI_DATA_WIDTH) QA_CCI_DATA;
 typedef struct
 {
     QA_CCI_ADDR addr;
+    // Number of lines in packet - 1 (4 lines == 3)
+    QA_CCI_NUM_LINES numLines;
 
     // Cached in FPGA CCI?
     Bool cached;
@@ -94,6 +97,10 @@ typedef struct
 {
     QA_CCI_ADDR addr;
     QA_CCI_DATA data;
+    // Number of lines in packet - 1 (4 lines == 3)
+    QA_CCI_NUM_LINES numLines;
+    // Start of packet -- first line in multi-line write
+    Bool sop;
 
     // Cached in FPGA CCI?
     Bool cached;
@@ -151,12 +158,18 @@ endinterface
 //
 interface QA_MEMORY_DRIVER_IMPORT#(numeric type n_WRITE_ACK_BITS);
     method Action readLineReq(QA_CCI_ADDR addr,
+                              // Number of response lines requested - 1 (4 lines == 3)
+                              QA_CCI_NUM_LINES numLines,
                               Bool cached,
                               Bool checkLoadStoreOrder);
     method ActionValue#(QA_CCI_DATA) readLineRsp();
 
     method Action writeLine(QA_CCI_ADDR addr,
                             QA_CCI_DATA data,
+                            // Number of lines in packet - 1 (4 lines == 3)
+                            QA_CCI_NUM_LINES numLines,
+                            // Start of packet (first line)
+                            Bool sop,
                             Bool cached,
                             Bool checkLoadStoreOrder);
 
@@ -284,12 +297,15 @@ module mkQADeviceImport#(Clock qaClk, Reset qaRst)
 
     interface QA_MEMORY_DRIVER_IMPORT memoryDriver;
         method readLineReq(mem_read_req_addr,
+                           mem_read_req_num_lines,
                            mem_read_req_cached,
                            mem_read_req_check_order) ready(mem_read_req_rdy) enable(mem_read_req_enable);
         method mem_read_rsp_data readLineRsp() ready(mem_read_rsp_rdy) enable((*inhigh*) en0);
 
         method writeLine(mem_write_addr,
                          mem_write_data,
+                         mem_write_req_num_lines,
+                         mem_write_req_sop,
                          mem_write_req_cached,
                          mem_write_req_check_order) ready(mem_write_rdy) enable(mem_write_enable);
         method mem_write_ack writeAck() enable((*inhigh*) en1);
@@ -613,12 +629,14 @@ module mkQADeviceSynth#(Clock qaClk, Reset qaRst)
         if (req.read matches tagged Valid .read)
         begin
             qaMemoryDriver.readLineReq(read.addr,
+                                       read.numLines,
                                        read.cached, read.checkLoadStoreOrder);
         end
 
         if (req.write matches tagged Valid .write)
         begin
             qaMemoryDriver.writeLine(write.addr, write.data,
+                                     write.numLines, write.sop,
                                      write.cached, write.checkLoadStoreOrder);
         end
     endrule
@@ -690,12 +708,12 @@ module mkQADeviceSynth#(Clock qaClk, Reset qaRst)
         method Action req(QA_MEM_REQ r) if (canStartReq);
             syncMemoryReqQ.enq(r);
 
-            if (isValid(r.read))
+            if (r.read matches tagged Valid .r)
             begin
-                activeMemReads.up();
+                activeMemReads.upBy(1 + zeroExtend(r.numLines));
             end
 
-            if (isValid(r.write))
+            if (r.write matches tagged Valid .w &&& w.sop)
             begin
                 activeMemWrites.up();
             end

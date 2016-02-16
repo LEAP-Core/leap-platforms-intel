@@ -62,7 +62,7 @@ import List::*;
 typedef `LOCAL_MEM_ADDR_BITS LOCAL_MEM_ADDR_SZ;
 `include "awb/provides/local_mem_interface.bsh"
 
-typedef LOCAL_MEM_WORD_SZ LOCAL_MEM_BURST_DATA_SZ;
+typedef TMul#(LOCAL_MEM_WORD_SZ, LOCAL_MEM_WORDS_PER_LINE) LOCAL_MEM_BURST_DATA_SZ;
 
 
 // Host-side memory allocator
@@ -83,9 +83,21 @@ module [CONNECTED_MODULE] mkLocalMem#(LOCAL_MEM_CONFIG conf)
     // interface:
     (LOCAL_MEM);
 
-    if (`LOCAL_MEM_WORD_BITS * `LOCAL_MEM_WORDS_PER_LINE != `CCI_DATA_WIDTH)
+    if (`LOCAL_MEM_WORD_BITS != `CCI_DATA_WIDTH)
     begin
         error("LOCAL_MEM_WORD_BITS must match CCI_DATA_WIDTH");
+    end
+
+    //
+    // The current local memory code supports only fixed sized requests.
+    // CCI supports multi-line requests.  Check that the local memory
+    // configuration maps to one of the supported multi-line options.
+    //
+    if ((`LOCAL_MEM_WORDS_PER_LINE != 1) &&
+        (`LOCAL_MEM_WORDS_PER_LINE != 2) &&
+        (`LOCAL_MEM_WORDS_PER_LINE != 4))
+    begin
+        error("LOCAL_MEM_WORDS_PER_LINE must match CCI multi-line options");
     end
 
     //
@@ -117,12 +129,25 @@ module [CONNECTED_MODULE] mkLocalMem#(LOCAL_MEM_CONFIG conf)
                            paramNode);
     Bool checkLoadStoreOrder = (enforceOrder != 0);
 
+
+    //
+    // Track multi-beat reads and writes.
+    //
+    Reg#(Bit#(TLog#(LOCAL_MEM_WORDS_PER_LINE))) nWriteBeatsRem <- mkReg(0);
+    Reg#(LOCAL_MEM_ADDR) writeMultiAddr <- mkRegU();
+    Reg#(Vector#(LOCAL_MEM_WORDS_PER_LINE, LOCAL_MEM_WORD)) writeMultiBuf <- mkRegU();
+
+    Reg#(Bit#(TLog#(LOCAL_MEM_WORDS_PER_LINE))) nReadBeats <- mkReg(0);
+    Reg#(Vector#(LOCAL_MEM_WORDS_PER_LINE, LOCAL_MEM_WORD)) readMultiBuf <- mkRegU();
+    FIFO#(LOCAL_MEM_LINE) readLineQ <- mkLFIFO();
+
+
     //
     // Gate for requests.  memReq.notFull must be here since request methods
     // are sent through wires and merged in fwdMemReq!
     //
     function Bool notBusy();
-        return memReq.notFull();
+        return memReq.notFull() && (nWriteBeatsRem == 0);
     endfunction
 
     rule trackWrites (True);
@@ -134,12 +159,91 @@ module [CONNECTED_MODULE] mkLocalMem#(LOCAL_MEM_CONFIG conf)
     //
     // Merge read and write requests into a single request so they stay aligned.
     //
-    RWire#(QA_MEM_READ_REQ) readReqW <- mkRWire();
-    RWire#(QA_MEM_WRITE_REQ) writeReqW <- mkRWire();
+    RWire#(LOCAL_MEM_ADDR) readReqW <- mkRWire();
+    RWire#(Tuple2#(LOCAL_MEM_ADDR, LOCAL_MEM_LINE)) writeReqW <- mkRWire();
 
     (* fire_when_enabled *)
-    rule fwdMemReq (isValid(readReqW.wget) || isValid(writeReqW.wget));
-        memReq.send(QA_MEM_REQ { read: readReqW.wget, write: writeReqW.wget });
+    rule fwdMemReq (True);
+        let r_addr = validValue(readReqW.wget);
+        match {.w_addr, .w_data} = validValue(writeReqW.wget);
+
+        // CCI's number of lines in a multi-beat request is 0 based
+        Integer cci_num_lines = valueOf(LOCAL_MEM_WORDS_PER_LINE) - 1;
+
+        if ((nWriteBeatsRem != 0) && (valueOf(LOCAL_MEM_WORDS_PER_LINE) > 1))
+        begin
+            // Finish a multi-line write request
+            let w_req = QA_MEM_WRITE_REQ {
+                            addr: writeMultiAddr,
+                            data: writeMultiBuf[0],
+                            numLines: fromInteger(cci_num_lines),
+                            sop: False,
+                            cached: False,
+                            checkLoadStoreOrder: checkLoadStoreOrder };
+
+            memReq.send(QA_MEM_REQ { read: tagged Invalid,
+                                     write: tagged Valid w_req });
+
+            nWriteBeatsRem <= nWriteBeatsRem - 1;
+            writeMultiBuf <= shiftInAtN(writeMultiBuf, ?);
+        end
+        else
+        begin
+            let r_req = QA_MEM_READ_REQ {
+                            addr: r_addr,
+                            numLines: fromInteger(cci_num_lines),
+                            cached: False,
+                            checkLoadStoreOrder: checkLoadStoreOrder };
+
+            Vector#(LOCAL_MEM_WORDS_PER_LINE, LOCAL_MEM_WORD) w_vec;
+            w_vec = unpack(w_data);
+
+            let w_req = QA_MEM_WRITE_REQ {
+                            addr: w_addr,
+                            data: w_vec[0],
+                            numLines: fromInteger(cci_num_lines),
+                            sop: True,
+                            cached: False,
+                            checkLoadStoreOrder: checkLoadStoreOrder };
+
+            memReq.send(QA_MEM_REQ {
+                          read: isValid(readReqW.wget) ? tagged Valid r_req :
+                                                         tagged Invalid,
+                          write: isValid(writeReqW.wget) ? tagged Valid w_req :
+                                                           tagged Invalid });
+
+            // Save remainder of multi-beat request
+            if (isValid(writeReqW.wget))
+            begin
+                nWriteBeatsRem <= fromInteger(cci_num_lines);
+            end
+
+            writeMultiAddr <= w_addr;
+            writeMultiBuf <= shiftInAtN(w_vec, ?);
+        end
+    endrule
+
+
+    //
+    // Collect all beats of a read into a line.
+    //
+    rule collectReadLine (True);
+        let data = memReadLineRsp.receive();
+        memReadLineRsp.deq();
+
+        let v = shiftInAtN(readMultiBuf, data);
+        readMultiBuf <= v;
+
+        if ((nReadBeats == fromInteger(valueOf(LOCAL_MEM_WORDS_PER_LINE) - 1)) ||
+            (valueOf(LOCAL_MEM_WORDS_PER_LINE) == 1))
+        begin
+            nReadBeats <= 0;
+            readLineQ.enq(pack(v));
+        end
+        else
+        begin
+            nReadBeats <= nReadBeats + 1;
+        end
     endrule
 
 
@@ -154,17 +258,12 @@ module [CONNECTED_MODULE] mkLocalMem#(LOCAL_MEM_CONFIG conf)
 
 
     method Action readLineReq(LOCAL_MEM_ADDR addr) if (notBusy());
-        match {.l_addr, .w_idx} = localMemSeparateAddr(addr);
-
-        // Don't use the small FPGA-side cache. Assume we will miss.
-        readReqW.wset(QA_MEM_READ_REQ { addr: l_addr,
-                                        cached: False,
-                                        checkLoadStoreOrder: checkLoadStoreOrder });
+        readReqW.wset(addr);
     endmethod
 
     method ActionValue#(LOCAL_MEM_LINE) readLineRsp();
-        let data = memReadLineRsp.receive();
-        memReadLineRsp.deq();
+        let data = readLineQ.first();
+        readLineQ.deq();
 
         return data;
     endmethod
@@ -175,12 +274,7 @@ module [CONNECTED_MODULE] mkLocalMem#(LOCAL_MEM_CONFIG conf)
     endmethod
 
     method Action writeLine(LOCAL_MEM_ADDR addr, LOCAL_MEM_LINE data) if (notBusy());
-        match {.l_addr, .w_idx} = localMemSeparateAddr(addr);
-
-        writeReqW.wset(QA_MEM_WRITE_REQ { addr: l_addr,
-                                          data: data,
-                                          cached: False,
-                                          checkLoadStoreOrder: checkLoadStoreOrder });
+        writeReqW.wset(tuple2(addr, data));
     endmethod
 
     method Action writeWordMasked(LOCAL_MEM_ADDR addr, LOCAL_MEM_WORD data, LOCAL_MEM_WORD_MASK mask) if (notBusy());

@@ -50,7 +50,12 @@ module cci_mpf_shim_detect_eop
     // shim composition rules require that requests have temporally unique
     // values in the low bits of Mdata.  This module generates tags
     // taking advantage of indices constructed from unique Mdata values.
-    parameter MAX_ACTIVE_REQS = 128
+    parameter MAX_ACTIVE_REQS = 128,
+
+    // Some modules (e.g. VTP) generate reads of their own with IDs that
+    // conflict in the Mdata space.  These extra reads are tagged with
+    // a reserved bit in Mdata and can be ignored.
+    RESERVED_MDATA_IDX = CCI_PLATFORM_MDATA_WIDTH
     )
    (
     input  logic clk,
@@ -86,7 +91,7 @@ module cci_mpf_shim_detect_eop
 
     // ====================================================================
     //
-    //  Channel 0 (read) -- No action.
+    //  Channel 0 (read) -- Tag responses with EOP.
     //
     // ====================================================================
 
@@ -96,6 +101,10 @@ module cci_mpf_shim_detect_eop
 
     t_cci_clNum rd_rsp_packet_len;
     logic rd_rsp_pkt_eop;
+
+    logic rd_rsp_is_tracked;
+    assign rd_rsp_is_tracked = cci_c0Rx_isReadRsp(fiu.c0Rx) &&
+                               ! fiu.c0Rx.hdr.mdata[RESERVED_MDATA_IDX];
 
     cci_mpf_shim_detect_eop_track_flits
       #(
@@ -107,11 +116,12 @@ module cci_mpf_shim_detect_eop
         .reset,
         .rdy(rd_rsp_mon_rdy),
 
-        .req_en(cci_mpf_c0TxIsReadReq(afu.c0Tx)),
+        .req_en(cci_mpf_c0TxIsReadReq(afu.c0Tx) &&
+                ! afu.c0Tx.hdr.base.mdata[RESERVED_MDATA_IDX]),
         .reqIdx(t_req_idx'(afu.c0Tx.hdr.base.mdata)),
         .reqLen(afu.c0Tx.hdr.base.cl_len),
 
-        .rsp_en(cci_c0Rx_isReadRsp(fiu.c0Rx)),
+        .rsp_en(rd_rsp_is_tracked),
         .rspIdx(t_req_idx'(fiu.c0Rx.hdr.mdata)),
         .rspIsPacked(1'b0),
 
@@ -131,7 +141,14 @@ module cci_mpf_shim_detect_eop
     //
     always_ff @(posedge clk)
     begin
-        afu.c0Rx <= cci_mpf_c0Rx_updEOP(fiu.c0Rx, rd_rsp_pkt_eop);
+        if (rd_rsp_is_tracked)
+        begin
+            afu.c0Rx <= cci_mpf_c0Rx_updEOP(fiu.c0Rx, rd_rsp_pkt_eop);
+        end
+        else
+        begin
+            afu.c0Rx <= fiu.c0Rx;
+        end
     end
 
 

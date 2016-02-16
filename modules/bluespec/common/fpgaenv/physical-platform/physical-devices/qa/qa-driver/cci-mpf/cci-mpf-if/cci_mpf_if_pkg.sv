@@ -55,12 +55,14 @@ package cci_mpf_if_pkg;
     parameter CCI_MMIOADDR_WIDTH = CCIP_MMIOADDR_WIDTH;
     parameter CCI_MMIODATA_WIDTH = CCIP_MMIODATA_WIDTH;
 
+    parameter CCI_MDATA_WIDTH = CCIP_MDATA_WIDTH;
+
 `ifdef USE_PLATFORM_CCIS
-    parameter CCI_MDATA_WIDTH = CCIS_MDATA_WIDTH;
+    parameter CCI_PLATFORM_MDATA_WIDTH = CCIS_MDATA_WIDTH;
     parameter CCI_TX_ALMOST_FULL_THRESHOLD = CCIS_TX_ALMOST_FULL_THRESHOLD;
 `endif
 `ifdef USE_PLATFORM_CCIP
-    parameter CCI_MDATA_WIDTH = CCIP_MDATA_WIDTH;
+    parameter CCI_PLATFORM_MDATA_WIDTH = CCIP_MDATA_WIDTH;
     parameter CCI_TX_ALMOST_FULL_THRESHOLD = CCIP_TX_ALMOST_FULL_THRESHOLD;
 `endif
 
@@ -329,6 +331,9 @@ package cci_mpf_if_pkg;
         logic       addrIsVirtual;
         t_cci_vc    vc_sel;
         t_cci_clLen cl_len;
+
+        // Applies only to writes
+        logic       sop;
     } t_cci_mpf_ReqMemHdrParams;
 
     // Default value for request header construction. It takes only one
@@ -344,6 +349,7 @@ package cci_mpf_if_pkg;
         p.addrIsVirtual = 1'(addrIsVirtual);
         p.vc_sel = eVC_VL0;
         p.cl_len = eCL_LEN_1;
+        p.sop = 1'b1;
         return p;
     endfunction
 
@@ -389,7 +395,7 @@ package cci_mpf_if_pkg;
         h.base.mdata = mdata;
         h.base.vc_sel = params.vc_sel;
         h.base.cl_len = params.cl_len;
-        h.base.sop = 1'b1;
+        h.base.sop = params.sop;
 
         return h;
     endfunction
@@ -715,7 +721,7 @@ package cci_mpf_if_pkg;
     endfunction
 
     function automatic t_if_cci_c0_Rx cci_mpf_c0Rx_updEOP(input t_if_cci_c0_Rx r,
-                                                          logic eop);
+                                                          input logic eop);
         t_if_cci_c0_Rx r_out = r;
         r_out.hdr.rsvd1 = eop;
         return r_out;

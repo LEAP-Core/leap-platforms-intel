@@ -90,8 +90,7 @@ module cci_mpf_shim_mux
     //
     // ====================================================================
 
-    cci_mpf_if
-      afu_buf[0:1] (.clk);
+    cci_mpf_if afu_buf[0:1] (.clk);
 
     // Latency-insensitive ports need explicit dequeue (enable).
     logic deqC0Tx[0:1];
@@ -140,14 +139,33 @@ module cci_mpf_shim_mux
     logic [NUM_AFU_PORTS-1 : 0] c0_request;
     logic [NUM_AFU_PORTS-1 : 0] c1_request;
 
+    // Is either AFU in the middle of a multi-line write?
+    logic [NUM_AFU_PORTS-1 : 0] c1_active;
+    logic c1_some_chan_active;
+    assign c1_some_chan_active = |(c1_active);
+
     generate
         for (p = 0; p < NUM_AFU_PORTS; p = p + 1)
         begin : channelRequests
+            // Track multi-line writes arriving from the buffered channels
+            cci_mpf_prim_track_multi_write
+               (
+                .clk,
+                .reset,
+                .c1Tx(afu_buf[p].c1Tx),
+                .c1Tx_en(deqC1Tx[p]),
+                .packetActive(c1_active[p]),
+                .nextBeatNum()
+                );
+
             //
             // Are there incoming requests?
             //
             assign c0_request[p] = cci_mpf_c0TxIsValid(afu_buf[p].c0Tx);
-            assign c1_request[p] = cci_mpf_c1TxIsValid(afu_buf[p].c1Tx);
+            // Limit c1 requests if one of the channels has a multi-line
+            // write active.
+            assign c1_request[p] = cci_mpf_c1TxIsValid(afu_buf[p].c1Tx) &&
+                                   (c1_active[p] || ! c1_some_chan_active);
         end
     endgenerate
 
@@ -202,7 +220,7 @@ module cci_mpf_shim_mux
 
     always_ff @(posedge clk)
     begin
-        assert ((RESERVED_MDATA_IDX > 0) && (RESERVED_MDATA_IDX < CCI_MDATA_WIDTH)) else
+        assert ((RESERVED_MDATA_IDX > 0) && (RESERVED_MDATA_IDX < CCI_PLATFORM_MDATA_WIDTH)) else
             $fatal("cci_mpf_shim_mux.sv: Illegal RESERVED_MDATA_IDX value: %d", RESERVED_MDATA_IDX);
     end
 
@@ -240,6 +258,7 @@ module cci_mpf_shim_mux
         begin
             // Mux port 0 wins
             fiu.c1Tx = afu_buf[0].c1Tx;
+            fiu.c1Tx.valid = c1_request[0];
             fiu.c1Tx.hdr.base.mdata[RESERVED_MDATA_IDX] = 0;
             check_hdr1 = afu_buf[0].c1Tx.hdr.base.mdata[RESERVED_MDATA_IDX];
         end
@@ -247,6 +266,7 @@ module cci_mpf_shim_mux
         begin
             // Mux port 1 wins
             fiu.c1Tx = afu_buf[1].c1Tx;
+            fiu.c1Tx.valid = c1_request[1];
             fiu.c1Tx.hdr.base.mdata[RESERVED_MDATA_IDX] = 1;
             check_hdr1 = afu_buf[1].c1Tx.hdr.base.mdata[RESERVED_MDATA_IDX];
         end

@@ -175,6 +175,7 @@ module cci_mpf_shim_edge_connect
     // a synthesized request to complete a multi-beat write or it is
     // a new request from the FIFO.
     //
+    t_ccip_clNum stg1_fiu_wr_beat_idx;
     t_ccip_clNum stg1_fiu_wr_beats_rem;
     logic stg1_fiu_c1Tx_sop;
     logic stg1_packet_done;
@@ -210,6 +211,7 @@ module cci_mpf_shim_edge_connect
         if (reset)
         begin
             stg1_fiu_c1Tx_sop <= 1'b1;
+            stg1_fiu_wr_beat_idx <= 1'b0;
             stg1_fiu_wr_beats_rem <= 1'b0;
 
             stg1_packet_is_new <= 1'b0;
@@ -230,6 +232,7 @@ module cci_mpf_shim_edge_connect
                 // The heap data for the SOP is definitely available
                 // since it arrived with the header.
                 stg1_fiu_c1Tx_sop <= 1'b1;
+                stg1_fiu_wr_beat_idx <= 0;
                 stg1_fiu_wr_beats_rem <= fiu_c1Tx_first.hdr.base.cl_len;
 
                 wr_heap_data_rdy <= cci_mpf_c1TxIsValid(fiu_c1Tx_first);
@@ -245,6 +248,7 @@ module cci_mpf_shim_edge_connect
             begin
                 // In the middle of a multi-beat request
                 stg1_fiu_c1Tx_sop <= 1'b0;
+                stg1_fiu_wr_beat_idx <= stg1_fiu_wr_beat_idx + 1;
                 stg1_fiu_wr_beats_rem <= stg1_fiu_wr_beats_rem - 1;
 
                 wr_heap_deq_idx <= wr_heap_deq_idx + 1;
@@ -264,6 +268,10 @@ module cci_mpf_shim_edge_connect
                 stg2_fiu_c1Tx <= stg1_fiu_c1Tx;
                 // SOP set only first first beat in a multi-beat packet
                 stg2_fiu_c1Tx.hdr.base.sop <= stg1_fiu_c1Tx_sop;
+                // Low bits of aligned address reflect the beat
+                stg2_fiu_c1Tx.hdr.base.address[$bits(t_ccip_clNum)-1 : 0] <=
+                    stg1_fiu_c1Tx.hdr.base.address[$bits(t_ccip_clNum)-1 : 0] |
+                    stg1_fiu_wr_beat_idx;
             end
             else
             begin
@@ -337,9 +345,6 @@ module cci_mpf_shim_edge_connect
         begin
             if (cci_mpf_c0TxIsReadReq(afu_edge.c0Tx))
             begin
-                assert(afu_edge.c0Tx.hdr.base.cl_len == eCL_LEN_1) else
-                    $fatal("cci_mpf_shim_edge_connect: Multi-beat reads not supported yet");
-
                 assert((afu_edge.c0Tx.hdr.base.address[1:0] & afu_edge.c0Tx.hdr.base.cl_len) == 2'b0) else
                     $fatal("cci_mpf_shim_edge_connect: Multi-beat read address must be naturally aligned");
             end
@@ -353,7 +358,7 @@ module cci_mpf_shim_edge_connect
                         $fatal("cci_mpf_shim_edge_connect: Wrong number of multi-beat writes");
 
                 assert(afu_edge.c1Tx.hdr.base.sop ||
-                       (afu_wr_prev_addr == afu_edge.c0Tx.hdr.base.address)) else
+                       (afu_wr_prev_addr == afu_edge.c1Tx.hdr.base.address)) else
                     $fatal("cci_mpf_shim_edge_connect: Address changed in multi-beat write");
 
                 assert((afu_edge.c1Tx.hdr.base.address[1:0] & afu_edge.c1Tx.hdr.base.cl_len) == 2'b0) else
@@ -364,8 +369,12 @@ module cci_mpf_shim_edge_connect
                 begin
                     afu_wr_beats_rem <= afu_edge.c1Tx.hdr.base.cl_len;
                 end
+                else
+                begin
+                    afu_wr_beats_rem <= afu_wr_beats_rem - 1;
+                end
 
-                afu_wr_prev_addr <= afu_edge.c0Tx.hdr.base.address;
+                afu_wr_prev_addr <= afu_edge.c1Tx.hdr.base.address;
             end
         end
     end

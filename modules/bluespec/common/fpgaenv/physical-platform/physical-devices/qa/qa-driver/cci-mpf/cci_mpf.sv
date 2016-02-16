@@ -167,7 +167,8 @@ module cci_mpf
 
     cci_mpf_shim_detect_eop
       #(
-        .MAX_ACTIVE_REQS(MAX_ACTIVE_REQS)
+        .MAX_ACTIVE_REQS(MAX_ACTIVE_REQS),
+        .RESERVED_MDATA_IDX(CCI_PLATFORM_MDATA_WIDTH-2)
         )
       eop
        (
@@ -207,7 +208,7 @@ module cci_mpf
                 // qa_shim_sort_responses provides this guarantee by rewriting
                 // Mdata as requests and responses as they flow in and out
                 // of the stack.
-                .RESERVED_MDATA_IDX(CCI_MDATA_WIDTH-2)
+                .RESERVED_MDATA_IDX(CCI_PLATFORM_MDATA_WIDTH-2)
                 )
               v_to_p
                (

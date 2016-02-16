@@ -67,9 +67,7 @@ module qa_sim_top_level(CLK,
     logic pClkDiv2;
     logic pClkDiv4;
     logic uClk_usr;
-    assign uClk_usr = pClk;
     logic uClk_usrDiv2;
-    assign uClk_usrDiv2 = pClkDiv2;
 
     logic       pck_cp2af_softReset;
     logic [1:0] pck_cp2af_pwrState;   // CCI-P AFU Power State
@@ -84,6 +82,8 @@ module qa_sim_top_level(CLK,
         .pClk,
         .pClkDiv2,
         .pClkDiv4,
+        .uClk_usr,
+        .uClk_usrDiv2,
         .pck_cp2af_softReset,
         .pck_cp2af_pwrState,
         .pck_cp2af_error,

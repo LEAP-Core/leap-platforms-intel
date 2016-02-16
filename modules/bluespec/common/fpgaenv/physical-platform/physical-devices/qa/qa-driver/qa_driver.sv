@@ -91,6 +91,8 @@ module qa_driver
     // Memory read
     //
     input  logic [CCI_ADDR_WIDTH-1:0] mem_read_req_addr,
+    // Number of lines requested in multi-line read
+    input  t_cci_clNum  mem_read_req_num_lines,
     // Use CCI's cache if true
     input  logic        mem_read_req_cached,
     // Enforce order of references to the same address?
@@ -106,6 +108,10 @@ module qa_driver
     //
     input  logic [CCI_ADDR_WIDTH-1:0] mem_write_addr,
     input  t_cci_clData mem_write_data,
+    // Number of lines written in multi-line read
+    input  t_cci_clNum  mem_write_req_num_lines,
+    // Start of packet?  (0 only for all but first beat in multi-line write)
+    input  logic        mem_write_req_sop,
     // Use CCI's cache if true
     input  logic        mem_write_req_cached,
     // Enforce order of references to the same address?
@@ -260,7 +266,7 @@ module qa_driver
     qa_driver_main_fiu_tap
       #(
         .AFU_ID(AFU_ID),
-        .QA_DRIVER_WRITE_TAG((1 << CCI_MDATA_WIDTH) - 1)
+        .QA_DRIVER_WRITE_TAG((1 << CCI_PLATFORM_MDATA_WIDTH) - 1)
         )
       tap
        (
@@ -331,7 +337,7 @@ module qa_driver
         // The bit in Mdata that the MUX code will use to record the source
         // of requests. This Mdata location but be 0 on all requests
         // arriving at the MUX.
-        .RESERVED_MDATA_IDX(CCI_MDATA_WIDTH-1)
+        .RESERVED_MDATA_IDX(CCI_PLATFORM_MDATA_WIDTH-1)
         )
       mux
        (
@@ -354,6 +360,7 @@ module qa_driver
         .fiu(fiu_mux[MUX_IDX_MEMORY]),
         .afu_mmio_rd_rsp(afu_csr_rd_rsp),
         .mem_read_req_addr,
+        .mem_read_req_num_lines(t_ccip_clLen'(mem_read_req_num_lines)),
         .mem_read_req_cached,
         .mem_read_req_check_order,
         .mem_read_req_rdy,
@@ -362,6 +369,8 @@ module qa_driver
         .mem_read_rsp_rdy,
         .mem_write_addr,
         .mem_write_data,
+        .mem_write_req_num_lines(t_ccip_clLen'(mem_write_req_num_lines)),
+        .mem_write_req_sop,
         .mem_write_req_cached,
         .mem_write_req_check_order,
         .mem_write_rdy,

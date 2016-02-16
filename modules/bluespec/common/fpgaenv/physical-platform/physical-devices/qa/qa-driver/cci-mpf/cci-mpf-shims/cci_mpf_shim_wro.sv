@@ -746,7 +746,8 @@ module cci_mpf_shim_wro
 
     // Free heap entries as read responses arrive.
     assign c0_heap_freeIdx = t_C0_REQ_IDX'(fiu.c0Rx.hdr);
-    assign c0_heap_free = cci_c0Rx_isReadRsp(fiu.c0Rx);
+    assign c0_heap_free = cci_c0Rx_isReadRsp(fiu.c0Rx) &&
+                          cci_mpf_c0Rx_isEOP(fiu.c0Rx);
 
     // Either forward the header from the FIU for non-read responses or
     // reconstruct the read response header.

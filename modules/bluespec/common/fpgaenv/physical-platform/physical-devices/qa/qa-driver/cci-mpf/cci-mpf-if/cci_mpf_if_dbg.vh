@@ -72,7 +72,7 @@
             assign c2Tx_tid = c2Tx.hdr.tid;
             logic c2Tx_mmioRdValid;
             assign c2Tx_mmioRdValid = c2Tx.mmioRdValid;
-            logic c2Tx_data;
+            t_cci_mmioData c2Tx_data;
             assign c2Tx_data = c2Tx.data;
 
             t_cci_vc c0Rx_hdr_vc_used;
@@ -85,6 +85,8 @@
             assign c0Rx_hdr_resp_type = c0Rx.hdr.resp_type;
             t_ccip_mdata c0Rx_hdr_mdata;
             assign c0Rx_hdr_mdata = c0Rx.hdr.mdata;
+            t_ccip_clData c0Rx_rsvd1;
+            assign c0Rx_hdr_rsvd1 = c0Rx.hdr.rsvd1;
             t_ccip_clData c0Rx_data;
             assign c0Rx_data = c0Rx.data;
             logic c0Rx_rspValid;
@@ -204,10 +206,11 @@
                 /******************* AFU -> MEM Write Request *****************/
                 if (! reset && c1Tx.valid)
                 begin
-                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%x\t%s %x\t%x\n",
+                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%s\t%x\t%s %x\t%x\n",
                             $time,
                             print_channel(c1Tx.hdr.base.vc_sel),
                             c1Tx.hdr.base.cl_len,
+                            (c1Tx.hdr.base.sop ? "S" : "x"),
                             print_c1_reqtype(c1Tx.hdr.base.req_type),
                             c1Tx.hdr.base.mdata,
                             (c1Tx.hdr.ext.addrIsVirtual ? "V" : "P"),
@@ -229,10 +232,12 @@
                 /******************* MEM -> AFU Read Response *****************/
                 if (! reset && c0Rx.rspValid)
                 begin
-                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%x\t%x\n",
+                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%s\t%x\t%x\n",
                             $time,
                             print_channel(c0Rx.hdr.vc_used),
                             c0Rx.hdr.cl_num,
+                            ((c0Rx.hdr.cl_num == 0) ? "S" :
+                               cci_mpf_c0Rx_isEOP(c0Rx) ? "E" : "x"),
                             print_c0_resptype(c0Rx.hdr.resp_type),
                             c0Rx.hdr.mdata,
                             c0Rx.data);
@@ -241,10 +246,11 @@
                 /****************** MEM -> AFU Write Response *****************/
                 if (! reset && c1Rx.rspValid)
                 begin
-                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%x\n",
+                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%s\t%x\n",
                             $time,
                             print_channel(c1Rx.hdr.vc_used),
                             c1Rx.hdr.cl_num,
+                            (c1Rx.hdr.format ? "F" : "x"),
                             print_c1_resptype(c1Rx.hdr.resp_type),
                             c1Rx.hdr.mdata);
                 end

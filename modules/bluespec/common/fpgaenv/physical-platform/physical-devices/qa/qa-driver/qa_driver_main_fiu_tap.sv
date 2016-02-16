@@ -77,6 +77,20 @@ module qa_driver_main_fiu_tap
     t_if_cci_c2_Tx mmio_read_rsp_q;
     logic did_mmio_read_rsp;
 
+    // Track multi-beat writes so writes injected here aren't interrupting
+    // a packet.
+    logic c1Tx_multi_beat_active;
+    cci_mpf_prim_track_multi_write
+      track_multi_write
+       (
+        .clk,
+        .reset,
+        .c1Tx(fiu.c1Tx),
+        .c1Tx_en(1'b1),
+        .packetActive(c1Tx_multi_beat_active),
+        .nextBeatNum()
+        );
+
     always_comb
     begin
         // Request channels to host
@@ -97,7 +111,8 @@ module qa_driver_main_fiu_tap
         // Give priority to AFU activity.  Special cases considered only when
         // memory writes are permitted and there is no traffic already generated
         // this cycle by the AFU.
-        if (! fiu.c1TxAlmFull && ! cci_mpf_c1TxIsValid(afu.c1Tx))
+        if (! fiu.c1TxAlmFull && ! cci_mpf_c1TxIsValid(afu.c1Tx) &&
+            ! c1Tx_multi_beat_active)
         begin
             // Need to set AFU_ID in DSM?  This can always be done since
             // the AFU won't be active until the DSM is initialized.
@@ -159,7 +174,6 @@ module qa_driver_main_fiu_tap
             did_afu_id_write <= csr.afu_dsm_base_valid;
         end
     end
-
 
     //
     // Track compatibility-mode mapping CSR read responses to DSM writes

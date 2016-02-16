@@ -55,6 +55,8 @@ module qa_driver_memory
     // Memory read
     //
     input  t_cci_clAddr       mem_read_req_addr,
+    // Number of lines requested in multi-line read
+    input  t_cci_clLen        mem_read_req_num_lines,
     // Use CCI's cache if true
     input  logic              mem_read_req_cached,
     // Enforce order of references to the same address?
@@ -70,6 +72,10 @@ module qa_driver_memory
     //
     input  t_cci_clAddr       mem_write_addr,
     input  t_cci_clData       mem_write_data,
+    // Number of lines written in multi-line read
+    input  t_cci_clLen        mem_write_req_num_lines,
+    // Start of packet?  (0 only for all but first beat in multi-line write)
+    input  logic              mem_write_req_sop,
     // Use CCI's cache if true
     input  logic              mem_write_req_cached,
     // Enforce order of references to the same address?
@@ -97,6 +103,9 @@ module qa_driver_memory
     always_comb
     begin
         rd_req_params = cci_mpf_defaultReqHdrParams(1);
+
+        rd_req_params.cl_len = mem_read_req_num_lines;
+
         rd_req_params.checkLoadStoreOrder = mem_read_req_check_order;
         // Use a single, ordered channel when load/store order matters.
         if (mem_read_req_check_order)
@@ -110,6 +119,7 @@ module qa_driver_memory
     t_cci_mdata_platform read_req_tag;
     t_cci_mdata_platform read_rsp_tag;
     t_cci_mdata_platform write_req_tag;
+    t_cci_mdata_platform write_req_tag_next;
 
     // Assert almost full for both channels together in order to maintain
     // memory ordering.
@@ -134,6 +144,10 @@ module qa_driver_memory
     always_comb
     begin
         wr_req_params = cci_mpf_defaultReqHdrParams();
+
+        wr_req_params.cl_len = mem_write_req_num_lines;
+        wr_req_params.sop = mem_write_req_sop;
+
         wr_req_params.checkLoadStoreOrder = mem_write_req_check_order;
         wr_req_params.addrIsVirtual = 1'b1;
     end
@@ -142,7 +156,7 @@ module qa_driver_memory
         cci_mpf_genC1TxWriteReq(
             cci_mpf_c1_genReqHdr(mem_write_req_cached ? eREQ_WRLINE_M : eREQ_WRLINE_I,
                                  mem_write_addr,
-                                 t_cci_mdata'(write_req_tag),
+                                 t_cci_mdata'(write_req_tag_next),
                                  wr_req_params),
             mem_write_data,
             mem_write_enable);
@@ -161,6 +175,10 @@ module qa_driver_memory
         end
     end
 
+    // Increment mem_req_tag on SOP
+    assign write_req_tag_next =
+        write_req_tag + t_cci_mdata_platform'(mem_write_enable & mem_write_req_sop);
+
     // Error checking on read tags, used mostly for checking MPF.
     always_ff @(posedge clk)
     begin
@@ -174,10 +192,7 @@ module qa_driver_memory
         end
         else
         begin
-            if (mem_write_enable)
-            begin
-                write_req_tag <= write_req_tag + 1;
-            end
+            write_req_tag <= write_req_tag_next;
 
             if (mem_read_req_enable)
             begin
@@ -186,7 +201,10 @@ module qa_driver_memory
 
             if (mem_read_rsp_rdy)
             begin
-                read_rsp_tag <= read_rsp_tag + 1;
+                if (cci_mpf_c0Rx_isEOP(afu_if.c0Rx))
+                begin
+                    read_rsp_tag <= read_rsp_tag + 1;
+                end
 
                 assert(afu_if.c0Rx.hdr.mdata == read_rsp_tag) else
                     $fatal("qa_driver_memory: Incorrect tag (0x%x), expected 0x%x",

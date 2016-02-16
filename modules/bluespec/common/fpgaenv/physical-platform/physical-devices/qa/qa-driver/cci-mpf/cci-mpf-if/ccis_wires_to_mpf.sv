@@ -78,16 +78,42 @@ module ccis_wires_to_mpf
 
     // FIU connection to the external wires
     cci_mpf_if fiu_ext(.clk);
+    cci_mpf_if fiu_int(.clk);
 
     logic reset;
     assign reset = ! (ffs_vl_LP32ui_lp2sy_SoftReset_n &&
                       ffs_vl_LP32ui_lp2sy_InitDnForSys);
     assign fiu_ext.reset = reset;
-    assign fiu.reset = fiu_ext.reset;
+    assign fiu_int.reset = fiu_ext.reset;
 
-    // Route AFU Tx lines toward FIU
-    assign fiu_ext.c0Tx = fiu.c0Tx;
-    assign fiu_ext.c1Tx = fiu.c1Tx;
+    assign fiu_ext.c0Tx = fiu_int.c0Tx;
+    assign fiu_int.c0TxAlmFull = fiu_ext.c0TxAlmFull;
+
+    assign fiu_ext.c1Tx = fiu_int.c1Tx;
+
+    assign fiu_ext.c2Tx = fiu_int.c2Tx;
+
+    //
+    // Route AFU Tx lines toward FIU, converting multi-line requests into
+    // single line requests since CCI-S doesn't support multi-line.
+    //
+    cci_mpf_if fiu_multi(.clk);
+    cci_mpf_multi_line_read_to_single
+      multi_rd
+       (
+        .clk,
+        .fiu(fiu_int),
+        .afu(fiu_multi)
+        );
+
+    cci_mpf_multi_line_write_to_single
+      multi_wr
+       (
+        .clk,
+        .fiu(fiu_multi),
+        .afu(fiu)
+        );
+
 
     // CCI-S C0 header from MPF header
     function automatic t_ccis_ReqMemHdr cci_mpf_to_ccis_c0_ReqMemHdr(t_cci_mpf_c0_ReqMemHdr mpf_h);
@@ -340,9 +366,9 @@ module ccis_wires_to_mpf
     logic wrfence_alm_full;
 
     logic wr0_valid;
-    assign wr0_valid = cci_mpf_c1TxIsWriteReq(fiu.c1Tx);
+    assign wr0_valid = cci_mpf_c1TxIsWriteReq(fiu_int.c1Tx);
     logic wr1_valid;
-    assign wr1_valid = cci_c1Rx_isWriteRsp(fiu.c1Rx);
+    assign wr1_valid = cci_c1Rx_isWriteRsp(fiu_int.c1Rx);
 
     always_ff @(posedge clk)
     begin
@@ -368,9 +394,8 @@ module ccis_wires_to_mpf
         end
     end
     
-    assign fiu.c0TxAlmFull = fiu_ext.c0TxAlmFull;
     // Signal full to avoid filling the write response FIFO
-    assign fiu.c1TxAlmFull =
+    assign fiu_int.c1TxAlmFull =
         fiu_ext.c1TxAlmFull ||
         (num_active_writes >= MAX_WRITE_REQS - CCI_TX_ALMOST_FULL_THRESHOLD) ||
         wrfence_alm_full;
@@ -386,7 +411,7 @@ module ccis_wires_to_mpf
 
     cci_mpf_prim_fifo_lutram
       #(
-        .N_DATA_BITS(CCI_MDATA_WIDTH),
+        .N_DATA_BITS(CCI_PLATFORM_MDATA_WIDTH),
         .N_ENTRIES(MAX_WRITE_REQS)
         )
       c0_wr_rsp
@@ -406,7 +431,7 @@ module ccis_wires_to_mpf
     //
     // Record WrFence and send a response.
     //
-    t_ccis_mdata wr_fence_mdata;
+    t_cci_mdata wr_fence_mdata;
     t_cci_vc wr_fence_vc_used;
     logic wr_fence_deq_en;
     logic wr_fence_not_empty;
@@ -433,37 +458,263 @@ module ccis_wires_to_mpf
 
     always_comb
     begin
-        fiu.c0Rx = fiu_ext.c0Rx;
+        fiu_int.c0Rx = fiu_ext.c0Rx;
 
         wr_rsp_deq_en = 1'b0;
         wr_fence_deq_en = 1'b0;
 
         if (wr_rsp_not_empty && ! cci_c1Rx_isValid(fiu_ext.c1Rx))
         begin
-            fiu.c1Rx = t_if_cci_c1_Rx'(0);
-            fiu.c1Rx.hdr.resp_type = eRSP_WRLINE;
-            fiu.c1Rx.hdr.vc_used = eVC_VL0;
-            fiu.c1Rx.hdr.mdata = t_cci_mdata'(wr_rsp_mdata);
-            fiu.c1Rx.rspValid = 1'b1;
+            fiu_int.c1Rx = t_if_cci_c1_Rx'(0);
+            fiu_int.c1Rx.hdr.resp_type = eRSP_WRLINE;
+            fiu_int.c1Rx.hdr.vc_used = eVC_VL0;
+            fiu_int.c1Rx.hdr.mdata = t_cci_mdata'(wr_rsp_mdata);
+            fiu_int.c1Rx.rspValid = 1'b1;
 
             wr_rsp_deq_en = 1'b1;
         end
         else if (wr_fence_not_empty && ! cci_c1Rx_isValid(fiu_ext.c1Rx))
         begin
-            fiu.c1Rx = t_if_cci_c1_Rx'(0);
-            fiu.c1Rx.hdr.resp_type = eRSP_WRFENCE;
-            fiu.c1Rx.hdr.vc_used = wr_fence_vc_used;
-            fiu.c1Rx.hdr.mdata = t_cci_mdata'(wr_fence_mdata);
-            fiu.c1Rx.rspValid = 1'b1;
+            fiu_int.c1Rx = t_if_cci_c1_Rx'(0);
+            fiu_int.c1Rx.hdr.resp_type = eRSP_WRFENCE;
+            fiu_int.c1Rx.hdr.vc_used = wr_fence_vc_used;
+            fiu_int.c1Rx.hdr.mdata = t_cci_mdata'(wr_fence_mdata);
+            fiu_int.c1Rx.rspValid = 1'b1;
 
             wr_fence_deq_en = 1'b1;
         end
         else
         begin
-            fiu.c1Rx = fiu_ext.c1Rx;
+            fiu_int.c1Rx = fiu_ext.c1Rx;
         end
     end
 
 endmodule // ccis_wires_to_mpf
+
+
+//
+// Convert a multi-line read request to individual requests since
+// the native interface doesn't support them.
+//
+module cci_mpf_multi_line_read_to_single
+  #(
+    parameter MAX_ACTIVE_REQS = 128
+    )
+   (
+    input  logic clk,
+
+    cci_mpf_if.to_fiu fiu,
+    cci_mpf_if.to_afu afu
+    );
+
+    assign afu.reset = fiu.reset;
+    assign reset = fiu.reset;
+
+    // Only channel 0 is changed.  All others just pass through.
+    assign fiu.c1Tx = afu.c1Tx;
+    assign afu.c1TxAlmFull = fiu.c1TxAlmFull;
+    assign fiu.c2Tx = afu.c2Tx;
+    assign afu.c1Rx = fiu.c1Rx;
+
+    //
+    // Use a FIFO to make incoming c0 Tx requests latency-insensitive.
+    //
+    t_if_cci_mpf_c0_Tx c0Tx_fifo_first;
+    logic c0Tx_fifo_deq;
+    logic c0Tx_fifo_notEmpty;
+
+    cci_mpf_prim_fifo_lutram
+      #(
+        .N_DATA_BITS($bits(t_if_cci_mpf_c0_Tx)),
+        .N_ENTRIES(CCI_TX_ALMOST_FULL_THRESHOLD + 2),
+        .THRESHOLD(CCI_TX_ALMOST_FULL_THRESHOLD)
+        )
+      c0_fifo(.clk,
+              .reset,
+
+              .enq_data(afu.c0Tx),
+              // Map the valid bit through as enq here and notEmpty below.
+              .enq_en(cci_mpf_c0TxIsValid(afu.c0Tx)),
+              .notFull(),
+              .almostFull(afu.c0TxAlmFull),
+
+              .first(c0Tx_fifo_first),
+              .deq_en(c0Tx_fifo_deq),
+              .notEmpty(c0Tx_fifo_notEmpty)
+              );
+
+    //
+    // A heap preserves the original Mdata and number of cache lines in a
+    // request.
+    //
+    typedef logic [$clog2(MAX_ACTIVE_REQS)-1 : 0] t_req_idx;
+
+    logic rd_heap_notFull;
+    t_req_idx rd_heap_allocIdx;
+
+    t_cci_clNum rd_heap_origClNum;
+    t_req_idx rd_heap_origMdata;
+
+    t_if_cci_c0_Rx c0Rx_q;
+
+
+    //
+    // Responses...
+    //
+
+    // Register c0 responses in order to read the heap
+    always_ff @(posedge clk)
+    begin
+        c0Rx_q <= fiu.c0Rx;
+    end
+
+    always_comb
+    begin
+        //
+        // c0 Responses.  Restore state from request stored in local heap.
+        //
+        afu.c0Rx = c0Rx_q;
+        if (cci_c0Rx_isReadRsp(c0Rx_q))
+        begin
+            afu.c0Rx.hdr.mdata[$clog2(MAX_ACTIVE_REQS)-1 : 0] = rd_heap_origMdata;
+
+            // Convert back to multi-line
+            afu.c0Rx.hdr.cl_num = rd_heap_origClNum;
+        end
+    end
+
+
+    //
+    // Requests...
+    //
+
+    //
+    // Convert c0 Tx multi-line to single beat requests
+    //
+    t_cci_clNum beat_num;
+
+    always_comb
+    begin
+        fiu.c0Tx = 'x;
+        fiu.c0Tx.valid = 1'b0;
+
+        c0Tx_fifo_deq = 1'b0;
+
+        // Request to process and space to put it?
+        if (rd_heap_notFull && c0Tx_fifo_notEmpty && ! fiu.c0TxAlmFull)
+        begin
+            fiu.c0Tx = c0Tx_fifo_first;
+            fiu.c0Tx.hdr.base.mdata[$clog2(MAX_ACTIVE_REQS)-1 : 0] = rd_heap_allocIdx;
+
+            // Convert to a single line request
+            fiu.c0Tx.hdr.base.cl_len = eCL_LEN_1;
+            fiu.c0Tx.hdr.base.address[$bits(beat_num)-1:0] =
+                fiu.c0Tx.hdr.base.address[$bits(beat_num)-1:0] | beat_num;
+
+            // Done with all beats?
+            c0Tx_fifo_deq = (beat_num == c0Tx_fifo_first.hdr.base.cl_len);
+        end
+    end
+
+    // Track the beat number
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            beat_num <= t_cci_clNum'(0);
+        end
+        else if (c0Tx_fifo_deq)
+        begin
+            // Done with packet
+            beat_num <= t_cci_clNum'(0);
+        end
+        else if (fiu.c0Tx.valid)
+        begin
+            // In the middle of a multi-beat read
+            beat_num <= beat_num + t_cci_clNum'(1);
+        end
+    end
+
+
+    //
+    // Heap for storing request state and mapping back to response headers.
+    //
+    cci_mpf_prim_heap
+      #(
+        .N_ENTRIES(MAX_ACTIVE_REQS),
+        .N_DATA_BITS($bits(t_cci_clNum) + $bits(t_req_idx)),
+        .MIN_FREE_SLOTS(CCI_TX_ALMOST_FULL_THRESHOLD + 1)
+        )
+      rd_heap
+       (
+        .clk,
+        .reset,
+
+        .enq(fiu.c0Tx.valid),
+        .enqData({ beat_num, t_req_idx'(c0Tx_fifo_first.hdr.base.mdata) }),
+        .notFull(rd_heap_notFull),
+        .allocIdx(rd_heap_allocIdx),
+
+        .readReq(t_req_idx'(fiu.c0Rx.hdr.mdata)),
+        .readRsp({ rd_heap_origClNum, rd_heap_origMdata }),
+        .free(cci_c0Rx_isReadRsp(fiu.c0Rx)),
+        .freeIdx(t_req_idx'(fiu.c0Rx.hdr.mdata))
+        );
+
+endmodule // cci_mpf_multi_line_read_to_single
+
+
+//
+// Convert beats of a multi-line write request to individual requests since
+// the native interface doesn't support them.
+//
+module cci_mpf_multi_line_write_to_single
+   (
+    input  logic clk,
+
+    cci_mpf_if.to_fiu fiu,
+    cci_mpf_if.to_afu afu
+    );
+
+    assign afu.reset = fiu.reset;
+    assign reset = fiu.reset;
+
+    assign fiu.c0Tx = afu.c0Tx;
+    assign afu.c0TxAlmFull = fiu.c0TxAlmFull;
+
+    assign afu.c1TxAlmFull = fiu.c1TxAlmFull;
+
+    assign fiu.c2Tx = afu.c2Tx;
+
+    assign afu.c0Rx = fiu.c0Rx;
+    assign afu.c1Rx = fiu.c1Rx;
+
+
+    t_cci_clNum beat_num;
+
+    always_comb
+    begin
+        fiu.c1Tx = afu.c1Tx;
+
+        // Convert to a single line request
+        fiu.c1Tx.hdr.base.sop = 1'b1;
+        fiu.c1Tx.hdr.base.cl_len = eCL_LEN_1;
+        fiu.c1Tx.hdr.base.address[1:0] = fiu.c1Tx.hdr.base.address[1:0] |
+                                         beat_num;
+    end
+
+    // Track the beat number
+    cci_mpf_prim_track_multi_write
+      track_multi_write
+       (
+        .clk,
+        .reset,
+        .c1Tx(afu.c1Tx),
+        .c1Tx_en(1'b1),
+        .packetActive(),
+        .nextBeatNum(beat_num)
+        );
+
+endmodule // cci_mpf_multi_line_write_to_single
 
 `endif

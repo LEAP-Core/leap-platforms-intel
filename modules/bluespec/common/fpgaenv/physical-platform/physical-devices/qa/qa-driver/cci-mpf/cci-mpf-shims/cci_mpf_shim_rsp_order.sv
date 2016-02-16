@@ -200,13 +200,16 @@ module cci_mpf_shim_rsp_order
     //
     // ====================================================================
 
-    t_req_idx rd_rob_enqIdx;
+    t_req_idx rd_rob_allocIdx;
 
+    logic rd_rob_deq_en;
     logic rd_rob_notEmpty;
     t_cci_mdata rd_rob_mdata;
     t_cci_mdata rd_heap_readMdata;
 
-    t_cci_clData rd_rob_outData;
+    logic rd_rob_eop;
+    t_cci_clNum rd_rob_cl_num;
+    t_cci_clData rd_rob_out_data;
 
     // Buffer not full for timing.  An extra free slot is added to the
     // ROB to account for latency of the not full signal.
@@ -219,6 +222,28 @@ module cci_mpf_shim_rsp_order
     generate
         if (SORT_READ_RESPONSES)
         begin : gen_rd_rob
+            // Number of ROB entries to allocate.  More than one must be
+            // allocated to hold multi-beat read responses. CCI-P allows
+            // up to 4 lines per request, one line per beat.
+            logic [2:0] n_alloc;
+            assign n_alloc = 
+                cci_mpf_c0TxIsReadReq(afu.c0Tx) ?
+                    3'(afu.c0Tx.hdr.base.cl_len) + 3'(1) :
+                    3'(0);
+
+            // Read response index is the base index allocated by the
+            // c0Tx read request plus the beat offset for multi-line reads.
+            t_req_idx rd_rob_data_idx;
+            assign rd_rob_data_idx = t_req_idx'(fiu.c0Rx.hdr.mdata) +
+                                     t_req_idx'(fiu.c0Rx.hdr.cl_num);
+
+            t_cci_mdata rd_sop_mdata;
+            t_cci_mdata rd_beat_mdata;
+
+            t_cci_clNum rd_packet_len;
+            t_cci_clNum rd_sop_packet_len;
+            t_cci_clNum rd_beat_packet_len;
+
             //
             // Read responses are sorted.  Allocate a ROB as
             // a reorder buffer.
@@ -226,29 +251,63 @@ module cci_mpf_shim_rsp_order
             cci_mpf_prim_rob
               #(
                 .N_ENTRIES(MAX_ACTIVE_REQS),
-                .N_DATA_BITS(CCI_CLDATA_WIDTH),
-                .N_META_BITS(CCI_MDATA_WIDTH),
-                .MIN_FREE_SLOTS(CCI_TX_ALMOST_FULL_THRESHOLD + 1)
+                .N_DATA_BITS($bits(t_cci_clNum) + CCI_CLDATA_WIDTH),
+                .N_META_BITS($bits(t_cci_clNum) + CCI_MDATA_WIDTH),
+                .MIN_FREE_SLOTS(CCI_TX_ALMOST_FULL_THRESHOLD * 2),
+                .MAX_ALLOC_PER_CYCLE(4)
                 )
               rd_rob
                (
                 .clk,
                 .reset,
 
-                .enq_en(cci_mpf_c0TxIsReadReq(afu.c0Tx)),
-                .enqMeta(afu.c0Tx.hdr.base.mdata),
+                .alloc(n_alloc),
+                .allocMeta({ afu.c0Tx.hdr.base.cl_len, afu.c0Tx.hdr.base.mdata }),
                 .notFull(rd_not_full),
-                .enqIdx(rd_rob_enqIdx),
+                .allocIdx(rd_rob_allocIdx),
 
                 .enqData_en(cci_c0Rx_isReadRsp(fiu.c0Rx)),
-                .enqDataIdx(t_req_idx'(fiu.c0Rx.hdr.mdata)),
-                .enqData(fiu.c0Rx.data),
+                .enqDataIdx(rd_rob_data_idx),
+                .enqData({ fiu.c0Rx.hdr.cl_num, fiu.c0Rx.data }),
 
-                .deq_en(cci_c0Rx_isReadRsp(afu.c0Rx)),
+                .deq_en(rd_rob_deq_en),
                 .notEmpty(rd_rob_notEmpty),
-                .first(rd_rob_outData),
-                .firstMeta(rd_rob_mdata)
+                .first({ rd_rob_cl_num, rd_rob_out_data }),
+                .firstMeta({ rd_beat_packet_len, rd_beat_mdata })
                 );
+
+
+            // Responses are now ordered.  Mark EOP when the last flit is
+            // forwarded.
+            assign rd_rob_eop = (rd_rob_cl_num == rd_packet_len);
+
+
+            // The Mdata field stored in the ROB is valid only for the first
+            // beat in multi-line responses.  Since responses are ordered
+            // we can preserve valid Mdata and return it with the remaining
+            // flits in a packet.
+            always_comb
+            begin
+                if (rd_rob_cl_num == 0)
+                begin
+                    rd_rob_mdata = rd_beat_mdata;
+                    rd_packet_len = rd_beat_packet_len;
+                end
+                else
+                begin
+                    rd_rob_mdata = rd_sop_mdata;
+                    rd_packet_len = rd_sop_packet_len;
+                end
+            end
+
+            always_ff @(posedge clk)
+            begin
+                if (rd_rob_deq_en && (rd_rob_cl_num == 0))
+                begin
+                    rd_sop_mdata <= rd_beat_mdata;
+                    rd_sop_packet_len <= rd_beat_packet_len;
+                end
+            end
         end
         else
         begin
@@ -271,13 +330,20 @@ module cci_mpf_shim_rsp_order
                 .enq(cci_mpf_c0TxIsReadReq(afu.c0Tx)),
                 .enqData(afu.c0Tx.hdr.base.mdata),
                 .notFull(rd_not_full),
-                .allocIdx(rd_rob_enqIdx),
+                .allocIdx(rd_rob_allocIdx),
 
                 .readReq(t_req_idx'(fiu.c0Rx.hdr.mdata)),
                 .readRsp(rd_heap_readMdata),
-                .free(cci_c0Rx_isReadRsp(fiu.c0Rx)),
+                .free(cci_c0Rx_isReadRsp(fiu.c0Rx) &&
+                      cci_mpf_c0Rx_isEOP(fiu.c0Rx)),
                 .freeIdx(t_req_idx'(fiu.c0Rx.hdr.mdata))
                 );
+
+            assign rd_rob_eop = 'x;
+            assign rd_rob_cl_num = 'x;
+            assign rd_rob_out_data = 'x;
+            assign rd_rob_mdata = 'x;
+            assign rd_rob_notEmpty = 'x;
         end
     endgenerate
 
@@ -287,7 +353,7 @@ module cci_mpf_shim_rsp_order
     always_comb
     begin
         fiu_buf.c0Tx = afu.c0Tx;
-        fiu_buf.c0Tx.hdr.base.mdata = t_cci_mdata'(rd_rob_enqIdx);
+        fiu_buf.c0Tx.hdr.base.mdata = t_cci_mdata'(rd_rob_allocIdx);
     end
 
     logic c0_non_rd_valid;
@@ -306,9 +372,11 @@ module cci_mpf_shim_rsp_order
         // Forward responses toward AFU as they become available in sorted order.
         // Non-read responses on the channel have priority since they are
         // unbuffered.
+        rd_rob_deq_en = 'x;
         if (SORT_READ_RESPONSES)
         begin
-            afu.c0Rx.rspValid = rd_rob_notEmpty && ! c0_non_rd_valid;
+            rd_rob_deq_en = rd_rob_notEmpty && ! c0_non_rd_valid;
+            afu.c0Rx.rspValid = rd_rob_deq_en;
         end
 
         // Either forward the header from the FIU for non-read responses or
@@ -318,7 +386,9 @@ module cci_mpf_shim_rsp_order
         if (SORT_READ_RESPONSES && ! c0_non_rd_valid)
         begin
             afu.c0Rx.hdr = cci_c0_genRspHdr(eRSP_RDLINE, rd_rob_mdata);
-            afu.c0Rx.data = rd_rob_outData;
+            afu.c0Rx.hdr.cl_num = rd_rob_cl_num;
+            afu.c0Rx = cci_mpf_c0Rx_updEOP(afu.c0Rx, rd_rob_eop);
+            afu.c0Rx.data = rd_rob_out_data;
         end
         else
         begin

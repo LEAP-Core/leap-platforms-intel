@@ -650,7 +650,7 @@ module cci_mpf_multi_line_read_to_single
         .clk,
         .reset,
 
-        .enq(fiu.c0Tx.valid),
+        .enq(cci_mpf_c0TxIsReadReq(fiu.c0Tx)),
         .enqData({ beat_num, t_req_idx'(c0Tx_fifo_first.hdr.base.mdata) }),
         .notFull(rd_heap_notFull),
         .allocIdx(rd_heap_allocIdx),
@@ -689,31 +689,16 @@ module cci_mpf_multi_line_write_to_single
     assign afu.c0Rx = fiu.c0Rx;
     assign afu.c1Rx = fiu.c1Rx;
 
-
-    t_cci_clNum beat_num;
-
     always_comb
     begin
         fiu.c1Tx = afu.c1Tx;
 
-        // Convert to a single line request
+        // Convert to a single line request.  The address is already correct
+        // the the receiving side is already prepared for one write response
+        // per line written.
         fiu.c1Tx.hdr.base.sop = 1'b1;
         fiu.c1Tx.hdr.base.cl_len = eCL_LEN_1;
-        fiu.c1Tx.hdr.base.address[1:0] = fiu.c1Tx.hdr.base.address[1:0] |
-                                         beat_num;
     end
-
-    // Track the beat number
-    cci_mpf_prim_track_multi_write
-      track_multi_write
-       (
-        .clk,
-        .reset,
-        .c1Tx(afu.c1Tx),
-        .c1Tx_en(1'b1),
-        .packetActive(),
-        .nextBeatNum(beat_num)
-        );
 
 endmodule // cci_mpf_multi_line_write_to_single
 

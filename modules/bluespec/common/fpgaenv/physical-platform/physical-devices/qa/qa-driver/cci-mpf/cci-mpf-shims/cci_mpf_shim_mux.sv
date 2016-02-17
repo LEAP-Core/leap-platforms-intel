@@ -144,11 +144,21 @@ module cci_mpf_shim_mux
     logic c1_some_chan_active;
     assign c1_some_chan_active = |(c1_active);
 
+    // Almost full flow control
+    logic c0_alm_full;
+    assign c0_alm_full = fiu.c0TxAlmFull;
+    logic c1_alm_full;
+    // Don't block when in the middle of a packet in order to avoid potential
+    // live locks.  There is enough downstream buffering to complete a packet
+    // once it starts.
+    assign c1_alm_full = fiu.c1TxAlmFull && ! c1_some_chan_active;
+
     generate
         for (p = 0; p < NUM_AFU_PORTS; p = p + 1)
         begin : channelRequests
             // Track multi-line writes arriving from the buffered channels
             cci_mpf_prim_track_multi_write
+              wr_track
                (
                 .clk,
                 .reset,
@@ -193,7 +203,7 @@ module cci_mpf_shim_mux
         else
         begin
             // Only update the winner if there was a request.
-            if (|c0_request && ! fiu.c0TxAlmFull)
+            if (|c0_request && ! c0_alm_full)
             begin
                 last_c0_winner_idx <= c0_winner_idx;
 
@@ -201,7 +211,7 @@ module cci_mpf_shim_mux
                     $fatal("cci_mpf_shim_mux.sv: AFU C0 Mdata[%d] must be zero", RESERVED_MDATA_IDX);
             end
 
-            if (|c1_request && ! fiu.c1TxAlmFull)
+            if (|c1_request && ! c1_alm_full)
             begin
                 last_c1_winner_idx <= c1_winner_idx;
 
@@ -226,7 +236,7 @@ module cci_mpf_shim_mux
 
     always_comb
     begin
-        if (fiu.c0TxAlmFull || ! (|c0_request))
+        if (c0_alm_full || ! (|c0_request))
         begin
             // No request
             fiu.c0Tx = cci_mpf_c0Tx_clearValids();
@@ -248,7 +258,7 @@ module cci_mpf_shim_mux
             check_hdr0 = afu_buf[1].c0Tx.hdr.base.mdata[RESERVED_MDATA_IDX];
         end
 
-        if (fiu.c1TxAlmFull || ! (|c1_request))
+        if (c1_alm_full || ! (|c1_request))
         begin
             // No request
             fiu.c1Tx = cci_mpf_c1Tx_clearValids();
@@ -279,8 +289,8 @@ module cci_mpf_shim_mux
             assign afu_buf[p].reset = fiu.reset;
 
             // Dequeue if there was a request and the source won arbitration.
-            assign deqC0Tx[p] = c0_request[p] && (c0_winner_idx == p) && ! fiu.c0TxAlmFull;
-            assign deqC1Tx[p] = c1_request[p] && (c1_winner_idx == p) && ! fiu.c1TxAlmFull;
+            assign deqC0Tx[p] = c0_request[p] && (c0_winner_idx == p) && ! c0_alm_full;
+            assign deqC1Tx[p] = c1_request[p] && (c1_winner_idx == p) && ! c1_alm_full;
         end
     endgenerate
 

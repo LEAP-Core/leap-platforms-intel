@@ -91,14 +91,21 @@ module qa_driver_main_fiu_tap
         .nextBeatNum()
         );
 
+    logic c1_need_write;
+
     always_comb
     begin
+        // Is an injected write pending?
+        c1_need_write = ((! did_afu_id_write && csr.afu_dsm_base_valid) ||
+                         mmio_read_rsp_q.mmioRdValid);
+
         // Request channels to host
         fiu.c0Tx = afu.c0Tx;
         afu.c0TxAlmFull = fiu.c0TxAlmFull;
 
         fiu.c1Tx = afu.c1Tx;
-        afu.c1TxAlmFull = fiu.c1TxAlmFull;
+        afu.c1TxAlmFull = fiu.c1TxAlmFull ||
+                          (c1_need_write && ! c1Tx_multi_beat_active);
 
         fiu.c2Tx = afu.c2Tx;
 

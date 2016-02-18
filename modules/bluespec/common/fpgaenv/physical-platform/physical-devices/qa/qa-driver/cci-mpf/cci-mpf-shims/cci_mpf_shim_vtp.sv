@@ -901,9 +901,8 @@ module cci_mpf_shim_vtp_assoc
         STATE_TLB_SEARCH_LINE,
         STATE_TLB_REQ_LRU,
         STATE_TLB_RECV_LRU,
-        STATE_TLB_PTE_MATCH,
-        STATE_TLB_BUBBLE,
-        STATE_TLB_ERROR
+        STATE_TLB_INSERT,
+        STATE_TLB_BUBBLE
     }
     t_STATE_TLB;
 
@@ -928,6 +927,8 @@ module cci_mpf_shim_vtp_assoc
         t_TLB_PHYSICAL_IDX pIdx;
     }
     t_PTE;
+
+    logic error_pte_missing;
 
     t_PTE found_pte;
     t_PTE cur_pte;
@@ -957,6 +958,7 @@ module cci_mpf_shim_vtp_assoc
             state <= STATE_TLB_IDLE;
             last_miss_channel <= 1'b0;
             bubble_hold <= 1'b1;
+            error_pte_missing <= 1'b0;
         end
         else
         begin
@@ -1051,14 +1053,18 @@ module cci_mpf_shim_vtp_assoc
                     // Iterate over the PTEs in a page table line, looking
                     // for a VA tag match.
                     //
-                    if (pte_num == PTES_PER_LINE'(0))
+                    if (error_pte_missing)
+                    begin
+                        // Nothing
+                    end
+                    else if (pte_num == PTES_PER_LINE'(0))
                     begin
                         // Last PTE in the current line.  Continue along
                         // the linked list of lines.
                         if (t_PTE_IDX'(pt_line) == t_PTE_IDX'(0))
                         begin
                             // End of list
-                            state <= STATE_TLB_ERROR;
+                            error_pte_missing <= 1'b1;
 
                             if (DEBUG_MESSAGES)
                             begin
@@ -1097,7 +1103,7 @@ module cci_mpf_shim_vtp_assoc
                         if (cur_pte.vTag == t_PTE_VA_TAG'(0))
                         begin
                             // NULL VA tag -- no more translations
-                            state <= STATE_TLB_ERROR;
+                            error_pte_missing <= 1'b1;
                         end
 
                         if (DEBUG_MESSAGES)
@@ -1143,11 +1149,11 @@ module cci_mpf_shim_vtp_assoc
                     // Receive the response from the LRU lookup
                     if (lru_lookup_rsp_rdy)
                     begin
-                        state <= STATE_TLB_PTE_MATCH;
+                        state <= STATE_TLB_INSERT;
                     end
                 end
 
-              STATE_TLB_PTE_MATCH:
+              STATE_TLB_INSERT:
                 begin
                     // The translation is added to the TLB (using
                     // combinational logic below).
@@ -1165,11 +1171,6 @@ module cci_mpf_shim_vtp_assoc
                         state <= STATE_TLB_IDLE;
                     end
                 end
-
-              STATE_TLB_ERROR:
-                begin
-                    // Terminal -- failed to find translation for a VA.
-                end
             endcase
         end
     end
@@ -1179,13 +1180,11 @@ module cci_mpf_shim_vtp_assoc
     assign tlbReadIdxEn = tlbReadIdxRdy && (state == STATE_TLB_READ_REQ);
 
     // Signal an error
-    assign lookupNotPresent[0] = (state == STATE_TLB_ERROR) &&
-                                 (last_miss_channel == 0);
-    assign lookupNotPresent[1] = (state == STATE_TLB_ERROR) &&
-                                 (last_miss_channel == 1);
+    assign lookupNotPresent[0] = error_pte_missing && (last_miss_channel == 0);
+    assign lookupNotPresent[1] = error_pte_missing && (last_miss_channel == 1);
 
     //
-    // TLB insertion (in STATE_TLB_PTE_MATCH)
+    // TLB insertion (in STATE_TLB_INSERT)
     //
 
     // Convert from page table tag/hash to TLB tag/index
@@ -1213,7 +1212,7 @@ module cci_mpf_shim_vtp_assoc
     // ====================================================================
 
     // Port 1 is used for updates in addition to lookups.
-    assign lookupRdy[1] = initialized && (state != STATE_TLB_PTE_MATCH);
+    assign lookupRdy[1] = initialized && (state != STATE_TLB_INSERT);
 
     // LRU replacement.  Determine which way to replace when inserting
     // a new translation in the TLB.
@@ -1227,16 +1226,16 @@ module cci_mpf_shim_vtp_assoc
 
         // Pick the LRU way when writing.  This happens only during
         // initialization and when a new translation is being added to
-        // the TLB:  state == STATE_TLB_PTE_MATCH.
+        // the TLB:  state == STATE_TLB_INSERT.
         for (int way = 0; way < NUM_TLB_SET_WAYS; way = way + 1)
         begin
-            tlb_wen[way] = ((state == STATE_TLB_PTE_MATCH) &&
+            tlb_wen[way] = ((state == STATE_TLB_INSERT) &&
                             lru_repl_vec[way]);
         end
 
         // Address is the update address if writing and the read address
         // otherwise.
-        if (state == STATE_TLB_PTE_MATCH)
+        if (state == STATE_TLB_INSERT)
         begin
             tlb_addr[1] = t_TLB_IDX'(insert_idx);
         end
@@ -1268,7 +1267,7 @@ module cci_mpf_shim_vtp_assoc
                 end
             end
 
-            if (state == STATE_TLB_PTE_MATCH)
+            if (state == STATE_TLB_INSERT)
             begin
                 for (int way = 0; way < NUM_TLB_SET_WAYS; way = way + 1)
                 begin

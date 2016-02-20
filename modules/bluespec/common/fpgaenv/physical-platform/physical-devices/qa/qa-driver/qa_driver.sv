@@ -326,8 +326,7 @@ module qa_driver
     localparam MUX_IDX_MEMORY   = 0;
     localparam MUX_IDX_CHANNELS = 1;
 
-    cci_mpf_if
-      fiu_mux[0:1] (.clk);
+    cci_mpf_if fiu_mux[0:1] (.clk);
 
     cci_mpf_shim_mux
       #(

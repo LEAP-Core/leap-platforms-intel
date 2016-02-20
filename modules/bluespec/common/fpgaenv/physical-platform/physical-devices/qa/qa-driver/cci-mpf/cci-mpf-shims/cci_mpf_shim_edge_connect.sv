@@ -100,7 +100,12 @@ module cci_mpf_shim_edge_connect
       #(
         .N_ENTRIES(N_WRITE_HEAP_ENTRIES),
         .N_DATA_BITS(CCI_CLDATA_WIDTH),
-        .MIN_FREE_SLOTS(CCI_TX_ALMOST_FULL_THRESHOLD + 1),
+        // Leave space both for the almost full threshold and a full
+        // multi-line packet.  To avoid deadlocks we never signal a
+        // transition to almost full in the middle of a packet so must
+        // be prepared to absorb all flits.
+        .MIN_FREE_SLOTS(CCI_TX_ALMOST_FULL_THRESHOLD +
+                        CCI_MAX_MULTI_LINE_BEATS + 1),
         .N_OUTPUT_REG_STAGES(1)
         )
       wr_heap
@@ -298,12 +303,17 @@ module cci_mpf_shim_edge_connect
     //
     // ====================================================================
 
+    logic afu_wr_packet_active;
+
     // All but write requests flow straight through
     assign afu.c0Tx = cci_mpf_updC0TxCanonical(afu_edge.c0Tx);
     assign afu.c2Tx = afu_edge.c2Tx;
 
     assign afu_edge.c0TxAlmFull = afu.c0TxAlmFull;
-    assign afu_edge.c1TxAlmFull = afu.c1TxAlmFull || ! wr_heap_not_full;
+    // Never signal almost full in the middle of a packet. Deadlocks can result
+    // since the control flit is already flowing through MPF.
+    assign afu_edge.c1TxAlmFull = (afu.c1TxAlmFull || ! wr_heap_not_full) &&
+                                  ! afu_wr_packet_active;
 
     assign afu_edge.c0Rx = afu.c0Rx;
     assign afu_edge.c1Rx = afu.c1Rx;
@@ -332,14 +342,25 @@ module cci_mpf_shim_edge_connect
     // multi-beat requests are formatted properly.
     //
 
-    t_ccip_clNum afu_wr_beats_rem;
+    cci_mpf_prim_track_multi_write
+      afu_wr_track
+       (
+        .clk,
+        .reset,
+        .c1Tx(afu_edge.c1Tx),
+        .c1Tx_en(1'b1),
+        .packetActive(afu_wr_packet_active),
+        .nextBeatNum()
+        );
+
     t_ccip_clAddr afu_wr_prev_addr;
+    t_cci_clLen afu_wr_prev_cl_len;
 
     always_ff @(posedge clk)
     begin
         if (reset)
         begin
-            afu_wr_beats_rem <= 0;
+            // Nothing
         end
         else
         begin
@@ -351,30 +372,28 @@ module cci_mpf_shim_edge_connect
 
             if (cci_mpf_c1TxIsWriteReq(afu_edge.c1Tx))
             begin
-                assert(afu_edge.c1Tx.hdr.base.sop == (afu_wr_beats_rem == 0)) else
+                assert(afu_edge.c1Tx.hdr.base.sop != afu_wr_packet_active) else
                     if (! afu_edge.c1Tx.hdr.base.sop)
                         $fatal("cci_mpf_shim_edge_connect: Expected SOP flag on write");
                     else
                         $fatal("cci_mpf_shim_edge_connect: Wrong number of multi-beat writes");
 
-                assert(afu_edge.c1Tx.hdr.base.sop ||
-                       (afu_wr_prev_addr == afu_edge.c1Tx.hdr.base.address)) else
-                    $fatal("cci_mpf_shim_edge_connect: Address changed in multi-beat write");
-
-                assert((afu_edge.c1Tx.hdr.base.address[1:0] & afu_edge.c1Tx.hdr.base.cl_len) == 2'b0) else
-                    $fatal("cci_mpf_shim_edge_connect: Multi-beat write address must be naturally aligned");
-
-
                 if (afu_edge.c1Tx.hdr.base.sop)
                 begin
-                    afu_wr_beats_rem <= afu_edge.c1Tx.hdr.base.cl_len;
+                    assert ((afu_edge.c1Tx.hdr.base.address[1:0] & afu_edge.c1Tx.hdr.base.cl_len) == 2'b0) else
+                        $fatal("cci_mpf_shim_edge_connect: Multi-beat write address must be naturally aligned");
                 end
                 else
                 begin
-                    afu_wr_beats_rem <= afu_wr_beats_rem - 1;
+                    assert (afu_wr_prev_cl_len == afu_edge.c1Tx.hdr.base.cl_len) else
+                        $fatal("cci_mpf_shim_edge_connect: cl_len must be the same in all beats of a multi-line write");
+
+                    assert ((afu_wr_prev_addr + 1) == afu_edge.c1Tx.hdr.base.address) else
+                        $fatal("cci_mpf_shim_edge_connect: Address must increment with each beat in multi-line write");
                 end
 
                 afu_wr_prev_addr <= afu_edge.c1Tx.hdr.base.address;
+                afu_wr_prev_cl_len <= afu_edge.c1Tx.hdr.base.cl_len;
             end
         end
     end

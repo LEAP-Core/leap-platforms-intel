@@ -179,7 +179,11 @@ module cci_mpf_shim_buffer_afu
 
     // Forward the FIFO to the buffered output.  The valid bit is
     // only meaningful when the FIFO isn't empty.
-    assign afu_buf.c1Tx = cci_mpf_c1TxMaskValids(c1_first, c1_notEmpty);
+    always_comb
+    begin
+        afu_buf.c1Tx = c1_first;
+        afu_buf.c1Tx.valid = c1_notEmpty;
+    end
 
     cci_mpf_prim_fifo_lutram
       #(

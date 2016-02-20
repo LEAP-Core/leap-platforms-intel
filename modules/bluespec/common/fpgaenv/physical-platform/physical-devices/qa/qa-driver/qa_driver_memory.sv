@@ -121,11 +121,6 @@ module qa_driver_memory
     t_cci_mdata_platform write_req_tag;
     t_cci_mdata_platform write_req_tag_next;
 
-    // Assert almost full for both channels together in order to maintain
-    // memory ordering.
-    logic almFull;
-    assign almFull = afu_if.c0TxAlmFull || afu_if.c1TxAlmFull;
-
     assign afu_if.c0Tx =
         cci_mpf_genC0TxReadReq(
             cci_mpf_c0_genReqHdr(mem_read_req_cached ? eREQ_RDLINE_S : eREQ_RDLINE_I,
@@ -134,7 +129,7 @@ module qa_driver_memory
                                  rd_req_params),
             mem_read_req_enable);
 
-    assign mem_read_req_rdy = ! almFull;
+    assign mem_read_req_rdy = ! afu_if.c0TxAlmFull;
 
     assign mem_read_rsp_data = afu_if.c0Rx.data;
     assign mem_read_rsp_rdy = cci_c0Rx_isReadRsp(afu_if.c0Rx);
@@ -161,7 +156,7 @@ module qa_driver_memory
             mem_write_data,
             mem_write_enable);
 
-    assign mem_write_rdy = ! almFull;
+    assign mem_write_rdy = ! afu_if.c1TxAlmFull;
     assign mem_write_ack = cci_c1Rx_isWriteRsp(afu_if.c1Rx);
 
     always_ff @(posedge clk)

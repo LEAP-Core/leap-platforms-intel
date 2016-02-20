@@ -102,6 +102,30 @@ module cci_mpf_prim_lru_pseudo
     endfunction
 
 
+    //
+    // Register inputs for timing.  Delaying LRU update a cycle doesn't
+    // really matter.
+    //
+    t_ENTRY_IDX refIdx0_q;
+    t_WAY_VEC refWayVec0_q;
+    logic refEn0_q;
+
+    t_ENTRY_IDX refIdx1_q;
+    t_WAY_VEC refWayVec1_q;
+    logic refEn1_q;
+
+    always_ff @(posedge clk)
+    begin
+        refIdx0_q <= refIdx0;
+        refWayVec0_q <= refWayVec0;
+        refEn0_q <= refEn0;
+
+        refIdx1_q <= refIdx1;
+        refWayVec1_q <= refWayVec1;
+        refEn1_q <= refEn1;
+    end
+
+
     // ====================================================================
     //
     //   Storage
@@ -175,13 +199,13 @@ module cci_mpf_prim_lru_pseudo
     always_comb
     begin
         // Default -- read for update if requested
-        addr0 = refIdx0;
+        addr0 = refIdx0_q;
         wdata0 = 'x;
         wen0 = 1'b0;
 
-        update0_en  = refEn0 && rdy;
-        update0_idx = refIdx0;
-        update0_ref = refWayVec0;
+        update0_en  = refEn0_q && rdy;
+        update0_idx = refIdx0_q;
+        update0_ref = refWayVec0_q;
 
         if (update0_en_qq)
         begin
@@ -294,12 +318,12 @@ module cci_mpf_prim_lru_pseudo
     always_comb
     begin
         // Default -- read for update if requested
-        addr1 = refIdx1;
+        addr1 = refIdx1_q;
         wdata1 = 'x;
 
-        update1_en  = refEn1 && rdy;
-        update1_idx = refIdx1;
-        update1_ref = refWayVec1;
+        update1_en  = refEn1_q && rdy;
+        update1_idx = refIdx1_q;
+        update1_ref = refWayVec1_q;
 
         if (lookupEn)
         begin

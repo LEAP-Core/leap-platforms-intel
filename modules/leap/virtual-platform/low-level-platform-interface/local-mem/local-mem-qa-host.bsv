@@ -134,6 +134,7 @@ module [CONNECTED_MODULE] mkLocalMem#(LOCAL_MEM_CONFIG conf)
     // Track multi-beat reads and writes.
     //
     Reg#(Bit#(TLog#(LOCAL_MEM_WORDS_PER_LINE))) nWriteBeatsRem <- mkReg(0);
+    Reg#(Bit#(TLog#(LOCAL_MEM_WORDS_PER_LINE))) writeBeatIdx <- mkRegU();
     Reg#(LOCAL_MEM_ADDR) writeMultiAddr <- mkRegU();
     Reg#(Vector#(LOCAL_MEM_WORDS_PER_LINE, LOCAL_MEM_WORD)) writeMultiBuf <- mkRegU();
 
@@ -174,7 +175,7 @@ module [CONNECTED_MODULE] mkLocalMem#(LOCAL_MEM_CONFIG conf)
         begin
             // Finish a multi-line write request
             let w_req = QA_MEM_WRITE_REQ {
-                            addr: writeMultiAddr,
+                            addr: writeMultiAddr | zeroExtend(writeBeatIdx),
                             data: writeMultiBuf[0],
                             numLines: fromInteger(cci_num_lines),
                             sop: False,
@@ -185,6 +186,7 @@ module [CONNECTED_MODULE] mkLocalMem#(LOCAL_MEM_CONFIG conf)
                                      write: tagged Valid w_req });
 
             nWriteBeatsRem <= nWriteBeatsRem - 1;
+            writeBeatIdx <= writeBeatIdx + 1;
             writeMultiBuf <= shiftInAtN(writeMultiBuf, ?);
         end
         else
@@ -220,6 +222,7 @@ module [CONNECTED_MODULE] mkLocalMem#(LOCAL_MEM_CONFIG conf)
 
             writeMultiAddr <= w_addr;
             writeMultiBuf <= shiftInAtN(w_vec, ?);
+            writeBeatIdx <= 1;
         end
     endrule
 

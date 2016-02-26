@@ -76,6 +76,7 @@ package cci_mpf_if_pkg;
     typedef t_ccip_vc t_cci_vc;
     typedef t_ccip_clLen t_cci_clLen;
     typedef t_ccip_clNum t_cci_clNum;
+    typedef t_ccip_qwIdx t_cci_qwIdx;
     // Maximum number of beats in a multi-line request
     parameter CCI_MAX_MULTI_LINE_BEATS = 1 << $clog2($bits(t_cci_clNum));
 
@@ -98,9 +99,17 @@ package cci_mpf_if_pkg;
     typedef t_ccip_c1_RspMemHdr t_cci_c1_RspMemHdr;
     parameter CCI_C1RX_MEMHDR_WIDTH = CCIP_C1RX_MEMHDR_WIDTH;
 
+    // Atomic request/response variants
+    typedef t_ccip_c1_ReqAtomicHdr t_cci_c1_ReqAtomicHdr;
+    typedef t_ccip_c0_RspAtomicHdr t_cci_c0_RspAtomicHdr;
+
+    // Memory fence request/response variants
+    typedef t_ccip_c1_ReqFenceHdr t_cci_c1_ReqFenceHdr;
+    typedef t_ccip_c1_RspFenceHdr t_cci_c1_RspFenceHdr;
+
+    // MMIO request/response variants
     typedef t_ccip_c0_ReqMmioHdr t_cci_c0_ReqMmioHdr;
     parameter CCI_C0RX_MMIOHDR_WIDTH = CCIP_C0RX_MMIOHDR_WIDTH;
-
     typedef t_ccip_c2_RspMmioHdr t_cci_c2_RspMmioHdr;
     parameter CCI_C2TX_MMIOHDR_WIDTH = CCIP_C2TX_MMIOHDR_WIDTH;
 
@@ -604,13 +613,21 @@ package cci_mpf_if_pkg;
         return r.valid;
     endfunction
 
+    // Does an MPF C0 TX have read request?
+    function automatic logic cci_mpf_c0TxIsReadReq_noCheckValid(
+        input t_if_cci_mpf_c0_Tx r
+        );
+
+        return ((r.hdr.base.req_type == eREQ_RDLINE_I) ||
+                (r.hdr.base.req_type == eREQ_RDLINE_S));
+    endfunction
+
     // Does an MPF C0 TX have a valid read request?
     function automatic logic cci_mpf_c0TxIsReadReq(
         input t_if_cci_mpf_c0_Tx r
         );
 
-        return r.valid && ((r.hdr.base.req_type == eREQ_RDLINE_I) ||
-                           (r.hdr.base.req_type == eREQ_RDLINE_S));
+        return r.valid && cci_mpf_c0TxIsReadReq_noCheckValid(r);
     endfunction
 
 
@@ -623,19 +640,35 @@ package cci_mpf_if_pkg;
     endfunction
 
     // Does an MPF C0 TX have a valid write request?
+    function automatic logic cci_mpf_c1TxIsWriteReq_noCheckValid(
+        input t_if_cci_mpf_c1_Tx r
+        );
+
+        return ((r.hdr.base.req_type == eREQ_WRLINE_I) ||
+                (r.hdr.base.req_type == eREQ_WRLINE_M));
+    endfunction
+
+    // Does an MPF C0 TX have a valid write request?
     function automatic logic cci_mpf_c1TxIsWriteReq(
         input t_if_cci_mpf_c1_Tx r
         );
 
-        return r.valid && ((r.hdr.base.req_type == eREQ_WRLINE_I) ||
-                           (r.hdr.base.req_type == eREQ_WRLINE_M));
+        return r.valid && cci_mpf_c1TxIsWriteReq_noCheckValid(r);
+    endfunction
+
+
+    function automatic logic cci_mpf_c1TxIsWriteFenceReq_noCheckValid(
+        input t_if_cci_mpf_c1_Tx r
+        );
+
+        return (r.hdr.base.req_type == eREQ_WRFENCE);
     endfunction
 
     function automatic logic cci_mpf_c1TxIsWriteFenceReq(
         input t_if_cci_mpf_c1_Tx r
         );
 
-        return r.valid && (r.hdr.base.req_type == eREQ_WRFENCE);
+        return r.valid && cci_mpf_c1TxIsWriteFenceReq_noCheckValid(r);
     endfunction
 
 

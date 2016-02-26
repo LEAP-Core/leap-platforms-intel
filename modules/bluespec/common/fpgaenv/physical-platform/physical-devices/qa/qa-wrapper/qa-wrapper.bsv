@@ -239,7 +239,7 @@ interface QA_WIRES;
                              Bit#(574) pck_cp2af_sRx);
 
     (* prefix = "", always_ready *)
-    method Bit#(736) pck_af2cp_sTx;
+    method Bit#(742) pck_af2cp_sTx;
 `endif
 endinterface
 

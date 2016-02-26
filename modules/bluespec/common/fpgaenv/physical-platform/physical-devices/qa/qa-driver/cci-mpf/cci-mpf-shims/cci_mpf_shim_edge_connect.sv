@@ -331,9 +331,12 @@ module cci_mpf_shim_edge_connect
         // Multi-beat write request?  Only the start of packet beat goes
         // through MPF.  The rest are buffered in wr_heap here and the
         // packets will be regenerated when the sop packet exits.
+        //
+        // Only pass requests that are either the start of a write or
+        // that aren't writes.
         afu.c1Tx.valid = afu_edge.c1Tx.valid &&
                          (afu_edge.c1Tx.hdr.base.sop ||
-                          (afu_edge.c1Tx.hdr.base.cl_len == eCL_LEN_1));
+                          ! cci_mpf_c1TxIsWriteReq_noCheckValid(afu_edge.c1Tx));
     end
 
 

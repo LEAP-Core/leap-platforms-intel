@@ -696,8 +696,11 @@ module cci_mpf_multi_line_write_to_single
         // Convert to a single line request.  The address is already correct
         // the the receiving side is already prepared for one write response
         // per line written.
-        fiu.c1Tx.hdr.base.sop = 1'b1;
-        fiu.c1Tx.hdr.base.cl_len = eCL_LEN_1;
+        if (cci_mpf_c1TxIsWriteReq_noCheckValid(afu.c1Tx))
+        begin
+            fiu.c1Tx.hdr.base.sop = 1'b1;
+            fiu.c1Tx.hdr.base.cl_len = eCL_LEN_1;
+        end
     end
 
 endmodule // cci_mpf_multi_line_write_to_single

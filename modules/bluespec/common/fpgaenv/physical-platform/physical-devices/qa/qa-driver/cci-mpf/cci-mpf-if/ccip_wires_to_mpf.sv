@@ -149,10 +149,13 @@ module cci_mpf_multi_line_write_to_single
                 fiu_c1_tx = afu_c1_tx;
 
                 // Convert to a single line request
-                fiu_c1_tx.hdr.base.sop = 1'b1;
-                fiu_c1_tx.hdr.base.cl_len = eCL_LEN_1;
-                fiu_c1_tx.hdr.base.address[1:0] = fiu_c1_tx.hdr.base.address[1:0] |
-                                                  beat_num;
+                if (cci_mpf_c1TxIsWriteReq_noCheckValid(afu_c1_tx))
+                begin
+                    fiu_c1_tx.hdr.base.sop = 1'b1;
+                    fiu_c1_tx.hdr.base.cl_len = eCL_LEN_1;
+                    fiu_c1_tx.hdr.base.address[1:0] = fiu_c1_tx.hdr.base.address[1:0] |
+                                                      beat_num;
+                end
             end
         end
     endgenerate

@@ -53,7 +53,7 @@ typedef enum logic [3:0] {
     eREQ_WRLINE_M  = 4'h1,      // Memory Write with FPGA Cache Hint=Modified
 //    eREQ_WRPUSH_I  = 4'h2,      // Memory Write with DDIO Hint ** NOT SUPPORTED CURRENTLY **
     eREQ_WRFENCE   = 4'h4,      // Memory Write Fence
-    eREQ_ATOMIC    = 4'h5,      // Atomic operation: Compare-Exchange for Memory Addr
+//    eREQ_ATOMIC    = 4'h5,      // Atomic operation: Compare-Exchange for Memory Addr  ** NOT SUPPORTED CURRENTELY **
     eREQ_INTR      = 4'h6       // Interrupt the CPU ** NOT SUPPORTED CURRENTLY **
 } t_ccip_c1_req;
 
@@ -62,8 +62,8 @@ typedef enum logic [3:0] {
 // Channel 0
 typedef enum logic [3:0] {
     eRSP_RDLINE     = 4'h0,     // Memory Read
-    eRSP_UMSG       = 4'h4,     // UMsg received
-    eRSP_ATOMIC     = 4'h5      // Atomic Operation: Compare-Exchange for Memory Addr
+    eRSP_UMSG       = 4'h4      // UMsg received
+//    eRSP_ATOMIC     = 4'h5      // Atomic Operation: Compare-Exchange for Memory Addr
 } t_ccip_c0_rsp;
 
 // Channel 1
@@ -103,7 +103,7 @@ typedef struct packed {
     t_ccip_clAddr   address;
     t_ccip_mdata    mdata;
 } t_ccip_c0_ReqMemHdr;
-parameter CCIP_C0TX_MEMHDR_WIDTH = $bits(t_ccip_c0_ReqMemHdr);
+parameter CCIP_C0TX_HDR_WIDTH = $bits(t_ccip_c0_ReqMemHdr);
 
 typedef struct packed {
     logic [5:0]     rsvd2;
@@ -116,18 +116,7 @@ typedef struct packed {
     t_ccip_clAddr   address;
     t_ccip_mdata    mdata;
 } t_ccip_c1_ReqMemHdr;
-parameter CCIP_C1TX_MEMHDR_WIDTH = $bits(t_ccip_c1_ReqMemHdr);
-
-typedef struct packed {
-    t_ccip_qwIdx    qw_idx;
-    logic [2:0]     rsvd2;
-    t_ccip_vc       vc_sel;       // only eVC_VL0 is legal
-    logic [3:0]     rsvd1;
-    t_ccip_c1_req   req_type;     // reserved, drive 0
-    logic [5:0]     rsvd0;        // reserved, drive 0
-    t_ccip_clAddr   address;
-    t_ccip_mdata    mdata;
-} t_ccip_c1_ReqAtomicHdr;
+parameter CCIP_C1TX_HDR_WIDTH = $bits(t_ccip_c1_ReqMemHdr);
 
 typedef struct packed {
     logic [5:0]     rsvd2;          // reserved, drive 0
@@ -147,17 +136,7 @@ typedef struct packed {
     t_ccip_c0_rsp   resp_type;
     t_ccip_mdata    mdata;
 } t_ccip_c0_RspMemHdr;
-parameter CCIP_C0RX_MEMHDR_WIDTH = $bits(t_ccip_c0_RspMemHdr);
-
-typedef struct packed {
-    t_ccip_vc       vc_used;
-    logic           rsvd1;          // reserved, don't care
-    logic           hit_miss;
-    logic           success;
-    logic [2:0]     rsvd0;          // reserved, don't care
-    t_ccip_c0_rsp   resp_type;
-    t_ccip_mdata    mdata;
-} t_ccip_c0_RspAtomicHdr;
+parameter CCIP_C0RX_HDR_WIDTH = $bits(t_ccip_c0_RspMemHdr);
 
 typedef struct packed {
     t_ccip_vc       vc_used;
@@ -169,7 +148,7 @@ typedef struct packed {
     t_ccip_c1_rsp   resp_type;
     t_ccip_mdata    mdata;
 } t_ccip_c1_RspMemHdr;
-parameter CCIP_C1RX_MEMHDR_WIDTH = $bits(t_ccip_c1_RspMemHdr);
+parameter CCIP_C1RX_HDR_WIDTH = $bits(t_ccip_c1_RspMemHdr);
 
 typedef struct packed {
     logic [7:0]     rsvd0;          // reserved, don't care
@@ -188,12 +167,11 @@ typedef struct packed {
     logic           rsvd;       // reserved, don't care
     t_ccip_tid      tid;
 } t_ccip_c0_ReqMmioHdr;
-parameter CCIP_C0RX_MMIOHDR_WIDTH = $bits(t_ccip_c0_ReqMmioHdr);
 
 typedef struct packed {
     t_ccip_tid     tid;         // Returned back from ReqMmioHdr
 } t_ccip_c2_RspMmioHdr;
-parameter CCIP_C2TX_MMIOHDR_WIDTH = $bits(t_ccip_c2_RspMmioHdr);
+parameter CCIP_C2TX_HDR_WIDTH = $bits(t_ccip_c2_RspMmioHdr);
 
 //------------------------------------------------------------------------
 // CCI-P Input & Output bus structures 

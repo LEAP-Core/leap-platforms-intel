@@ -757,7 +757,7 @@ module cci_mpf_shim_wro
 
         if (cci_c0Rx_isReadRsp(fiu_buf.c0Rx))
         begin
-            afu_buf.c0Rx.hdr = { fiu_buf.c0Rx.hdr[CCI_C0RX_MEMHDR_WIDTH-1 : $bits(t_C0_REQ_IDX)], c0_heap_readRsp.mdata };
+            afu_buf.c0Rx.hdr = { fiu_buf.c0Rx.hdr[CCI_C0RX_HDR_WIDTH-1 : $bits(t_C0_REQ_IDX)], c0_heap_readRsp.mdata };
         end
     end
 
@@ -800,7 +800,7 @@ module cci_mpf_shim_wro
 
         if (cci_c1Rx_isWriteRsp(fiu_buf.c1Rx))
         begin
-            afu_buf.c1Rx.hdr = { fiu_buf.c1Rx.hdr[CCI_C1RX_MEMHDR_WIDTH-1 : $bits(t_C1_REQ_IDX)], c1_heap_readRsp.mdata };
+            afu_buf.c1Rx.hdr = { fiu_buf.c1Rx.hdr[CCI_C1RX_HDR_WIDTH-1 : $bits(t_C1_REQ_IDX)], c1_heap_readRsp.mdata };
         end
     end
 

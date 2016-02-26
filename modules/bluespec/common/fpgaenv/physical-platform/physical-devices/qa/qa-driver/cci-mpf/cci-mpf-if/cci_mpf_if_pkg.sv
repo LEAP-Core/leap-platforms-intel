@@ -60,10 +60,11 @@ package cci_mpf_if_pkg;
 `ifdef USE_PLATFORM_CCIS
     parameter CCI_PLATFORM_MDATA_WIDTH = CCIS_MDATA_WIDTH;
     parameter CCI_TX_ALMOST_FULL_THRESHOLD = CCIS_TX_ALMOST_FULL_THRESHOLD;
-`endif
-`ifdef USE_PLATFORM_CCIP
+`elsif USE_PLATFORM_CCIP
     parameter CCI_PLATFORM_MDATA_WIDTH = CCIP_MDATA_WIDTH;
     parameter CCI_TX_ALMOST_FULL_THRESHOLD = CCIP_TX_ALMOST_FULL_THRESHOLD;
+`else
+    ** ERROR: Select a valid platform
 `endif
 
     typedef t_ccip_clAddr t_cci_clAddr;
@@ -90,18 +91,14 @@ package cci_mpf_if_pkg;
     typedef t_ccip_c1_rsp t_cci_c1_rsp;
 
     typedef t_ccip_c0_ReqMemHdr t_cci_c0_ReqMemHdr;
-    parameter CCI_C0TX_MEMHDR_WIDTH = CCIP_C0TX_MEMHDR_WIDTH;
+    parameter CCI_C0TX_HDR_WIDTH = CCIP_C0TX_HDR_WIDTH;
     typedef t_ccip_c1_ReqMemHdr t_cci_c1_ReqMemHdr;
-    parameter CCI_C1TX_MEMHDR_WIDTH = CCIP_C1TX_MEMHDR_WIDTH;
+    parameter CCI_C1TX_HDR_WIDTH = CCIP_C1TX_HDR_WIDTH;
 
     typedef t_ccip_c0_RspMemHdr t_cci_c0_RspMemHdr;
-    parameter CCI_C0RX_MEMHDR_WIDTH = CCIP_C0RX_MEMHDR_WIDTH;
+    parameter CCI_C0RX_HDR_WIDTH = CCIP_C0RX_HDR_WIDTH;
     typedef t_ccip_c1_RspMemHdr t_cci_c1_RspMemHdr;
-    parameter CCI_C1RX_MEMHDR_WIDTH = CCIP_C1RX_MEMHDR_WIDTH;
-
-    // Atomic request/response variants
-    typedef t_ccip_c1_ReqAtomicHdr t_cci_c1_ReqAtomicHdr;
-    typedef t_ccip_c0_RspAtomicHdr t_cci_c0_RspAtomicHdr;
+    parameter CCI_C1RX_HDR_WIDTH = CCIP_C1RX_HDR_WIDTH;
 
     // Memory fence request/response variants
     typedef t_ccip_c1_ReqFenceHdr t_cci_c1_ReqFenceHdr;
@@ -109,9 +106,7 @@ package cci_mpf_if_pkg;
 
     // MMIO request/response variants
     typedef t_ccip_c0_ReqMmioHdr t_cci_c0_ReqMmioHdr;
-    parameter CCI_C0RX_MMIOHDR_WIDTH = CCIP_C0RX_MMIOHDR_WIDTH;
     typedef t_ccip_c2_RspMmioHdr t_cci_c2_RspMmioHdr;
-    parameter CCI_C2TX_MMIOHDR_WIDTH = CCIP_C2TX_MMIOHDR_WIDTH;
 
     typedef t_if_ccip_c0_Tx t_if_cci_c0_Tx;
     typedef t_if_ccip_c1_Tx t_if_cci_c1_Tx;

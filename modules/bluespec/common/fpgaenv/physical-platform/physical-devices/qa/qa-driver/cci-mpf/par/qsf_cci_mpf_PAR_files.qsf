@@ -16,6 +16,7 @@ set_global_assignment -name SEARCH_PATH $CCI_MPF_SRC/cci-if
 set_global_assignment -name SEARCH_PATH $CCI_MPF_SRC/cci-mpf-if
 set_global_assignment -name SEARCH_PATH $CCI_MPF_SRC/cci-mpf-prims
 set_global_assignment -name SEARCH_PATH $CCI_MPF_SRC/cci-mpf-shims
+set_global_assignment -name SEARCH_PATH $CCI_MPF_SRC/cci-mpf-shims/cci_mpf_shim_vtp
 
 ## Type and interface Packages and header files
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-if/ccis_if_pkg.sv
@@ -58,5 +59,8 @@ set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-shims/cci_mp
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-shims/cci_mpf_shim_mux.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-shims/cci_mpf_shim_null.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-shims/cci_mpf_shim_rsp_order.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-shims/cci_mpf_shim_vtp.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_shim_vtp.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_shim_vtp_pipe.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_shim_vtp_pt_walk.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_shim_vtp_tlb.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-shims/cci_mpf_shim_wro.sv

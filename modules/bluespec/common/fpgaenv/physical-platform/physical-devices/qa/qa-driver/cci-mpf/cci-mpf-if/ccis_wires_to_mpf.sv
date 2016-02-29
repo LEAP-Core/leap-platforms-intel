@@ -508,6 +508,7 @@ module cci_mpf_multi_line_read_to_single
     );
 
     assign afu.reset = fiu.reset;
+    logic reset;
     assign reset = fiu.reset;
 
     // Only channel 0 is changed.  All others just pass through.
@@ -677,6 +678,7 @@ module cci_mpf_multi_line_write_to_single
     );
 
     assign afu.reset = fiu.reset;
+    logic reset;
     assign reset = fiu.reset;
 
     assign fiu.c0Tx = afu.c0Tx;

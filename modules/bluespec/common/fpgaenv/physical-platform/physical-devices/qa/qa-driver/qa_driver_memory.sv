@@ -121,13 +121,16 @@ module qa_driver_memory
     t_cci_mdata_platform write_req_tag;
     t_cci_mdata_platform write_req_tag_next;
 
-    assign afu_if.c0Tx =
-        cci_mpf_genC0TxReadReq(
-            cci_mpf_c0_genReqHdr(mem_read_req_cached ? eREQ_RDLINE_S : eREQ_RDLINE_I,
-                                 mem_read_req_addr,
-                                 t_cci_mdata'(read_req_tag),
-                                 rd_req_params),
-            mem_read_req_enable);
+    always_ff @(posedge clk)
+    begin
+        afu_if.c0Tx <=
+            cci_mpf_genC0TxReadReq(
+                cci_mpf_c0_genReqHdr(mem_read_req_cached ? eREQ_RDLINE_S : eREQ_RDLINE_I,
+                                     mem_read_req_addr,
+                                     t_cci_mdata'(read_req_tag),
+                                     rd_req_params),
+                mem_read_req_enable);
+    end
 
     assign mem_read_req_rdy = ! afu_if.c0TxAlmFull;
 
@@ -147,14 +150,17 @@ module qa_driver_memory
         wr_req_params.addrIsVirtual = 1'b1;
     end
 
-    assign afu_if.c1Tx =
-        cci_mpf_genC1TxWriteReq(
-            cci_mpf_c1_genReqHdr(mem_write_req_cached ? eREQ_WRLINE_M : eREQ_WRLINE_I,
-                                 mem_write_addr,
-                                 t_cci_mdata'(write_req_tag_next),
-                                 wr_req_params),
-            mem_write_data,
-            mem_write_enable);
+    always_ff @(posedge clk)
+    begin
+        afu_if.c1Tx <=
+            cci_mpf_genC1TxWriteReq(
+                cci_mpf_c1_genReqHdr(mem_write_req_cached ? eREQ_WRLINE_M : eREQ_WRLINE_I,
+                                     mem_write_addr,
+                                     t_cci_mdata'(write_req_tag_next),
+                                     wr_req_params),
+                mem_write_data,
+                mem_write_enable);
+    end
 
     assign mem_write_rdy = ! afu_if.c1TxAlmFull;
     assign mem_write_ack = cci_c1Rx_isWriteRsp(afu_if.c1Rx);
@@ -208,7 +214,11 @@ module qa_driver_memory
         end
     end
 
-    assign afu_if.c2Tx = afu_mmio_rd_rsp;
+
+    always_ff @(posedge clk)
+    begin
+        afu_if.c2Tx <= afu_mmio_rd_rsp;
+    end
 
 
     // ====================================================================

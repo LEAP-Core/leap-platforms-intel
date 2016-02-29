@@ -225,3 +225,10 @@ Packagehint=leap-platforms-intel
 [Intel MPF CCI Abstract Interface]
 File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/cci-mpf-if/cci-mpf-if.awb
 Packagehint=leap-platforms-intel
+
+[Intel MPF Shims/Requires]
+qa_cci_mpf_shims_vtp=Intel MPF VTP Shim
+
+[Intel MPF VTP Shim]
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/cci-mpf-shims/cci_mpf_shim_vtp/cci-mpf-shims-vtp.awb
+Packagehint=leap-platforms-intel

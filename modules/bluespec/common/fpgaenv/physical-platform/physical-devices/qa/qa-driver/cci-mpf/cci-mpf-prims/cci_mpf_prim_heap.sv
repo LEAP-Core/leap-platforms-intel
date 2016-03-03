@@ -43,6 +43,8 @@ module cci_mpf_prim_heap
     parameter N_DATA_BITS = 64,
     // Threshold below which heap asserts "full"
     parameter MIN_FREE_SLOTS = 1,
+    // Register enq, delaying the write by a cycle?
+    parameter REGISTER_INPUT = 0,
     // Number of additional register stages on readRsp
     parameter N_OUTPUT_REG_STAGES = 0
     )
@@ -78,6 +80,7 @@ module cci_mpf_prim_heap
         .N_DATA_BITS(N_DATA_BITS),
         .N_READ_PORTS(1),
         .MIN_FREE_SLOTS(MIN_FREE_SLOTS),
+        .REGISTER_INPUT(REGISTER_INPUT),
         .N_OUTPUT_REG_STAGES(N_OUTPUT_REG_STAGES)
         )
       h(
@@ -107,6 +110,8 @@ module cci_mpf_prim_heap_multi
     parameter N_READ_PORTS = 1,
     // Threshold below which heap asserts "full"
     parameter MIN_FREE_SLOTS = 1,
+    // Register enq, delaying the write by a cycle?
+    parameter REGISTER_INPUT = 0,
     // Number of additional register stages on readRsp
     parameter N_OUTPUT_REG_STAGES = 0
     )
@@ -184,6 +189,40 @@ module cci_mpf_prim_heap_multi
 
     // ====================================================================
     //
+    // Heap writes either happen the cycle requested (default) or are
+    // registered for timing and delayed a cycle. The allocation pointers
+    // and counters are updated the cycle requested independent of
+    // the data timing.
+    //
+    // ====================================================================
+
+    logic heap_enq;
+    t_data heap_enqData;
+    t_idx heap_allocIdx;
+
+    generate
+        if (REGISTER_INPUT == 0)
+        begin : nr
+            // Unregistered
+            assign heap_enq = enq;
+            assign heap_enqData = enqData;
+            assign heap_allocIdx = allocIdx;
+        end
+        else
+        begin : r
+            // Registered
+            always_ff @(posedge clk)
+            begin
+                heap_enq <= enq;
+                heap_enqData <= enqData;
+                heap_allocIdx <= allocIdx;
+            end
+        end
+    endgenerate
+
+
+    // ====================================================================
+    //
     // Heap memory. Replicate the memory for each read port in order to
     // support simultaneous enq and read on all ports.
     //
@@ -206,9 +245,9 @@ module cci_mpf_prim_heap_multi
                 // Value available one cycle after request.
                 mem_rd_rsp[p][0] <= mem[p][readReq[p]];
 
-                if (enq)
+                if (heap_enq)
                 begin
-                    mem[p][allocIdx] <= enqData;
+                    mem[p][heap_allocIdx] <= heap_enqData;
                 end
             end
 

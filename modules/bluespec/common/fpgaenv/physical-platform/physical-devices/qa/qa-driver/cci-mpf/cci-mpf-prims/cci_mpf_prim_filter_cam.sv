@@ -76,22 +76,53 @@ module cci_mpf_prim_filter_cam
     // Test insert and protect
     logic [0 : N_TEST_CLIENTS-1] insert_match;
 
-    genvar g;
-    generate
-        if (BYPASS_INSERT_TO_TEST == 0)
+    // Insertion pipeline registers
+    logic [$clog2(N_BUCKETS)-1 : 0] insert_idx_q;
+    logic [BITS_PER_BUCKET-1 : 0]   insert_value_q;
+    logic                           insert_en_q;
+
+    //
+    // An array to hold in flight insert values and multi-cycle tests that
+    // might be inserted but aren't yet in the CAM.  Values in this array
+    // must also be checked.  The arrays are declared to be the maximum
+    // possible size used.
+    //
+    logic [BITS_PER_BUCKET-1 : 0] inflight_values[0 : 1];
+    logic inflight_valids[0 : 1];
+    logic [0 : N_TEST_CLIENTS-1] inflight_test_match;
+
+    // Number of inflight_values entries actually used 
+    localparam NUM_INFLIGHT_VALUES = 1 + BYPASS_INSERT_TO_TEST;
+
+    //
+    // Compare test_value against various registers holding in flight state.
+    //
+    always_comb
+    begin
+        // Insertion requests are registered for timing.  Compare test_value
+        // against an entry that will be active next cycle.
+        inflight_valids[0] = insert_en_q;
+        inflight_values[0] = insert_value_q;
+
+        // Compare against values inserted this cycle?  This entry will be
+        // considered only if BYPASS_INSERT_TO_TEST is set.
+        inflight_valids[1] = insert_en;
+        inflight_values[1] = insert_value;
+
+        // Compare test_value to inflight_values
+        for (int c = 0; c < N_TEST_CLIENTS; c = c + 1)
         begin
-            // If not bypassing then claim it never matches.
-            assign insert_match = N_BUCKETS'(0);
-        end
-        else
-        begin
-            // Bypassing: compare insert and test values.
-            for (g = 0; g < N_TEST_CLIENTS; g = g + 1)
-            begin : im
-                assign insert_match[g] = (insert_value == test_value[g]);
+            inflight_test_match[c] = 1'b0;
+
+            for (int v = 0; v < NUM_INFLIGHT_VALUES; v = v + 1)
+            begin
+                inflight_test_match[c] =
+                    inflight_test_match[c] ||
+                    (inflight_valids[v] && (inflight_values[v] == test_value[c]));
             end
         end
-    endgenerate
+    end
+
 
     logic [0 : N_TEST_CLIENTS-1][0 : N_BUCKETS-1] test_match;
 
@@ -113,8 +144,8 @@ module cci_mpf_prim_filter_cam
             test_notPresent[c] = (! test_en[c] ||
                                   // Does any valid entry match?
                                   (! (|(valid & test_match[c])) &&
-                                   // Did the inserted entry match?
-                                   (! insert_en || ! insert_match[c])));
+                                   // Does an in-flight entry match?
+                                   ! (|(inflight_test_match[c]))));
         end
     end
 
@@ -135,6 +166,13 @@ module cci_mpf_prim_filter_cam
     //
     always_ff @(posedge clk)
     begin
+        insert_idx_q <= insert_idx;
+        insert_value_q <= insert_value;
+        insert_en_q <= insert_en;
+    end
+
+    always_ff @(posedge clk)
+    begin
         if (reset)
         begin
             valid <= N_BUCKETS'(0);
@@ -142,10 +180,10 @@ module cci_mpf_prim_filter_cam
         else
         begin
             // Insert new entry
-            if (insert_en)
+            if (insert_en_q)
             begin
-                values[insert_idx] <= insert_value;
-                valid[insert_idx] <= 1'b1;
+                values[insert_idx_q] <= insert_value_q;
+                valid[insert_idx_q] <= 1'b1;
             end
 
             // Remove old entries
@@ -160,4 +198,3 @@ module cci_mpf_prim_filter_cam
     end
 
 endmodule // cci_mpf_prim_filter_cam
-

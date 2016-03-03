@@ -38,6 +38,95 @@ module cci_mpf_prim_fifo_lutram
   #(
     parameter N_DATA_BITS = 32,
     parameter N_ENTRIES = 2,
+    parameter THRESHOLD = 1,
+
+    // Register output if non-zero
+    parameter REGISTER_OUTPUT = 0
+    )
+   (
+    input  logic clk,
+    input  logic reset,
+
+    input  logic [N_DATA_BITS-1 : 0] enq_data,
+    input  logic                     enq_en,
+    output logic                     notFull,
+    output logic                     almostFull,
+
+    output logic [N_DATA_BITS-1 : 0] first,
+    input  logic                     deq_en,
+    output logic                     notEmpty
+    );
+
+    logic fifo_deq;
+    logic fifo_notEmpty;
+    logic [N_DATA_BITS-1 : 0] fifo_first;
+
+    cci_mpf_prim_fifo_lutram_base
+      #(
+        .N_DATA_BITS(N_DATA_BITS),
+        .N_ENTRIES(N_ENTRIES),
+        .THRESHOLD(THRESHOLD)
+        )
+      fifo
+       (
+        .clk,
+        .reset,
+        .enq_data,
+        .enq_en,
+        .notFull,
+        .almostFull,
+        .first(fifo_first),
+        .deq_en(fifo_deq),
+        .notEmpty(fifo_notEmpty)
+        );
+
+    generate
+        if (REGISTER_OUTPUT == 0)
+        begin : nr
+            assign first = fifo_first;
+            assign fifo_deq = deq_en;
+            assign notEmpty = fifo_notEmpty;
+        end
+        else
+        begin : r
+            //
+            // Output register stage
+            //
+            logic [N_DATA_BITS-1 : 0] reg_out;
+            logic reg_out_valid;
+
+            assign first = reg_out;
+            assign notEmpty = reg_out_valid;
+            assign fifo_deq = fifo_notEmpty && (deq_en || ! reg_out_valid);
+
+            always_ff @(posedge clk)
+            begin
+                if (reset)
+                begin
+                    reg_out_valid <= 1'b0;
+                end
+                else
+                begin
+                    if (deq_en || ! reg_out_valid)
+                    begin
+                        reg_out_valid <= fifo_notEmpty;
+                        reg_out <= fifo_first;
+                    end
+                end
+            end
+        end
+    endgenerate
+
+endmodule // cci_mpf_prim_fifo_lutram_reg
+
+
+//
+// Base implementation of the LUTRAM FIFO, used by the main wrapper above.
+//
+module cci_mpf_prim_fifo_lutram_base
+  #(
+    parameter N_DATA_BITS = 32,
+    parameter N_ENTRIES = 2,
     parameter THRESHOLD = 1
     )
    (
@@ -142,4 +231,4 @@ module cci_mpf_prim_fifo_lutram
         end
     end
 
-endmodule // cci_mpf_prim_fifo_lutram
+endmodule // cci_mpf_prim_fifo_lutram_base

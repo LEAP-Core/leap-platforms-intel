@@ -263,7 +263,9 @@ module cci_mpf_shim_csr
         // Unconditional logic, controlled by c2_rsp_en
         //
 
+        c2_rsp_in.mmioRdValid = 1'b0;
         c2_rsp_in.hdr.tid = mmio_req_tid;
+        c2_rsp_in.data = t_ccip_mmioData'('x);
 
         // Address here has been converted to be relative to the start
         // of the MPF feature list.

@@ -39,7 +39,10 @@
 
 module cci_mpf_shim_buffer_lockstep_afu
   #(
-    parameter THRESHOLD = CCI_TX_ALMOST_FULL_THRESHOLD
+    parameter THRESHOLD = CCI_TX_ALMOST_FULL_THRESHOLD,
+
+    // Register c0Tx and c1Tx outputs?
+    parameter REGISTER_OUTPUTS = 0
     )
    (
     input  logic clk,
@@ -120,7 +123,8 @@ module cci_mpf_shim_buffer_lockstep_afu
       #(
         .N_DATA_BITS(TX_BITS),
         .N_ENTRIES(N_ENTRIES),
-        .THRESHOLD(THRESHOLD)
+        .THRESHOLD(THRESHOLD),
+        .REGISTER_OUTPUT(REGISTER_OUTPUTS)
         )
       c1_fifo(.clk,
               .reset(afu_buf.reset),

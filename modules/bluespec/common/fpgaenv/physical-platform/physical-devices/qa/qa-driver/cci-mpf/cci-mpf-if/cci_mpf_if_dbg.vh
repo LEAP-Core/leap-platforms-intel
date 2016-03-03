@@ -85,8 +85,6 @@
             assign c0Rx_hdr_resp_type = c0Rx.hdr.resp_type;
             t_ccip_mdata c0Rx_hdr_mdata;
             assign c0Rx_hdr_mdata = c0Rx.hdr.mdata;
-            t_ccip_clData c0Rx_rsvd1;
-            assign c0Rx_hdr_rsvd1 = c0Rx.hdr.rsvd1;
             t_ccip_clData c0Rx_data;
             assign c0Rx_data = c0Rx.data;
             logic c0Rx_rspValid;

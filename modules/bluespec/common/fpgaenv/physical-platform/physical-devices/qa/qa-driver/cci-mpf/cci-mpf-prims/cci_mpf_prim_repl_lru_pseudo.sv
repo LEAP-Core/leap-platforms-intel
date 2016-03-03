@@ -30,9 +30,9 @@
 
 
 //
-// Pseudo LRU implementation.  Pseudo LRU sets a bit vector to 1 when an
-// entry is referenced.  When all bits in a vector become 1 all bits are
-// reset to 0.
+// Pseudo LRU replacement implementation.  Pseudo LRU sets a bit vector to 1
+// when an entry is referenced.  When all bits in a vector become 1 all bits
+// are reset to 0.
 //
 // This implementation has more query and update ports than there are
 // read and write ports in the internal memory.  Instead of blocking,
@@ -44,7 +44,7 @@
 // version requires only one block RAM.
 //
 
-module cci_mpf_prim_lru_pseudo
+module cci_mpf_prim_repl_lru_pseudo
   #(
     parameter N_WAYS = 4,
     parameter N_ENTRIES = 1024
@@ -83,22 +83,22 @@ module cci_mpf_prim_lru_pseudo
     input  logic refEn1
     );
 
-    typedef logic [$clog2(N_ENTRIES)-1 : 0] t_ENTRY_IDX;
-    typedef logic [N_WAYS-1 : 0] t_WAY_VEC;
+    typedef logic [$clog2(N_ENTRIES)-1 : 0] t_entry_idx;
+    typedef logic [N_WAYS-1 : 0] t_way_vec;
 
     //
     // Pseudo-LRU update function.
     //
-    function automatic t_WAY_VEC updatePseudoLRU;
-        input t_WAY_VEC cur;
-        input t_WAY_VEC newLRU;
+    function automatic t_way_vec updatePseudoLRU;
+        input t_way_vec cur;
+        input t_way_vec newLRU;
 
         // Or new LRU position into the current state
-        t_WAY_VEC upd = cur | newLRU;
+        t_way_vec upd = cur | newLRU;
 
         // If all bits set turn everything off, otherwise return the updated
         // set.
-        return (&(upd) == 1) ? t_WAY_VEC'(0) : upd;
+        return (&(upd) == 1) ? t_way_vec'(0) : upd;
     endfunction
 
 
@@ -106,12 +106,12 @@ module cci_mpf_prim_lru_pseudo
     // Register inputs for timing.  Delaying LRU update a cycle doesn't
     // really matter.
     //
-    t_ENTRY_IDX refIdx0_q;
-    t_WAY_VEC refWayVec0_q;
+    t_entry_idx refIdx0_q;
+    t_way_vec refWayVec0_q;
     logic refEn0_q;
 
-    t_ENTRY_IDX refIdx1_q;
-    t_WAY_VEC refWayVec1_q;
+    t_entry_idx refIdx1_q;
+    t_way_vec refWayVec1_q;
     logic refEn1_q;
 
     always_ff @(posedge clk)
@@ -132,20 +132,20 @@ module cci_mpf_prim_lru_pseudo
     //
     // ====================================================================
 
-    t_ENTRY_IDX addr0;
-    t_WAY_VEC wdata0;
+    t_entry_idx addr0;
+    t_way_vec wdata0;
     logic wen0;
-    t_WAY_VEC rdata0;
+    t_way_vec rdata0;
 
-    t_ENTRY_IDX addr1;
-    t_WAY_VEC wdata1;
+    t_entry_idx addr1;
+    t_way_vec wdata1;
     logic wen1;
-    t_WAY_VEC rdata1;
+    t_way_vec rdata1;
 
     cci_mpf_prim_dualport_ram_init
       #(
         .N_ENTRIES(N_ENTRIES),
-        .N_DATA_BITS($bits(t_WAY_VEC))
+        .N_DATA_BITS($bits(t_way_vec))
         )
       lru_data
         (
@@ -181,17 +181,17 @@ module cci_mpf_prim_lru_pseudo
     logic update0_en_q;
     logic update0_en_qq;
 
-    t_ENTRY_IDX update0_idx;
-    t_ENTRY_IDX update0_idx_q;
-    t_ENTRY_IDX update0_idx_qq;
+    t_entry_idx update0_idx;
+    t_entry_idx update0_idx_q;
+    t_entry_idx update0_idx_qq;
 
     // New reference
-    t_WAY_VEC update0_ref;
-    t_WAY_VEC update0_ref_q;
-    t_WAY_VEC update0_ref_qq;
+    t_way_vec update0_ref;
+    t_way_vec update0_ref_q;
+    t_way_vec update0_ref_qq;
 
     // Current state into which new reference is added
-    t_WAY_VEC update0_cur_lru_qq;
+    t_way_vec update0_cur_lru_qq;
 
     //
     // Address and write data assignment.
@@ -254,26 +254,26 @@ module cci_mpf_prim_lru_pseudo
     logic update1_en_q;
     logic update1_en_qq;
 
-    t_ENTRY_IDX update1_idx;
-    t_ENTRY_IDX update1_idx_q;
-    t_ENTRY_IDX update1_idx_qq;
+    t_entry_idx update1_idx;
+    t_entry_idx update1_idx_q;
+    t_entry_idx update1_idx_qq;
 
     // New reference
-    t_WAY_VEC update1_ref;
-    t_WAY_VEC update1_ref_q;
-    t_WAY_VEC update1_ref_qq;
+    t_way_vec update1_ref;
+    t_way_vec update1_ref_q;
+    t_way_vec update1_ref_qq;
 
     // Current state into which new reference is added.  Also holds the
     // buffered state of table reads for LRU lookup.
-    t_WAY_VEC update1_cur_lru_qq;
+    t_way_vec update1_cur_lru_qq;
 
     // Compute the lookup response
-    t_WAY_VEC lookup_vec_rsp;
-    t_ENTRY_IDX lookup_rsp;
+    t_way_vec lookup_vec_rsp;
+    t_entry_idx lookup_rsp;
 
     always_comb
     begin
-        lookup_vec_rsp = t_WAY_VEC'(0);
+        lookup_vec_rsp = t_way_vec'(0);
         lookup_rsp = 'x;
 
         for (int w = 0; w < N_WAYS; w = w + 1)
@@ -371,4 +371,5 @@ module cci_mpf_prim_lru_pseudo
         end 
     end
 
-endmodule // cci_mpf_prim_lru_pseudo
+endmodule // cci_mpf_prim_repl_lru_pseudo
+

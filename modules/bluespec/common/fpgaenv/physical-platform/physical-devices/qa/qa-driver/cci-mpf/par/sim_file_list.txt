@@ -17,8 +17,10 @@ cci-mpf-prims/cci_mpf_prim_fifo_lutram.sv
 cci-mpf-prims/cci_mpf_prim_filter_cam.sv
 cci-mpf-prims/cci_mpf_prim_filter_counting.sv
 cci-mpf-prims/cci_mpf_prim_heap.sv
-cci-mpf-prims/cci_mpf_prim_lru_pseudo.sv
+cci-mpf-prims/cci_mpf_prim_lfsr.sv
 cci-mpf-prims/cci_mpf_prim_lutram.sv
+cci-mpf-prims/cci_mpf_prim_repl_lru_pseudo.sv
+cci-mpf-prims/cci_mpf_prim_repl_random.sv
 cci-mpf-prims/cci_mpf_prim_rob.sv
 cci-mpf-prims/cci_mpf_prim_track_multi_write.sv
 cci-mpf-shims/cci_mpf_shim_buffer_afu.sv

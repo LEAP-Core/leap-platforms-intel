@@ -328,8 +328,7 @@ module cci_mpf_shim_vtp_tlb
 
     // ====================================================================
     //
-    //   Insertion logic and LRU table for picking victim during TLB
-    //   insertion.
+    //   Insertion logic for picking victim during TLB insertion.
     //
     // ====================================================================
 
@@ -351,8 +350,8 @@ module cci_mpf_shim_vtp_tlb
     t_tlb_idx fill_idx;
     t_tlb_physical_idx fill_pa;
 
-    logic lru_rdy;
-    logic lru_lookup_rsp_rdy;
+    logic repl_rdy;
+    logic repl_lookup_rsp_rdy;
 
     logic [1:0] fill_bubble;
 
@@ -380,7 +379,7 @@ module cci_mpf_shim_vtp_tlb
 
               STATE_TLB_FILL_REQ_WAY:
                 begin
-                    if (lru_rdy)
+                    if (repl_rdy)
                     begin
                         fill_state <= STATE_TLB_FILL_RECV_WAY;
                     end
@@ -388,7 +387,7 @@ module cci_mpf_shim_vtp_tlb
 
               STATE_TLB_FILL_RECV_WAY:
                 begin
-                    if (lru_lookup_rsp_rdy)
+                    if (repl_lookup_rsp_rdy)
                     begin
                         fill_state <= STATE_TLB_FILL_INSERT;
                     end
@@ -414,39 +413,39 @@ module cci_mpf_shim_vtp_tlb
         end
     end
 
-    // Do a lookup in STATE_TLB_REQ_LRU
-    logic lru_lookup_en;
-    assign lru_lookup_en = lru_rdy && (fill_state == STATE_TLB_FILL_REQ_WAY);
+    // Do a lookup in STATE_TLB_FILL_REQ_WAY
+    logic repl_lookup_en;
+    assign repl_lookup_en = repl_rdy && (fill_state == STATE_TLB_FILL_REQ_WAY);
 
-    // LRU replacement.  Determine which way to replace when inserting
-    // a new translation in the TLB.
-    logic [NUM_TLB_SET_WAYS-1 : 0] lru_repl_vec;
-    logic [NUM_TLB_SET_WAYS-1 : 0] lru_lookup_vec_rsp;
+    // Replacement way selection.  Determine which way to replace when
+    // inserting a new translation in the TLB.
+    logic [NUM_TLB_SET_WAYS-1 : 0] way_repl_vec;
+    logic [NUM_TLB_SET_WAYS-1 : 0] repl_lookup_vec_rsp;
 
     // Register the response when it arrives
     always_ff @(posedge clk)
     begin
-        if (lru_lookup_rsp_rdy)
+        if (repl_lookup_rsp_rdy)
         begin
-            lru_repl_vec <= lru_lookup_vec_rsp;
+            way_repl_vec <= repl_lookup_vec_rsp;
         end
     end
 
-    cci_mpf_prim_lru_pseudo
+    cci_mpf_prim_repl_random
       #(
         .N_WAYS(NUM_TLB_SET_WAYS),
         .N_ENTRIES(NUM_TLB_SETS)
         )
-      lru
+      repl
         (
          .clk,
          .reset,
-         .rdy(lru_rdy),
+         .rdy(repl_rdy),
          .lookupIdx(fill_idx),
-         .lookupEn(lru_lookup_en),
-         .lookupVecRsp(lru_lookup_vec_rsp),
+         .lookupEn(repl_lookup_en),
+         .lookupVecRsp(repl_lookup_vec_rsp),
          .lookupRsp(),
-         .lookupRspRdy(lru_lookup_rsp_rdy),
+         .lookupRspRdy(repl_lookup_rsp_rdy),
          .refIdx0(target_tlb_idx(stg_state[NUM_TLB_LOOKUP_PIPE_STAGES][0].lookup_page_va)),
          .refWayVec0(lookup_way_hit_vec[0]),
          .refEn0(tlb_if.lookupValid[0]),
@@ -485,13 +484,13 @@ module cci_mpf_shim_vtp_tlb
         tlb_wdata.tag = fill_tag;
         tlb_wdata.idx = fill_pa;
 
-        // Pick the LRU way when writing.  This happens only during
+        // Pick the victim way when writing.  This happens only during
         // initialization and when a new translation is being added to
         // the TLB: STATE_TLB_FILL_INSERT.
         for (int way = 0; way < NUM_TLB_SET_WAYS; way = way + 1)
         begin
             tlb_wen[way] = (fill_state == STATE_TLB_FILL_INSERT) &&
-                           lru_repl_vec[way];
+                           way_repl_vec[way];
         end
 
         // Address is the update address if writing and the read address

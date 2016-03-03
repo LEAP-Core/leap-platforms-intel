@@ -908,6 +908,7 @@ module cci_mpf_shim_wro_hashed_reqs
         .deqTx(afu_deq)
         );
 
+    logic reset;
     assign reset = afu_buf.reset;
     assign afu_fifo.reset = afu_buf.reset;
 

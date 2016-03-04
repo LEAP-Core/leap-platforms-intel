@@ -40,6 +40,12 @@
 
 module cci_mpf_shim_csr
   #(
+    // Instance ID reported in feature IDs of all device feature
+    // headers instantiated under this instance of MPF.  If only a single
+    // MPF instance is instantiated in the AFU then leaving the instance
+    // ID at 1 is probably the right choice.
+    parameter MPF_INSTANCE_ID = 1,
+
     // MMIO base address (byte level) allocated to MPF for feature lists
     // and CSRs.  The AFU allocating this module must build at least
     // a device feature header (DFH) for the AFU.  The chain of device
@@ -224,6 +230,7 @@ module cci_mpf_shim_csr
         // Construct the feature headers for each feature
         vtp_dfh = ccip_dfh_defaultDFH();
         vtp_dfh.f_type = eFTYP_BBB;
+        vtp_dfh.id = t_ccip_feature_id'(MPF_INSTANCE_ID);
         vtp_dfh.next = CCI_MPF_VTP_CSR_SIZE;
         if (MPF_ENABLE_VTP != 0)
         begin
@@ -237,6 +244,7 @@ module cci_mpf_shim_csr
 
         wro_dfh = ccip_dfh_defaultDFH();
         wro_dfh.f_type = eFTYP_BBB;
+        wro_dfh.id = t_ccip_feature_id'(MPF_INSTANCE_ID);
         if (MPF_ENABLE_WRO != 0)
         begin
             // UID of WRO feature (from cci_mpf_csrs.h)

@@ -1,0 +1,9 @@
+%name Intel MPF SW Include
+%desc Intel MPF SW Include
+
+%provides qa_cci_mpf_sw_include
+
+%sources -t H -v PUBLIC  IMPF.h
+%sources -t H -v PUBLIC  MPFService.h
+
+%sources -t H -v PUBLIC  cci_mpf_shim_vtp_params.h

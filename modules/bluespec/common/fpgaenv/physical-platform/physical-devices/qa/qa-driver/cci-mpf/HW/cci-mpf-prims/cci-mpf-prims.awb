@@ -1,7 +1,7 @@
 %name Primitive Modules for MPF
 %desc Primitive Modules for MPF
 
-%provides qa_cci_mpf_prims
+%provides qa_cci_mpf_hw_prims
 
 %sources -t VERILOG_H  -v PRIVATE cci_mpf_prim_hash.vh
 

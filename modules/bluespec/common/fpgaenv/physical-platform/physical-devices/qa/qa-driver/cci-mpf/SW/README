@@ -1,0 +1,132 @@
+  Copyright(c) 2015-2016, Intel Corporation
+
+  Redistribution  and  use  in source  and  binary  forms,  with  or  without
+  modification, are permitted provided that the following conditions are met:
+
+  * Redistributions of  source code  must retain the  above copyright notice,
+    this list of conditions and the following disclaimer.
+  * Redistributions in binary form must reproduce the above copyright notice,
+    this list of conditions and the following disclaimer in the documentation
+    and/or other materials provided with the distribution.
+  * Neither the name  of Intel Corporation  nor the names of its contributors
+    may be used to  endorse or promote  products derived  from this  software
+    without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING,  BUT NOT LIMITED TO,  THE
+  IMPLIED WARRANTIES OF  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED.  IN NO EVENT  SHALL THE COPYRIGHT OWNER  OR CONTRIBUTORS BE
+  LIABLE  FOR  ANY  DIRECT,  INDIRECT,  INCIDENTAL,  SPECIAL,  EXEMPLARY,  OR
+  CONSEQUENTIAL  DAMAGES  (INCLUDING,  BUT  NOT LIMITED  TO,  PROCUREMENT  OF
+  SUBSTITUTE GOODS OR SERVICES;  LOSS OF USE,  DATA, OR PROFITS;  OR BUSINESS
+  INTERRUPTION)  HOWEVER CAUSED  AND ON ANY THEORY  OF LIABILITY,  WHETHER IN
+  CONTRACT,  STRICT LIABILITY,  OR TORT  (INCLUDING NEGLIGENCE  OR OTHERWISE)
+  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,  EVEN IF ADVISED OF THE
+  POSSIBILITY OF SUCH DAMAGE.
+
+
+Memory Property Factory - Virtual-to-Physical shim SW service (VTP service)
+===========================================================================
+
+The AAL VTP service allows other applications and services to establish shared
+memory buffers with an AFU that can be addressed using virtual addresses. The
+VTP service handles initialization of the VTP hardware shim and the creation and
+maintenance of a page table to resolve virtual-to-physical address translations.
+
+
+Build instructions
+------------------
+
+The VTP service (or VTP, for short) is a regular AAL service, and is built using
+the AALSDK into a dynamic library that can be loaded an runtime when allocating
+VTP.
+
+The easiest way to create this library is by using the supplied Makefile. After
+you have installed the AALSDK (see the AALSDK installation guide for details),
+build VTP as follows:
+
+   $ cd SW
+   $ make prefix=<my_prefix>   # or make DESTDIR=<my_destdir>
+
+Which variation of the make command you use depends on how you built and
+installed the AALSDK.
+
+The make step should leave you with the following files:
+
+   libVTP.so.x.y.z
+   libVTP.so         # link to libVTP.so.x.y.z
+   libVTP.so.x       # link to libVTP.so.x.y.z
+
+where x/y/z are set according to the version of VTP you have built.
+
+
+
+How to use VTP in your software application or service
+------------------------------------------------------
+
+VTP makes use of the existing ALI interface for MMIO and memory allocation
+services provided by AAL, and as such does not interface with hardware
+directly.  Such a service is sometimes referred to as a "software-only" service
+- do not let this terminology confuse you; VTP requires the VTP shim in
+hardware to enable address translations.
+
+VTP implements the IVTP interface defined in SW/include/aalsdk/service/IVTP.h.
+This interface essentially resembles the ALIBuffer interface, with the crucial
+difference that any memory buffers allocated through this interface are known
+to the MPF - you can share virtual addresses between software and the AFU for
+accessing data in these buffers.
+
+
+Service Instantiation
+
+To allocate a VTP service, follow these steps:
+
+   1. Allocate a ALIAFU service to get access to a particular AFU (either
+      ASEALIAFU for simulation, or HWALIAFU).
+
+   2. Use the IALIMMIO interface exposed by that service to query the AFU for
+      existing MPF VTP feature. This is usually done through a call to
+      IALIMMIO::getFeature(), which takes an NmedValueSet containing
+      information about the desired feature as an argument, and returns the
+      MMIO offset of the VTP device feature header.
+
+      NamedValueSet featureFilter;
+      featureFilter.Add(ALI_GETFEATURE_GUID_KEY,
+                        static_cast<ALI_GETFEATURE_GUID_DATATYPE>(sGUID));
+
+      mmioGetFeatureOffset(&m_VTPDFHOffset, featureFilter);
+
+   3. Allocate a VTP service, passing a pointer to the ALIAFU's IBase and
+      the offset just obtained in its manifest:
+
+      Manifest.Add(AAL_FACTORY_CREATE_CONFIGRECORD_INCLUDED, &VTPConfigRecord);
+      Manifest.Add(ALIAFU_IBASE_KEY,
+                   static_cast<ALIAFU_IBASE_DATATYPE>(m_pALIAFU_AALService));
+      Manifest.Add(VTP_DFH_OFFSET_KEY,
+                   static_cast<VTP_DFH_OFFSET_DATATYPE>(m_VTPDFHOffset));
+
+      m_Runtime.allocService(dynamic_cast<IBase *>(this),
+                             Manifest,
+                             m_VTPTranID);
+
+   4. After resetting the AFU (using afuReset()), *always* call vtpReset().
+      An AFU reset will always also clear internal registers in the MPF,
+      including the VTP feature. vtpReset() reinitializes these. Note that
+      vtpReset() will not clear/initialize the VTP feature, it only
+      reinitializes the CSRs necessary for operation.
+
+Please refer to the supplied Hello_ALI_VTP_NLB sample application for the
+complete code required.
+
+
+Shared Virtual Memory Allocation
+
+To allocate shared buffers which both your SW and your AFU can access using
+virtual addresses, use IVTP's bufferAllocate():
+
+   m_pVTPService->bufferAllocate(BUFFER_SIZE, &pBuffer));
+
+You can now pass the pBuffer pointer (which is a valid virtual address) to your
+AFU, e.g. using a CSR.
+
+

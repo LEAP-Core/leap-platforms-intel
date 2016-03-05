@@ -1,7 +1,7 @@
 %name Intel MPF CCI Abstract Interface
 %desc Intel MPF CCI Abstract Interface
 
-%provides qa_cci_mpf_if
+%provides qa_cci_mpf_hw_if
 
 %notes README
 

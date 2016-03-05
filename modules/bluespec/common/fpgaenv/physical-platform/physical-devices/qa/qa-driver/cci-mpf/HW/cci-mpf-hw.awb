@@ -1,0 +1,21 @@
+%name Intel MPF HW
+%desc Intel MPF HW
+
+%provides qa_cci_mpf_hw
+%requires qa_cci_hw_if
+%requires qa_cci_mpf_hw_if
+%requires qa_cci_mpf_hw_shims
+%requires qa_cci_mpf_hw_prims
+
+%notes README
+
+##
+## File with shared parameters, declared for both Verilog and C
+##
+%sources -t H           -v PUBLIC  cci_mpf_csrs.h
+%sources -t VERILOG_H   -v PRIVATE cci_mpf_csrs.h
+
+%sources -t VERILOG_H   -v PRIVATE cci_mpf_csrs.vh
+%sources -t VERILOG_PKG -v PRIVATE cci_mpf_csrs_pkg.sv
+
+%sources -t VERILOG     -v PRIVATE cci_mpf.sv

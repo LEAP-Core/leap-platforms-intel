@@ -1,7 +1,7 @@
 %name Intel CCI Interface
 %desc Intel CCI Interface
 
-%provides qa_cci_if
+%provides qa_cci_hw_if
 
 %notes README
 

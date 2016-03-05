@@ -53,7 +53,7 @@
 #endif
 
 #include "AFU_csr.h"
-#include "cci_mpf_shim_vtp.h"
+#include "awb/provides/qa_cci_mpf_sw.h"
 
 
 USING_NAMESPACE(std)
@@ -114,14 +114,14 @@ class AFU_CLASS
 
     //
     // Allocate a shared memory buffer and add the VA/PA mapping to the
-    // FPGA-side VTP, implemented in CCI_MPF_SHIM_VTP_CLASS and the
-    // corresponding RTL.
+    // FPGA-side VTP from the MPF (Memory Properties Factor) library.
     //
     void* CreateSharedBufferInVM(ssize_t size_bytes);
 
     // Virtual to physical translation for memory created by
     // CreateSharedBufferInVM.
     btPhysAddr SharedBufferVAtoPA(const void* va);
+
 
     //
     // DSM is a relatively small shared memory buffer defined by the CCI
@@ -175,10 +175,6 @@ class AFU_CLASS
 
     std::vector<AFU_BUFFER> buffers;
     AFU_BUFFER dsmBuffer;
-
-    // Shared translation and virtual memory manager.  Only one is
-    // permitted per AFU.
-    CCI_MPF_SHIM_VTP vtp;
 };
 
 
@@ -245,6 +241,9 @@ public:
     AFU_BUFFER CreateSharedBuffer(ssize_t size_bytes);
     void FreeSharedBuffer(AFU_BUFFER buffer);
 
+    void* CreateSharedBufferInVM(ssize_t size_bytes);
+    btPhysAddr SharedBufferVAtoPA(const void* va);
+
     // <begin IServiceClient interface>
     void serviceAllocated(IBase *pServiceBase,
                           TransactionID const &rTranID);
@@ -279,6 +278,10 @@ public:
     IALIBuffer    *m_pALIBufferService; ///< Pointer to Buffer Service
     IALIMMIO      *m_pALIMMIOService;   ///< Pointer to MMIO Service
     IALIReset     *m_pALIResetService;  ///< Pointer to AFU Reset Service
+
+    // Shared translation and virtual memory manager.
+    MPFVTP        *m_mpf_vtp;
+    btCSROffset    m_VTPDFHOffset;      ///< VTP DFH offset
 #endif
     AFU_RUNTIME_CLIENT m_runtimeClient;
     CSemaphore     m_Sem;            // For synchronizing with the AAL runtime.

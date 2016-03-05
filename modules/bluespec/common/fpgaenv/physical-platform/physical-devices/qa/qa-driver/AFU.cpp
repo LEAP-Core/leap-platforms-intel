@@ -37,8 +37,7 @@
 #include <assert.h>
 
 #include "awb/provides/qa_device.h"
-#include "awb/provides/qa_cci_mpf_shims.h"
-#include "awb/provides/qa_cci_if.h"
+#include "awb/provides/qa_cci_hw_if.h"
 
 #include "awb/provides/physical_platform.h"
 
@@ -78,11 +77,6 @@ AFU_CLASS::AFU_CLASS(const char* afuID, uint32_t dsmSizeBytes)
         printf("Polling DSM...\n"); sleep(1);
     }
 
-    // Allocate the virtual to physical translation table that enables
-    // host/FPGA shared virtual regions.  Shared regions are allocated
-    // with the CreateSharedBufferInVM() method.
-    vtp = new CCI_MPF_SHIM_VTP_CLASS(this);
-
     printf("AFU Ready (0x%016llx)\n", ReadDSM64(0));
 }
 
@@ -118,14 +112,14 @@ AFU_CLASS::CreateSharedBuffer(ssize_t size_bytes) {
 void*
 AFU_CLASS::CreateSharedBufferInVM(ssize_t size_bytes)
 {
-    return vtp->CreateSharedBufferInVM(size_bytes);
+    return afuClient->CreateSharedBufferInVM(size_bytes);
 }
 
 
 btPhysAddr
 AFU_CLASS::SharedBufferVAtoPA(const void* va)
 {
-    return vtp->SharedBufferVAtoPA(va);
+    return afuClient->SharedBufferVAtoPA(va);
 }
 
 
@@ -389,11 +383,30 @@ AFU_CLIENT_CLASS::InitService(const char* afuID)
     // Allocate the Service and allocate the required workspace.
     //   This happens in the background via callbacks (simple state machine).
     //   When everything is set we do the real work here in the main thread.
-   m_runtimeClient->getRuntime()->allocService(dynamic_cast<IBase *>(this),
-                                               manifest);
-   m_Sem.Wait();
+    m_runtimeClient->getRuntime()->allocService(dynamic_cast<IBase *>(this),
+                                                manifest);
+    m_Sem.Wait();
 
-   return m_Result;
+
+    btcString sGUID = MPF_VTP_BBB_GUID;
+    NamedValueSet featureFilter;
+    featureFilter.Add(ALI_GETFEATURE_TYPE_KEY, static_cast<ALI_GETFEATURE_TYPE_DATATYPE>(2));
+    featureFilter.Add(ALI_GETFEATURE_GUID_KEY, static_cast<ALI_GETFEATURE_GUID_DATATYPE>(sGUID));
+    if (true != m_pALIMMIOService->mmioGetFeatureOffset(&m_VTPDFHOffset, featureFilter))
+    {
+        fprintf(stderr, "ERROR: Failed find VTP feature in hardware\n");
+        exit(1);
+    }
+
+    // Now that the service is allocated, get the virtual to physical
+    // translation service.  We use the source directly instead of
+    // linking with libMPF.so in order to use the latest version.
+    m_mpf_vtp = new MPFVTP(m_pALIBufferService,
+                           m_pALIMMIOService,
+                           m_VTPDFHOffset);
+    assert(m_mpf_vtp->isOK());
+
+    return m_Result;
 }
 
 
@@ -476,6 +489,26 @@ AFU_CLIENT_CLASS::FreeSharedBuffer(AFU_BUFFER buffer)
     m_pALIBufferService->bufferFree(btVirtAddr(buffer->virtualAddress));
 
 #endif
+}
+
+
+void*
+AFU_CLIENT_CLASS::CreateSharedBufferInVM(ssize_t size_bytes)
+{
+    ali_errnum_e st;
+    btVirtAddr va;
+
+    st = m_mpf_vtp->bufferAllocate(size_bytes, &va);
+    assert(st == ali_errnumOK);
+
+    return (void*)va;
+}
+
+
+btPhysAddr
+AFU_CLIENT_CLASS::SharedBufferVAtoPA(const void* va)
+{
+    return m_mpf_vtp->bufferGetIOVA(btVirtAddr(va));
 }
 
 

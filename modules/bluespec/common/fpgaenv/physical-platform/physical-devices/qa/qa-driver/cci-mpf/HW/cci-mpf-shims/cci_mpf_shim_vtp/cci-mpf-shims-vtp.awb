@@ -1,17 +1,13 @@
 %name Intel MPF VTP Shim
 %desc Intel MPF VTP Shim
 
-%provides qa_cci_mpf_shims_vtp
+%provides qa_cci_mpf_hw_shims_vtp
 
 %notes README
-
-%sources -t H          -v PUBLIC  cci_mpf_shim_vtp.h
-%sources -t CPP        -v PRIVATE cci_mpf_shim_vtp.cpp
 
 ##
 ## File with shared parameters, declared for both Verilog and C
 ##
-%sources -t H          -v PRIVATE cci_mpf_shim_vtp_params.h
 %sources -t VERILOG_H  -v PRIVATE cci_mpf_shim_vtp_params.h
 
 %sources -t VERILOG_H  -v PRIVATE cci_mpf_shim_vtp.vh

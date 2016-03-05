@@ -1,8 +1,8 @@
 %name Intel MPF Shims
 %desc Intel MPF Shims
 
-%provides qa_cci_mpf_shims
-%requires qa_cci_mpf_shims_vtp
+%provides qa_cci_mpf_hw_shims
+%requires qa_cci_mpf_hw_shims_vtp
 
 %notes README
 

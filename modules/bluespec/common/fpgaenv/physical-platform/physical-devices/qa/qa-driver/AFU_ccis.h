@@ -29,8 +29,16 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef CCI_MPF_SHIM_VTP_H
-#define CCI_MPF_SHIM_VTP_H
+//
+// This module holds a class used to emulate features that became available
+// after CCI-S.
+//
+
+#ifndef AFU_CCIS_H
+#define AFU_CCIS_H
+
+#include "awb/provides/qa_platform_libs.h"
+#if (CCI_S_IFC != 0)
 
 // AAL redefines ASSERT and TRACE
 #undef ASSERT
@@ -50,42 +58,16 @@ USING_NAMESPACE(AAL)
 //
 #include "cci_mpf_shim_vtp_params.h"
 
-//
-// The shared page table is stored in a contiguous region of physical memory.
-// The table is a hashed structure, with CCI_PT_VA_IDX_BITS buckets.  Each bucket
-// is a single CCI memory line holding a ptesPerLine length vector of
-// CCI_PT_PTEs.  ptesPerLine must be set such that it leaves room for
-// a pointer of size CCI_PT_OFFSET_BITS in the high bits of the bucket for
-// the next pointer.  The next pointer is used when the number of PTEs overflows
-// a hash bucket.
-//
-//      MSB                                                        0
-//     --------------------------------------------------------------
-//     | next ptr |   PTE   |   PTE   |   PTE   |   PTE   |   PTE   |
-//     --------------------------------------------------------------
-//
-// The initial bucket for a given VA is found at the idx field of a VA, defined
-// below.  The index is the line offset from the root of the page table.
-// When the number of PTEs in a bucket overflows the available space
-// the table may be extended by setting next ptr to a line offset of another
-// bucket in the page table.  The offset must be beyond the hash buckets
-// defined by CCI_PT_VA_IDX_BITS.
-//
-// The entire page table starts initialized to zero.  A PTE holding a virtual
-// offset 0 is assumed to be NULL and terminates a list.  The next ptr value
-// 0 also terminates a list.
-//
 
-
-typedef class CCI_MPF_SHIM_VTP_CLASS* CCI_MPF_SHIM_VTP;
+typedef class AFU_CCIS_CLASS* AFU_CCIS;
 typedef class AFU_CLASS* AFU;
 
 
-class CCI_MPF_SHIM_VTP_CLASS : public CAASBase
+class AFU_CCIS_CLASS : public CAASBase
 {
   public:
-    CCI_MPF_SHIM_VTP_CLASS(AFU afu);
-    ~CCI_MPF_SHIM_VTP_CLASS();
+    AFU_CCIS_CLASS(AFU afu);
+    ~AFU_CCIS_CLASS();
 
     //
     // Allocate a memory buffer shared by the host and an FPGA.
@@ -97,6 +79,8 @@ class CCI_MPF_SHIM_VTP_CLASS : public CAASBase
     btPhysAddr SharedBufferVAtoPA(const void* va);
 
   private:
+    void Initialize();
+
     //
     // Add a new page to the table.
     //
@@ -169,11 +153,13 @@ class CCI_MPF_SHIM_VTP_CLASS : public CAASBase
 
     AFU            m_afu;
     btCSROffset    m_csr_base;          // Base address of VTP CSRs
+
+    bool           did_init;
 };
 
 
 inline void
-CCI_MPF_SHIM_VTP_CLASS::AddrComponentsFromVA(
+AFU_CCIS_CLASS::AddrComponentsFromVA(
     uint64_t va,
     uint64_t& tag,
     uint64_t& idx,
@@ -203,7 +189,7 @@ CCI_MPF_SHIM_VTP_CLASS::AddrComponentsFromVA(
 
 
 inline void
-CCI_MPF_SHIM_VTP_CLASS::AddrComponentsFromVA(
+AFU_CCIS_CLASS::AddrComponentsFromVA(
     const void *va,
     uint64_t& tag,
     uint64_t& idx,
@@ -213,7 +199,7 @@ CCI_MPF_SHIM_VTP_CLASS::AddrComponentsFromVA(
 }
 
 inline void
-CCI_MPF_SHIM_VTP_CLASS::AddrComponentsFromPA(
+AFU_CCIS_CLASS::AddrComponentsFromPA(
     uint64_t pa,
     uint64_t& idx,
     uint64_t& byteOffset)
@@ -231,7 +217,7 @@ CCI_MPF_SHIM_VTP_CLASS::AddrComponentsFromPA(
 }
 
 inline uint64_t
-CCI_MPF_SHIM_VTP_CLASS::AddrToPTE(
+AFU_CCIS_CLASS::AddrToPTE(
     uint64_t va,
     uint64_t pa)
 {
@@ -241,11 +227,12 @@ CCI_MPF_SHIM_VTP_CLASS::AddrToPTE(
 }
 
 inline uint64_t
-CCI_MPF_SHIM_VTP_CLASS::AddrToPTE(
+AFU_CCIS_CLASS::AddrToPTE(
     const void* va,
     uint64_t pa)
 {
     return AddrToPTE(uint64_t(va), pa);
 }
 
-#endif
+#endif // CCI_S_IFC
+#endif // AFU_CCIS_H

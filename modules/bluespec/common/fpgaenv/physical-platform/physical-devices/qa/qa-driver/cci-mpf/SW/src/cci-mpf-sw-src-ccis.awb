@@ -1,0 +1,5 @@
+%name Intel MPF SW (CCI-S compatible)
+%desc Intel MPF SW (CCI-S compatible)
+
+%provides qa_cci_mpf_sw
+%requires qa_cci_mpf_sw_include

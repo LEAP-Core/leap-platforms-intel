@@ -37,15 +37,28 @@
 #include <assert.h>
 
 #include "awb/provides/qa_driver.h"
-#include "awb/provides/qa_cci_mpf_shims.h"
-#include "awb/provides/qa_cci_if.h"
-#include "awb/provides/qa_cci_mpf.h"
+
+// Only used on CCI-S
+#if (CCI_S_IFC != 0)
+
+#include "awb/provides/qa_cci_mpf_hw_shims.h"
+#include "awb/provides/qa_cci_hw_if.h"
+#include "awb/provides/qa_cci_mpf_hw.h"
 
 
-CCI_MPF_SHIM_VTP_CLASS::CCI_MPF_SHIM_VTP_CLASS(AFU afu) :
+AFU_CCIS_CLASS::AFU_CCIS_CLASS(AFU afu) :
     m_afu(afu),
-    m_csr_base(0)
+    m_csr_base(0),
+    did_init(false)
 {
+}
+
+
+void
+AFU_CCIS_CLASS::Initialize()
+{
+    did_init = true;
+
     // There must be overflow space in the page table
     assert(CCI_PT_VA_IDX_BITS < CCI_PT_LINE_IDX_BITS);
 
@@ -54,21 +67,21 @@ CCI_MPF_SHIM_VTP_CLASS::CCI_MPF_SHIM_VTP_CLASS(AFU afu) :
     //
     btCSROffset f_addr = 0;
     // Get the main AFU feature header
-    CCIP_FEATURE_DFH f_afu(afu->ReadCSR64(f_addr));
+    CCIP_FEATURE_DFH f_afu(m_afu->ReadCSR64(f_addr));
 
     // Walk the list of features, looking for VTP
     bool is_eol = f_afu.isEOL();
     f_addr += f_afu.getNext();
     while (! is_eol)
     {
-        CCIP_FEATURE_DFH f(afu->ReadCSR64(f_addr));
+        CCIP_FEATURE_DFH f(m_afu->ReadCSR64(f_addr));
         printf("DFH 0x%04llx: %d 0x%016llx 0x%016llx\n", f_addr,
                f.getFeatureType(),
-               afu->ReadCSR64(f_addr + 16),
-               afu->ReadCSR64(f_addr + 8));
+               m_afu->ReadCSR64(f_addr + 16),
+               m_afu->ReadCSR64(f_addr + 8));
         if ((f.getFeatureType() == eFTYP_BBB) &&
-            (afu->ReadCSR64(f_addr + 16) == 0xc8a2982fff9642bf) &&
-            (afu->ReadCSR64(f_addr + 8)  == 0xa70545727f501901))
+            (m_afu->ReadCSR64(f_addr + 16) == 0xc8a2982fff9642bf) &&
+            (m_afu->ReadCSR64(f_addr + 8)  == 0xa70545727f501901))
         {
             // Found VTP
             m_csr_base = f_addr;
@@ -89,7 +102,7 @@ CCI_MPF_SHIM_VTP_CLASS::CCI_MPF_SHIM_VTP_CLASS(AFU afu) :
     size_t pt_size = (1LL << CCI_PT_LINE_IDX_BITS) * CL(1);
 
     // Allocate the table.  The allocator fills it with zeros.
-    AFU_BUFFER pt = afu->CreateSharedBuffer(pt_size);
+    AFU_BUFFER pt = m_afu->CreateSharedBuffer(pt_size);
     assert(pt && (pt->numBytes == pt_size));
 
     m_pageTable = (uint8_t*)pt->virtualAddress;
@@ -105,19 +118,21 @@ CCI_MPF_SHIM_VTP_CLASS::CCI_MPF_SHIM_VTP_CLASS(AFU afu) :
     assert(m_pageTableFree <= m_pageTableEnd);
 
     // Tell the hardware the address of the table
-    afu->WriteCSR64(m_csr_base + CCI_MPF_VTP_CSR_PAGE_TABLE_PADDR,
-                    m_pageTablePA / CL(1));
+    m_afu->WriteCSR64(m_csr_base + CCI_MPF_VTP_CSR_PAGE_TABLE_PADDR,
+                      m_pageTablePA / CL(1));
 }
 
 
-CCI_MPF_SHIM_VTP_CLASS::~CCI_MPF_SHIM_VTP_CLASS()
+AFU_CCIS_CLASS::~AFU_CCIS_CLASS()
 {
 }
 
 
 void*
-CCI_MPF_SHIM_VTP_CLASS::CreateSharedBufferInVM(size_t size_bytes)
+AFU_CCIS_CLASS::CreateSharedBufferInVM(size_t size_bytes)
 {
+    if (! did_init) Initialize();
+
     AutoLock(this);
 
     // Align request to page size
@@ -218,7 +233,7 @@ CCI_MPF_SHIM_VTP_CLASS::CreateSharedBufferInVM(size_t size_bytes)
 
 
 void
-CCI_MPF_SHIM_VTP_CLASS::FreeSharedBuffer(void* va)
+AFU_CCIS_CLASS::FreeSharedBuffer(void* va)
 {
     // Because of the remapping we can't currently free workspaces.
     // AAL doesn't know about the reorganized virtual address space and
@@ -228,7 +243,7 @@ CCI_MPF_SHIM_VTP_CLASS::FreeSharedBuffer(void* va)
 
 
 void
-CCI_MPF_SHIM_VTP_CLASS::InsertPageMapping(const void* va, btPhysAddr pa)
+AFU_CCIS_CLASS::InsertPageMapping(const void* va, btPhysAddr pa)
 {
     printf("Map %p at 0x%08lx\n", va, pa);
 
@@ -313,7 +328,7 @@ CCI_MPF_SHIM_VTP_CLASS::InsertPageMapping(const void* va, btPhysAddr pa)
 
 
 void
-CCI_MPF_SHIM_VTP_CLASS::ReadPTE(
+AFU_CCIS_CLASS::ReadPTE(
     const uint8_t* pte,
     uint64_t& vaTag,
     uint64_t& paIdx)
@@ -337,7 +352,7 @@ CCI_MPF_SHIM_VTP_CLASS::ReadPTE(
 
 
 uint64_t
-CCI_MPF_SHIM_VTP_CLASS::ReadTableIdx(
+AFU_CCIS_CLASS::ReadTableIdx(
     const uint8_t* p)
 {
     // Might not be a natural size
@@ -349,7 +364,7 @@ CCI_MPF_SHIM_VTP_CLASS::ReadTableIdx(
 
 
 void
-CCI_MPF_SHIM_VTP_CLASS::WritePTE(
+AFU_CCIS_CLASS::WritePTE(
     uint8_t* pte,
     uint64_t vaTag,
     uint64_t paIdx)
@@ -362,7 +377,7 @@ CCI_MPF_SHIM_VTP_CLASS::WritePTE(
 
 
 void
-CCI_MPF_SHIM_VTP_CLASS::WriteTableIdx(
+AFU_CCIS_CLASS::WriteTableIdx(
     uint8_t* p,
     uint64_t idx)
 {
@@ -375,8 +390,10 @@ CCI_MPF_SHIM_VTP_CLASS::WriteTableIdx(
 // Translate VA to PA using page table.
 //
 btPhysAddr
-CCI_MPF_SHIM_VTP_CLASS::SharedBufferVAtoPA(const void* va)
+AFU_CCIS_CLASS::SharedBufferVAtoPA(const void* va)
 {
+    if (! did_init) Initialize();
+
     // Get the hash index and VA tag
     uint64_t tag;
     uint64_t idx;
@@ -427,7 +444,7 @@ CCI_MPF_SHIM_VTP_CLASS::SharedBufferVAtoPA(const void* va)
 
 
 void
-CCI_MPF_SHIM_VTP_CLASS::DumpPageTable()
+AFU_CCIS_CLASS::DumpPageTable()
 {
     printf("Page table dump:\n");
     printf("  %lld lines, %ld PTEs per line, max. memory represented in PTE %lld GB\n",
@@ -485,3 +502,5 @@ CCI_MPF_SHIM_VTP_CLASS::DumpPageTable()
         }
     }
 }
+
+#endif // CCI_S_IFC

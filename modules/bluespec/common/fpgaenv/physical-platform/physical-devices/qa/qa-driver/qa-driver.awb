@@ -10,6 +10,9 @@
 %sources -t H           -v PUBLIC  AFU_csr.h
 %sources -t CPP         -v PRIVATE AFU.cpp
 
+%sources -t H           -v PUBLIC  AFU_ccis.h
+%sources -t CPP         -v PRIVATE AFU_ccis.cpp
+
 %sources -t VERILOG_PKG -v PRIVATE qa_driver_csr_types.sv
 
 %sources -t VERILOG_H   -v PRIVATE qa_driver_csr.vh

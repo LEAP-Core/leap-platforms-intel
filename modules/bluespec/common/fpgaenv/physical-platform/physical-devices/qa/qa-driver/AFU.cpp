@@ -52,7 +52,7 @@ AFU_CLASS::AFU_CLASS(const char* afuID, uint32_t dsmSizeBytes)
 
     // Instantiate the accelerator
     afuRuntimeClient = new AFU_RUNTIME_CLIENT_CLASS();
-    afuClient = new AFU_CLIENT_CLASS(afuRuntimeClient);
+    afuClient = new AFU_CLIENT_CLASS(this, afuRuntimeClient);
     afuClient->InitService(afuID);
 
     // create buffer for DSM
@@ -296,7 +296,8 @@ AFU_CLASS::RunTests(QA_HOST_CHANNELS_DEVICE qa)
 //
 // ========================================================================
 
-AFU_CLIENT_CLASS::AFU_CLIENT_CLASS(AFU_RUNTIME_CLIENT rtc) :
+AFU_CLIENT_CLASS::AFU_CLIENT_CLASS(AFU afu, AFU_RUNTIME_CLIENT rtc) :
+    afu(afu),
     m_pAALService(NULL),
     m_runtimeClient(rtc),
 #if (CCI_S_IFC != 0)
@@ -388,6 +389,14 @@ AFU_CLIENT_CLASS::InitService(const char* afuID)
     m_Sem.Wait();
 
 
+#if (CCI_S_IFC != 0)
+    // Instantiate the compatibility class when running on CCI-S.  It will
+    // provide a software shim to support VTP which became part of the
+    // standard distribution in CCI-P.
+    afu_ccis_compat = new AFU_CCIS_CLASS(afu);
+
+#else
+
     btcString sGUID = MPF_VTP_BBB_GUID;
     NamedValueSet featureFilter;
     featureFilter.Add(ALI_GETFEATURE_TYPE_KEY, static_cast<ALI_GETFEATURE_TYPE_DATATYPE>(2));
@@ -405,6 +414,7 @@ AFU_CLIENT_CLASS::InitService(const char* afuID)
                            m_pALIMMIOService,
                            m_VTPDFHOffset);
     assert(m_mpf_vtp->isOK());
+#endif
 
     return m_Result;
 }
@@ -495,6 +505,9 @@ AFU_CLIENT_CLASS::FreeSharedBuffer(AFU_BUFFER buffer)
 void*
 AFU_CLIENT_CLASS::CreateSharedBufferInVM(ssize_t size_bytes)
 {
+#if (CCI_S_IFC != 0)
+    return afu_ccis_compat->CreateSharedBufferInVM(size_bytes);
+#else
     ali_errnum_e st;
     btVirtAddr va;
 
@@ -502,13 +515,18 @@ AFU_CLIENT_CLASS::CreateSharedBufferInVM(ssize_t size_bytes)
     assert(st == ali_errnumOK);
 
     return (void*)va;
+#endif
 }
 
 
 btPhysAddr
 AFU_CLIENT_CLASS::SharedBufferVAtoPA(const void* va)
 {
+#if (CCI_S_IFC != 0)
+    return afu_ccis_compat->SharedBufferVAtoPA(va);
+#else
     return m_mpf_vtp->bufferGetIOVA(btVirtAddr(va));
+#endif
 }
 
 

@@ -63,6 +63,7 @@ USING_NAMESPACE(AAL)
 typedef class AFU_CLIENT_CLASS *AFU_CLIENT;
 typedef class AFU_RUNTIME_CLIENT_CLASS *AFU_RUNTIME_CLIENT;
 typedef class QA_HOST_CHANNELS_DEVICE_CLASS *QA_HOST_CHANNELS_DEVICE;
+typedef class AFU_CCIS_CLASS *AFU_CCIS;
 
 
 #ifndef CL
@@ -190,7 +191,7 @@ class AFU_CLIENT_CLASS: public CAASBase,
                         public IServiceClient
 {
 public:
-    AFU_CLIENT_CLASS(AFU_RUNTIME_CLIENT rtc);
+    AFU_CLIENT_CLASS(AFU afu, AFU_RUNTIME_CLIENT rtc);
     ~AFU_CLIENT_CLASS();
 
     btInt InitService(const char* afuID);
@@ -271,9 +272,16 @@ public:
     // </ICCIClient>
 
   protected:
+    AFU            afu;
     IBase         *m_pAALService;    // The generic AAL Service interface for the AFU.
+
 #if (CCI_S_IFC != 0)
     ICCIAFU       *m_Service;
+
+    // CCI-S compatibility layer.  The CCI-S version of the memory allocator
+    // used by VTP is here.  In CCI-P the ability to allocate large blocks
+    // of shared virtual memory became part of the standard release.
+    AFU_CCIS       afu_ccis_compat;
 #else
     IALIBuffer    *m_pALIBufferService; ///< Pointer to Buffer Service
     IALIMMIO      *m_pALIMMIOService;   ///< Pointer to MMIO Service

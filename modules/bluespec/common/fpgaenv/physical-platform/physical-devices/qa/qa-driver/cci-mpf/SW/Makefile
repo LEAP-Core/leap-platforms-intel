@@ -68,7 +68,8 @@ endif
 INCLUDE = include
 
 OBJECTS = src/cci_mpf_service.o \
-	  src/cci_mpf_shim_vtp.o
+	  src/cci_mpf_shim_vtp.o \
+	  src/cci_mpf_shim_vtp_pt.o
 
 all: libMPF.so libMPF.so.0
 

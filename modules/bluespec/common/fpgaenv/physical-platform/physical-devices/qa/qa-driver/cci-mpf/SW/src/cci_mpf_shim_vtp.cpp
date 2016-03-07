@@ -125,24 +125,8 @@ MPFVTP::MPFVTP( IALIBuffer *pBufferService,
 
    // Allocate the page table.  The size of the page table is a function
    // of the PTE index space.
-   size_t pt_size = (1LL << CCI_PT_LINE_IDX_BITS) * CL(1);
-   err = m_pALIBuffer->bufferAllocate(pt_size, &m_pPageTable);
-   ASSERT(err == ali_errnumOK && m_pPageTable);
-
-   // clear table
-   memset(m_pPageTable, 0, pt_size);
-
-   // FIXME: bufferGetIOVA should take a btVirtAddr to be consistent
-   m_PageTablePA = m_pALIBuffer->bufferGetIOVA((unsigned char *)m_pPageTable);
-
-   m_pPageTableEnd = m_pPageTable + pt_size;
-
-   // The page table is hashed.  It begins with lines devoted to the hash
-   // table.  The remainder of the buffer is available for overflow lines.
-   // Initialize the free pointer of overflow lines, which begins at the
-   // end of the hash table.
-   m_pPageTableFree = m_pPageTable + (1LL << CCI_PT_VA_IDX_BITS) * CL(1);
-   ASSERT(m_pPageTableFree <= m_pPageTableEnd);
+   ret = ptInitialize();
+   ASSERT(ret);
 
    // Tell the hardware the address of the table
    ret = vtpEnable();
@@ -153,9 +137,9 @@ MPFVTP::MPFVTP( IALIBuffer *pBufferService,
 
 
 ali_errnum_e MPFVTP::bufferAllocate( btWSSize             Length,
-                                  btVirtAddr          *pBufferptr,
-                                  NamedValueSet const &rInputArgs,
-                                  NamedValueSet       &rOutputArgs )
+                                     btVirtAddr          *pBufferptr,
+                                     NamedValueSet const &rInputArgs,
+                                     NamedValueSet       &rOutputArgs )
 {
    AutoLock(this);
 
@@ -253,7 +237,9 @@ ali_errnum_e MPFVTP::bufferAllocate( btWSSize             Length,
       }
 
       // Add the mapping to the page table
-      InsertPageMapping(va_alloc, m_pALIBuffer->bufferGetIOVA((unsigned char *)buffer));
+      ptInsertPageMapping(btVirtAddr(va_alloc),
+                          m_pALIBuffer->bufferGetIOVA((unsigned char *)buffer),
+                          MPFVTP_PAGE_2MB);
 
       // Next VA
       va_alloc = (void*)(size_t(va_alloc) - pageSize);
@@ -272,7 +258,7 @@ ali_errnum_e MPFVTP::bufferAllocate( btWSSize             Length,
        munmap(va_base, va_base_len);
    }
 
-   DumpPageTable();
+   ptDumpPageTable();
 
    *pBufferptr = (btVirtAddr)va_aligned;
    return ali_errnumOK;
@@ -294,52 +280,13 @@ ali_errnum_e MPFVTP::bufferFreeAll()
 
 btPhysAddr MPFVTP::bufferGetIOVA( btVirtAddr Address)
 {
-   // Get the hash index and VA tag
-   uint64_t tag;
-   uint64_t idx;
-   uint64_t offset;
-   AddrComponentsFromVA(Address, tag, idx, offset);
+   bool ret;
+   btPhysAddr pa;
 
-   // The idx field is the hash bucket in which the VA will be found.
-   uint8_t* pte = m_pPageTable + idx * CL(1);
+   ret = ptTranslateVAtoPA(Address, &pa);
+   ASSERT(ret);
 
-   // Search for a matching tag in the hash bucket.  The bucket is a set
-   // of vectors PTEs chained in a linked list.
-   while (true)
-   {
-      // Walk through one vector in one line
-      for (int n = 0; n < ptesPerLine; n += 1)
-      {
-         uint64_t va_tag;
-         uint64_t pa_idx;
-         ReadPTE(pte, va_tag, pa_idx);
-
-         if (va_tag == tag)
-         {
-            // Found it!
-            return (pa_idx << CCI_PT_PAGE_OFFSET_BITS) | offset;
-         }
-
-         // End of the PTE list?
-         if (va_tag == 0)
-         {
-            // Failed to find an entry for VA
-            return 0;
-         }
-
-         pte += pteBytes;
-      }
-
-      // VA not found in current line.  Does this line of PTEs link to
-      // another?
-      pte = m_pPageTable + ReadTableIdx(pte) * CL(1);
-
-      // End of list?  (Table index was NULL.)
-      if (pte == m_pPageTable)
-      {
-         return 0;
-      }
-   }
+   return pa;
 }
 
 btBool MPFVTP::vtpReset( void )
@@ -353,262 +300,27 @@ btBool MPFVTP::vtpEnable( void )
    // FIXME: this is likely to change or disappear in beta!
 
    // Write page table physical address CSR
-   return m_pALIMMIO->mmioWrite64(m_dfhOffset + CCI_MPF_VTP_CSR_PAGE_TABLE_PADDR, m_PageTablePA / CL(1));
+   return m_pALIMMIO->mmioWrite64(m_dfhOffset + CCI_MPF_VTP_CSR_PAGE_TABLE_PADDR,
+                                  ptGetPageTableRootPA() / CL(1));
 }
 
 //-----------------------------------------------------------------------------
 // Private functions
 //-----------------------------------------------------------------------------
 
-void MPFVTP::InsertPageMapping( const void* va, btPhysAddr pa )
+btVirtAddr
+MPFVTP::ptAllocSharedPage(btWSSize length, btPhysAddr* pa)
 {
-    AAL_DEBUG(LM_AFU, "Map " << std::hex << std::setw(2) <<
-                      std::setfill('0') << va << " at " << pa << std::endl);
+   ali_errnum_e err;
+   btVirtAddr va;
 
-    //
-    // VA components are the offset within the 2MB-aligned page, the index
-    // within the direct-mapped page table hash vector and the remaining high
-    // address bits: the tag.
-    //
-    uint64_t va_tag;
-    uint64_t va_idx;
-    uint64_t va_offset;
-    AddrComponentsFromVA(va, va_tag, va_idx, va_offset);
-    ASSERT(va_offset == 0);
+   err = m_pALIBuffer->bufferAllocate(length, &va);
+   ASSERT(err == ali_errnumOK && va);
 
-    //
-    // PA components are the offset within the 2MB-aligned page and the
-    // index of the 2MB aligned physical page (low bits dropped).
-    //
-    uint64_t pa_idx;
-    uint64_t pa_offset;
-    AddrComponentsFromPA(pa, pa_idx, pa_offset);
-    ASSERT(pa_offset == 0);
-
-    //
-    // The page table is hashed by the VA index.  Compute the address of
-    // the line given the hash.
-    //
-    uint8_t* p = m_pPageTable + va_idx * CL(1);
-
-    //
-    // Find a free entry.
-    //
-    uint32_t n = 0;
-    while (true)
-    {
-        if (n++ != ptesPerLine)
-        {
-            // Walking PTEs in a line
-            uint64_t tmp_va_tag;
-            uint64_t tmp_pa_idx;
-            ReadPTE(p, tmp_va_tag, tmp_pa_idx);
-
-            if (tmp_va_tag == 0)
-            {
-                // Found a free entry
-                break;
-            }
-
-            // Entry was busy.  Move on to the next one.
-            p += pteBytes;
-        }
-        else
-        {
-            // End of the line.  Is there an overflow line already?
-            n = 0;
-
-            uint64_t next_idx = ReadTableIdx(p);
-            if (next_idx != 0)
-            {
-                // Overflow allocated.  Switch to it and keep searching.
-                p = m_pPageTable + next_idx * CL(1);
-            }
-            else
-            {
-                // Need a new overflow line.  Is there space in the page table?
-                ASSERT(m_pPageTableFree < m_pPageTableEnd);
-
-                // Add a next line pointer to the current entry.
-                WriteTableIdx(p, (m_pPageTableFree - m_pPageTable) / CL(1));
-                p = m_pPageTableFree;
-                m_pPageTableFree += CL(1);
-
-                // Write the new PTE at p.
-                break;
-            }
-        }
-    }
-
-    // Add the new PTE
-    WritePTE(p, va_tag, pa_idx);
+   *pa = m_pALIBuffer->bufferGetIOVA((unsigned char *)va);
+   return va;
 }
 
-void MPFVTP::ReadPTE( const uint8_t* pte, uint64_t& vaTag, uint64_t& paIdx )
-{
-    // Might not be a natural size so use memcpy
-    uint64_t e = 0;
-    memcpy(&e, pte, pteBytes);
-
-    paIdx = e & ((1LL << CCI_PT_PA_IDX_BITS) - 1);
-
-    vaTag = e >> CCI_PT_PA_IDX_BITS;
-    vaTag &= (1LL << vaTagBits) - 1;
-
-    // VA is sign extended from its size to 64 bits
-    if (CCI_PT_VA_BITS != 64)
-    {
-        vaTag <<= (64 - vaTagBits);
-        vaTag = uint64_t(int64_t(vaTag) >> (64 - vaTagBits));
-    }
-}
-
-uint64_t MPFVTP::ReadTableIdx( const uint8_t* p )
-{
-    // Might not be a natural size
-    uint64_t e = 0;
-    memcpy(&e, p, (CCI_PT_LINE_IDX_BITS + 7) / 8);
-
-    return e & ((1LL << CCI_PT_LINE_IDX_BITS) - 1);
-}
-
-void MPFVTP::WritePTE( uint8_t* pte, uint64_t vaTag, uint64_t paIdx )
-{
-    uint64_t p = AddrToPTE(vaTag, paIdx);
-
-    // Might not be a natural size so use memcpy
-    memcpy(pte, &p, pteBytes);
-}
-
-void MPFVTP::WriteTableIdx( uint8_t* p, uint64_t idx )
-{
-    // Might not be a natural size
-    memcpy(p, &idx, (CCI_PT_LINE_IDX_BITS + 7) / 8);
-}
-
-void MPFVTP::DumpPageTable()
-{
-     AAL_DEBUG(LM_AFU, "Page table dump: " << std::endl);
-     AAL_DEBUG(LM_AFU, (1LL << CCI_PT_LINE_IDX_BITS) << " lines " <<
-                       ptesPerLine << " PTEs per line, max memory represented in PTE " <<
-                       ((1LL << CCI_PT_LINE_IDX_BITS) * ptesPerLine * 2) / 1024 <<
-                       " GB" << std::endl);
-//std::hex << std::setw(2) << std::setfill('0') << (void*)buffer << " to " << va_alloc << std::endl);
-
-    // Loop through all lines in the hash table
-    for (int hash_idx = 0; hash_idx < (1LL << CCI_PT_VA_IDX_BITS); hash_idx += 1)
-    {
-        int cur_idx = hash_idx;
-        uint8_t* pte = m_pPageTable + hash_idx * CL(1);
-
-        // Loop over all lines in the hash group
-        while (true)
-        {
-            int n;
-            // Loop over all PTEs in a single line
-            for (n = 0; n < ptesPerLine; n += 1)
-            {
-                uint64_t va_tag;
-                uint64_t pa_idx;
-                ReadPTE(pte, va_tag, pa_idx);
-
-                // End of the PTE list within the current hash group?
-                if (va_tag == 0) break;
-
-                //
-                // The VA in a PTE is the combination of the tag (stored
-                // in the PTE) and the hash table index.  The table index
-                // is mapped directly from the low bits of the VA's line
-                // address.
-                //
-                // The PA in a PTE is stored as the index of the 2MB-aligned
-                // physical address.
-                AAL_DEBUG(LM_AFU, "    " << std::dec << hash_idx << "/" << cur_idx <<
-                          ":\t\tVA " << std::hex << std::setw(2) << std::setfill('0') <<
-                          ((va_tag << (CCI_PT_VA_IDX_BITS + CCI_PT_PAGE_OFFSET_BITS)) |
-                          (uint64_t(hash_idx) << CCI_PT_PAGE_OFFSET_BITS)) << " -> PA " <<
-                          std::hex << std::setw(2) << std::setfill('0') <<
-                          pa_idx << CCI_PT_PAGE_OFFSET_BITS << std::endl);
-                pte += pteBytes;
-            }
-
-            // If the PTE list within the current hash group is incomplete then
-            // we have walked all PTEs in the line.
-            if (n != ptesPerLine) break;
-
-            // Follow the next pointer to the connected line holding another
-            // vector of PTEs.
-            cur_idx = ReadTableIdx(pte);
-            pte = m_pPageTable + cur_idx * CL(1);
-            // End of list?  (Table index was NULL.)
-            if (pte == m_pPageTable) break;
-        }
-    }
-}
-
-inline void MPFVTP::AddrComponentsFromVA( uint64_t va,
-                                       uint64_t& tag,
-                                       uint64_t& idx,
-                                       uint64_t& byteOffset )
-{
-   uint64_t v = va;
-
-   byteOffset = v & ((1LL << CCI_PT_PAGE_OFFSET_BITS) - 1);
-   v >>= CCI_PT_PAGE_OFFSET_BITS;
-
-   idx = v & ((1LL << CCI_PT_VA_IDX_BITS) - 1);
-   v >>= CCI_PT_VA_IDX_BITS;
-
-   tag = v & ((1LL << vaTagBits) - 1);
-
-   // Make sure no address bits were lost in the conversion.  The high bits
-   // beyond CCI_PT_VA_BITS are sign extended.
-   if (CCI_PT_VA_BITS != 64)
-   {
-      int64_t va_check = va;
-      // Shift all but the high bit of the VA range to the right.  All the
-      // resulting bits must match.
-      va_check >>= (CCI_PT_VA_BITS - 1);
-      ASSERT((va_check == 0) || (va_check == -1));
-   }
-}
-
-
-inline void MPFVTP::AddrComponentsFromVA( const void *va,
-                                       uint64_t& tag,
-                                       uint64_t& idx,
-                                       uint64_t& byteOffset )
-{
-   AddrComponentsFromVA(uint64_t(va), tag, idx, byteOffset);
-}
-
-inline void MPFVTP::AddrComponentsFromPA( uint64_t pa,
-                                       uint64_t& idx,
-                                       uint64_t& byteOffset )
-{
-   uint64_t p = pa;
-
-   byteOffset = p & ((1LL << CCI_PT_PAGE_OFFSET_BITS) - 1);
-   p >>= CCI_PT_PAGE_OFFSET_BITS;
-
-   idx = p & ((1LL << CCI_PT_PA_IDX_BITS) - 1);
-   p >>= CCI_PT_PA_IDX_BITS;
-
-   // PA_IDX_BITS must be large enough to represent all physical pages
-   ASSERT(p == 0);
-}
-
-inline uint64_t MPFVTP::AddrToPTE( uint64_t va, uint64_t pa )
-{
-   ASSERT((pa & ~((1LL << CCI_PT_PA_IDX_BITS) - 1)) == 0);
-
-   return ((va << CCI_PT_PA_IDX_BITS) | pa);
-}
-
-inline uint64_t MPFVTP::AddrToPTE( const void* va, uint64_t pa )
-{
-   return AddrToPTE(uint64_t(va), pa);
-}
 /// @} group VTPService
 
 END_NAMESPACE(AAL)

@@ -49,10 +49,13 @@ module cci_mpf_shim_vtp_pt_walk
     input  logic clk,
     input  logic reset,
 
+    // CSRs
+    cci_mpf_csrs.vtp csrs,
+
     // Request a page walk.
-    input  logic walkPtReqEn,              // Enable PT walk request
-    input  t_tlb_va_page walkPtReqVA,      // VA to translate
-    output logic walkPtReqRdy,             // Ready to accept a request?
+    input  logic walkPtReqEn,                  // Enable PT walk request
+    input  t_tlb_4kb_va_page_idx walkPtReqVA,  // VA to translate
+    output logic walkPtReqRdy,                 // Ready to accept a request?
 
     // Completed a page walk.  Tell the TLB about a new translation
     cci_mpf_shim_vtp_tlb_if.fill tlb_fill_if,
@@ -66,7 +69,7 @@ module cci_mpf_shim_vtp_pt_walk
     // for turning the request into a read of the page table and forwarding
     // the result to ptReadData.
     output logic ptReadIdxEn,
-    output t_pte_idx ptReadIdx,
+    output t_cci_clAddr ptReadIdx,
     // System ready to accept a read request?
     input  logic ptReadIdxRdy,
 
@@ -75,11 +78,16 @@ module cci_mpf_shim_vtp_pt_walk
     input logic ptReadDataEn
     );
 
+
+    // Address hash index in the host memory page table
+    localparam CCI_PT_VA_IDX_BITS = 14;     // 14 == 16K buckets in the hash table
+    typedef logic [CCI_PT_VA_IDX_BITS-1 : 0] t_pte_va_hash_idx;
+
     // Address tag in the page table (tag concatenated with hash index is
     // the virtual page.
-    localparam CCI_PT_VA_TAG_BITS = CCI_PT_VA_BITS -
+    localparam CCI_PT_VA_TAG_BITS = 48 -
                                     CCI_PT_VA_IDX_BITS -
-                                    CCI_PT_PAGE_OFFSET_BITS;
+                                    CCI_PT_2MB_PAGE_OFFSET_BITS;
 
     typedef logic [CCI_PT_VA_TAG_BITS-1 : 0] t_pte_va_tag;
 
@@ -87,9 +95,22 @@ module cci_mpf_shim_vtp_pt_walk
         // Confirm that the VA size specified in VTP matches CCI.  The CCI
         // version is line addresses, so the units must be converted.
         assert (CCI_MPF_CLADDR_WIDTH + $clog2(CCI_CLDATA_WIDTH >> 3) ==
-                CCI_PT_VA_BITS) else
+                48) else
             $fatal("cci_mpf_shim_vtp.sv: VA address size mismatch!");
     end
+
+
+    // Base address of the page table
+    t_cci_clAddr page_table_base;
+    assign page_table_base = csrs.vtp_in_page_table_base;
+
+    logic initialized;
+    assign initialized = csrs.vtp_in_page_table_base_valid;
+
+
+    // Index (pointer) to line in the page table
+    localparam CCI_PT_LINE_IDX_BITS = 15;   // 15 == 2MB with 64 byte lines
+    typedef logic [CCI_PT_LINE_IDX_BITS-1 : 0] t_pte_idx;
 
 
     // ====================================================================
@@ -110,6 +131,8 @@ module cci_mpf_shim_vtp_pt_walk
 
     t_state_pt_walk state;
 
+    localparam CCI_PT_PA_IDX_BITS = CCI_PT_2MB_PA_PAGE_INDEX_BITS;
+
     // Bytes to hold a single PTE
     localparam PTE_BYTES = (CCI_PT_VA_TAG_BITS + CCI_PT_PA_IDX_BITS + 7) / 8;
     // Bytes to hold a page table pointer
@@ -125,8 +148,8 @@ module cci_mpf_shim_vtp_pt_walk
     // One page table entry
     typedef struct packed
     {
-        t_pte_va_tag       vTag;
-        t_tlb_physical_idx pIdx;
+        t_pte_va_tag          vTag;
+        t_tlb_2mb_pa_page_idx pIdx;
     }
     t_pte;
 
@@ -164,7 +187,7 @@ module cci_mpf_shim_vtp_pt_walk
                         state <= STATE_PT_WALK_READ_REQ;
                     end
 
-                    {pte_va_tag, pte_hash_idx} <= walkPtReqVA;
+                    {pte_va_tag, pte_hash_idx} <= vtp4kbTo2mbVA(walkPtReqVA);
 
                     // Why the double application of types to walkPtReqVA?
                     // The hash index isolates the proper bits of the page
@@ -173,7 +196,7 @@ module cci_mpf_shim_vtp_pt_walk
                     // (The PTE index space includes both the hash table
                     // and overflow space to which hash entries can point
                     // in order to construct longer linked lists.)
-                    pte_idx <= t_pte_idx'(t_pte_va_hash_idx'(walkPtReqVA));
+                    pte_idx <= t_pte_idx'(t_pte_va_hash_idx'(vtp4kbTo2mbVA(walkPtReqVA)));
                 end
 
               STATE_PT_WALK_READ_REQ:
@@ -181,7 +204,7 @@ module cci_mpf_shim_vtp_pt_walk
                     //
                     // Request a line from the page table.
                     //
-                    if (ptReadIdxRdy)
+                    if (ptReadIdxRdy && initialized)
                     begin
                         state <= STATE_PT_WALK_READ_RSP;
                     end
@@ -223,7 +246,7 @@ module cci_mpf_shim_vtp_pt_walk
                             if (DEBUG_MESSAGES)
                             begin
                                 $display("PT WALK: ERROR, failed to find 0x%x",
-                                         {pte_va_tag, pte_hash_idx,  CCI_PT_PAGE_OFFSET_BITS'(0)});
+                                         {pte_va_tag, pte_hash_idx,  CCI_PT_2MB_PAGE_OFFSET_BITS'(0)});
                             end
                         end
                         else
@@ -234,7 +257,7 @@ module cci_mpf_shim_vtp_pt_walk
                             if (DEBUG_MESSAGES)
                             begin
                                 $display("PT WALK: Search for 0x%x, next line %0d",
-                                         {pte_va_tag, pte_hash_idx,  CCI_PT_PAGE_OFFSET_BITS'(0)},
+                                         {pte_va_tag, pte_hash_idx,  CCI_PT_2MB_PAGE_OFFSET_BITS'(0)},
                                          t_pte_idx'(pt_line));
                             end
                         end
@@ -247,8 +270,8 @@ module cci_mpf_shim_vtp_pt_walk
                         if (DEBUG_MESSAGES)
                         begin
                             $display("PT WALK: Found 0x%x (PA 0x%x), num %0d",
-                                     {cur_pte.vTag, pte_hash_idx,  CCI_PT_PAGE_OFFSET_BITS'(0)},
-                                     {cur_pte.pIdx, CCI_PT_PAGE_OFFSET_BITS'(0)},
+                                     {cur_pte.vTag, pte_hash_idx,  CCI_PT_2MB_PAGE_OFFSET_BITS'(0)},
+                                     {cur_pte.pIdx, CCI_PT_2MB_PAGE_OFFSET_BITS'(0)},
                                      pte_num);
                         end
                     end
@@ -263,9 +286,9 @@ module cci_mpf_shim_vtp_pt_walk
                         if (DEBUG_MESSAGES)
                         begin
                             $display("PT WALK: Search for 0x%x, at 0x%x (PA 0x%x), num %0d",
-                                     {pte_va_tag, pte_hash_idx,  CCI_PT_PAGE_OFFSET_BITS'(0)},
-                                     {cur_pte.vTag, pte_hash_idx,  CCI_PT_PAGE_OFFSET_BITS'(0)},
-                                     {cur_pte.pIdx, CCI_PT_PAGE_OFFSET_BITS'(0)},
+                                     {pte_va_tag, pte_hash_idx,  CCI_PT_2MB_PAGE_OFFSET_BITS'(0)},
+                                     {cur_pte.vTag, pte_hash_idx,  CCI_PT_2MB_PAGE_OFFSET_BITS'(0)},
+                                     {cur_pte.pIdx, CCI_PT_2MB_PAGE_OFFSET_BITS'(0)},
                                      pte_num);
                         end
                     end
@@ -301,8 +324,9 @@ module cci_mpf_shim_vtp_pt_walk
     end
 
     // Request a page table read depending on state.
-    assign ptReadIdx = pte_idx;
-    assign ptReadIdxEn = ptReadIdxRdy && (state == STATE_PT_WALK_READ_REQ);
+    assign ptReadIdx = page_table_base | pte_idx;
+    assign ptReadIdxEn = ptReadIdxRdy && initialized &&
+                         (state == STATE_PT_WALK_READ_REQ);
 
     always_ff @(posedge clk)
     begin
@@ -323,8 +347,8 @@ module cci_mpf_shim_vtp_pt_walk
     //
     assign tlb_fill_if.fillEn = (state == STATE_PT_WALK_INSERT) &&
                                 tlb_fill_if.fillRdy;
-    assign tlb_fill_if.fillVA = {pte_va_tag, pte_hash_idx};
-    assign tlb_fill_if.fillPA = found_pte.pIdx;
+    assign tlb_fill_if.fillVA = vtp2mbTo4kbVA({pte_va_tag, pte_hash_idx});
+    assign tlb_fill_if.fillPA = vtp2mbTo4kbPA(found_pte.pIdx);
 
 endmodule // cci_mpf_shim_vtp_pt_walk
 

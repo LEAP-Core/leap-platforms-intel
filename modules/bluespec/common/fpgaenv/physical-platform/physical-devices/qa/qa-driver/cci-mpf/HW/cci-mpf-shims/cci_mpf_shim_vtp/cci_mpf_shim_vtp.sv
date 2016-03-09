@@ -134,13 +134,9 @@ module cci_mpf_shim_vtp
     //
     // ====================================================================
 
-    // Base address of the page table
-    t_cci_clAddr page_table_base;
-    assign page_table_base = csrs.vtp_in_page_table_base;
-
     logic walk_pt_rdy;
     logic walk_pt_req_en;
-    t_tlb_va_page walk_pt_req_va[0 : 1];
+    t_tlb_4kb_va_page_idx walk_pt_req_va[0 : 1];
 
     // Miss channel arbiter -- used for fairness
     logic last_miss_channel;
@@ -202,7 +198,7 @@ module cci_mpf_shim_vtp
         begin
             $display("VTP: Request page walk for miss chan %0d, VA 0x%x",
                      last_miss_channel,
-                     {walk_pt_req_va[last_miss_channel], CCI_PT_PAGE_OFFSET_BITS'(0)});
+                     {walk_pt_req_va[last_miss_channel], CCI_PT_4KB_PAGE_OFFSET_BITS'(0)});
         end
     end
 
@@ -223,8 +219,8 @@ module cci_mpf_shim_vtp
     // Page table read request and response signals
     logic ptReadIdxEn;
     logic ptReadIdxEn_q;
-    t_pte_idx ptReadIdx;
-    t_pte_idx ptReadIdx_q;
+    t_cci_clAddr ptReadIdx;
+    t_cci_clAddr ptReadIdx_q;
     logic ptReadDataEn;
 
     cci_mpf_shim_vtp_pt_walk
@@ -236,6 +232,8 @@ module cci_mpf_shim_vtp
         .clk,
         .reset,
 
+        .csrs,
+
         .walkPtReqEn(walk_pt_req_en),
         .walkPtReqVA(walk_pt_req_va[last_miss_channel]),
         .walkPtReqRdy(walk_pt_rdy),
@@ -246,7 +244,7 @@ module cci_mpf_shim_vtp
 
         .ptReadIdxEn,
         .ptReadIdx,
-        .ptReadIdxRdy(! ptReadIdxEn_q && csrs.vtp_in_page_table_base_valid),
+        .ptReadIdxRdy(! ptReadIdxEn_q),
 
         .ptReadData(fiu.c0Rx.data),
         .ptReadDataEn
@@ -309,7 +307,7 @@ module cci_mpf_shim_vtp
             //
             did_pt_rd = 1'b1;
             c0_req_hdr = cci_mpf_c0_genReqHdr(eREQ_RDLINE_S,
-                                              page_table_base + ptReadIdx_q,
+                                              ptReadIdx_q,
                                               t_cci_mdata'(0),
                                               cci_mpf_defaultReqHdrParams(0));
 

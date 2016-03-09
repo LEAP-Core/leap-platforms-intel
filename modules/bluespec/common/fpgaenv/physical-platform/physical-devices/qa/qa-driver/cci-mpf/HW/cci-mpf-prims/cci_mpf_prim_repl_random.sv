@@ -97,7 +97,7 @@ module cci_mpf_prim_repl_random
     t_way_vec way_vec;
     always_comb
     begin
-        for (int i = 0; i < N_ENTRIES; i = i + 1)
+        for (int i = 0; i < N_WAYS; i = i + 1)
         begin
             way_vec[i] = (t_way_idx'(i) == idx);
         end

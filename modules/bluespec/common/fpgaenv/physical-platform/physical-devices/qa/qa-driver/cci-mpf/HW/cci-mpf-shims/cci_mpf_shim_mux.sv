@@ -41,12 +41,16 @@
 module cci_mpf_shim_mux
   #(
     //
-    // The MUX currently supports c2Tx from only one source.  Since c2Tx
-    // isn't flow controlled buffering would be required to support accurate
-    // flow control.  Specify the input channel to which c2Tx should
-    // connect.
+    // The MUX can either multiplex c2Tx, the MMIO response channel, or
+    // it can connect only one source.  Since c2Tx isn't flow controlled,
+    // buffering is required to support accurate flow control.  If only
+    // one source connection is required specify the input channel to
+    // which c2Tx should connect.
     //
-    parameter C2TX_INPUT_CHANNEL = 0,
+    // If both source channels must be connected, set C2TX_INPUT_CHANNEL
+    // to -1.
+    //
+    parameter C2TX_INPUT_CHANNEL = -1,
 
     //
     // This MUX requires that one bit be reserved for message routing in the
@@ -364,16 +368,88 @@ module cci_mpf_shim_mux
     //
     // ====================================================================
 
-    // c2Tx isn't currently multiplexed
-    assign fiu.c2Tx = afus[C2TX_INPUT_CHANNEL].c2Tx;
+    generate
+        if (C2TX_INPUT_CHANNEL != -1)
+        begin : c2nm
+            // c2Tx isn't multiplexed.  Connect only the requested source.
+            assign fiu.c2Tx = afus[C2TX_INPUT_CHANNEL].c2Tx;
 
-    always_ff @(posedge clk)
-    begin
-        if (! reset)
-        begin
-            assert (! afus[(C2TX_INPUT_CHANNEL == 0) ? 1 : 0].c2Tx.mmioRdValid) else
-              $fatal("cci_mpf_shim_mux.sv: mmioRdValid set on ignored input channel!");
+            always_ff @(posedge clk)
+            begin
+                if (! reset)
+                begin
+                    assert (! afus[(C2TX_INPUT_CHANNEL == 0) ? 1 : 0].c2Tx.mmioRdValid) else
+                        $fatal("cci_mpf_shim_mux.sv: mmioRdValid set on ignored input channel!");
+                end
+            end
         end
-    end
+        else
+        begin : c2m
+            // c2Tx is multiplexed but has no flow control.  The CCI spec.
+            // allows at most 64 requests in flight.
+
+            t_if_cci_c2_Tx c2Tx[0:1];
+            logic [NUM_AFU_PORTS-1 : 0] c2_request;
+
+            logic [AFU_PORTS_RADIX-1 : 0] last_c2_winner_idx;
+            logic [AFU_PORTS_RADIX-1 : 0] c2_winner_idx;
+
+            // Create a FIFO for each channel.
+            for (p = 0; p < NUM_AFU_PORTS; p = p + 1)
+            begin : c2m_chn
+                cci_mpf_prim_fifo_lutram
+                  #(
+                    .N_DATA_BITS($bits(t_if_cci_c2_Tx)),
+                    .N_ENTRIES(64),
+                    .REGISTER_OUTPUT(1)
+                    )
+                  c2fifo
+                    (
+                     .clk,
+                     .reset,
+
+                     .enq_data(afus[p].c2Tx),
+                     .enq_en(cci_mpf_c2TxIsValid(afus[p].c2Tx)),
+                     // Channel has no flow control.  In simulation the FIFO
+                     // will raise an error if it fills.
+                     .notFull(),
+                     .almostFull(),
+
+                     .first(c2Tx[p]),
+                     .deq_en(c2_request[p] && (c2_winner_idx == p)),
+                     .notEmpty(c2_request[p])
+                     );
+            end
+
+            // Round-robin arbitration among two clients
+            assign c2_winner_idx = c2_request[1] && (! c2_request[0] ||
+                                                     (last_c2_winner_idx == 0));
+
+            // Forward the response
+            always_comb
+            begin
+                fiu.c2Tx = c2Tx[c2_winner_idx];
+                fiu.c2Tx.mmioRdValid = |(c2_request);
+            end
+
+            // Record the winner
+            always_ff @(posedge clk)
+            begin
+                if (reset)
+                begin
+                    last_c2_winner_idx <= 0;
+                end
+                else
+                begin
+                    // Only update the winner if there was a request.
+                    if (|(c2_request))
+                    begin
+                        last_c2_winner_idx <= c2_winner_idx;
+                        $display("MUX C2TX %d", c2_winner_idx);
+                    end
+                end
+            end
+        end
+    endgenerate
 
 endmodule // cci_mpf_shim_mux

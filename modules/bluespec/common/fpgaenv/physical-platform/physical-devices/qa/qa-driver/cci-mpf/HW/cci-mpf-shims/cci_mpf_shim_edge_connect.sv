@@ -136,14 +136,17 @@ module cci_mpf_shim_edge_connect
     // ====================================================================
 
     // All but write requests flow straight through
-    assign fiu_edge.c0Tx = cci_mpf_updC0TxCanonical(fiu.c0Tx);
-    assign fiu_edge.c2Tx = fiu.c2Tx;
+    always_ff @(posedge clk)
+    begin
+        fiu_edge.c0Tx <= cci_mpf_updC0TxCanonical(fiu.c0Tx);
+        fiu_edge.c2Tx <= fiu.c2Tx;
+    end
 
     assign fiu.c0TxAlmFull = fiu_edge.c0TxAlmFull;
 
+    // Responses
     assign fiu.c0Rx = fiu_edge.c0Rx;
     assign fiu.c1Rx = fiu_edge.c1Rx;
-
 
     // Multi-beat writes complete by synthesizing new packets and reading
     // data from wr_heap.  c1 Tx flows through a buffering FIFO since

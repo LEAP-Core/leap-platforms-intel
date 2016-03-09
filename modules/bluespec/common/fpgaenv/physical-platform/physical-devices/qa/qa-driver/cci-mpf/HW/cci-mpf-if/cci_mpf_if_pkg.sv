@@ -735,6 +735,21 @@ package cci_mpf_if_pkg;
     endfunction
 
 
+    // Does a C2 TX have a valid response?
+    function automatic logic cci_mpf_c2TxIsValid(
+        input t_if_cci_c2_Tx r
+        );
+
+        return r.mmioRdValid;
+    endfunction
+
+    function automatic t_if_cci_c2_Tx cci_mpf_c2Tx_clearValids();
+        t_if_cci_c2_Tx r = 'x;
+        r.mmioRdValid = 1'b0;
+        return r;
+    endfunction
+
+
     //
     // End of packet (EOP) marks the last response corresponding to a single
     // or multi-beat read request.  This is computed by MPF in module

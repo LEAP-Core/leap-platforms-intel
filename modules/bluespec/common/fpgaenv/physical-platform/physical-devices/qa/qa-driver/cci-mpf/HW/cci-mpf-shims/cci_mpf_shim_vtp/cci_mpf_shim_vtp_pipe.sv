@@ -114,36 +114,6 @@ module cci_mpf_shim_vtp_pipe
 
     // ====================================================================
     //
-    //  Address mapping functions.
-    //
-    // ====================================================================
-
-    // Similar to CCI_PT_PAGE_OFFSET_BITS but with line-based instead
-    // of byte-based addresses.
-    localparam LINE_PAGE_OFFSET_BITS = CCI_PT_PAGE_OFFSET_BITS -
-                                       $clog2(CCI_CLDATA_WIDTH / 8);
-
-    // Offset of a line within a page
-    typedef logic [LINE_PAGE_OFFSET_BITS-1 : 0] t_va_page_offset;
-
-    // Given the virtual address of a line return the shortened VA of a page
-    function automatic t_tlb_va_page pageFromVA;
-        input t_cci_clAddr addr;
-
-        return addr[$high(addr) : LINE_PAGE_OFFSET_BITS];
-    endfunction
-
-    // Given the virtual address of a line return the offset of the line from
-    // the containing page.
-    function automatic t_va_page_offset pageOffsetFromVA;
-        input t_cci_clAddr addr;
-
-        return addr[LINE_PAGE_OFFSET_BITS-1 : 0];
-    endfunction
-
-
-    // ====================================================================
-    //
     //  TLB lookup pipeline
     //
     // ====================================================================
@@ -313,14 +283,14 @@ module cci_mpf_shim_vtp_pipe
     // skipped if the incoming request already has a physical address.
     //
     assign tlb_if.lookupPageVA[0] =
-        pageFromVA(cci_mpf_c0_getReqAddr(c0_afu_pipe[AFU_PIPE_LOOKUP_STAGE].hdr));
+        vtp4kbPageIdxFromVA(cci_mpf_c0_getReqAddr(c0_afu_pipe[AFU_PIPE_LOOKUP_STAGE].hdr));
     assign tlb_if.lookupEn[0] =
         tlb_if.lookupRdy[0] &&
         cci_mpf_c0TxIsReadReq(c0_afu_pipe[AFU_PIPE_LOOKUP_STAGE]) &&
         cci_mpf_c0_getReqAddrIsVirtual(c0_afu_pipe[AFU_PIPE_LOOKUP_STAGE].hdr);
 
     assign tlb_if.lookupPageVA[1] =
-        pageFromVA(cci_mpf_c1_getReqAddr(c1_afu_pipe[AFU_PIPE_LOOKUP_STAGE].hdr));
+        vtp4kbPageIdxFromVA(cci_mpf_c1_getReqAddr(c1_afu_pipe[AFU_PIPE_LOOKUP_STAGE].hdr));
     assign tlb_if.lookupEn[1] =
         tlb_if.lookupRdy[1] &&
         cci_mpf_c1TxIsWriteReq(c1_afu_pipe[AFU_PIPE_LOOKUP_STAGE]) &&
@@ -335,20 +305,21 @@ module cci_mpf_shim_vtp_pipe
 
     // Construct the read request header.
     t_cci_mpf_c0_ReqMemHdr c0_req_hdr;
-    t_va_page_offset c0_req_offset;
+    t_tlb_2mb_page_offset c0_req_offset;
 
     always_comb
     begin
         c0_req_hdr = c0_afu_pipe[AFU_PIPE_LAST_STAGE].hdr;
 
         // Request's line offset within the page.
-        c0_req_offset = pageOffsetFromVA(c0_req_hdr.base.address);
+        c0_req_offset = vtp2mbPageOffsetFromVA(c0_req_hdr.base.address);
 
         // Replace the address with the physical address
         if (cci_mpf_c0_getReqAddrIsVirtual(c0_req_hdr))
         begin
             // Page offset remains the same in VA and PA
-            c0_req_hdr.base.address = { tlb_if.lookupRspPagePA[0], c0_req_offset };
+            c0_req_hdr.base.address = { vtp4kbTo2mbPA(tlb_if.lookupRspPagePA[0]),
+                                        c0_req_offset };
             c0_req_hdr.ext.addrIsVirtual = 0;
         end
     end
@@ -370,19 +341,20 @@ module cci_mpf_shim_vtp_pipe
 
     // Channel 1 request logic
     t_cci_mpf_c1_ReqMemHdr c1_req_hdr;
-    t_va_page_offset c1_req_offset;
+    t_tlb_2mb_page_offset c1_req_offset;
 
     always_comb
     begin
         c1_req_hdr = c1_afu_pipe[AFU_PIPE_LAST_STAGE].hdr;
 
         // Request's line offset within the page.
-        c1_req_offset = pageOffsetFromVA(c1_req_hdr.base.address);
+        c1_req_offset = vtp2mbPageOffsetFromVA(c1_req_hdr.base.address);
 
         // Replace the address with the physical address
         if (cci_mpf_c1_getReqAddrIsVirtual(c1_req_hdr))
         begin
-            c1_req_hdr.base.address = { tlb_if.lookupRspPagePA[1], c1_req_offset };
+            c1_req_hdr.base.address = { vtp4kbTo2mbPA(tlb_if.lookupRspPagePA[1]),
+                                        c1_req_offset };
             c1_req_hdr.ext.addrIsVirtual = 0;
         end
     end

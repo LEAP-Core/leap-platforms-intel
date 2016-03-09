@@ -48,6 +48,11 @@
 //
 module cci_mpf_shim_vtp_tlb
   #(
+    // Number of offset bits in pages managed by this TLB instance.  OFFSETS
+    // ARE LINES, NOT BYTES.  Typical values are 6 for 4KB pages and 15
+    // for 2MB pages.
+    parameter CCI_PT_PAGE_OFFSET_BITS = CCI_PT_2MB_PAGE_OFFSET_BITS,
+
     parameter DEBUG_MESSAGES = 0
     )
    (
@@ -62,8 +67,55 @@ module cci_mpf_shim_vtp_tlb
 
     // Number of sets in the FPGA-side TLB
     localparam NUM_TLB_SETS = 1024;
-    localparam NUM_TLB_IDX_BITS = $clog2(NUM_TLB_SETS);
-    typedef logic [NUM_TLB_IDX_BITS-1 : 0] t_tlb_idx;
+    localparam NUM_TLB_INDEX_BITS = $clog2(NUM_TLB_SETS);
+    typedef logic [NUM_TLB_INDEX_BITS-1 : 0] t_tlb_idx;
+
+
+    // ====================================================================
+    //
+    // The page size managed in this TLB is configured by setting the
+    // CCI_PT_PAGE_OFFSET_BITS parameter.  Build types around the
+    // configured size and functions to map to/from 4KB page indices
+    // used in cci_mpf_shim_vtp_tlb_if.
+    //
+    // The interface connecting the TLB to the VTP pipeline and to the
+    // page walker always uses 4KB aligned addresses, independent of
+    // the page size managed in a TLB instance.
+    //
+    // ====================================================================
+
+    localparam CCI_PT_VA_PAGE_INDEX_BITS = CCI_PT_VA_BITS -
+                                           CCI_PT_PAGE_OFFSET_BITS;
+    localparam CCI_PT_PA_PAGE_INDEX_BITS = CCI_PT_PA_BITS -
+                                           CCI_PT_PAGE_OFFSET_BITS;
+
+    typedef logic [CCI_PT_VA_PAGE_INDEX_BITS-1 : 0] t_tlb_va_page_idx;
+    typedef logic [CCI_PT_PA_PAGE_INDEX_BITS-1 : 0] t_tlb_pa_page_idx;
+
+    // Convert 4KB page index to this TLB's size. We assume the index
+    // is properly aligned.
+    function automatic t_tlb_va_page_idx tlbVAIdxFrom4K(t_tlb_4kb_va_page_idx p);
+        return p[CCI_PT_4KB_VA_PAGE_INDEX_BITS - CCI_PT_VA_PAGE_INDEX_BITS +:
+                 CCI_PT_VA_PAGE_INDEX_BITS];
+    endfunction
+
+    function automatic t_tlb_4kb_va_page_idx tlbVAIdxTo4K(t_tlb_va_page_idx p);
+        t_tlb_4kb_va_page_idx p4k = CCI_PT_4KB_VA_PAGE_INDEX_BITS'(0);
+        p4k[CCI_PT_4KB_VA_PAGE_INDEX_BITS-1 -: CCI_PT_VA_PAGE_INDEX_BITS] = p;
+        return p4k;
+    endfunction
+
+    function automatic t_tlb_pa_page_idx tlbPAIdxFrom4K(t_tlb_4kb_pa_page_idx p);
+        return p[CCI_PT_4KB_PA_PAGE_INDEX_BITS - CCI_PT_PA_PAGE_INDEX_BITS +:
+                 CCI_PT_PA_PAGE_INDEX_BITS];
+    endfunction
+
+    function automatic t_tlb_4kb_pa_page_idx tlbPAIdxTo4K(t_tlb_pa_page_idx p);
+        t_tlb_4kb_pa_page_idx p4k = CCI_PT_4KB_PA_PAGE_INDEX_BITS'(0);
+        p4k[CCI_PT_4KB_PA_PAGE_INDEX_BITS-1 -: CCI_PT_PA_PAGE_INDEX_BITS] = p;
+        return p4k;
+    endfunction
+
 
     // A virtual address tag is the remainder of the address after using
     // the low bits as a direct-mapped index to a TLB set.  NOTE: The
@@ -72,14 +124,14 @@ module cci_mpf_shim_vtp_tlb
     // the FPGA's TLB hash size.  The page table hash is large because
     // we can afford a large table in host memory.  The TLB here is in
     // block RAM so is necessarily smaller.
-    localparam TLB_VA_TAG_BITS = $bits(t_tlb_va_page) - NUM_TLB_IDX_BITS;
+    localparam TLB_VA_TAG_BITS = CCI_PT_VA_PAGE_INDEX_BITS - NUM_TLB_INDEX_BITS;
     typedef logic [TLB_VA_TAG_BITS-1 : 0] t_tlb_virtual_tag;
 
     // A single TLB entry is a virtual tag and physical page index.
     typedef struct packed
     {
         t_tlb_virtual_tag tag;
-        t_tlb_physical_idx idx;
+        t_tlb_pa_page_idx idx;
     }
     t_tlb_entry;
 
@@ -154,7 +206,7 @@ module cci_mpf_shim_vtp_tlb
     //
     typedef struct {
         logic did_lookup;
-        t_tlb_va_page lookup_page_va;
+        t_tlb_va_page_idx lookup_page_va;
     } t_tlb_stage_state;
 
     localparam NUM_TLB_LOOKUP_PIPE_STAGES = 4;
@@ -175,7 +227,7 @@ module cci_mpf_shim_vtp_tlb
                 stg_state[1][p].did_lookup <= tlb_if.lookupEn[p];
             end 
 
-            stg_state[1][p].lookup_page_va <= tlb_if.lookupPageVA[p];
+            stg_state[1][p].lookup_page_va <= tlbVAIdxFrom4K(tlb_if.lookupPageVA[p]);
         end
 
         for (int s = 1; s < NUM_TLB_LOOKUP_PIPE_STAGES; s = s + 1)
@@ -185,7 +237,7 @@ module cci_mpf_shim_vtp_tlb
     end
 
     // Return target TLB index for VA
-    function automatic t_tlb_idx target_tlb_idx(t_tlb_va_page va);
+    function automatic t_tlb_idx target_tlb_idx(t_tlb_va_page_idx va);
         t_tlb_virtual_tag tag;
         t_tlb_idx idx;
         { tag, idx } = va;
@@ -193,7 +245,7 @@ module cci_mpf_shim_vtp_tlb
     endfunction
 
     // Return target TLB tag for VA
-    function automatic t_tlb_virtual_tag target_tlb_tag(t_tlb_va_page va);
+    function automatic t_tlb_virtual_tag target_tlb_tag(t_tlb_va_page_idx va);
         t_tlb_virtual_tag tag;
         t_tlb_idx idx;
         { tag, idx } = va;
@@ -221,7 +273,7 @@ module cci_mpf_shim_vtp_tlb
     //
 
     // Set read address for lookup
-    assign tlb_addr[0] = t_tlb_idx'(tlb_if.lookupPageVA[0]);
+    assign tlb_addr[0] = t_tlb_idx'(tlbVAIdxFrom4K(tlb_if.lookupPageVA[0]));
 
 
     //
@@ -305,7 +357,7 @@ module cci_mpf_shim_vtp_tlb
                                    ! tlb_if.lookupValid[p];
 
             tlb_if.lookupMissVA[p] =
-                stg_state[NUM_TLB_LOOKUP_PIPE_STAGES][p].lookup_page_va;
+                tlbVAIdxTo4K(stg_state[NUM_TLB_LOOKUP_PIPE_STAGES][p].lookup_page_va);
 
             // Get the physical page index from the chosen way
             tlb_if.lookupRspPagePA[p] = 'x;
@@ -317,7 +369,8 @@ module cci_mpf_shim_vtp_tlb
                     lookup_way_hit[p] = way;
 
                     // Get the physical page index
-                    tlb_if.lookupRspPagePA[p] = stg_tlb_rdata[4][p][way].idx;
+                    tlb_if.lookupRspPagePA[p] =
+                        tlbPAIdxTo4K(stg_tlb_rdata[4][p][way].idx);
                     break;
                 end
             end
@@ -348,7 +401,7 @@ module cci_mpf_shim_vtp_tlb
     assign tlb_if.fillRdy = (fill_state == STATE_TLB_FILL_IDLE);
     t_tlb_virtual_tag fill_tag;
     t_tlb_idx fill_idx;
-    t_tlb_physical_idx fill_pa;
+    t_tlb_pa_page_idx fill_pa;
 
     logic repl_rdy;
     logic repl_lookup_rsp_rdy;
@@ -372,8 +425,8 @@ module cci_mpf_shim_vtp_tlb
                         fill_state <= STATE_TLB_FILL_REQ_WAY;
 
                         // Convert from VA to TLB tag/index
-                        { fill_tag, fill_idx } <= tlb_if.fillVA;
-                        fill_pa <= tlb_if.fillPA;
+                        { fill_tag, fill_idx } <= tlbVAIdxFrom4K(tlb_if.fillVA);
+                        fill_pa <= tlbPAIdxFrom4K(tlb_if.fillPA);
                     end
                 end
 
@@ -501,7 +554,7 @@ module cci_mpf_shim_vtp_tlb
         end
         else
         begin
-            tlb_addr[1] = t_tlb_idx'(tlb_if.lookupPageVA[1]);
+            tlb_addr[1] = t_tlb_idx'(tlbVAIdxFrom4K(tlb_if.lookupPageVA[1]));
         end
     end
 
@@ -513,9 +566,9 @@ module cci_mpf_shim_vtp_tlb
             begin
                 if (tlb_if.lookupEn[p])
                 begin
-                    $display("TLB: Lookup chan %0d, VA 0x%x",
+                    $display("TLB: Lookup chan %0d, VA 0x%x (line)",
                              p,
-                             {tlb_if.lookupPageVA[p], CCI_PT_PAGE_OFFSET_BITS'(0)});
+                             {tlb_if.lookupPageVA[p], CCI_PT_4KB_PAGE_OFFSET_BITS'(0)});
                 end
 
                 if (tlb_if.lookupValid[p])
@@ -523,7 +576,7 @@ module cci_mpf_shim_vtp_tlb
                     $display("TLB: Hit chan %0d, idx %0d, way %0d, PA 0x%x",
                              p, target_tlb_idx(stg_state[NUM_TLB_LOOKUP_PIPE_STAGES][p].lookup_page_va),
                              lookup_way_hit[p],
-                             {tlb_if.lookupRspPagePA[p], CCI_PT_PAGE_OFFSET_BITS'(0)});
+                             {tlb_if.lookupRspPagePA[p], CCI_PT_4KB_PAGE_OFFSET_BITS'(0)});
                 end
             end
 

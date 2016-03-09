@@ -139,53 +139,55 @@ btBool MPF::init( IBase               *pclientBase,
    }
 
    // ------------- Component detection and initialization -------------
+   // Generally, all MPF features carry the same feature ID and are
+   // differentiated by their respective GUID.
+   // The best practice is to supply the MPF_FEATURE_ID_KEY when allocating an
+   // MPF service - this will cause enumeration of all exposed MPF features
+   // belonging to a particular MPF module instance.
+   // For more fine-grained control, it is also possible to specify MMIO
+   // offsets of the respective features directly. Use this method with care.
+   // It will take precedence over the feature ID.
 
-   //
-   // VTP
-   //
+   btBool hasVTP = false;
 
-   // determine VTP DFH offset
-   //    a) provided -> use that
-   //    b) else search for feature by ID
+   // If MPF_FEATURE_ID is specified, try to detect available features.
+   MPF_FEATURE_ID_DATATYPE mpfFID;
+   if ( ENamedValuesOK == optArgs.Get(MPF_FEATURE_ID_KEY, &mpfFID) ) {
 
-   if ( ENamedValuesOK != optArgs.Get(MPF_VTP_DFH_OFFSET_KEY, &m_vtpDFHOffset) ) {
+      //
+      // VTP
+      //
 
-      MPF_VTP_FEATURE_ID_DATATYPE vtpFID;
+      // Ask ALI for a BBB with MPF's feature ID and the expected VTP GUID
+      NamedValueSet filter;
+      filter.Add( ALI_GETFEATURE_TYPE_KEY, static_cast<ALI_GETFEATURE_TYPE_DATATYPE>(ALI_DFH_TYPE_BBB) );
+      filter.Add( ALI_GETFEATURE_ID_KEY, static_cast<ALI_GETFEATURE_ID_DATATYPE>(mpfFID) );
+      filter.Add( ALI_GETFEATURE_GUID_KEY, (ALI_GETFEATURE_GUID_DATATYPE)MPF_VTP_BBB_GUID );
 
-      if ( ENamedValuesOK != optArgs.Get(MPF_VTP_FEATURE_ID_KEY, &vtpFID) ) {
-
-         // FIXME: is this really a failure condition? How about allocating a
-         // MPF without a VTP feature?
-         initFailed(new CExceptionTransactionEvent( NULL,
-                  rtid,
-                  errBadParameter,
-                  reasMissingParameter,
-                  "No VTP DFH base offset or feature ID in optArgs."));
-         return true;
-
+      if ( false == m_pALIMMIO->mmioGetFeatureOffset( &m_vtpDFHOffset, filter ) ) {
+         // No VTP found - this could mean that VTP is not enabled in MPF
+         hasVTP = false;
       } else {
-
-         NamedValueSet filter;
-         filter.Add( ALI_GETFEATURE_TYPE_KEY, (ALI_GETFEATURE_TYPE_DATATYPE)2 );
-         //filter.add( ALI_GETFEATURE_GUID_KEY, (ALI_GETFEATURE_GUID_DATATYPE)MPF_VTP_BBB_GUID );
-         filter.Add( ALI_GETFEATURE_ID_KEY, vtpFID );
-
-         if ( false == m_pALIMMIO->mmioGetFeatureOffset( &m_vtpDFHOffset, filter ) ) {
-            initFailed(new CExceptionTransactionEvent( NULL,
-                     rtid,
-                     errBadParameter,
-                     reasMissingParameter,
-                     "No VTP DFH base offset in optArgs, and no VTP feature found by ID."));
-            return true;
-         }
+         hasVTP = true;
       }
    }
 
-   ASSERT(m_vtpDFHOffset != -1);       // FIXME: might not be a failure
+   // Allow directly specified DFH offsets to override autodetection
+   // FIXME: may fail silently, e.g. on wrong datatype.
+   // Note: this assumes that m_vtpDFHOffset will not be updated if key is not
+   // found.
+   if ( ENamedValuesOK == optArgs.Get(MPF_VTP_DFH_OFFSET_KEY, &m_vtpDFHOffset) ) {
+      AAL_DEBUG(LM_AFU, "Using directly specified MPF_VTP_DFH_OFFSET)." <<
+            std::endl);
+      hasVTP = true;
+   } else {
+      AAL_DEBUG(LM_AFU, "No direct MPF_VTP_DFH_OFFSET supplied." << std::endl);
+   }
 
-   if ( -1 != m_vtpDFHOffset ) {
 
-      AAL_INFO(LM_All, "Using MMIO address " << std::hex << m_vtpDFHOffset << " for VTP.");
+   if (hasVTP) {
+      AAL_INFO(LM_All, "Using MMIO address 0x" << std::hex << m_vtpDFHOffset <<
+            " for VTP." << std::endl);
 
       // Instantiate component class
       // FIXME: all the m_* don't really need to be members of MPF
@@ -199,10 +201,13 @@ btBool MPF::init( IBase               *pclientBase,
                   "VTP initialization failed."));
          return true;
       }
-   }
 
-   // expose interface to outside
-   SetInterface(iidMPFVTPService, dynamic_cast<IMPFVTP *>(m_pVTP));
+      // found VTP, expose interface to outside
+      SetInterface(iidMPFVTPService, dynamic_cast<IMPFVTP *>(m_pVTP));
+
+   } else {
+      AAL_INFO(LM_AFU, "No VTP feature." << std::endl);
+   }
 
    initComplete(rtid);
    return true;

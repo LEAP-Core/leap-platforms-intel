@@ -67,12 +67,12 @@ BEGIN_NAMESPACE(AAL)
 // Service creation parameter keys and datatypes
 #define ALIAFU_IBASE_KEY "ALIAFUIBase"
 #define ALIAFU_IBASE_DATATYPE btObjectType
-#define MPF_VTP_DFH_ADDRESS_KEY "VTPDFHAddress"
+#define MPF_VTP_DFH_ADDRESS_KEY "MPFVTPDFHAddress"
 #define MPF_VTP_DFH_ADDRESS_DATATYPE btObjectType
-#define MPF_VTP_DFH_OFFSET_KEY "VTPDFHOffset"
+#define MPF_VTP_DFH_OFFSET_KEY "MPFVTPDFHOffset"
 #define MPF_VTP_DFH_OFFSET_DATATYPE btCSROffset
-#define MPF_VTP_FEATURE_ID_KEY "MPFVTPFeatureID"
-#define MPF_VTP_FEATURE_ID_DATATYPE btUnsigned32bitInt
+#define MPF_FEATURE_ID_KEY "MPFFeatureID"
+#define MPF_FEATURE_ID_DATATYPE btUnsigned64bitInt
 
 /// VTP BBB GUID, used to identify HW VTP component
 #define MPF_VTP_BBB_GUID "C8A2982F-FF96-42BF-A705-45727F501901"

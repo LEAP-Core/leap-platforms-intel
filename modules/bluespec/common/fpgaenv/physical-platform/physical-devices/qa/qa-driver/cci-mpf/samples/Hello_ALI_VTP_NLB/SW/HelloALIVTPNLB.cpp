@@ -335,14 +335,14 @@ btInt HelloALIVTPNLBApp::run()
 
    // Ask the ALI service for the VTP device feature header (DFH)
 //   featureFilter.Add(ALI_GETFEATURE_ID_KEY, static_cast<ALI_GETFEATURE_ID_DATATYPE>(25));
-   featureFilter.Add(ALI_GETFEATURE_TYPE_KEY, static_cast<ALI_GETFEATURE_TYPE_DATATYPE>(2));
-   featureFilter.Add(ALI_GETFEATURE_GUID_KEY, static_cast<ALI_GETFEATURE_GUID_DATATYPE>(sGUID));
-   if (true != m_pALIMMIOService->mmioGetFeatureOffset(&m_VTPDFHOffset, featureFilter)) {
-      ERR("No VTP feature\n");
-      m_bIsOK = false;
-      m_Result = -1;
-      goto done_1;
-   }
+   // featureFilter.Add(ALI_GETFEATURE_TYPE_KEY, static_cast<ALI_GETFEATURE_TYPE_DATATYPE>(2));
+   // featureFilter.Add(ALI_GETFEATURE_GUID_KEY, static_cast<ALI_GETFEATURE_GUID_DATATYPE>(sGUID));
+   // if (true != m_pALIMMIOService->mmioGetFeatureOffset(&m_VTPDFHOffset, featureFilter)) {
+   //    ERR("No VTP feature\n");
+   //    m_bIsOK = false;
+   //    m_Result = -1;
+   //    goto done_1;
+   // }
 
    // Reuse Manifest and Configrecord for VTP service
    Manifest.Empty();
@@ -360,9 +360,8 @@ btInt HelloALIVTPNLBApp::run()
    // the ALIAFU service
    Manifest.Add(ALIAFU_IBASE_KEY, static_cast<ALIAFU_IBASE_DATATYPE>(m_pALIAFU_AALService));
 
-   // the location of the VTP device feature header
-   Manifest.Add(MPF_VTP_DFH_OFFSET_KEY,
-         static_cast<MPF_VTP_DFH_OFFSET_DATATYPE>(m_VTPDFHOffset));
+   // MPFs feature ID, used to find correct features in DFH list
+   Manifest.Add(MPF_FEATURE_ID_KEY, static_cast<MPF_FEATURE_ID_DATATYPE>(1));
 
    // in future, everything could be figured out by just giving the service name
    Manifest.Add(AAL_FACTORY_CREATE_SERVICENAME, "VTP");

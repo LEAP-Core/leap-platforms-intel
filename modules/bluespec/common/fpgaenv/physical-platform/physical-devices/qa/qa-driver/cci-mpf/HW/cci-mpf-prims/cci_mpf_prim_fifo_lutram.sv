@@ -117,7 +117,7 @@ module cci_mpf_prim_fifo_lutram
         end
     endgenerate
 
-endmodule // cci_mpf_prim_fifo_lutram_reg
+endmodule // cci_mpf_prim_fifo_lutram
 
 
 //

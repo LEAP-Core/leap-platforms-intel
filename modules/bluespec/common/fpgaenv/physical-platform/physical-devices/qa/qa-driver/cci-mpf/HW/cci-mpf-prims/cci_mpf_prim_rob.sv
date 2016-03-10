@@ -46,7 +46,10 @@ module cci_mpf_prim_rob
     parameter MIN_FREE_SLOTS = 1,
     // Maximum number of entries that can be allocated in a single cycle.
     // This is used for multi-line requests.
-    parameter MAX_ALLOC_PER_CYCLE = 1
+    parameter MAX_ALLOC_PER_CYCLE = 1,
+
+    // Register output if non-zero
+    parameter REGISTER_OUTPUT = 0
     )
    (
     input  logic clk,
@@ -111,7 +114,8 @@ module cci_mpf_prim_rob
       #(
         .N_ENTRIES(N_ENTRIES),
         .N_DATA_BITS(N_DATA_BITS),
-        .N_META_BITS(N_META_BITS)
+        .N_META_BITS(N_META_BITS),
+        .REGISTER_OUTPUT(REGISTER_OUTPUT)
         )
       data
        (
@@ -304,7 +308,8 @@ module cci_mpf_prim_rob_data
   #(
     parameter N_ENTRIES = 32,
     parameter N_DATA_BITS = 64,
-    parameter N_META_BITS = 1
+    parameter N_META_BITS = 1,
+    parameter REGISTER_OUTPUT = 0
     )
    (
     input  logic clk,
@@ -445,7 +450,8 @@ module cci_mpf_prim_rob_data
       #(
         .N_DATA_BITS(N_META_BITS + N_DATA_BITS),
         .N_ENTRIES(4),
-        .THRESHOLD(2)
+        .THRESHOLD(2),
+        .REGISTER_OUTPUT(REGISTER_OUTPUT)
         )
       fifo
        (

@@ -445,7 +445,6 @@ module cci_mpf_shim_mux
                     if (|(c2_request))
                     begin
                         last_c2_winner_idx <= c2_winner_idx;
-                        $display("MUX C2TX %d", c2_winner_idx);
                     end
                 end
             end

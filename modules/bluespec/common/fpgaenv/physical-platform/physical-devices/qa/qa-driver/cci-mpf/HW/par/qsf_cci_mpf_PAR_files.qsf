@@ -40,6 +40,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-if/ccis_wire
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-prims/cci_mpf_prim_dualport_ram.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-prims/cci_mpf_prim_fifo1.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-prims/cci_mpf_prim_fifo2.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-prims/cci_mpf_prim_fifo_bram.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-prims/cci_mpf_prim_fifo_lutram.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-prims/cci_mpf_prim_filter_cam.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-prims/cci_mpf_prim_filter_counting.sv

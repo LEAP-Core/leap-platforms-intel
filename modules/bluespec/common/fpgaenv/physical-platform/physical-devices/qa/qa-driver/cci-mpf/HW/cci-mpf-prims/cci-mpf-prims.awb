@@ -8,6 +8,7 @@
 %sources -t VERILOG    -v PRIVATE cci_mpf_prim_dualport_ram.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_prim_fifo1.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_prim_fifo2.sv
+%sources -t VERILOG    -v PRIVATE cci_mpf_prim_fifo_bram.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_prim_fifo_lutram.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_prim_filter_cam.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_prim_filter_counting.sv

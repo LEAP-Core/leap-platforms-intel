@@ -13,6 +13,7 @@ cci-mpf-if/ccis_wires_to_mpf.sv
 cci-mpf-prims/cci_mpf_prim_dualport_ram.sv
 cci-mpf-prims/cci_mpf_prim_fifo1.sv
 cci-mpf-prims/cci_mpf_prim_fifo2.sv
+cci-mpf-prims/cci_mpf_prim_fifo_bram.sv
 cci-mpf-prims/cci_mpf_prim_fifo_lutram.sv
 cci-mpf-prims/cci_mpf_prim_filter_cam.sv
 cci-mpf-prims/cci_mpf_prim_filter_counting.sv

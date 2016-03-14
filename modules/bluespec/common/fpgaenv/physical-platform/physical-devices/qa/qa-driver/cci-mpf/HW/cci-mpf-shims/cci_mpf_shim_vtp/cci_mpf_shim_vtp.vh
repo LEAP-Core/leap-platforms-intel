@@ -147,6 +147,8 @@ interface cci_mpf_shim_vtp_tlb_if;
     logic fillEn;
     t_tlb_4kb_va_page_idx fillVA;
     t_tlb_4kb_pa_page_idx fillPA;
+    // 2MB page? If 0 then it is a 4KB page.
+    logic fillBigPage;
     logic fillRdy;
 
     modport server
@@ -182,6 +184,7 @@ interface cci_mpf_shim_vtp_tlb_if;
         output fillEn,
         output fillVA,
         output fillPA,
+        output fillBigPage,
         input  fillRdy
         );
 

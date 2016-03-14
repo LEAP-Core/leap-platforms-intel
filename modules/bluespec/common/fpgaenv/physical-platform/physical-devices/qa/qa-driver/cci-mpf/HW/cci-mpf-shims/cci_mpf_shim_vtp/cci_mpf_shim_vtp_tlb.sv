@@ -53,7 +53,14 @@ module cci_mpf_shim_vtp_tlb
     // for 2MB pages.
     parameter CCI_PT_PAGE_OFFSET_BITS = CCI_PT_2MB_PAGE_OFFSET_BITS,
 
-    parameter DEBUG_MESSAGES = 0
+    // Number of sets in the FPGA-side TLB
+    parameter NUM_TLB_SETS = 512,
+
+    // The TLB is associative.  Define the width of a set.
+    parameter NUM_TLB_SET_WAYS = 4,
+
+    parameter DEBUG_MESSAGES = 0,
+    parameter DEBUG_NAME = ""
     )
    (
     input  logic clk,
@@ -62,11 +69,6 @@ module cci_mpf_shim_vtp_tlb
     cci_mpf_shim_vtp_tlb_if.server tlb_if
     );
 
-    // The TLB is associative.  Define the width of a set.
-    localparam NUM_TLB_SET_WAYS = 4;
-
-    // Number of sets in the FPGA-side TLB
-    localparam NUM_TLB_SETS = 1024;
     localparam NUM_TLB_INDEX_BITS = $clog2(NUM_TLB_SETS);
     typedef logic [NUM_TLB_INDEX_BITS-1 : 0] t_tlb_idx;
 
@@ -144,9 +146,9 @@ module cci_mpf_shim_vtp_tlb
     // ====================================================================
 
     // The address and write data are broadcast to all ways in a set
-    t_tlb_idx tlb_addr[0 : 1];
+    t_tlb_idx tlb_raddr[0 : 1];
 
-    // Write only uses port 1
+    t_tlb_idx tlb_waddr;
     t_tlb_entry tlb_wdata;
     logic tlb_wen[0 : NUM_TLB_SET_WAYS-1];
 
@@ -157,36 +159,37 @@ module cci_mpf_shim_vtp_tlb
     t_tlb_entry tlb_rdata[0 : 1][0 : NUM_TLB_SET_WAYS-1];
 
     // Each way is ready at the same time since the init logic is the same
-    logic tlb_rdy[0 : NUM_TLB_SET_WAYS-1];
+    logic tlb_rdy[0 : 1][0 : NUM_TLB_SET_WAYS-1];
     logic initialized;
-    assign initialized = tlb_rdy[0];
+    assign initialized = tlb_rdy[0][0];
 
     genvar w;
+    genvar p;
     generate
         for (w = 0; w < NUM_TLB_SET_WAYS; w = w + 1)
-        begin: gen_tlb
-            cci_mpf_prim_dualport_ram_init
-              #(
-                .N_ENTRIES(NUM_TLB_SETS),
-                .N_DATA_BITS($bits(t_tlb_entry)),
-                .N_OUTPUT_REG_STAGES(1)
-                )
-              tlb
-               (
-                .reset,
-                .rdy(tlb_rdy[w]),
+        begin : way
+            for (p = 0; p < 2; p = p + 1)
+            begin : gen_tlb
+                cci_mpf_prim_simple_ram_init
+                  #(
+                    .N_ENTRIES(NUM_TLB_SETS),
+                    .N_DATA_BITS($bits(t_tlb_entry)),
+                    .N_OUTPUT_REG_STAGES(1)
+                    )
+                  tlb
+                   (
+                    .clk,
+                    .reset,
+                    .rdy(tlb_rdy[p][w]),
 
-                .clk0(clk),
-                .addr0(tlb_addr[0]),
-                .wen0(1'b0),
-                .wdata0('x),
-                .rdata0(tlb_rdata[0][w]),
-                .clk1(clk),
-                .addr1(tlb_addr[1]),
-                .wen1(tlb_wen[w]),
-                .wdata1(tlb_wdata),
-                .rdata1(tlb_rdata[1][w])
-                );
+                    .waddr(tlb_waddr),
+                    .wen(tlb_wen[w]),
+                    .wdata(tlb_wdata),
+
+                    .raddr(tlb_raddr[p]),
+                    .rdata(tlb_rdata[p][w])
+                    );
+            end
         end
     endgenerate
 
@@ -273,7 +276,8 @@ module cci_mpf_shim_vtp_tlb
     //
 
     // Set read address for lookup
-    assign tlb_addr[0] = t_tlb_idx'(tlbVAIdxFrom4K(tlb_if.lookupPageVA[0]));
+    assign tlb_raddr[0] = t_tlb_idx'(tlbVAIdxFrom4K(tlb_if.lookupPageVA[0]));
+    assign tlb_raddr[1] = t_tlb_idx'(tlbVAIdxFrom4K(tlb_if.lookupPageVA[1]));
 
 
     //
@@ -528,14 +532,15 @@ module cci_mpf_shim_vtp_tlb
     // ====================================================================
 
     // Port 1 is used for updates in addition to lookups.
-    assign tlb_if.lookupRdy[1] = initialized &&
-                                 (fill_state != STATE_TLB_FILL_INSERT);
+    assign tlb_if.lookupRdy[1] = initialized;
 
     always_comb
     begin
         // TLB update -- write virtual address TAG and physical page index.
         tlb_wdata.tag = fill_tag;
         tlb_wdata.idx = fill_pa;
+
+        tlb_waddr = t_tlb_idx'(fill_idx);
 
         // Pick the victim way when writing.  This happens only during
         // initialization and when a new translation is being added to
@@ -544,17 +549,6 @@ module cci_mpf_shim_vtp_tlb
         begin
             tlb_wen[way] = (fill_state == STATE_TLB_FILL_INSERT) &&
                            way_repl_vec[way];
-        end
-
-        // Address is the update address if writing and the read address
-        // otherwise.
-        if (fill_state == STATE_TLB_FILL_INSERT)
-        begin
-            tlb_addr[1] = t_tlb_idx'(fill_idx);
-        end
-        else
-        begin
-            tlb_addr[1] = t_tlb_idx'(tlbVAIdxFrom4K(tlb_if.lookupPageVA[1]));
         end
     end
 
@@ -566,14 +560,16 @@ module cci_mpf_shim_vtp_tlb
             begin
                 if (tlb_if.lookupEn[p])
                 begin
-                    $display("TLB: Lookup chan %0d, VA 0x%x (line)",
+                    $display("TLB %s: Lookup chan %0d, VA 0x%x (line)",
+                             DEBUG_NAME,
                              p,
                              {tlb_if.lookupPageVA[p], CCI_PT_4KB_PAGE_OFFSET_BITS'(0)});
                 end
 
                 if (tlb_if.lookupValid[p])
                 begin
-                    $display("TLB: Hit chan %0d, idx %0d, way %0d, PA 0x%x",
+                    $display("TLB %s: Hit chan %0d, idx %0d, way %0d, PA 0x%x",
+                             DEBUG_NAME,
                              p, target_tlb_idx(stg_state[NUM_TLB_LOOKUP_PIPE_STAGES][p].lookup_page_va),
                              lookup_way_hit[p],
                              {tlb_if.lookupRspPagePA[p], CCI_PT_4KB_PAGE_OFFSET_BITS'(0)});
@@ -586,9 +582,10 @@ module cci_mpf_shim_vtp_tlb
                 begin
                     if (tlb_wen[way])
                     begin
-                        $display("TLB: Insert idx %0d, way %0d, VA 0x%x, PA 0x%x",
-                                 tlb_addr[1], way,
-                                 {tlb_wdata.tag, tlb_addr[1], CCI_PT_PAGE_OFFSET_BITS'(0)},
+                        $display("TLB %s: Insert idx %0d, way %0d, VA 0x%x, PA 0x%x",
+                                 DEBUG_NAME,
+                                 tlb_waddr, way,
+                                 {tlb_wdata.tag, tlb_waddr, CCI_PT_PAGE_OFFSET_BITS'(0)},
                                  {tlb_wdata.idx, CCI_PT_PAGE_OFFSET_BITS'(0)});
                     end
                 end

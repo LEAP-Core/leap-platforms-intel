@@ -5,5 +5,3 @@
 
 %sources -t H -v PUBLIC  IMPF.h
 %sources -t H -v PUBLIC  MPFService.h
-
-%sources -t H -v PUBLIC  cci_mpf_shim_vtp_params.h

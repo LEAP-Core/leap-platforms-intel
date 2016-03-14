@@ -50,8 +50,6 @@
 #include <aalsdk/AALTypes.h>
 #include <aalsdk/utils/Utilities.h>
 
-#include "cci_mpf_shim_vtp_params.h"
-
 BEGIN_NAMESPACE(AAL)
 
 /// @addtogroup VTPService
@@ -68,6 +66,9 @@ typedef enum
 MPFVTP_PAGE_SIZE;
 
 
+typedef class MPFVTP_PT_TREE_CLASS* MPFVTP_PT_TREE;
+
+
 //
 // MPFVTP_PAGE_TABLE -- Page table management.
 //
@@ -81,6 +82,7 @@ class MPFVTP_PAGE_TABLE
   public:
     // VTP page table constructor
     MPFVTP_PAGE_TABLE();
+    ~MPFVTP_PAGE_TABLE();
 
     // Initialize page table
     bool ptInitialize();
@@ -108,67 +110,136 @@ class MPFVTP_PAGE_TABLE
     virtual btVirtAddr ptAllocSharedPage(btWSSize length, btPhysAddr* pa) = 0;
 
   private:
-    uint8_t               *m_pPageTable;
-    btPhysAddr             m_pPageTablePA;
-    uint8_t               *m_pPageTableEnd;
-    uint8_t               *m_pPageTableFree;
+    // Virtual to physical page hierarchical page table.  This is the table
+    // that is passed to the FPGA.
+    MPFVTP_PT_TREE ptVtoP;
 
-    //
-    // Convert addresses to their component bit ranges
-    //
-    inline void AddrComponentsFromVA(uint64_t va,
-                                     uint64_t& tag,
-                                     uint64_t& idx,
-                                     uint64_t& byteOffset);
+    // Because the page table is implemented in user space with no access
+    // to kernel page mapping.  In order to walk ptVtoP in software we need
+    // to record a reverse physical to virtual mapping.
+    MPFVTP_PT_TREE ptPtoV;
 
-    inline void AddrComponentsFromVA(const void* va,
-                                     uint64_t& tag,
-                                     uint64_t& idx,
-                                     uint64_t& byteOffset);
+    btPhysAddr m_pPageTablePA;
 
-    inline void AddrComponentsFromPA(uint64_t pa,
-                                     uint64_t& idx,
-                                     uint64_t& byteOffset);
+    // Add a virtual to physical mapping at depth in the tree.  Returns
+    // false if a mapping already exists.
+    bool AddVAtoPA(btVirtAddr va, btPhysAddr pa, uint32_t depth);
 
-    //
-    // Construct a PTE from a virtual/physical address pair.
-    //
-    inline uint64_t AddrToPTE(uint64_t va, uint64_t pa);
-    inline uint64_t AddrToPTE(const void* va, uint64_t pa);
+    // Add a physical to virtual mapping at depth in the tree.  Returns
+    // false if a mapping already exists.
+    bool AddPAtoVA(btPhysAddr pa, btVirtAddr va, uint32_t depth);
 
-    //
-    // Read a PTE or table index currently in the table.
-    //
-    void ReadPTE(const uint8_t* pte, uint64_t& vaTag, uint64_t& paIdx);
-    uint64_t ReadTableIdx(const uint8_t* p);
+    bool ptTranslatePAtoVA(btPhysAddr pa, btVirtAddr *va);
 
-    //
-    // Read a PTE or table index to the table.
-    //
-    void WritePTE(uint8_t* pte, uint64_t vaTag, uint64_t paIdx);
-    void WriteTableIdx(uint8_t* p, uint64_t idx);
+    void DumpPageTableVAtoPA(MPFVTP_PT_TREE table,
+                             uint64_t partial_va,
+                             uint32_t depth);
 
-    static const size_t pageSize = MB(2);
-    static const size_t pageMask = ~(pageSize - 1);
+    uint32_t ptIdxFromAddr(uint64_t addr, uint32_t depth)
+    {
+        // Drop 4KB page offset
+        uint64_t idx = addr >> 12;
 
-    // Number of tag bits for a VA.  Tags are the VA bits not covered by
-    // the page offset and the hash table index.
-    static const uint32_t vaTagBits = CCI_PT_VA_BITS -
-                                      CCI_PT_VA_IDX_BITS -
-                                      CCI_PT_PAGE_OFFSET_BITS;
+        // Get index for requested depth
+        if (depth)
+        {
+            idx >>= (depth * 9);
+        }
 
-    // Size of a single PTE.  PTE is a tuple: VA tag and PA page index.
-    // The size is rounded up to a multiple of bytes.
-    static const uint32_t pteBytes = (vaTagBits + CCI_PT_PA_IDX_BITS + 7) / 8;
-
-    // Size of a page table pointer rounded up to a multiple of bytes
-    static const uint32_t ptIdxBytes = (CCI_PT_PA_IDX_BITS + 7) / 8;
-
-    // Number of PTEs that fit in a line.  A line is the basic entry in
-    // the hash table.  It holds as many PTEs as fit and ends with a pointer
-    // to the next line, where the list of PTEs continues.
-    static const uint32_t ptesPerLine = (CL(1) - ptIdxBytes) / pteBytes;
+        return idx & 0x1ff;
+    }
 };
+
+
+//
+// Hierarchical page table class.  This class is used to build a table
+// similar to x86_64 page tables, where 9-bit chunks of an address are
+// direct mapped into a tree of 512 entry (4KB) pointers.
+//
+class MPFVTP_PT_TREE_CLASS
+{
+  public:
+    MPFVTP_PT_TREE_CLASS()
+    {
+        Reset();
+    }
+
+    ~MPFVTP_PT_TREE_CLASS() {};
+
+    void Reset()
+    {
+        memset(table, -1, sizeof(table));
+    }
+
+    // Does an entry exist at the index?
+    bool EntryExists(uint32_t idx)
+    {
+        if (idx >= 512)
+        {
+            return false;
+        }
+
+        return (table[idx] != -1);
+    }
+
+    // Is the entry at idx terminal? If so, use GetTranslatedAddr(). If not,
+    // use GetChildAddr().
+    bool EntryIsTerminal(uint32_t idx)
+    {
+        if (idx >= 512)
+        {
+            return false;
+        }
+
+        return (table[idx] & 1) != 0;
+    }
+
+    // Walk the tree.  Ideally this would be a pointer to another
+    // MPFVTP_PT_TREE, but that doesn't work for the virtually indexed
+    // table since it holds physical addresses.  The caller will have
+    // to interpret the child pointer depending on the type of tree.
+    int64_t GetChildAddr(uint32_t idx)
+    {
+        if ((idx >= 512) || EntryIsTerminal(idx))
+        {
+            return -1;
+        }
+
+        return table[idx];
+    }
+
+    int64_t GetTranslatedAddr(uint32_t idx)
+    {
+        if ((idx >= 512) || ! EntryIsTerminal(idx))
+        {
+            return -1;
+        }
+
+        // Subtract 1 to clear the low bit that is set to indicate the entry
+        // is terminal.
+        return table[idx] - 1;
+    }
+
+    void InsertChildAddr(uint32_t idx, int64_t addr)
+    {
+        if (idx < 512)
+        {
+            table[idx] = addr;
+        }
+    }
+
+    void InsertTranslatedAddr(uint32_t idx, int64_t addr)
+    {
+        if (idx < 512)
+        {
+            table[idx] = addr | 1;
+        }
+    }
+
+  private:
+    int64_t table[512];
+};
+
 
 /// @}
 

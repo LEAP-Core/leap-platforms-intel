@@ -5,11 +5,6 @@
 
 %notes README
 
-##
-## File with shared parameters, declared for both Verilog and C
-##
-%sources -t VERILOG_H  -v PRIVATE cci_mpf_shim_vtp_params.h
-
 %sources -t VERILOG_H  -v PRIVATE cci_mpf_shim_vtp.vh
 
 %sources -t VERILOG    -v PRIVATE cci_mpf_shim_vtp.sv

@@ -204,14 +204,10 @@ module cci_mpf_shim_detect_eop
         // If wr_rsp_pkt_eop is 0 then this flit is a write response and it
         // isn't the end of the packet.  Drop it.  The response will be
         // merged into a single flit.
-        if (! wr_rsp_pkt_eop)
-        begin
-            afu.c1Rx.rspValid <= 1'b0;
-        end
+        afu.c1Rx.rspValid <= fiu.c1Rx.rspValid &&
+                             (wr_rsp_pkt_eop || ! cci_c1Rx_isWriteRsp(fiu.c1Rx));
 
         // Merge write responses for a packet into single response.
-        // This code simply assumes the flit is the end of the packet.
-        // The code above will clear the valid bit if it isn't the end.
         if (cci_c1Rx_isWriteRsp(fiu.c1Rx))
         begin
             afu.c1Rx.hdr.format <= 1'b1;
@@ -306,7 +302,7 @@ module cci_mpf_shim_detect_eop_track_flits
     // Update count as packets are received
     always_comb
     begin
-        pkt_eop = 1'b1;
+        pkt_eop = 1'b0;
         rcvd_cnt_upd = 'x;
 
         if (rsp_en)
@@ -315,12 +311,12 @@ module cci_mpf_shim_detect_eop_track_flits
             begin
                 // Only one response or last packet.  Done!
                 rcvd_cnt_upd = t_cci_clNum'(0);
+                pkt_eop = 1'b1;
             end
             else
             begin
                 // One flit received.  Keep counting.
                 rcvd_cnt_upd = rcvd_cnt + t_cci_clNum'(1);
-                pkt_eop = 1'b0;
             end
         end
     end

@@ -38,6 +38,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-if/ccis_wire
 
 ## Primitives used by MPF shims
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-prims/cci_mpf_prim_dualport_ram.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-prims/cci_mpf_prim_simple_ram.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-prims/cci_mpf_prim_fifo1.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-prims/cci_mpf_prim_fifo2.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-prims/cci_mpf_prim_fifo_bram.sv

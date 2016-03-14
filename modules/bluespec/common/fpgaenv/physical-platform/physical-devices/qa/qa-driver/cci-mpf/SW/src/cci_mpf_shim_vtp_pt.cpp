@@ -60,6 +60,29 @@ BEGIN_NAMESPACE(AAL)
 //////                                                                ///////
 /////////////////////////////////////////////////////////////////////////////
 
+//
+// The page table managed here looks very much like a standard x86_64
+// hierarchical page table.  It is composed of a tree of 4KB pages, with
+// each page holding a vector of 512 64-bit physical addresses.  Each level
+// in the tree is selected directly from 9 bit chunks of a virtual address.
+// Like x86_64 processors, only the low 48 bits of the virtual address are
+// mapped.  Bits 39-47 select the index in the root of the page table,
+// which is a physical address pointing to the mapping of the 2nd level
+// bits 30-38, etc.  The search proceeds down the tree until a mapping is
+// found.
+//
+// Since pages are aligned on at least 4KB boundaries, at least the low
+// 12 bits of any value in the table are zero.  We use some of these bits
+// as flags.  Bit 0 set indicates the mapping is complete.  The current
+// implementation supports both 4KB and 2MB pages.  Bit 0 will be set
+// after searching 3 levels for 2MB pages and 4 levels for 4KB pages.
+// Bit 1 indicates no mapping exists and the search has failed.
+//
+// | 47 ---- 39 | 38 ---- 30 | 29 ---- 21 | 20 ---- 12 | 11 ---------- 0 |
+//     9 bits       9 bits       9 bits       9 bits   ^ 4KB page offset ^
+//                                        ^        2MB page offset       ^
+//
+//
 
 /// @addtogroup VTPService
 /// @{
@@ -73,26 +96,26 @@ MPFVTP_PAGE_TABLE::MPFVTP_PAGE_TABLE()
 }
 
 
+MPFVTP_PAGE_TABLE::~MPFVTP_PAGE_TABLE()
+{
+    // We should release the page table here.
+}
+
+
 bool
 MPFVTP_PAGE_TABLE::ptInitialize()
 {
-    // Allocate the page table.  The size of the page table is a function
-    // of the PTE index space.
-    size_t pt_size = (1LL << CCI_PT_LINE_IDX_BITS) * CL(1);
-    m_pPageTable = ptAllocSharedPage(pt_size, &m_pPageTablePA);
-    assert(m_pPageTable != NULL);
+    // Allocate the roots of both the virtual to physical page table passed
+    // to the FPGA and the reverse physical to virtual table used in
+    // this module to walk the virtual to physical table.
 
-    // clear table
-    memset(m_pPageTable, 0, pt_size);
+    // VtoP is shared with the hardware
+    ptVtoP = MPFVTP_PT_TREE(ptAllocSharedPage(sizeof(MPFVTP_PT_TREE_CLASS),
+                                              &m_pPageTablePA));
+    ptVtoP->Reset();
 
-    m_pPageTableEnd = m_pPageTable + pt_size;
-
-    // The page table is hashed.  It begins with lines devoted to the hash
-    // table.  The remainder of the buffer is available for overflow lines.
-    // Initialize the free pointer of overflow lines, which begins at the
-    // end of the hash table.
-    m_pPageTableFree = m_pPageTable + (1LL << CCI_PT_VA_IDX_BITS) * CL(1);
-    assert(m_pPageTableFree <= m_pPageTableEnd);
+    // PtoV is private to software
+    ptPtoV = new MPFVTP_PT_TREE_CLASS();
 
     return true;
 }
@@ -111,83 +134,15 @@ MPFVTP_PAGE_TABLE::ptInsertPageMapping(
     btPhysAddr pa,
     MPFVTP_PAGE_SIZE size)
 {
-    //
-    // VA components are the offset within the 2MB-aligned page, the index
-    // within the direct-mapped page table hash vector and the remaining high
-    // address bits: the tag.
-    //
-    uint64_t va_tag;
-    uint64_t va_idx;
-    uint64_t va_offset;
-    AddrComponentsFromVA(va, va_tag, va_idx, va_offset);
-    ASSERT(va_offset == 0);
+    // Are the addresses reasonable?
+    uint64_t mask = (size == MPFVTP_PAGE_4KB) ? (1 << 12) - 1 :
+                                                (1 << 21) - 1;
+    assert((uint64_t(va) & mask) == 0);
+    assert((pa & mask) == 0);
 
-    //
-    // PA components are the offset within the 2MB-aligned page and the
-    // index of the 2MB aligned physical page (low bits dropped).
-    //
-    uint64_t pa_idx;
-    uint64_t pa_offset;
-    AddrComponentsFromPA(pa, pa_idx, pa_offset);
-    ASSERT(pa_offset == 0);
+    uint32_t depth = (size == MPFVTP_PAGE_4KB) ? 4 : 3;
 
-    //
-    // The page table is hashed by the VA index.  Compute the address of
-    // the line given the hash.
-    //
-    uint8_t* p = m_pPageTable + va_idx * CL(1);
-
-    //
-    // Find a free entry.
-    //
-    uint32_t n = 0;
-    while (true)
-    {
-        if (n++ != ptesPerLine)
-        {
-            // Walking PTEs in a line
-            uint64_t tmp_va_tag;
-            uint64_t tmp_pa_idx;
-            ReadPTE(p, tmp_va_tag, tmp_pa_idx);
-
-            if (tmp_va_tag == 0)
-            {
-                // Found a free entry
-                break;
-            }
-
-            // Entry was busy.  Move on to the next one.
-            p += pteBytes;
-        }
-        else
-        {
-            // End of the line.  Is there an overflow line already?
-            n = 0;
-
-            uint64_t next_idx = ReadTableIdx(p);
-            if (next_idx != 0)
-            {
-                // Overflow allocated.  Switch to it and keep searching.
-                p = m_pPageTable + next_idx * CL(1);
-            }
-            else
-            {
-                // Need a new overflow line.  Is there space in the page table?
-                ASSERT(m_pPageTableFree < m_pPageTableEnd);
-
-                // Add a next line pointer to the current entry.
-                WriteTableIdx(p, (m_pPageTableFree - m_pPageTable) / CL(1));
-                p = m_pPageTableFree;
-                m_pPageTableFree += CL(1);
-
-                // Write the new PTE at p.
-                break;
-            }
-        }
-    }
-
-    // Add the new PTE
-    WritePTE(p, va_tag, pa_idx);
+    AddVAtoPA(va, pa, depth);
 
     return true;
 }
@@ -195,239 +150,215 @@ MPFVTP_PAGE_TABLE::ptInsertPageMapping(
 
 bool
 MPFVTP_PAGE_TABLE::ptTranslateVAtoPA(btVirtAddr va,
-                                   btPhysAddr *pa)
+                                     btPhysAddr *pa)
 {
-    *pa = 0;
+    MPFVTP_PT_TREE table = ptVtoP;
 
-    // Get the hash index and VA tag
-    uint64_t tag;
-    uint64_t idx;
-    uint64_t offset;
-    AddrComponentsFromVA(va, tag, idx, offset);
-
-    // The idx field is the hash bucket in which the VA will be found.
-    uint8_t* pte = m_pPageTable + idx * CL(1);
-
-    // Search for a matching tag in the hash bucket.  The bucket is a set
-    // of vectors PTEs chained in a linked list.
-    while (true)
+    uint32_t depth = 4;
+    while (depth--)
     {
-        // Walk through one vector in one line
-        for (int n = 0; n < ptesPerLine; n += 1)
+        // Index in the current level
+        uint64_t idx = ptIdxFromAddr(uint64_t(va), depth);
+
+        if (! table->EntryExists(idx)) return false;
+
+        if (table->EntryIsTerminal(idx))
         {
-            uint64_t va_tag;
-            uint64_t pa_idx;
-            ReadPTE(pte, va_tag, pa_idx);
-
-            if (va_tag == tag)
-            {
-                // Found it!
-                *pa = (pa_idx << CCI_PT_PAGE_OFFSET_BITS) | offset;
-                return true;
-            }
-
-            // End of the PTE list?
-            if (va_tag == 0)
-            {
-                // Failed to find an entry for VA
-                return false;
-            }
-
-            pte += pteBytes;
+            *pa = btPhysAddr(table->GetTranslatedAddr(idx));
+            return true;
         }
 
-        // VA not found in current line.  Does this line of PTEs link to
-        // another?
-        pte = m_pPageTable + ReadTableIdx(pte) * CL(1);
-
-        // End of list?  (Table index was NULL.)
-        if (pte == m_pPageTable)
-        {
-            return false;
-        }
+        // Walk down to child
+        btPhysAddr child_pa = table->GetChildAddr(idx);
+        btVirtAddr child_va;
+        if (! ptTranslatePAtoVA(child_pa, &child_va)) return false;
+        table = MPFVTP_PT_TREE(child_va);
     }
-}
 
-
-
-//-----------------------------------------------------------------------------
-// Private functions
-//-----------------------------------------------------------------------------
-
-void
-MPFVTP_PAGE_TABLE::ReadPTE(
-    const uint8_t* pte,
-    uint64_t& vaTag,
-    uint64_t& paIdx)
-{
-    // Might not be a natural size so use memcpy
-    uint64_t e = 0;
-    memcpy(&e, pte, pteBytes);
-
-    paIdx = e & ((1LL << CCI_PT_PA_IDX_BITS) - 1);
-
-    vaTag = e >> CCI_PT_PA_IDX_BITS;
-    vaTag &= (1LL << vaTagBits) - 1;
-
-    // VA is sign extended from its size to 64 bits
-    if (CCI_PT_VA_BITS != 64)
-    {
-        vaTag <<= (64 - vaTagBits);
-        vaTag = uint64_t(int64_t(vaTag) >> (64 - vaTagBits));
-    }
-}
-
-
-uint64_t
-MPFVTP_PAGE_TABLE::ReadTableIdx(const uint8_t* p)
-{
-    // Might not be a natural size
-    uint64_t e = 0;
-    memcpy(&e, p, (CCI_PT_LINE_IDX_BITS + 7) / 8);
-
-    return e & ((1LL << CCI_PT_LINE_IDX_BITS) - 1);
-}
-
-
-void
-MPFVTP_PAGE_TABLE::WritePTE(uint8_t* pte, uint64_t vaTag, uint64_t paIdx)
-{
-    uint64_t p = AddrToPTE(vaTag, paIdx);
-
-    // Might not be a natural size so use memcpy
-    memcpy(pte, &p, pteBytes);
-}
-
-
-void
-MPFVTP_PAGE_TABLE::WriteTableIdx(uint8_t* p, uint64_t idx)
-{
-    // Might not be a natural size
-    memcpy(p, &idx, (CCI_PT_LINE_IDX_BITS + 7) / 8);
+    return false;
 }
 
 
 void
 MPFVTP_PAGE_TABLE::ptDumpPageTable()
 {
-    // Loop through all lines in the hash table
-    for (int hash_idx = 0; hash_idx < (1LL << CCI_PT_VA_IDX_BITS); hash_idx += 1)
+    DumpPageTableVAtoPA(ptVtoP, 0, 4);
+}
+
+
+//-----------------------------------------------------------------------------
+// Private functions
+//-----------------------------------------------------------------------------
+
+bool
+MPFVTP_PAGE_TABLE::ptTranslatePAtoVA(btPhysAddr pa, btVirtAddr *va)
+{
+    MPFVTP_PT_TREE table = ptPtoV;
+
+    uint32_t depth = 4;
+    while (depth--)
     {
-        int cur_idx = hash_idx;
-        uint8_t* pte = m_pPageTable + hash_idx * CL(1);
+        // Index in the current level
+        uint64_t idx = ptIdxFromAddr(uint64_t(pa), depth);
 
-        // Loop over all lines in the hash group
-        while (true)
+        if (! table->EntryExists(idx)) return false;
+
+        if (table->EntryIsTerminal(idx))
         {
-            int n;
-            // Loop over all PTEs in a single line
-            for (n = 0; n < ptesPerLine; n += 1)
+            *va = btVirtAddr(table->GetTranslatedAddr(idx));
+            return true;
+        }
+
+        // Walk down to child
+        table = MPFVTP_PT_TREE(table->GetChildAddr(idx));
+    }
+
+    return false;
+}
+
+
+bool
+MPFVTP_PAGE_TABLE::AddVAtoPA(btVirtAddr va, btPhysAddr pa, uint32_t depth)
+{
+    MPFVTP_PT_TREE table = ptVtoP;
+
+    // Index in the leaf page
+    uint64_t leaf_idx = ptIdxFromAddr(uint64_t(va), 4 - depth);
+
+    uint32_t cur_depth = 4;
+    while (--depth)
+    {
+        // Drop 4KB page offset
+        uint64_t idx = ptIdxFromAddr(uint64_t(va), --cur_depth);
+
+        // Need a new page in the table?
+        if (! table->EntryExists(idx))
+        {
+            btPhysAddr pt_p;
+            btVirtAddr pt_v = ptAllocSharedPage(sizeof(MPFVTP_PT_TREE_CLASS),
+                                                &pt_p);
+            MPFVTP_PT_TREE child_table = MPFVTP_PT_TREE(pt_v);
+            child_table->Reset();
+
+            // Add new page to physical to virtual translation so the table
+            // can be walked in software
+            if (! AddPAtoVA(pt_p, pt_v, 4)) return false;
+
+            // Add new page to the FPGA-visible virtual to physical table
+            table->InsertChildAddr(idx, pt_p);
+        }
+
+        // Are we being asked to add an entry below a larger region that
+        // is already mapped?
+        if (table->EntryIsTerminal(idx)) return false;
+
+        // Continue down the tree
+        btPhysAddr child_pa = table->GetChildAddr(idx);
+        btVirtAddr child_va;
+        if (! ptTranslatePAtoVA(child_pa, &child_va)) return false;
+        table = MPFVTP_PT_TREE(child_va);
+    }
+
+    // Now at the leaf.  Add the translation.
+    if (table->EntryExists(leaf_idx)) return false;
+
+    table->InsertTranslatedAddr(leaf_idx, pa);
+    return true;
+}
+
+
+bool
+MPFVTP_PAGE_TABLE::AddPAtoVA(btPhysAddr pa, btVirtAddr va, uint32_t depth)
+{
+    MPFVTP_PT_TREE table = ptPtoV;
+
+    // Index in the leaf page
+    uint64_t leaf_idx = ptIdxFromAddr(uint64_t(pa), 4 - depth);
+
+    uint32_t cur_depth = 4;
+    while (--depth)
+    {
+        // Drop 4KB page offset
+        uint64_t idx = ptIdxFromAddr(uint64_t(pa), --cur_depth);
+
+        // Need a new page in the table?
+        if (! table->EntryExists(idx))
+        {
+            // Add new page to the FPGA-visible virtual to physical table
+            MPFVTP_PT_TREE child_table = new MPFVTP_PT_TREE_CLASS();
+            if (child_table == NULL) return false;
+
+            table->InsertChildAddr(idx, int64_t(child_table));
+        }
+
+        // Are we being asked to add an entry below a larger region that
+        // is already mapped?
+        if (table->EntryIsTerminal(idx)) return false;
+
+        // Continue down the tree
+        table = MPFVTP_PT_TREE(table->GetChildAddr(idx));
+    }
+
+    // Now at the leaf.  Add the translation.
+    if (table->EntryExists(leaf_idx)) return false;
+
+    table->InsertTranslatedAddr(leaf_idx, int64_t(va));
+    return true;
+}
+
+
+void
+MPFVTP_PAGE_TABLE::DumpPageTableVAtoPA(
+    MPFVTP_PT_TREE table,
+    uint64_t partial_va,
+    uint32_t depth)
+{
+    for (uint64_t idx = 0; idx < 512; idx++)
+    {
+        if (table->EntryExists(idx))
+        {
+            uint64_t va = partial_va | (idx << (12 + 9 * (depth - 1)));
+            if (table->EntryIsTerminal(idx))
             {
-                uint64_t va_tag;
-                uint64_t pa_idx;
-                ReadPTE(pte, va_tag, pa_idx);
+                // Found a translation
+                const char *kind;
+                switch (depth)
+                {
+                  case 1:
+                    kind = "4KB";
+                    break;
+                  case 2:
+                    kind = "2MB";
+                    break;
+                  default:
+                    kind = "?";
+                    break;
+                }
 
-                // End of the PTE list within the current hash group?
-                if (va_tag == 0) break;
+                printf("    VA 0x%016llx -> PA 0x%016llx (%s)\n",
+                       va,
+                       table->GetTranslatedAddr(idx),
+                       kind);
 
-                //
-                // The VA in a PTE is the combination of the tag (stored
-                // in the PTE) and the hash table index.  The table index
-                // is mapped directly from the low bits of the VA's line
-                // address.
-                //
-                // The PA in a PTE is stored as the index of the 2MB-aligned
-                // physical address.
-                pte += pteBytes;
+                // Validate translation function
+                btPhysAddr check_pa;
+                assert(ptTranslateVAtoPA(btVirtAddr(va), &check_pa));
+                assert(check_pa == table->GetTranslatedAddr(idx));
             }
+            else
+            {
+                // Follow pointer to another level
+                assert(depth != 1);
 
-            // If the PTE list within the current hash group is incomplete then
-            // we have walked all PTEs in the line.
-            if (n != ptesPerLine) break;
-
-            // Follow the next pointer to the connected line holding another
-            // vector of PTEs.
-            cur_idx = ReadTableIdx(pte);
-            pte = m_pPageTable + cur_idx * CL(1);
-            // End of list?  (Table index was NULL.)
-            if (pte == m_pPageTable) break;
+                btPhysAddr child_pa = table->GetChildAddr(idx);
+                btVirtAddr child_va;
+                assert(ptTranslatePAtoVA(child_pa, &child_va));
+                DumpPageTableVAtoPA(MPFVTP_PT_TREE(child_va), va, depth - 1);
+            }
         }
     }
 }
 
-inline void
-MPFVTP_PAGE_TABLE::AddrComponentsFromVA(
-    uint64_t va,
-    uint64_t& tag,
-    uint64_t& idx,
-    uint64_t& byteOffset )
-{
-    uint64_t v = va;
-
-    byteOffset = v & ((1LL << CCI_PT_PAGE_OFFSET_BITS) - 1);
-    v >>= CCI_PT_PAGE_OFFSET_BITS;
-
-    idx = v & ((1LL << CCI_PT_VA_IDX_BITS) - 1);
-    v >>= CCI_PT_VA_IDX_BITS;
-
-    tag = v & ((1LL << vaTagBits) - 1);
-
-    // Make sure no address bits were lost in the conversion.  The high bits
-    // beyond CCI_PT_VA_BITS are sign extended.
-    if (CCI_PT_VA_BITS != 64)
-    {
-        int64_t va_check = va;
-        // Shift all but the high bit of the VA range to the right.  All the
-        // resulting bits must match.
-        va_check >>= (CCI_PT_VA_BITS - 1);
-        ASSERT((va_check == 0) || (va_check == -1));
-    }
-}
-
-
-inline void
-MPFVTP_PAGE_TABLE::AddrComponentsFromVA(
-    const void *va,
-    uint64_t& tag,
-    uint64_t& idx,
-    uint64_t& byteOffset)
-{
-    AddrComponentsFromVA(uint64_t(va), tag, idx, byteOffset);
-}
-
-inline void
-MPFVTP_PAGE_TABLE::AddrComponentsFromPA(
-    uint64_t pa,
-    uint64_t& idx,
-    uint64_t& byteOffset)
-{
-    uint64_t p = pa;
-
-    byteOffset = p & ((1LL << CCI_PT_PAGE_OFFSET_BITS) - 1);
-    p >>= CCI_PT_PAGE_OFFSET_BITS;
-
-    idx = p & ((1LL << CCI_PT_PA_IDX_BITS) - 1);
-    p >>= CCI_PT_PA_IDX_BITS;
-
-    // PA_IDX_BITS must be large enough to represent all physical pages
-    ASSERT(p == 0);
-}
-
-
-inline uint64_t
-MPFVTP_PAGE_TABLE::AddrToPTE(uint64_t va, uint64_t pa)
-{
-    ASSERT((pa & ~((1LL << CCI_PT_PA_IDX_BITS) - 1)) == 0);
-
-    return ((va << CCI_PT_PA_IDX_BITS) | pa);
-}
-
-
-inline uint64_t
-MPFVTP_PAGE_TABLE::AddrToPTE(const void* va, uint64_t pa)
-{
-    return AddrToPTE(uint64_t(va), pa);
-}
 
 /// @} group VTPService
 

@@ -41,6 +41,9 @@
 // The walker receives requests from the TLB when a translation is not present
 // in the TLB.
 //
+// The table being walked is constructed by software.  The format is
+// is described in SW/src/cci_mpf_shim_vtp_pt.cpp.
+//
 module cci_mpf_shim_vtp_pt_walk
   #(
     parameter DEBUG_MESSAGES = 0
@@ -68,28 +71,15 @@ module cci_mpf_shim_vtp_pt_walk
     // the table walk.  Code that instantiates this module is responsible
     // for turning the request into a read of the page table and forwarding
     // the result to ptReadData.
-    output logic ptReadIdxEn,
-    output t_cci_clAddr ptReadIdx,
+    output logic ptReadEn,
+    output t_cci_clAddr ptReadAddr,
     // System ready to accept a read request?
-    input  logic ptReadIdxRdy,
+    input  logic ptReadRdy,
 
     // Response to page table read request
     input t_cci_clData ptReadData,
     input logic ptReadDataEn
     );
-
-
-    // Address hash index in the host memory page table
-    localparam CCI_PT_VA_IDX_BITS = 14;     // 14 == 16K buckets in the hash table
-    typedef logic [CCI_PT_VA_IDX_BITS-1 : 0] t_pte_va_hash_idx;
-
-    // Address tag in the page table (tag concatenated with hash index is
-    // the virtual page.
-    localparam CCI_PT_VA_TAG_BITS = 48 -
-                                    CCI_PT_VA_IDX_BITS -
-                                    CCI_PT_2MB_PAGE_OFFSET_BITS;
-
-    typedef logic [CCI_PT_VA_TAG_BITS-1 : 0] t_pte_va_tag;
 
     initial begin
         // Confirm that the VA size specified in VTP matches CCI.  The CCI
@@ -99,18 +89,61 @@ module cci_mpf_shim_vtp_pt_walk
             $fatal("cci_mpf_shim_vtp.sv: VA address size mismatch!");
     end
 
-
-    // Base address of the page table
-    t_cci_clAddr page_table_base;
-    assign page_table_base = csrs.vtp_in_page_table_base;
+    // Root address of the page table
+    t_cci_clAddr page_table_root;
+    assign page_table_root = csrs.vtp_in_page_table_base;
 
     logic initialized;
     assign initialized = csrs.vtp_in_page_table_base_valid;
 
 
-    // Index (pointer) to line in the page table
-    localparam CCI_PT_LINE_IDX_BITS = 15;   // 15 == 2MB with 64 byte lines
-    typedef logic [CCI_PT_LINE_IDX_BITS-1 : 0] t_pte_idx;
+    // ====================================================================
+    //
+    //   Page table properties.
+    //
+    // ====================================================================
+
+    // Hierarchical page table is composed of 4KB pages, each with 512
+    // 64 bit pointers either to the translated PA or to the next page
+    // in the page table.  Each index is thus 9 bits.
+    localparam PT_PAGE_IDX_WIDTH = 9;
+
+    // Page index components: line address and word within line
+    localparam PT_PAGE_WORD_IDX_WIDTH = $clog2(CCI_CLDATA_WIDTH / 64);
+    typedef logic [PT_PAGE_WORD_IDX_WIDTH-1 : 0] t_pt_page_word_idx;
+
+    localparam PT_PAGE_LINE_IDX_WIDTH = PT_PAGE_IDX_WIDTH - PT_PAGE_WORD_IDX_WIDTH;
+    typedef logic [PT_PAGE_LINE_IDX_WIDTH-1 : 0] t_pt_page_line_idx;
+
+    typedef struct packed
+    {
+        t_pt_page_line_idx line_idx;
+        t_pt_page_word_idx word_idx;
+    }
+    t_pt_page_idx;
+
+    localparam PT_MAX_DEPTH = 4;
+    typedef logic [$clog2(PT_MAX_DEPTH)-1 : 0] t_pt_walk_depth;
+
+    function automatic t_pt_page_line_idx ptNextLineIdx(
+        t_tlb_4kb_va_page_idx pidx_4k
+        );
+
+        // Top bits
+        t_pt_page_idx pidx = pidx_4k[$bits(pidx_4k)-1 -: $bits(t_pt_page_idx)];
+
+        return pidx.line_idx;
+    endfunction
+
+    function automatic t_pt_page_word_idx ptNextWordIdx(
+        t_tlb_4kb_va_page_idx pidx_4k
+        );
+
+        // Top bits
+        t_pt_page_idx pidx = pidx_4k[$bits(pidx_4k)-1 -: $bits(t_pt_page_idx)];
+
+        return pidx.word_idx;
+    endfunction
 
 
     // ====================================================================
@@ -122,199 +155,62 @@ module cci_mpf_shim_vtp_pt_walk
     typedef enum logic [2:0]
     {
         STATE_PT_WALK_IDLE,
-        STATE_PT_WALK_READ_REQ,
-        STATE_PT_WALK_READ_RSP,
-        STATE_PT_WALK_SEARCH_LINE,
-        STATE_PT_WALK_INSERT
+        STATE_PT_WALK_START,
+        STATE_PT_WALK_BUSY
     }
     t_state_pt_walk;
 
     t_state_pt_walk state;
-
-    localparam CCI_PT_PA_IDX_BITS = CCI_PT_2MB_PA_PAGE_INDEX_BITS;
-
-    // Bytes to hold a single PTE
-    localparam PTE_BYTES = (CCI_PT_VA_TAG_BITS + CCI_PT_PA_IDX_BITS + 7) / 8;
-    // Bytes to hold a page table pointer
-    localparam PT_IDX_BYTES = (CCI_PT_PA_IDX_BITS + 7) / 8;
-    // Number of page table entries in a line
-    localparam PTES_PER_LINE = ((CCI_CLDATA_WIDTH / 8) - PT_IDX_BYTES) / PTE_BYTES;
-
-    // Buffer for storing the line being searched in the page table
-    t_cci_clData pt_line;
-    // Counter to track number of PTEs active in pt_line
-    logic [PTES_PER_LINE : 0] pte_num;
-
-    // One page table entry
-    typedef struct packed
-    {
-        t_pte_va_tag          vTag;
-        t_tlb_2mb_pa_page_idx pIdx;
-    }
-    t_pte;
-
     logic error_pte_missing;
 
-    t_pte found_pte;
-    t_pte cur_pte;
-    assign cur_pte = t_pte'(pt_line);
+    // Registered page table read responses
+    logic pt_read_rsp_valid;
+    t_cci_clAddr pt_read_rsp_pa;
 
-    t_pte_va_hash_idx pte_hash_idx;
-    t_pte_va_tag pte_va_tag;
+    // Terminal entry?  The translation is found.
+    logic pt_read_rsp_found;
 
-    t_pte_idx pte_idx;
 
     //
     // The miss handler supports processing only one request at a time.
     //
-    assign walkPtReqRdy = (state == STATE_PT_WALK_IDLE);
+    assign walkPtReqRdy = initialized &&
+                          (state == STATE_PT_WALK_IDLE) &&
+                          ! error_pte_missing;
 
-
+    //
+    // State transition.  One request is processed at a time.
+    //
     always_ff @(posedge clk)
     begin
         if (reset)
         begin
             state <= STATE_PT_WALK_IDLE;
-            error_pte_missing <= 1'b0;
         end
         else
         begin
             case (state)
               STATE_PT_WALK_IDLE:
                 begin
+                    // New request arrived and not already doing a walk
                     if (walkPtReqEn)
                     begin
-                        state <= STATE_PT_WALK_READ_REQ;
-                    end
-
-                    {pte_va_tag, pte_hash_idx} <= vtp4kbTo2mbVA(walkPtReqVA);
-
-                    // Why the double application of types to walkPtReqVA?
-                    // The hash index isolates the proper bits of the page
-                    // address in the hash table.  The PTE index type grows
-                    // the pointer to the full size index used in the PTE.
-                    // (The PTE index space includes both the hash table
-                    // and overflow space to which hash entries can point
-                    // in order to construct longer linked lists.)
-                    pte_idx <= t_pte_idx'(t_pte_va_hash_idx'(vtp4kbTo2mbVA(walkPtReqVA)));
-                end
-
-              STATE_PT_WALK_READ_REQ:
-                begin
-                    //
-                    // Request a line from the page table.
-                    //
-                    if (ptReadIdxRdy && initialized)
-                    begin
-                        state <= STATE_PT_WALK_READ_RSP;
+                        state <= STATE_PT_WALK_START;
                     end
                 end
 
-              STATE_PT_WALK_READ_RSP:
+              STATE_PT_WALK_START:
                 begin
-                    //
-                    // Wait for page table line read response.
-                    //
-                    pt_line <= ptReadData;
-                    pte_num <= PTES_PER_LINE;
-
-                    if (ptReadDataEn)
+                    if (ptReadEn)
                     begin
-                        state <= STATE_PT_WALK_SEARCH_LINE;
+                        state <= STATE_PT_WALK_BUSY;
                     end
                 end
 
-              STATE_PT_WALK_SEARCH_LINE:
+              STATE_PT_WALK_BUSY:
                 begin
-                    //
-                    // Iterate over the PTEs in a page table line, looking
-                    // for a VA tag match.
-                    //
-                    if (error_pte_missing)
-                    begin
-                        // Nothing
-                    end
-                    else if (pte_num == PTES_PER_LINE'(0))
-                    begin
-                        // Last PTE in the current line.  Continue along
-                        // the linked list of lines.
-                        if (t_pte_idx'(pt_line) == t_pte_idx'(0))
-                        begin
-                            // End of list
-                            error_pte_missing <= 1'b1;
-
-                            if (DEBUG_MESSAGES)
-                            begin
-                                $display("PT WALK: ERROR, failed to find 0x%x",
-                                         {pte_va_tag, pte_hash_idx,  CCI_PT_2MB_PAGE_OFFSET_BITS'(0)});
-                            end
-                        end
-                        else
-                        begin
-                            // Read the next line in the linked list
-                            state <= STATE_PT_WALK_READ_REQ;
-
-                            if (DEBUG_MESSAGES)
-                            begin
-                                $display("PT WALK: Search for 0x%x, next line %0d",
-                                         {pte_va_tag, pte_hash_idx,  CCI_PT_2MB_PAGE_OFFSET_BITS'(0)},
-                                         t_pte_idx'(pt_line));
-                            end
-                        end
-                    end
-                    else if (cur_pte.vTag == pte_va_tag)
-                    begin
-                        // Found the requested PTE!
-                        state <= STATE_PT_WALK_INSERT;
-
-                        if (DEBUG_MESSAGES)
-                        begin
-                            $display("PT WALK: Found 0x%x (PA 0x%x), num %0d",
-                                     {cur_pte.vTag, pte_hash_idx,  CCI_PT_2MB_PAGE_OFFSET_BITS'(0)},
-                                     {cur_pte.pIdx, CCI_PT_2MB_PAGE_OFFSET_BITS'(0)},
-                                     pte_num);
-                        end
-                    end
-                    else
-                    begin
-                        if (cur_pte.vTag == t_pte_va_tag'(0))
-                        begin
-                            // NULL VA tag -- no more translations
-                            error_pte_missing <= 1'b1;
-                        end
-
-                        if (DEBUG_MESSAGES)
-                        begin
-                            $display("PT WALK: Search for 0x%x, at 0x%x (PA 0x%x), num %0d",
-                                     {pte_va_tag, pte_hash_idx,  CCI_PT_2MB_PAGE_OFFSET_BITS'(0)},
-                                     {cur_pte.vTag, pte_hash_idx,  CCI_PT_2MB_PAGE_OFFSET_BITS'(0)},
-                                     {cur_pte.pIdx, CCI_PT_2MB_PAGE_OFFSET_BITS'(0)},
-                                     pte_num);
-                        end
-                    end
-
-                    // Record the found PTE unconditionally.  It will only be
-                    // used after transition to STATE_PT_WALK_INSERT.
-                    found_pte <= cur_pte;
-
-                    // Shift the line by one PTE so the next iteration
-                    // may search the next PTE.  The size of a PTE is
-                    // rounded up to a multiple of bytes.  This only matters
-                    // when the state remains STATE_PT_WALK_SEARCH_LINE.
-                    pt_line <= pt_line >> (8 * (($bits(t_pte) + 7) / 8));
-                    pte_num <= pte_num - 1;
-
-                    // Unconditionally update pte_idx in case a new PTE entry
-                    // must be read from host memory. This will only be used
-                    // if the state changes back to STATE_PT_WALK_READ_REQ in the
-                    // code above.
-                    pte_idx <= t_pte_idx'(pt_line);
-                end
-
-              STATE_PT_WALK_INSERT:
-                begin
-                    // The translation is added to the TLB.
-                    if (tlb_fill_if.fillRdy)
+                    // Current request is complete
+                    if (tlb_fill_if.fillEn)
                     begin
                         state <= STATE_PT_WALK_IDLE;
                     end
@@ -323,32 +219,204 @@ module cci_mpf_shim_vtp_pt_walk
         end
     end
 
-    // Request a page table read depending on state.
-    assign ptReadIdx = page_table_base | pte_idx;
-    assign ptReadIdxEn = ptReadIdxRdy && initialized &&
-                         (state == STATE_PT_WALK_READ_REQ);
+
+    // VA being translated
+    t_tlb_4kb_va_page_idx translate_va;
+
+    // During translation the VA is broken down into 9 bit indices during
+    // the tree-based page walk.  This register is shifted as each level
+    // is traversed, leaving the next index in the high bits.
+    t_tlb_4kb_va_page_idx translate_va_idx;
+
+    // Record the word in the line requested in the most recent page table
+    // read.
+    t_pt_page_word_idx translate_va_prev_word_idx;
+    
+
+    // Track the depth while walking the table.  This is one way of detecting
+    // a malformed table or missing entry.
+    t_pt_walk_depth translate_depth;
+
+    always_ff @(posedge clk)
+    begin
+        if (state == STATE_PT_WALK_IDLE)
+        begin
+            // New request
+            translate_va <= walkPtReqVA;
+            translate_va_idx <= walkPtReqVA;
+            translate_depth <= t_pt_walk_depth'(~0);
+        end
+        else if (ptReadEn)
+        begin
+            translate_va_prev_word_idx <= ptNextWordIdx(translate_va_idx);
+
+            // Read requested from a level of the page table.  Shift to move
+            // to the index of the next level.
+            translate_va_idx <=
+                t_tlb_4kb_va_page_idx'({ translate_va_idx,
+                                         PT_PAGE_IDX_WIDTH'('x) });
+            translate_depth <= translate_depth + t_pt_walk_depth'(1);
+        end
+    end
+
+
+    // ====================================================================
+    //
+    //   Generate page table read requests.
+    //
+    // ====================================================================
+
+    // Enable a read request?
+    always_comb
+    begin
+        ptReadEn = 1'b0;
+
+        if ((state == STATE_PT_WALK_START) || (pt_read_rsp_valid &&
+                                               ! pt_read_rsp_found &&
+                                               ! error_pte_missing))
+        begin
+            ptReadEn = ptReadRdy;
+        end
+    end
+
+    // Address of read request
+    always_comb
+    begin
+        if (state == STATE_PT_WALK_START)
+        begin
+            // Start reading from the root of the page table, picking the
+            // offset indicates from the high bits of the VA.
+            ptReadAddr = page_table_root;
+        end
+        else
+        begin
+            // Next link in the page table tree
+            ptReadAddr = pt_read_rsp_pa;
+        end
+
+        // Select the proper line in this level of the table, based on the
+        // portion of the VA corresponding to the level.
+        ptReadAddr[PT_PAGE_LINE_IDX_WIDTH-1 : 0] = ptNextLineIdx(translate_va_idx);
+    end
+
+
+    // ====================================================================
+    //
+    //   Consume page table read responses.
+    //
+    // ====================================================================
+
+    // Break a read response line into 64 bit words
+    logic [(CCI_CLDATA_WIDTH / 64)-1 : 0][63 : 0] pt_read_rsp_word_vec;
+
+    // 64 bit entry within the response line
+    logic [63 : 0] pt_read_rsp_entry;
+
+    always_comb
+    begin
+        pt_read_rsp_word_vec = ptReadData;
+        pt_read_rsp_entry = pt_read_rsp_word_vec[translate_va_prev_word_idx];
+    end
+
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            pt_read_rsp_valid <= 1'b0;
+            pt_read_rsp_found <= 1'b0;
+            error_pte_missing <= 1'b0;
+        end
+        else if (ptReadDataEn)
+        begin
+            pt_read_rsp_valid <= ptReadDataEn;
+
+            // Bit 0 of the response is set for actual translations (as
+            // opposed to pointers to another page table level).
+            pt_read_rsp_found <= pt_read_rsp_entry[0];
+
+            // The SW initializes entries to ~0.  Check bit 1 as a proxy
+            // for the entire entry being invalid.
+            error_pte_missing <= pt_read_rsp_entry[1] || error_pte_missing;
+            // Also an error if the maximum walk depth is reached without
+            // finding the entry.
+            if (! pt_read_rsp_entry[0] && (&(translate_depth) == 1'b1))
+            begin
+                error_pte_missing <= 1'b1;
+            end
+
+            // Extract the address of a line from the entry.
+            pt_read_rsp_pa <= pt_read_rsp_entry[$clog2(CCI_CLDATA_WIDTH / 8) +:
+                                                CCI_CLADDR_WIDTH];
+        end
+        else if (tlb_fill_if.fillEn || ptReadEn)
+        begin
+            // Done with the most recent response
+            pt_read_rsp_valid <= 1'b0;
+            pt_read_rsp_found <= 1'b0;
+        end
+    end
+
 
     always_ff @(posedge clk)
     begin
         if (! reset && DEBUG_MESSAGES)
         begin
-            if (ptReadIdxEn)
+            if (walkPtReqEn && (state == STATE_PT_WALK_IDLE))
             begin
-                $display("PT WALK: PTE read idx 0x%x", ptReadIdx);
+                $display("PT WALK: New req translate line VA 0x%x",
+                         { walkPtReqVA, CCI_PT_4KB_PAGE_OFFSET_BITS'(0) });
+            end
+
+            if (ptReadEn)
+            begin
+                $display("PT WALK: PTE read addr 0x%x (PA 0x%x) (line 0x%x, word 0x%x)",
+                         ptReadAddr, {ptReadAddr, 6'b0},
+                         ptNextLineIdx(translate_va_idx),
+                         ptNextWordIdx(translate_va_idx));
+            end
+
+            if (ptReadDataEn)
+            begin
+                $display("PT WALK: Line arrived 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x",
+                         pt_read_rsp_word_vec[7],
+                         pt_read_rsp_word_vec[6],
+                         pt_read_rsp_word_vec[5],
+                         pt_read_rsp_word_vec[4],
+                         pt_read_rsp_word_vec[3],
+                         pt_read_rsp_word_vec[2],
+                         pt_read_rsp_word_vec[1],
+                         pt_read_rsp_word_vec[0]);
+            end
+
+            if (pt_read_rsp_valid && (pt_read_rsp_found || error_pte_missing))
+            begin
+                $display("PT WALK: Response Addr 0x%x (PA 0x%x), size %s, found %d, error %d",
+                         pt_read_rsp_pa, {pt_read_rsp_pa, 6'b0},
+                         (tlb_fill_if.fillBigPage ? "2MB" : "4KB"),
+                         pt_read_rsp_found, error_pte_missing);
             end
         end
     end
 
-    // Signal an error
-    assign notPresent = error_pte_missing;
+    // ====================================================================
+    //
+    //   Return page walk result.
+    //
+    // ====================================================================
 
     //
     // TLB insertion (in STATE_PT_WALK_INSERT)
     //
-    assign tlb_fill_if.fillEn = (state == STATE_PT_WALK_INSERT) &&
-                                tlb_fill_if.fillRdy;
-    assign tlb_fill_if.fillVA = vtp2mbTo4kbVA({pte_va_tag, pte_hash_idx});
-    assign tlb_fill_if.fillPA = vtp2mbTo4kbPA(found_pte.pIdx);
+    assign tlb_fill_if.fillEn = pt_read_rsp_found && tlb_fill_if.fillRdy;
+    assign tlb_fill_if.fillVA = translate_va;
+    assign tlb_fill_if.fillPA = pt_read_rsp_pa[CCI_PT_4KB_PAGE_OFFSET_BITS +:
+                                               CCI_PT_4KB_PA_PAGE_INDEX_BITS];
+    // Use just bit 0 of translate_depth, which is either 2 for a 2MB page
+    // or 3 for a 4KB page.
+    assign tlb_fill_if.fillBigPage = ! (translate_depth[0]);
+
+    // Signal an error
+    assign notPresent = error_pte_missing;
 
 endmodule // cci_mpf_shim_vtp_pt_walk
 

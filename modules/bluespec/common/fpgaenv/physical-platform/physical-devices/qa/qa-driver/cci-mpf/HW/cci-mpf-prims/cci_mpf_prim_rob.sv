@@ -371,7 +371,7 @@ module cci_mpf_prim_rob_data
     // Storage where data will be sorted.  Port 0 is used for writes and
     // port 1 for reads.
     //
-    cci_mpf_prim_dualport_ram
+    cci_mpf_prim_simple_ram
       #(
         .N_ENTRIES(N_ENTRIES),
         .N_DATA_BITS(N_DATA_BITS),
@@ -379,17 +379,14 @@ module cci_mpf_prim_rob_data
         )
       memData
        (
-        .clk0(clk),
-        .addr0(enqDataIdx),
-        .wen0(enqData_en),
-        .wdata0(enqData),
-        .rdata0(),
+        .clk,
 
-        .clk1(clk),
-        .addr1(oldestIdx),
-        .wen1(1'b0),
-        .wdata1(N_DATA_BITS'(0)),
-        .rdata1(mem_first)
+        .waddr(enqDataIdx),
+        .wen(enqData_en),
+        .wdata(enqData),
+
+        .raddr(oldestIdx),
+        .rdata(mem_first)
         );
 
     //
@@ -398,7 +395,7 @@ module cci_mpf_prim_rob_data
     generate
         if (N_META_BITS != 0)
         begin : genMeta
-            cci_mpf_prim_dualport_ram
+            cci_mpf_prim_simple_ram
               #(
                 .N_ENTRIES(N_ENTRIES),
                 .N_DATA_BITS(N_META_BITS),
@@ -406,17 +403,14 @@ module cci_mpf_prim_rob_data
                 )
               memMeta
                (
-                .clk0(clk),
-                .addr0(enqMetaIdx),
-                .wen0(enq_en),
-                .wdata0(enqMeta),
-                .rdata0(),
+                .clk(clk),
 
-                .clk1(clk),
-                .addr1(oldestIdx),
-                .wen1(1'b0),
-                .wdata1('x),
-                .rdata1(mem_meta_first)
+                .waddr(enqMetaIdx),
+                .wen(enq_en),
+                .wdata(enqMeta),
+
+                .raddr(oldestIdx),
+                .rdata(mem_meta_first)
                 );
         end
         else

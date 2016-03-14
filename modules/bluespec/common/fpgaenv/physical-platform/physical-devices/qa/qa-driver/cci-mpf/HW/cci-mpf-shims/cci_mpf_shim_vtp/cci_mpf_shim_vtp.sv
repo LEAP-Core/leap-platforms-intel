@@ -116,16 +116,97 @@ module cci_mpf_shim_vtp
     //
     // ====================================================================
 
+    //
+    // Allocate two TLBs.  One manages 4KB pages and the other manages
+    // 2MB pages.
+    //
+
+    cci_mpf_shim_vtp_tlb_if tlb_if_4kb();
+
     cci_mpf_shim_vtp_tlb
       #(
-        .DEBUG_MESSAGES(DEBUG_MESSAGES)
+        .CCI_PT_PAGE_OFFSET_BITS(CCI_PT_4KB_PAGE_OFFSET_BITS),
+        .NUM_TLB_SETS(1024),
+        .DEBUG_MESSAGES(DEBUG_MESSAGES),
+        .DEBUG_NAME("4KB")
         )
-      tlb
+      tlb4kb
        (
         .clk,
         .reset,
-        .tlb_if
+        .tlb_if(tlb_if_4kb)
         );
+
+
+    cci_mpf_shim_vtp_tlb_if tlb_if_2mb();
+
+    cci_mpf_shim_vtp_tlb
+      #(
+        .CCI_PT_PAGE_OFFSET_BITS(CCI_PT_2MB_PAGE_OFFSET_BITS),
+        .NUM_TLB_SETS(512),
+        .DEBUG_MESSAGES(DEBUG_MESSAGES),
+        .DEBUG_NAME("2MB")
+        )
+      tlb2mb
+       (
+        .clk,
+        .reset,
+        .tlb_if(tlb_if_2mb)
+        );
+
+    genvar p;
+    generate
+        for (p = 0; p < 2; p = p + 1)
+        begin : tlb_ports
+            // When the pipeline requests a TLB lookup do it on both pipelines.
+            assign tlb_if_4kb.lookupPageVA[p] = tlb_if.lookupPageVA[p];
+            assign tlb_if_4kb.lookupEn[p] = tlb_if.lookupEn[p];
+            assign tlb_if_2mb.lookupPageVA[p] = tlb_if.lookupPageVA[p];
+            assign tlb_if_2mb.lookupEn[p] = tlb_if.lookupEn[p];
+            assign tlb_if.lookupRdy[p] = tlb_if_4kb.lookupRdy[p] &&
+                                         tlb_if_2mb.lookupRdy[p];
+
+            // The TLB pipeline is fixed length, so responses arrive together.
+            // At most one TLB should have a translation for a given address.
+            assign tlb_if.lookupValid[p] = tlb_if_4kb.lookupValid[p] ||
+                                           tlb_if_2mb.lookupValid[p];
+            assign tlb_if.lookupRspPagePA[p] =
+                tlb_if_4kb.lookupValid[p] ? tlb_if_4kb.lookupRspPagePA[p] :
+                                            tlb_if_2mb.lookupRspPagePA[p];
+
+            // Read the page table if both TLBs miss
+            assign tlb_if.lookupMiss[p] = tlb_if_4kb.lookupMiss[p] &&
+                                          tlb_if_2mb.lookupMiss[p];
+            assign tlb_if.lookupMissVA[p] = tlb_if_4kb.lookupMissVA[p];
+
+            // Validation
+            always_ff @(posedge clk)
+            begin
+                if (! reset)
+                begin
+                    assert(! tlb_if_4kb.lookupValid[p] || ! tlb_if_2mb.lookupValid[p]) else
+                        $fatal("cci_mpf_shim_vtp: Both TLBs valid!");
+
+                    if (tlb_if.lookupMiss[p])
+                    begin
+                        assert(vtp4kbTo2mbVA(tlb_if_4kb.lookupMissVA[p]) ==
+                               vtp4kbTo2mbVA(tlb_if_2mb.lookupMissVA[p])) else
+                            $fatal("cci_mpf_shim_vtp: Both TLBs missed but addresses different!");
+                    end
+                end
+            end
+        end
+    endgenerate
+
+    // Direct fills to the appropriate TLB depending on the page size
+    assign tlb_if_4kb.fillEn = tlb_if.fillEn && ! tlb_if.fillBigPage;
+    assign tlb_if_2mb.fillEn = tlb_if.fillEn && tlb_if.fillBigPage;
+
+    assign tlb_if_4kb.fillVA = tlb_if.fillVA;
+    assign tlb_if_4kb.fillPA = tlb_if.fillPA;
+    assign tlb_if_2mb.fillVA = tlb_if.fillVA;
+    assign tlb_if_2mb.fillPA = tlb_if.fillPA;
+    assign tlb_if.fillRdy = tlb_if_4kb.fillRdy && tlb_if_2mb.fillRdy;
 
 
     // ====================================================================
@@ -146,6 +227,7 @@ module cci_mpf_shim_vtp
         if (reset)
         begin
             last_miss_channel <= 1'b0;
+            walk_pt_req_en <= 1'b0;
         end
         else if (walk_pt_req_en)
         begin
@@ -217,10 +299,10 @@ module cci_mpf_shim_vtp
 
 
     // Page table read request and response signals
-    logic ptReadIdxEn;
-    logic ptReadIdxEn_q;
-    t_cci_clAddr ptReadIdx;
-    t_cci_clAddr ptReadIdx_q;
+    logic ptReadEn;
+    logic ptReadEn_q;
+    t_cci_clAddr ptReadAddr;
+    t_cci_clAddr ptReadAddr_q;
     logic ptReadDataEn;
 
     cci_mpf_shim_vtp_pt_walk
@@ -242,9 +324,9 @@ module cci_mpf_shim_vtp
 
         .notPresent,
 
-        .ptReadIdxEn,
-        .ptReadIdx,
-        .ptReadIdxRdy(! ptReadIdxEn_q),
+        .ptReadEn,
+        .ptReadAddr,
+        .ptReadRdy(! ptReadEn_q),
 
         .ptReadData(fiu.c0Rx.data),
         .ptReadDataEn
@@ -273,7 +355,7 @@ module cci_mpf_shim_vtp
     begin
         if (reset)
         begin
-            ptReadIdxEn_q <= 1'b0;
+            ptReadEn_q <= 1'b0;
         end
         else
         begin
@@ -282,10 +364,10 @@ module cci_mpf_shim_vtp
             // through fiu_pipe.c0Tx.  c0TxAlmFull is asserted when a page
             // table read is needed, so did_pt_rd will be true soon after
             // the page table read request arrives.
-            if (did_pt_rd || ! ptReadIdxEn_q)
+            if (did_pt_rd || ! ptReadEn_q)
             begin
-                ptReadIdxEn_q <= ptReadIdxEn;
-                ptReadIdx_q   <= ptReadIdx;
+                ptReadEn_q <= ptReadEn;
+                ptReadAddr_q   <= ptReadAddr;
             end
         end
     end
@@ -293,13 +375,13 @@ module cci_mpf_shim_vtp
     always_comb
     begin
         // Give priority to page table walker read requests.
-        fiu_pipe.c0TxAlmFull = fiu.c0TxAlmFull || ptReadIdxEn_q;
+        fiu_pipe.c0TxAlmFull = fiu.c0TxAlmFull || ptReadEn_q;
 
         // Normal read
         fiu_c0Tx = fiu_pipe.c0Tx;
         did_pt_rd = 1'b0;
 
-        if (! cci_mpf_c0TxIsValid(fiu_pipe.c0Tx) && ptReadIdxEn_q &&
+        if (! cci_mpf_c0TxIsValid(fiu_pipe.c0Tx) && ptReadEn_q &&
             ! fiu.c0TxAlmFull)
         begin
             //
@@ -307,7 +389,7 @@ module cci_mpf_shim_vtp
             //
             did_pt_rd = 1'b1;
             c0_req_hdr = cci_mpf_c0_genReqHdr(eREQ_RDLINE_S,
-                                              ptReadIdx_q,
+                                              ptReadAddr_q,
                                               t_cci_mdata'(0),
                                               cci_mpf_defaultReqHdrParams(0));
 

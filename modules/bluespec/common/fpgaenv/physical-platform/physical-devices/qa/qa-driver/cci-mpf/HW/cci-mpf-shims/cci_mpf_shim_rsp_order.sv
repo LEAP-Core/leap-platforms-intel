@@ -173,18 +173,12 @@ module cci_mpf_shim_rsp_order
     //
     // ====================================================================
 
-    // Set buffer latency as needed:
-    //   - Preserving write data: 2 cycles (heap latency)
-    //   - Not sorting read responses: 2 cycles (heap latency)
-    //   - Otherwise: 1 cycle (timing requirements)
-    localparam FIU_BUF_CYCLES =
-        ((PRESERVE_WRITE_MDATA || (SORT_READ_RESPONSES == 0)) ? 2 : 1);
-
     cci_mpf_if fiu_buf (.clk);
 
     cci_mpf_shim_buffer_fiu
       #(
-        .N_RX_REG_STAGES(FIU_BUF_CYCLES)
+        // Both the ROB and heaps depend on 2 cycle latency
+        .N_RX_REG_STAGES(2)
         )
       buf_rx
        (
@@ -204,6 +198,7 @@ module cci_mpf_shim_rsp_order
 
     logic rd_rob_deq_en;
     logic rd_rob_notEmpty;
+    logic rd_rob_data_rdy;
     t_cci_mdata rd_rob_mdata;
     t_cci_mdata rd_heap_readMdata;
 
@@ -272,10 +267,26 @@ module cci_mpf_shim_rsp_order
 
                 .deq_en(rd_rob_deq_en),
                 .notEmpty(rd_rob_notEmpty),
-                .first({ rd_rob_cl_num, rd_rob_out_data }),
-                .firstMeta({ rd_beat_packet_len, rd_beat_mdata })
+                .T2_first({ rd_rob_cl_num, rd_rob_out_data }),
+                .T2_firstMeta({ rd_beat_packet_len, rd_beat_mdata })
                 );
 
+
+            // ROB data appears 2 cycles after notEmpty is asserted
+            logic rd_rob_deq_en_q;
+            always_ff @(posedge clk)
+            begin
+                if (reset)
+                begin
+                    rd_rob_deq_en_q <= 1'b0;
+                    rd_rob_data_rdy <= 1'b0;
+                end
+                else
+                begin
+                    rd_rob_deq_en_q <= rd_rob_deq_en;
+                    rd_rob_data_rdy <= rd_rob_deq_en_q;
+                end
+            end
 
             // Responses are now ordered.  Mark EOP when the last flit is
             // forwarded.
@@ -302,7 +313,7 @@ module cci_mpf_shim_rsp_order
 
             always_ff @(posedge clk)
             begin
-                if (rd_rob_deq_en && (rd_rob_cl_num == 0))
+                if (rd_rob_data_rdy && (rd_rob_cl_num == 0))
                 begin
                     rd_sop_mdata <= rd_beat_mdata;
                     rd_sop_packet_len <= rd_beat_packet_len;
@@ -344,6 +355,7 @@ module cci_mpf_shim_rsp_order
             assign rd_rob_out_data = 'x;
             assign rd_rob_mdata = 'x;
             assign rd_rob_notEmpty = 'x;
+            assign rd_rob_data_rdy = 'x;
         end
     endgenerate
 
@@ -361,34 +373,40 @@ module cci_mpf_shim_rsp_order
     //
     // Responses
     //
+
+    // The ROB has a 2 cycle latency.  When the ROB is not empty decide when
+    // to deq based on whether fiu is empty.  The ROB response will be merged
+    // into afu two cycles later, when the empty fiu slot reaches fiu_buf.
+    always_comb
+    begin
+        // Is there a non-read response active?
+        c0_non_rd_valid = cci_c0Rx_isValid(fiu.c0Rx) &&
+                          ! cci_c0Rx_isReadRsp(fiu.c0Rx);
+
+        rd_rob_deq_en = rd_rob_notEmpty && ! c0_non_rd_valid;
+    end
+
+
     always_comb
     begin
         afu.c0Rx = fiu_buf.c0Rx;
-
-        // Is there a non-read response active?
-        c0_non_rd_valid = cci_c0Rx_isValid(fiu_buf.c0Rx) &&
-                          ! cci_c0Rx_isReadRsp(fiu_buf.c0Rx);
-
-        // Forward responses toward AFU as they become available in sorted order.
-        // Non-read responses on the channel have priority since they are
-        // unbuffered.
-        rd_rob_deq_en = 'x;
-        if (SORT_READ_RESPONSES)
-        begin
-            rd_rob_deq_en = rd_rob_notEmpty && ! c0_non_rd_valid;
-            afu.c0Rx.rspValid = rd_rob_deq_en;
-        end
 
         // Either forward the header from the FIU for non-read responses or
         // reconstruct the read response header.  The CCI-E header has the same
         // low bits as CCI-S so we always construct CCI-E and truncate when
         // in CCI-S mode.
-        if (SORT_READ_RESPONSES && ! c0_non_rd_valid)
+        if (SORT_READ_RESPONSES && rd_rob_data_rdy)
         begin
             afu.c0Rx.hdr = cci_c0_genRspHdr(eRSP_RDLINE, rd_rob_mdata);
             afu.c0Rx.hdr.cl_num = rd_rob_cl_num;
             afu.c0Rx = cci_mpf_c0Rx_updEOP(afu.c0Rx, rd_rob_eop);
             afu.c0Rx.data = rd_rob_out_data;
+            afu.c0Rx.rspValid = 1'b1;
+        end
+        else if (SORT_READ_RESPONSES && cci_c0Rx_isReadRsp(fiu_buf.c0Rx))
+        begin
+            // Read response comes from the ROB, not the FIU directly
+            afu.c0Rx.rspValid = 1'b0;
         end
         else
         begin

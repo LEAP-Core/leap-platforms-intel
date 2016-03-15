@@ -61,14 +61,16 @@ module qa_drv_hc_fifo_from_host
 
     t_cci_clData outQ_enq_data;
     logic outQ_enq_en;
-    logic outQ_notFull;
+    logic outQ_almostFull;
 
     //
     // Buffer the outgoing stream to control timing.
     //
-    cci_mpf_prim_fifo2
+    cci_mpf_prim_fifo_lutram
       #(
-        .N_DATA_BITS(CCI_CLDATA_WIDTH)
+        .N_DATA_BITS(CCI_CLDATA_WIDTH),
+        .N_ENTRIES(4),
+        .THRESHOLD(2)
         )
       outQ
         (
@@ -76,7 +78,8 @@ module qa_drv_hc_fifo_from_host
          .reset,
          .enq_data(outQ_enq_data),
          .enq_en(outQ_enq_en),
-         .notFull(outQ_notFull),
+         .notFull(),
+         .almostFull(outQ_almostFull),
          .first(rx_data),
          .deq_en(rx_enable),
          .notEmpty(rx_rdy)
@@ -121,7 +124,8 @@ module qa_drv_hc_fifo_from_host
     // Pass data from ROB toward the FPGA-side client when a message
     // is available and space is available in outQ.
     logic sc_notEmpty;
-    assign outQ_enq_en = sc_notEmpty && outQ_notFull;
+    logic rob_deq_en;
+    assign rob_deq_en = sc_notEmpty && ! outQ_almostFull;
 
     // Is the incoming read a FIFO read response?
     t_read_metadata response_read_metadata;
@@ -176,11 +180,28 @@ module qa_drv_hc_fifo_from_host
          .enqDataIdx(t_ROB_IDX'(response_read_metadata.robAddr)),
          .enqData(rx0.data),
 
-         .deq_en(outQ_enq_en),
+         .deq_en(rob_deq_en),
          .notEmpty(sc_notEmpty),
-         .first(outQ_enq_data),
-         .firstMeta()
+         .T2_first(outQ_enq_data),
+         .T2_firstMeta()
          );
+
+
+    // Data from the ROB is delayed two cycles.  Delay outQ_enq_en to match.
+    logic rob_deq_en_q;
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            rob_deq_en_q <= 1'b0;
+            outQ_enq_en <= 1'b0;
+        end
+        else
+        begin
+            rob_deq_en_q <= rob_deq_en;
+            outQ_enq_en <= rob_deq_en_q;
+        end
+    end
 
 
     // ====================================================================

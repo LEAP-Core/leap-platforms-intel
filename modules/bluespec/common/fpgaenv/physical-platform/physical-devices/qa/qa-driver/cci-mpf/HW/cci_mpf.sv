@@ -246,7 +246,7 @@ module cci_mpf
     //
     // ====================================================================
 
-    cci_mpf_if stg5_fiu_wro (.clk);
+    cci_mpf_if#(.ENABLE_LOG(1)) stg5_fiu_wro (.clk);
 
     generate
         if (ENFORCE_WR_ORDER)
@@ -288,7 +288,7 @@ module cci_mpf
     //
     // ====================================================================
 
-    cci_mpf_if stg6_fiu_rsp_order (.clk);
+    cci_mpf_if#(.ENABLE_LOG(1)) stg6_fiu_rsp_order (.clk);
 
     cci_mpf_shim_rsp_order
       #(

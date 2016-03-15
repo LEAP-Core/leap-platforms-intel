@@ -73,97 +73,9 @@ module cci_mpf_prim_rob
     // Ordered output
     input  logic deq_en,                            // Deq oldest entry
     output logic notEmpty,                          // Is oldest entry ready?
-    output logic [N_DATA_BITS-1 : 0] first,         // Data for oldest entry
-    output logic [N_META_BITS-1 : 0] firstMeta      // Meta-data for oldest entry
-    );
-
-    typedef logic [$clog2(N_ENTRIES)-1 : 0] t_idx;
-
-    logic oldest_deq;
-    logic oldest_rdy;
-    t_idx oldestIdx;
-
-    //
-    // ROB control logic
-    //
-    cci_mpf_prim_rob_ctrl
-      #(
-        .N_ENTRIES(N_ENTRIES),
-        .MIN_FREE_SLOTS(MIN_FREE_SLOTS),
-        .MAX_ALLOC_PER_CYCLE(MAX_ALLOC_PER_CYCLE)
-        )
-      ctrl
-       (
-        .clk,
-        .reset,
-        .alloc,
-        .notFull,
-        .allocIdx,
-        .enqData_en,
-        .enqDataIdx,
-
-        .oldest_deq,
-        .oldest_rdy,
-        .oldestIdx
-        );
-
-    //
-    // ROB data and buffering output FIFO
-    //
-    cci_mpf_prim_rob_data
-      #(
-        .N_ENTRIES(N_ENTRIES),
-        .N_DATA_BITS(N_DATA_BITS),
-        .N_META_BITS(N_META_BITS),
-        .REGISTER_OUTPUT(REGISTER_OUTPUT)
-        )
-      data
-       (
-        .clk,
-        .reset,
-        .enq_en(alloc != 0),
-        .enqMeta(allocMeta),
-        .enqMetaIdx(allocIdx),
-        .enqData_en,
-        .enqDataIdx,
-        .enqData,
-        .deq_en,
-        .notEmpty,
-        .first,
-        .firstMeta,
-
-        .oldestIdx,
-        .oldest_rdy,
-        .oldest_deq
-        );
-
-endmodule // cci_mpf_prim_rob
-
-
-
-module cci_mpf_prim_rob_ctrl
-  #(
-    parameter N_ENTRIES = 32,
-    // Threshold below which heap asserts "full"
-    parameter MIN_FREE_SLOTS = 1,
-    // Maximum number of entries that can be allocated in a single cycle.
-    // This is used for multi-line requests.
-    parameter MAX_ALLOC_PER_CYCLE = 1
-    )
-   (
-    input  logic clk,
-    input  logic reset,
-
-    input  logic [$clog2(MAX_ALLOC_PER_CYCLE) : 0] alloc,
-    output logic notFull,                             // Is ROB full?
-    output logic [$clog2(N_ENTRIES)-1 : 0] allocIdx,  // Index of new entry
-
-    input  logic enqData_en,                          // Store data for existing entry
-    input  logic [$clog2(N_ENTRIES)-1 : 0] enqDataIdx,
-
-    input  logic oldest_deq,                          // Deq oldest entry
-    output logic oldest_rdy,                          // Is oldest entry ready?
-    output logic [$clog2(N_ENTRIES)-1 : 0] oldestIdx  // Index of oldest entry
+    // Data arrives TWO CYCLES AFTER notEmpty and deq_en are asserted
+    output logic [N_DATA_BITS-1 : 0] T2_first,      // Data for oldest entry
+    output logic [N_META_BITS-1 : 0] T2_firstMeta   // Meta-data for oldest entry
     );
 
     typedef logic [$clog2(N_ENTRIES)-1 : 0] t_idx;
@@ -174,7 +86,6 @@ module cci_mpf_prim_rob_ctrl
 
     t_idx newest;
     t_idx oldest;
-    assign oldestIdx = oldest;
 
     // notFull is true as long as there are at least MIN_FREE_SLOTS available
     // at the end of the ring buffer. The computation is complicated by the
@@ -213,7 +124,7 @@ module cci_mpf_prim_rob_ctrl
             oldest <= 0;
         else
         begin
-            oldest <= oldest + oldest_deq;
+            oldest <= oldest + deq_en;
         end
     end
 
@@ -225,14 +136,14 @@ module cci_mpf_prim_rob_ctrl
     // Small register with the two dataValid_q entries that are useful
     // this cycle.
     logic [1 : 0] dataValid_sub_q;
-    logic oldest_deq_q;
+    logic deq_en_q;
     t_idx oldest_q;
 
     // Check one of two valid bits using registered state to determine
-    // oldest_rdy, depending on whether the oldest entry was dequeued
+    // notEmpty, depending on whether the oldest entry was dequeued
     // last cycle.  This is the best balance of work across two cycles
     // that still maintains full throughput.
-    assign oldest_rdy = dataValid_sub_q[oldest_deq_q];
+    assign notEmpty = dataValid_sub_q[deq_en_q];
 
     // Track valid data
     always_comb
@@ -240,7 +151,7 @@ module cci_mpf_prim_rob_ctrl
         dataValid = dataValid_q;
 
         // Clear on completion. Actually, one cycle later for timing.
-        if (oldest_deq_q)
+        if (deq_en_q)
         begin
             dataValid[oldest_q] = 1'b0;
         end
@@ -267,14 +178,14 @@ module cci_mpf_prim_rob_ctrl
         begin
             dataValid_q <= N_ENTRIES'(0);
             dataValid_sub_q <= 2'b0;
-            oldest_deq_q <= 1'b0;
+            deq_en_q <= 1'b0;
         end
         else
         begin
             dataValid_q <= dataValid;
-            oldest_deq_q <= oldest_deq;
+            deq_en_q <= deq_en;
 
-            // Record enough state to compute oldest_rdy in the next cycle
+            // Record enough state to compute notEmpty in the next cycle
             // in a method that is relatively independent of computation
             // this cycle.
             dataValid_sub_q <= { dataValid_q[t_idx'(oldest + 1)],
@@ -288,88 +199,20 @@ module cci_mpf_prim_rob_ctrl
     begin
         if (! reset)
         begin
-            assert(! oldest_deq || oldest_rdy) else
+            assert(! deq_en || notEmpty) else
               $fatal("cci_mpf_prim_rob: Can't DEQ when EMPTY!");
         end
     end
 
-endmodule // cci_mpf_prim_rob_ctrl
 
-
-//
-// Manage the data half of the ROB.  When the control pipeline indicates
-// output is ready this module retrieves the value from memory and then
-// routes the value through a FIFO.  The extra buffering in the FIFO
-// breaks the combinational loop between deq of the oldest value and
-// starting the memory read of the next oldest value, which is a multi-
-// cycle pipelined block RAM read.
-//
-module cci_mpf_prim_rob_data
-  #(
-    parameter N_ENTRIES = 32,
-    parameter N_DATA_BITS = 64,
-    parameter N_META_BITS = 1,
-    parameter REGISTER_OUTPUT = 0
-    )
-   (
-    input  logic clk,
-    input  logic reset,
-
-    input  logic enq_en,                            // Allocate an entry
-    input  logic [$clog2(N_ENTRIES)-1 : 0] enqMetaIdx,
-    input  logic [N_META_BITS-1 : 0] enqMeta,       // Save meta-data for new entry
-
-    input  logic enqData_en,                        // Store data for existing entry
-    input  logic [$clog2(N_ENTRIES)-1 : 0] enqDataIdx,
-    input  logic [N_DATA_BITS-1 : 0] enqData,
-
-    input  logic deq_en,                            // Deq oldest entry
-    output logic notEmpty,                          // Is oldest entry ready?
-    output logic [N_DATA_BITS-1 : 0] first,         // Data for oldest entry
-    output logic [N_META_BITS-1 : 0] firstMeta,     // Meta-data for oldest entry
-
-    // Signals connected to the ROB control module
-    input  logic oldest_rdy,                        // Is oldest entry ready?
-    output logic oldest_deq,
-    input  logic [$clog2(N_ENTRIES)-1 : 0] oldestIdx  // Index of oldest entry
-    );
-
-    typedef logic [N_DATA_BITS-1 : 0] t_data;
-    typedef logic [N_META_BITS-1 : 0] t_meta_data;
-    typedef logic [$clog2(N_ENTRIES)-1 : 0] t_idx;
-
-    t_data mem_first;
-    t_meta_data mem_meta_first;
-
-    logic fifo_full;
-
-    // Transfer from ROB to FIFO when data is ready and the FIFO
-    // has space for new data plus whatever may be in flight already.
-    assign oldest_deq = oldest_rdy && ! fifo_full;
-
-    // Record when memory is read so the result can be written to the FIFO
-    // at the right time.
-    logic did_oldest_deq;
-    logic did_oldest_deq_q;
-
-    always_ff @(posedge clk)
-    begin
-        if (reset)
-        begin
-            did_oldest_deq <= 1'b0;
-            did_oldest_deq_q <= 1'b0;
-        end
-        else
-        begin
-            did_oldest_deq <= oldest_deq;
-            did_oldest_deq_q <= did_oldest_deq;
-        end
-    end
-
+    // ====================================================================
+    //
+    //  Storage.
+    //
+    // ====================================================================
 
     //
-    // Storage where data will be sorted.  Port 0 is used for writes and
-    // port 1 for reads.
+    // Data
     //
     cci_mpf_prim_simple_ram
       #(
@@ -385,8 +228,8 @@ module cci_mpf_prim_rob_data
         .wen(enqData_en),
         .wdata(enqData),
 
-        .raddr(oldestIdx),
-        .rdata(mem_first)
+        .raddr(oldest),
+        .rdata(T2_first)
         );
 
     //
@@ -405,59 +248,19 @@ module cci_mpf_prim_rob_data
                (
                 .clk(clk),
 
-                .waddr(enqMetaIdx),
-                .wen(enq_en),
-                .wdata(enqMeta),
+                .waddr(newest),
+                .wen(alloc != 0),
+                .wdata(allocMeta),
 
-                .raddr(oldestIdx),
-                .rdata(mem_meta_first)
+                .raddr(oldest),
+                .rdata(T2_firstMeta)
                 );
         end
         else
         begin : noMeta
-            assign mem_meta_first = 'x;
+            assign T2_firstMeta = 'x;
         end
     endgenerate
 
-    //
-    // Output FIFO stage.
-    //
-    logic [N_META_BITS + N_DATA_BITS - 1 : 0] fifo_in;
-    logic [N_META_BITS + N_DATA_BITS - 1 : 0] fifo_out;
+endmodule // cci_mpf_prim_rob
 
-    generate
-        // Avoid warnings on size mismatch when N_META_BITS == 0
-        if (N_META_BITS == 0)
-        begin : mz
-            assign fifo_in = mem_first;
-            assign first = fifo_out;
-            assign firstMeta = 'x;
-        end
-        else
-        begin : mnz
-            assign fifo_in = { mem_meta_first, mem_first };
-            assign { firstMeta, first } = fifo_out;
-        end
-    endgenerate
-
-    cci_mpf_prim_fifo_lutram
-      #(
-        .N_DATA_BITS(N_META_BITS + N_DATA_BITS),
-        .N_ENTRIES(4),
-        .THRESHOLD(2),
-        .REGISTER_OUTPUT(REGISTER_OUTPUT)
-        )
-      fifo
-       (
-        .clk,
-        .reset,
-        .enq_data(fifo_in),
-        .enq_en(did_oldest_deq_q),
-        .notFull(),
-        .almostFull(fifo_full),
-        .first(fifo_out),
-        .deq_en,
-        .notEmpty
-        );
-
-endmodule // cci_mpf_prim_rob_data

@@ -50,7 +50,16 @@ module cci_mpf_prim_lutram
     input  logic [N_DATA_BITS-1 : 0] wdata
     );
 
-    logic [N_DATA_BITS-1 : 0] data[0 : N_ENTRIES-1] /* synthesis ramstyle = "MLAB, no_rw_check" */;
+    // Quartus uses Block RAM when N_DATA_BITS is 1 even when MLAB is
+    // specified, perhaps because the MUX required for 1 bit access is slow.
+    // The resulting timing is quite different.  In the spirit of giving
+    // coders what they asked for, code here forces 1 bit memory to LUTRAM.
+    // Changing N_DATA_BITS to 2 and passing in a dummy bit causes Quartus
+    // to generate LUTRAM and doesn't waste space because the extra bit is
+    // dropped in synthesis.
+    localparam REQ_DATA_WIDTH = (N_DATA_BITS == 1) ? 2 : N_DATA_BITS;
+
+    logic [REQ_DATA_WIDTH-1 : 0] data[0 : N_ENTRIES-1] /* synthesis ramstyle = "MLAB, no_rw_check" */;
 
     //
     // Delay writes by a cycle for for timing and add a bypass to guarantee
@@ -61,7 +70,9 @@ module cci_mpf_prim_lutram
     logic [N_DATA_BITS-1 : 0] wdata_q;
 
     // Bypass read response when writing the same location
-    assign rdata = (! wen_q || (raddr != waddr_q)) ? data[raddr] : wdata_q;
+    assign rdata = (! wen_q || (raddr != waddr_q)) ?
+                       N_DATA_BITS'(data[raddr]) :
+                       wdata_q;
 
     always_ff @(posedge clk)
     begin
@@ -71,7 +82,7 @@ module cci_mpf_prim_lutram
 
         if (wen_q)
         begin
-            data[waddr_q] <= wdata_q;
+            data[waddr_q] <= REQ_DATA_WIDTH'(wdata_q);
         end
     end
 

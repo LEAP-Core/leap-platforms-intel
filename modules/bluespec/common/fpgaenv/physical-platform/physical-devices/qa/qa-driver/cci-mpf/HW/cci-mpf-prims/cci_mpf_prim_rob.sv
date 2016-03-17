@@ -80,12 +80,12 @@ module cci_mpf_prim_rob
 
     typedef logic [$clog2(N_ENTRIES)-1 : 0] t_idx;
 
-    // Index logic in a space 1 bit larger than the true space
-    // in order to accommodate pointer comparison as pointers wrap.
+    // Count that can include both 0 and N_ENTRIES.
     typedef logic [$clog2(N_ENTRIES) : 0] t_idx_nowrap;
 
     t_idx newest;
     t_idx oldest;
+    logic validBits_rdy;
 
     // notFull is true as long as there are at least MIN_FREE_SLOTS available
     // at the end of the ring buffer. The computation is complicated by the
@@ -93,7 +93,8 @@ module cci_mpf_prim_rob
     logic newest_ge_oldest;
     assign newest_ge_oldest = (newest >= oldest);
     assign notFull =
-        ({1'b0, newest} + t_idx_nowrap'(MIN_FREE_SLOTS)) < {newest_ge_oldest, oldest};
+        validBits_rdy &&
+        (({1'b0, newest} + t_idx_nowrap'(MIN_FREE_SLOTS)) < {newest_ge_oldest, oldest});
 
     // enq allocates a slot and returns the index of the slot.
     assign allocIdx = newest;
@@ -115,84 +116,17 @@ module cci_mpf_prim_rob
         end
     end
 
-
-    // Bump the oldest pointer when the oldest entry is returned to the
-    // client.
+    // Bump the oldest pointer on deq
     always_ff @(posedge clk)
     begin
         if (reset)
+        begin
             oldest <= 0;
+        end
         else
         begin
             oldest <= oldest + deq_en;
         end
-    end
-
-
-    // Track data arrival
-    logic [N_ENTRIES-1 : 0] dataValid;
-    logic [N_ENTRIES-1 : 0] dataValid_q;
-
-    // Small register with the two dataValid_q entries that are useful
-    // this cycle.
-    logic [1 : 0] dataValid_sub_q;
-    logic deq_en_q;
-    t_idx oldest_q;
-
-    // Check one of two valid bits using registered state to determine
-    // notEmpty, depending on whether the oldest entry was dequeued
-    // last cycle.  This is the best balance of work across two cycles
-    // that still maintains full throughput.
-    assign notEmpty = dataValid_sub_q[deq_en_q];
-
-    // Track valid data
-    always_comb
-    begin
-        dataValid = dataValid_q;
-
-        // Clear on completion. Actually, one cycle later for timing.
-        if (deq_en_q)
-        begin
-            dataValid[oldest_q] = 1'b0;
-        end
-
-        // Set when data arrives.
-        if (enqData_en)
-        begin
-            dataValid[enqDataIdx] = 1'b1;
-        end
-    end
-
-    // Local reset for output data valid registers since dataValid_q is
-    // large enough to be a timing problem. No output can be ready the
-    // first cycle after reset is complete, so the delay isn't a problem.
-    logic reset_q;
-    always_ff @(posedge clk)
-    begin
-        reset_q <= reset;
-    end
-
-    always_ff @(posedge clk)
-    begin
-        if (reset_q)
-        begin
-            dataValid_q <= N_ENTRIES'(0);
-            dataValid_sub_q <= 2'b0;
-            deq_en_q <= 1'b0;
-        end
-        else
-        begin
-            dataValid_q <= dataValid;
-            deq_en_q <= deq_en;
-
-            // Record enough state to compute notEmpty in the next cycle
-            // in a method that is relatively independent of computation
-            // this cycle.
-            dataValid_sub_q <= { dataValid_q[t_idx'(oldest + 1)],
-                                 dataValid_q[oldest] };
-        end
-
-        oldest_q <= oldest;
     end
 
     always_ff @(negedge clk)
@@ -203,6 +137,173 @@ module cci_mpf_prim_rob
               $fatal("cci_mpf_prim_rob: Can't DEQ when EMPTY!");
         end
     end
+
+
+    // ====================================================================
+    //
+    //  Track data arrival
+    //
+    // ====================================================================
+
+    //
+    // Valid bits are stored in RAM.  To avoid the problem of needing
+    // two write ports to the memory we toggle the meaning of the valid
+    // bit on every trip around the ring buffer.  On the first trip around
+    // the valid tag is 1 since the memory is initialized to 0.  On the
+    // second trip around the valid bits start 1, having been set on the
+    // previous loop.  The target is thus changed to 0.
+    //
+    logic valid_tag;
+
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            valid_tag <= 1'b1;
+        end
+        else
+        begin
+            // Toggle the valid_tag every trip around the ring buffer.
+            if (deq_en && (&(oldest) == 1'b1))
+            begin
+                valid_tag <= ~valid_tag;
+            end
+        end
+    end
+
+
+    //
+    // Track the number of valid entries ready to go.
+    //
+    // A small counter works fine.  The count just has to stay ahead of
+    // the ROB's output.
+    //
+    typedef logic [2:0] t_valid_cnt;
+    t_valid_cnt num_valid;
+
+    assign notEmpty = (num_valid != t_valid_cnt'(0));
+
+    // Read validBits array.  Memory reads are multi-cycle.  The minimum
+    // read latency is 1.  As frequencies rise or array sizes grow, two
+    // cycles become necessary.  The code self adjusts from this parameter.
+    localparam VALID_RD_LATENCY = 2;
+
+    t_idx test_valid_idx[0 : VALID_RD_LATENCY];
+    logic test_valid_tgt[0 : VALID_RD_LATENCY];
+    logic test_ignore[0 : VALID_RD_LATENCY];
+    logic test_valid_value;
+
+    // An entry is ready when the valid tag in the oldest entry matches
+    // the target for the current trip around the ring buffer.
+    logic test_is_valid;
+    assign test_is_valid =
+        (test_valid_tgt[VALID_RD_LATENCY] == test_valid_value) &&
+        // Don't exceed num_valid's bounds
+        (&(num_valid) != 1'b1) &&
+        // Pipeline was rewound due to previous invalid
+        ! test_ignore[VALID_RD_LATENCY];
+
+    //
+    // The validBits memory has a VALID_RD_LATENCY cycle latency, making
+    // the tracking of valid entries complicated if we want to maintain
+    // full throughput.  The loop here speculates that tested entries are
+    // valid, rewinds the pipeline when invalid entries are found and
+    // retries.
+    //
+    always_ff @(posedge clk)
+    begin
+        if (reset || ! validBits_rdy)
+        begin
+            for (int i = 0; i <= VALID_RD_LATENCY; i = i + 1)
+            begin
+                test_valid_idx[i] <= t_idx'(0);
+                test_valid_tgt[i] <= 1'b1;
+                test_ignore[i] <= 1'b1;
+            end
+
+            test_ignore[0] <= 1'b0;
+        end
+        else
+        begin
+            for (int i = 0; i < VALID_RD_LATENCY; i = i + 1)
+            begin
+                // Advance the pipeline
+                test_valid_idx[i+1] <= test_valid_idx[i];
+                test_valid_tgt[i+1] <= test_valid_tgt[i];
+                test_ignore[i+1] <= test_ignore[i];
+            end
+
+            if (! test_is_valid && ! test_ignore[VALID_RD_LATENCY])
+            begin
+                // Failed test.  The test result comes VALID_RD_LATENCY
+                // cycles after the index tested was loaded.  Roll back
+                // and retry.
+                test_valid_idx[0] <= test_valid_idx[VALID_RD_LATENCY];
+                test_valid_tgt[0] <= test_valid_tgt[VALID_RD_LATENCY];
+
+                // Discard any positions in the pipeline after the failed
+                // slot since they can't be considered ready until the
+                // previous slot is ready.
+                for (int i = 1; i <= VALID_RD_LATENCY; i = i + 1)
+                begin
+                    test_ignore[i] <= 1'b1;
+                end
+            end
+            else
+            begin
+                // Speculate that the location being tested will hit.
+                test_valid_idx[0] <= test_valid_idx[0] + t_idx'(1);
+
+                // Invert the comparison tag when wrapping, just like valid_tag.
+                if (&(test_valid_idx[0]) == 1'b1)
+                begin
+                    test_valid_tgt[0] <= ~test_valid_tgt[0];
+                end
+            end
+        end
+    end
+
+    //
+    // Count the number of oldest data-ready entries in the ROB.
+    //
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            num_valid <= t_valid_cnt'(0);
+        end
+        else
+        begin
+            num_valid <= num_valid - t_valid_cnt'(deq_en) +
+                                     t_valid_cnt'(test_is_valid);
+        end
+    end
+
+    cci_mpf_prim_simple_ram_init
+      #(
+        .N_ENTRIES(N_ENTRIES),
+        .N_DATA_BITS(1),
+        .N_OUTPUT_REG_STAGES(VALID_RD_LATENCY - 1),
+        .INIT_VALUE(1'b0)
+        )
+      validBits
+       (
+        .clk,
+        .reset,
+        .rdy(validBits_rdy),
+
+        .raddr(test_valid_idx[0]),
+        .rdata(test_valid_value),
+
+        .waddr(enqDataIdx),
+        .wen(enqData_en),
+        // Indicate the entry is valid using the appropriate tag to
+        // mark validity.  Indices less than oldest are very young
+        // and have the tag for the next ring buffer loop.  Indicies
+        // greater than or equal to oldest use the tag for the current
+        // trip.
+        .wdata((enqDataIdx >= oldest) ? valid_tag : ~valid_tag)
+        );
 
 
     // ====================================================================
@@ -263,4 +364,3 @@ module cci_mpf_prim_rob
     endgenerate
 
 endmodule // cci_mpf_prim_rob
-

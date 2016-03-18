@@ -99,12 +99,11 @@ module cci_mpf_shim_detect_eop
     // Monitor flow of requests and responses.
     //
 
-    t_cci_clNum rd_rsp_packet_len;
     logic rd_rsp_pkt_eop;
 
-    logic rd_rsp_is_tracked;
-    assign rd_rsp_is_tracked = cci_c0Rx_isReadRsp(fiu.c0Rx) &&
-                               ! fiu.c0Rx.hdr.mdata[RESERVED_MDATA_IDX];
+    logic rd_rsp_is_tracked[0:2];
+    assign rd_rsp_is_tracked[0] = cci_c0Rx_isReadRsp(fiu.c0Rx) &&
+                                  ! fiu.c0Rx.hdr.mdata[RESERVED_MDATA_IDX];
 
     cci_mpf_shim_detect_eop_track_flits
       #(
@@ -121,12 +120,12 @@ module cci_mpf_shim_detect_eop
         .reqIdx(t_req_idx'(afu.c0Tx.hdr.base.mdata)),
         .reqLen(afu.c0Tx.hdr.base.cl_len),
 
-        .rsp_en(rd_rsp_is_tracked),
+        .rsp_en(rd_rsp_is_tracked[0]),
         .rspIdx(t_req_idx'(fiu.c0Rx.hdr.mdata)),
         .rspIsPacked(1'b0),
 
-        .pkt_eop(rd_rsp_pkt_eop),
-        .rspLen(rd_rsp_packet_len)
+        .T2_pkt_eop(rd_rsp_pkt_eop),
+        .T2_rspLen()
         );
 
 
@@ -139,15 +138,27 @@ module cci_mpf_shim_detect_eop
     //
     // Responses
     //
+    t_if_cci_c0_Rx c0Rx[0:2];
+    assign c0Rx[0] = fiu.c0Rx;
+
     always_ff @(posedge clk)
     begin
-        if (rd_rsp_is_tracked)
+        for (int i = 0; i < 2; i = i + 1)
         begin
-            afu.c0Rx <= cci_mpf_c0Rx_updEOP(fiu.c0Rx, rd_rsp_pkt_eop);
+            c0Rx[i+1] <= c0Rx[i];
+            rd_rsp_is_tracked[i+1] <= rd_rsp_is_tracked[i];
+        end
+    end
+
+    always_comb
+    begin
+        if (rd_rsp_is_tracked[2])
+        begin
+            afu.c0Rx = cci_mpf_c0Rx_updEOP(c0Rx[2], rd_rsp_pkt_eop);
         end
         else
         begin
-            afu.c0Rx <= fiu.c0Rx;
+            afu.c0Rx = c0Rx[2];
         end
     end
 
@@ -183,8 +194,8 @@ module cci_mpf_shim_detect_eop
         .rspIdx(t_req_idx'(fiu.c1Rx.hdr.mdata)),
         .rspIsPacked(fiu.c1Rx.hdr.format),
 
-        .pkt_eop(wr_rsp_pkt_eop),
-        .rspLen(wr_rsp_packet_len)
+        .T2_pkt_eop(wr_rsp_pkt_eop),
+        .T2_rspLen(wr_rsp_packet_len)
         );
 
 
@@ -197,18 +208,30 @@ module cci_mpf_shim_detect_eop
     //
     // Responses
     //
+    t_if_cci_c1_Rx c1Rx[0:2];
+    assign c1Rx[0] = fiu.c1Rx;
+
     always_ff @(posedge clk)
     begin
-        afu.c1Rx <= fiu.c1Rx;
+        for (int i = 0; i < 2; i = i + 1)
+        begin
+            c1Rx[i+1] <= c1Rx[i];
+        end
+    end
+
+    always_ff @(posedge clk)
+    begin
+        afu.c1Rx <= c1Rx[2];
 
         // If wr_rsp_pkt_eop is 0 then this flit is a write response and it
         // isn't the end of the packet.  Drop it.  The response will be
         // merged into a single flit.
-        afu.c1Rx.rspValid <= fiu.c1Rx.rspValid &&
-                             (wr_rsp_pkt_eop || ! cci_c1Rx_isWriteRsp(fiu.c1Rx));
+        afu.c1Rx.rspValid <=
+            c1Rx[2].rspValid &&
+            (wr_rsp_pkt_eop || ! cci_c1Rx_isWriteRsp(c1Rx[2]));
 
         // Merge write responses for a packet into single response.
-        if (cci_c1Rx_isWriteRsp(fiu.c1Rx))
+        if (cci_c1Rx_isWriteRsp(c1Rx[2]))
         begin
             afu.c1Rx.hdr.format <= 1'b1;
             afu.c1Rx.hdr.cl_num <= wr_rsp_packet_len;
@@ -250,11 +273,20 @@ module cci_mpf_shim_detect_eop_track_flits
     input  logic [$clog2(MAX_ACTIVE_REQS)-1 : 0] rspIdx,
     input  logic rspIsPacked,
 
+    //
+    // Responses arrive 2 cycles after requests
+    //
+
     // Is response the end of the packet?
-    output logic pkt_eop,
+    output logic T2_pkt_eop,
     // Full length of the flit's packet
-    output t_cci_clNum rspLen
+    output t_cci_clNum T2_rspLen
     );
+
+
+    //
+    // Requests
+    //
 
     // Packet size of outstanding requests.  Separating this from the count
     // of responses avoids dealing with multiple writers to either memory.
@@ -268,55 +300,127 @@ module cci_mpf_shim_detect_eop_track_flits
         end
     end
 
+
     //
     // Responses
     //
 
     //
-    // Count responses per packet in distributed RAM
+    // Count responses per packet in block RAM.  Block RAM certainly isn't
+    // needed for capacity but it is for speed.  Because the RAM has
+    // 2 cycle latency we have to track updates that are in flight in
+    // order to maintain accurate counts pipelined updates that haven't
+    // reached memory.
+    //
+    logic p_rsp_en[0:2];
+    logic [$clog2(MAX_ACTIVE_REQS)-1 : 0] p_rspIdx[0:2];
+    logic p_rspIsPacked[0:2];
+    t_cci_clNum p_num_inflight_same_idx[0:2];
+    logic inflight_req_match[1:2];
+
+    always_comb
+    begin
+        p_rsp_en[0] = rsp_en;
+        p_rspIdx[0] = rspIdx;
+        p_rspIsPacked[0] = rspIsPacked;
+
+        inflight_req_match[1] = (p_rsp_en[1] && (p_rspIdx[1] == rspIdx));
+        inflight_req_match[2] = (p_rsp_en[2] && (p_rspIdx[2] == rspIdx));
+
+        if (inflight_req_match[1] && inflight_req_match[2])
+        begin
+            // Both earlier requests are to the new index
+            p_num_inflight_same_idx[0] = t_cci_clNum'(2);
+        end
+        else if (inflight_req_match[1] || inflight_req_match[2])
+        begin
+            // One earlier requests is to the new index
+            p_num_inflight_same_idx[0] = t_cci_clNum'(1);
+        end
+        else
+        begin
+            // The new request is unique
+            p_num_inflight_same_idx[0] = t_cci_clNum'(0);
+        end
+    end
+
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            p_rsp_en[1] <= 1'b0;
+            p_rsp_en[2] <= 1'b0;
+        end
+        else
+        begin
+            p_rsp_en[1] <= p_rsp_en[0];
+            p_rsp_en[2] <= p_rsp_en[1];
+        end
+
+        for (int i = 1; i <= 2; i = i + 1)
+        begin
+            p_rspIdx[i] <= p_rspIdx[i-1];
+            p_rspIsPacked[i] = p_rspIsPacked[i-1];
+            p_num_inflight_same_idx[i] <= p_num_inflight_same_idx[i-1];
+        end
+    end
+
+    // Target length of the response's full packet
+    always_ff @(posedge clk)
+    begin
+        T2_rspLen <= packet_len[p_rspIdx[1]];
+    end
+
+    //
+    // Counter array of active requests
     //
     t_cci_clNum rcvd_cnt;
     t_cci_clNum rcvd_cnt_upd;
     logic rcvd_wen;
 
-    // Target length of the response's full packet
-    assign rspLen = packet_len[rspIdx];
-
-    cci_mpf_prim_lutram_init
+    cci_mpf_prim_simple_ram_init
       #(
         .N_ENTRIES(MAX_ACTIVE_REQS),
-        .N_DATA_BITS($bits(t_cci_clNum))
+        .N_DATA_BITS($bits(t_cci_clNum)),
+        .N_OUTPUT_REG_STAGES(1)
         )
       wr_rsp_cnt
        (
         .clk,
         .reset,
         .rdy,
+
         .raddr(rspIdx),
         .rdata(rcvd_cnt),
-        .waddr(rspIdx),
-        .wen(rsp_en),
+
+        .waddr(p_rspIdx[2]),
+        .wen(p_rsp_en[2]),
         .wdata(rcvd_cnt_upd)
         );
 
+
     // Update count as packets are received
+    t_cci_clNum num_received;
+
     always_comb
     begin
-        pkt_eop = 1'b0;
+        T2_pkt_eop = 1'b0;
         rcvd_cnt_upd = 'x;
 
-        if (rsp_en)
+        num_received = rcvd_cnt + p_num_inflight_same_idx[2];
+
+        if (p_rsp_en[2])
         begin
-            if (rspIsPacked || (rcvd_cnt == rspLen))
+            if (p_rspIsPacked[2] || (num_received == T2_rspLen))
             begin
                 // Only one response or last packet.  Done!
                 rcvd_cnt_upd = t_cci_clNum'(0);
-                pkt_eop = 1'b1;
+                T2_pkt_eop = 1'b1;
             end
             else
             begin
                 // One flit received.  Keep counting.
-                rcvd_cnt_upd = rcvd_cnt + t_cci_clNum'(1);
+                rcvd_cnt_upd = num_received + t_cci_clNum'(1);
             end
         end
     end

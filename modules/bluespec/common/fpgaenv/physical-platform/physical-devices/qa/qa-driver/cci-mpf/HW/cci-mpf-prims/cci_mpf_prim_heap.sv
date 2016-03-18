@@ -34,9 +34,6 @@
 // time.
 //
 
-//
-// Single ported implementation. Multi-ported implementation is below.
-//
 module cci_mpf_prim_heap
   #(
     parameter N_ENTRIES = 32,
@@ -64,127 +61,8 @@ module cci_mpf_prim_heap
     input  logic [$clog2(N_ENTRIES)-1 : 0] freeIdx
     );
 
-    logic [$clog2(N_ENTRIES)-1 : 0] readReq0[0 : 0];
-    logic [N_DATA_BITS-1 : 0] readRsp0[0 : 0];
-    assign readReq0[0] = readReq;
-    assign readRsp = readRsp0[0];
-
-    logic free0[0 : 0];
-    logic [$clog2(N_ENTRIES)-1 : 0] freeIdx0[0 : 0];
-    assign free0[0] = free;
-    assign freeIdx0[0] = freeIdx;
-
-    cci_mpf_prim_heap_multi
-      #(
-        .N_ENTRIES(N_ENTRIES),
-        .N_DATA_BITS(N_DATA_BITS),
-        .N_READ_PORTS(1),
-        .MIN_FREE_SLOTS(MIN_FREE_SLOTS),
-        .REGISTER_INPUT(REGISTER_INPUT),
-        .N_OUTPUT_REG_STAGES(N_OUTPUT_REG_STAGES)
-        )
-      h(
-        .clk,
-        .reset,
-        .enq,
-        .enqData,
-        .notFull,
-        .allocIdx,
-        .readReq(readReq0),
-        .readRsp(readRsp0),
-        .free(free0),
-        .freeIdx(freeIdx0)
-        );
-
-endmodule
-
-
-//
-// Multi ported implementation. There is only one enq/alloc port but
-// multiple read and free ports.
-//
-module cci_mpf_prim_heap_multi
-  #(
-    parameter N_ENTRIES = 32,
-    parameter N_DATA_BITS = 64,
-    parameter N_READ_PORTS = 1,
-    // Threshold below which heap asserts "full"
-    parameter MIN_FREE_SLOTS = 1,
-    // Register enq, delaying the write by a cycle?
-    parameter REGISTER_INPUT = 0,
-    // Number of additional register stages on readRsp
-    parameter N_OUTPUT_REG_STAGES = 0
-    )
-   (
-    input  logic clk,
-    input  logic reset,
-
-    input  logic enq,                                // Allocate an entry
-    input  logic [N_DATA_BITS-1 : 0] enqData,
-    output logic notFull,                            // Is scoreboard full?
-    output logic [$clog2(N_ENTRIES)-1 : 0] allocIdx, // Index of new entry
-
-    // Read requested index
-    input  logic [$clog2(N_ENTRIES)-1 : 0] readReq[0 : N_READ_PORTS-1],
-    // Read data (cycle after req)
-    output logic [N_DATA_BITS-1 : 0] readRsp[0 : N_READ_PORTS-1],
-
-    // enable free freeIdx
-    input  logic free[0 : N_READ_PORTS-1],
-    input  logic [$clog2(N_ENTRIES)-1 : 0] freeIdx[0 : N_READ_PORTS-1]
-    );
-
     typedef logic [N_DATA_BITS-1 : 0] t_data;
     typedef logic [$clog2(N_ENTRIES)-1 : 0] t_idx;
-
-    // Track whether an entry is free or busy
-    logic [N_ENTRIES-1 : 0] notBusy;
-
-    t_idx nextAlloc;
-    assign allocIdx = nextAlloc;
-
-
-    // ====================================================================
-    //
-    // Slots are allocated round robin instead of using a complicated free
-    // list. There must be at least MIN_FREE_SLOTS in the oldest positions.
-    //
-    // It takes 2 cycles For timing to compute notFull.  To guarantee
-    // MIN_FREE_SLOTS next cycle we add two to the requirement, naming
-    // the stronger requirement MIN_FREE_SLOTS_Q.
-    //
-    // ====================================================================
-
-    localparam MIN_FREE_SLOTS_Q = MIN_FREE_SLOTS + 2;
-
-    // notBusyRepl replicates the low bits of notBusy at the end to avoid
-    // computing wrap-around.
-    logic [MIN_FREE_SLOTS_Q + N_ENTRIES-1 : 0] notBusyRepl;
-    assign notBusyRepl = {notBusy[MIN_FREE_SLOTS_Q-1 : 0], notBusy};
-
-    // The next MIN_FREE_SLOTS_Q entries must be free
-    logic [MIN_FREE_SLOTS_Q-1 : 0] check_bits;
-    always_ff @(posedge clk)
-    begin
-        check_bits <= notBusyRepl[nextAlloc +: MIN_FREE_SLOTS_Q];
-        notFull <= &(check_bits);
-    end
-
-    always_ff @(posedge clk)
-    begin
-        if (reset)
-        begin
-            nextAlloc <= 0;
-        end
-        else if (enq)
-        begin
-            nextAlloc <= (nextAlloc == t_idx'(N_ENTRIES-1)) ?
-                             t_idx'(0) : nextAlloc + 1;
-
-            assert (notBusy[nextAlloc]) else
-                $fatal("cci_mpf_prim_heap: Can't ENQ when FULL!");
-        end
-    end
 
 
     // ====================================================================
@@ -221,71 +99,204 @@ module cci_mpf_prim_heap_multi
     endgenerate
 
 
-    // ====================================================================
     //
-    // Heap memory. Replicate the memory for each read port in order to
-    // support simultaneous enq and read on all ports.
+    // Heap memory
     //
+    cci_mpf_prim_simple_ram
+      #(
+        .N_ENTRIES(N_ENTRIES),
+        .N_DATA_BITS(N_DATA_BITS),
+        .N_OUTPUT_REG_STAGES(N_OUTPUT_REG_STAGES)
+        )
+      mem(
+        .clk,
+
+        .wen(heap_enq),
+        .waddr(heap_allocIdx),
+        .wdata(heap_enqData),
+
+        .raddr(readReq),
+        .rdata(readRsp)
+        );
+
+
     // ====================================================================
-
-    // Memory
-    t_data mem[0 : N_READ_PORTS-1][0 : N_ENTRIES-1];
-
-    // Read response buffer stages
-    t_data mem_rd_rsp[0 : N_READ_PORTS-1][0 : N_OUTPUT_REG_STAGES];
-
-    genvar p;
-    genvar s;
-    generate
-        for (p = 0; p < N_READ_PORTS; p = p + 1)
-        begin : memory
-            // This will be inferred as block RAM
-            always_ff @(posedge clk)
-            begin
-                // Value available one cycle after request.
-                mem_rd_rsp[p][0] <= mem[p][readReq[p]];
-
-                if (heap_enq)
-                begin
-                    mem[p][heap_allocIdx] <= heap_enqData;
-                end
-            end
-
-            // Read response buffer stages
-            for (s = 0; s < N_OUTPUT_REG_STAGES; s = s + 1)
-            begin : rspbuf
-                always_ff @(posedge clk)
-                begin
-                    mem_rd_rsp[p][s + 1] <= mem_rd_rsp[p][s];
-                end
-            end
-
-            assign readRsp[p] = mem_rd_rsp[p][N_OUTPUT_REG_STAGES];
-        end
-    endgenerate
-
-
     //
     // Free list.
     //
+    // ====================================================================
+
+    t_idx num_free;
+    assign notFull = (num_free > t_idx'(MIN_FREE_SLOTS));
+
+    // There are two free list heads to deal with the 2 cycle latency of
+    // BRAM reads.  The lists are balanced, since both push and pop of
+    // free entries are processed round-robin.
+    t_idx [1:0] free_head_idx;
+    t_idx [1:0] free_head_idx_reg;
+    t_idx [1:0] free_tail_idx;
+    logic head_rr_select;
+    logic tail_rr_select;
+
+    logic initialized;
+    t_idx init_idx;
+
+    assign allocIdx = free_head_idx[head_rr_select];
+
+    //
+    // Free list memory
+    //
+    logic free_wen;
+    t_idx free_widx_next;
+    t_idx free_rnext;
+
+    cci_mpf_prim_simple_ram
+      #(
+        .N_ENTRIES(N_ENTRIES),
+        .N_DATA_BITS($bits(t_idx)),
+        .N_OUTPUT_REG_STAGES(1)
+        )
+      freeList(
+        .clk,
+
+        .wen(free_wen),
+        .waddr(free_tail_idx[tail_rr_select]),
+        .wdata(free_widx_next),
+
+        .raddr(free_head_idx[head_rr_select]),
+        .rdata(free_rnext)
+        );
+
+
+    // Pop from free list
+    logic enq_q;
+    logic enq_qq;
+    logic head_rr_select_q;
+    logic head_rr_select_qq;
+
+    always_comb
+    begin
+        for (int i = 0; i < 2; i = i + 1)
+        begin
+            if (enq_qq && (head_rr_select_qq == 1'(i)))
+            begin
+                // Did a pop from this free list two cycles.  Receive the
+                // updated head pointer.
+                free_head_idx[i] = free_rnext;
+            end
+            else
+            begin
+                // No pop -- no change
+                free_head_idx[i] = free_head_idx_reg[i];
+            end
+        end
+    end
+
+    // Track pop until the free list read response is received
     always_ff @(posedge clk)
     begin
         if (reset)
         begin
-            notBusy <= ~ (N_ENTRIES'(0));
+            enq_q <= 1'b0;
+            enq_qq <= 1'b0;
+            head_rr_select <= 1'b0;
+
+            // Entries 0 and 1 begin as the head pointers
+            free_head_idx_reg[0] <= t_idx'(0);
+            free_head_idx_reg[1] <= t_idx'(1);
         end
         else
         begin
-            if (enq)
-            begin
-                notBusy[allocIdx] <= 1'b0;
-            end
+            enq_q <= enq;
+            enq_qq <= enq_q;
 
-            for (int i = 0; i < N_READ_PORTS; i = i + 1)
+            // Register combinationally computed free_head_idx
+            free_head_idx_reg[0] <= free_head_idx[0];
+            free_head_idx_reg[1] <= free_head_idx[1];
+        end
+
+        head_rr_select_q <= head_rr_select;
+        head_rr_select_qq <= head_rr_select_q;
+
+        if (enq)
+        begin
+            head_rr_select <= ~head_rr_select;
+        end
+    end
+
+
+    // Push released entry on the tail of a list.
+    assign free_wen = ! initialized || free;
+    assign free_widx_next = (! initialized ? init_idx : freeIdx);
+
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            free_tail_idx[0] <= t_idx'(0);
+            free_tail_idx[1] <= t_idx'(1);
+            tail_rr_select <= 1'b0;
+        end
+        else
+        begin
+            if (free_wen)
             begin
-                if (free[i])
+                // Move tail pointer to index just pushed
+                free_tail_idx[tail_rr_select] <= free_widx_next;
+                // Swap round-robin selector
+                tail_rr_select <= ~tail_rr_select;
+            end
+        end
+    end
+    
+
+    // Initialize the free list and track the number of free entries
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            // Start pushing with entry 2 since entries 0 and 1 start as the
+            // free list head pointers above.
+            init_idx <= t_idx'(2);
+            initialized <= 1'b0;
+
+            num_free <= t_idx'(0);
+        end
+        else
+        begin
+            if (! initialized)
+            begin
+                init_idx <= init_idx + t_idx'(1);
+
+                if (init_idx == t_idx'(N_ENTRIES-1))
                 begin
-                    notBusy[freeIdx[i]] <= 1'b1;
+                    // Initialization complete
+                    initialized <= 1'b1;
+
+                    // Reserve two entries that must stay on the free list.
+                    // This guarantees that neither free_head_idx ever goes
+                    // NULL, which would require managing a special case.
+                    num_free <= t_idx'(N_ENTRIES - 2);
+
+                    assert (N_ENTRIES > 2 + MIN_FREE_SLOTS) else
+                       $fatal("cci_mpf_prim_heap: Heap too small");
+                end
+            end
+            else
+            begin
+                if (free && ! enq)
+                begin
+                    num_free <= num_free + t_idx'(1);
+
+                    assert (num_free < N_ENTRIES - 2) else
+                       $fatal("cci_mpf_prim_heap: Too many free items. Pushed one twice?");
+                end
+                else if (! free && enq)
+                begin
+                    num_free <= num_free - t_idx'(1);
+
+                    assert (num_free != 0) else
+                       $fatal("cci_mpf_prim_heap: alloc from empty heap!");
                 end
             end
         end

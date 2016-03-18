@@ -126,9 +126,6 @@ module cci_mpf_prim_heap
     //
     // ====================================================================
 
-    t_idx num_free;
-    assign notFull = (num_free > t_idx'(MIN_FREE_SLOTS));
-
     // There are two free list heads to deal with the 2 cycle latency of
     // BRAM reads.  The lists are balanced, since both push and pop of
     // free entries are processed round-robin.
@@ -225,9 +222,27 @@ module cci_mpf_prim_heap
     end
 
 
-    // Push released entry on the tail of a list.
-    assign free_wen = ! initialized || free;
-    assign free_widx_next = (! initialized ? init_idx : freeIdx);
+    // Push released entry on the tail of a list, delayed by a cycle for
+    // timing.
+    logic free_q;
+    t_idx freeIdx_q;
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            free_q <= 1'b0;
+        end
+        else
+        begin
+            free_q <= free;
+        end
+
+        freeIdx_q <= freeIdx;
+    end
+    
+    assign free_wen = ! initialized || free_q;
+    assign free_widx_next = (! initialized ? init_idx : freeIdx_q);
+
 
     always_ff @(posedge clk)
     begin
@@ -251,6 +266,8 @@ module cci_mpf_prim_heap
     
 
     // Initialize the free list and track the number of free entries
+    t_idx num_free;
+
     always_ff @(posedge clk)
     begin
         if (reset)
@@ -261,6 +278,7 @@ module cci_mpf_prim_heap
             initialized <= 1'b0;
 
             num_free <= t_idx'(0);
+            notFull <= 1'b0;
         end
         else
         begin
@@ -277,6 +295,7 @@ module cci_mpf_prim_heap
                     // This guarantees that neither free_head_idx ever goes
                     // NULL, which would require managing a special case.
                     num_free <= t_idx'(N_ENTRIES - 2);
+                    notFull <= 1'b1;
 
                     assert (N_ENTRIES > 2 + MIN_FREE_SLOTS) else
                        $fatal("cci_mpf_prim_heap: Heap too small");
@@ -284,16 +303,18 @@ module cci_mpf_prim_heap
             end
             else
             begin
-                if (free && ! enq)
+                if (free_q && ! enq)
                 begin
                     num_free <= num_free + t_idx'(1);
+                    notFull <= ((num_free + t_idx'(1)) > t_idx'(MIN_FREE_SLOTS));
 
                     assert (num_free < N_ENTRIES - 2) else
                        $fatal("cci_mpf_prim_heap: Too many free items. Pushed one twice?");
                 end
-                else if (! free && enq)
+                else if (! free_q && enq)
                 begin
                     num_free <= num_free - t_idx'(1);
+                    notFull <= ((num_free - t_idx'(1)) > t_idx'(MIN_FREE_SLOTS));
 
                     assert (num_free != 0) else
                        $fatal("cci_mpf_prim_heap: alloc from empty heap!");

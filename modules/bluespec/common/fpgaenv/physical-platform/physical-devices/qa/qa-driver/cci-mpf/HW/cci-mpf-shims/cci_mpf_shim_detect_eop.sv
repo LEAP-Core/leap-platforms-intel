@@ -150,15 +150,15 @@ module cci_mpf_shim_detect_eop
         end
     end
 
-    always_comb
+    always_ff @(posedge clk)
     begin
         if (rd_rsp_is_tracked[2])
         begin
-            afu.c0Rx = cci_mpf_c0Rx_updEOP(c0Rx[2], rd_rsp_pkt_eop);
+            afu.c0Rx <= cci_mpf_c0Rx_updEOP(c0Rx[2], rd_rsp_pkt_eop);
         end
         else
         begin
-            afu.c0Rx = c0Rx[2];
+            afu.c0Rx <= c0Rx[2];
         end
     end
 
@@ -290,15 +290,23 @@ module cci_mpf_shim_detect_eop_track_flits
 
     // Packet size of outstanding requests.  Separating this from the count
     // of responses avoids dealing with multiple writers to either memory.
-    t_cci_clNum packet_len[0 : MAX_ACTIVE_REQS-1] /* synthesis ramstyle = "MLAB, no_rw_check" */;
+    cci_mpf_prim_simple_ram
+      #(
+        .N_ENTRIES(MAX_ACTIVE_REQS),
+        .N_DATA_BITS($bits(t_cci_clNum)),
+        .N_OUTPUT_REG_STAGES(1)
+        )
+      packet_len
+       (
+        .clk,
 
-    always_ff @(posedge clk)
-    begin
-        if (req_en)
-        begin
-            packet_len[reqIdx] <= reqLen;
-        end
-    end
+        .raddr(rspIdx),
+        .rdata(T2_rspLen),
+
+        .waddr(reqIdx),
+        .wen(req_en),
+        .wdata(reqLen)
+        );
 
 
     //
@@ -363,12 +371,6 @@ module cci_mpf_shim_detect_eop_track_flits
             p_rspIsPacked[i] = p_rspIsPacked[i-1];
             p_num_inflight_same_idx[i] <= p_num_inflight_same_idx[i-1];
         end
-    end
-
-    // Target length of the response's full packet
-    always_ff @(posedge clk)
-    begin
-        T2_rspLen <= packet_len[p_rspIdx[1]];
     end
 
     //

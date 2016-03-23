@@ -41,12 +41,14 @@
 
 #include <aalsdk/AAL.h>
 
+#include "awb/provides/qa_driver.h"
 #include "awb/provides/qa_platform_libs.h"
 
 #if (CCI_S_IFC != 0)
 #include <aalsdk/xlRuntime.h>
 #include <aalsdk/service/ICCIAFU.h>
 #include <aalsdk/service/ICCIClient.h>
+#include "awb/restricted/cci_mpf_csrs.h"
 #else
 #include <aalsdk/Runtime.h>
 #include <aalsdk/service/IALIAFU.h>
@@ -54,6 +56,7 @@
 
 #include "AFU_csr.h"
 #include "awb/provides/qa_cci_mpf_sw.h"
+#include "awb/restricted/stats-emitter.h"
 
 
 USING_NAMESPACE(std)
@@ -188,7 +191,8 @@ class AFU_CLIENT_CLASS: public CAASBase,
 #if (CCI_S_IFC != 0)
                         public ICCIClient,
 #endif
-                        public IServiceClient
+                        public IServiceClient,
+                        public STATS_EMITTER_CLASS
 {
 public:
     AFU_CLIENT_CLASS(AFU afu, AFU_RUNTIME_CLIENT rtc);
@@ -268,8 +272,14 @@ public:
     virtual void OnWorkspaceFreed(TransactionID const &TranID);
     virtual void OnWorkspaceFreeFailed(const IEvent &Event);
 #endif
-
     // </ICCIClient>
+
+    // STATS_EMITTER_CLASS virtual functions
+    void EmitStats(ofstream &statsFile);
+    void ResetStats();
+
+  private:
+    uint64_t GetStatVTP(t_cci_mpf_vtp_csr_offsets stat);
 
   protected:
     AFU            afu;

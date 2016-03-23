@@ -6,13 +6,14 @@
 %requires qa_cci_mpf_hw_if
 %requires qa_cci_mpf_hw_shims
 %requires qa_cci_mpf_hw_prims
+%requires qa_cci_mpf_hw_par
 
 %notes README
 
 ##
 ## File with shared parameters, declared for both Verilog and C
 ##
-%sources -t H           -v PUBLIC  cci_mpf_csrs.h
+%sources -t H           -v PRIVATE cci_mpf_csrs.h
 %sources -t VERILOG_H   -v PRIVATE cci_mpf_csrs.h
 
 %sources -t VERILOG_H   -v PRIVATE cci_mpf_csrs.vh

@@ -11,60 +11,63 @@ set_global_assignment -name VERILOG_MACRO "USE_PLATFORM_CCIP=1"
 #set_global_assignment -name VERILOG_MACRO "USE_PLATFORM_CCIS=1"
 
 ## MPF directories
-set_global_assignment -name SEARCH_PATH $CCI_MPF_SRC
-set_global_assignment -name SEARCH_PATH $CCI_MPF_SRC/cci-if
-set_global_assignment -name SEARCH_PATH $CCI_MPF_SRC/cci-mpf-if
-set_global_assignment -name SEARCH_PATH $CCI_MPF_SRC/cci-mpf-prims
-set_global_assignment -name SEARCH_PATH $CCI_MPF_SRC/cci-mpf-shims
-set_global_assignment -name SEARCH_PATH $CCI_MPF_SRC/cci-mpf-shims/cci_mpf_shim_vtp
+set_global_assignment -name SEARCH_PATH $CCI_MPF_SRC/HW
+set_global_assignment -name SEARCH_PATH $CCI_MPF_SRC/HW/cci-if
+set_global_assignment -name SEARCH_PATH $CCI_MPF_SRC/HW/cci-mpf-if
+set_global_assignment -name SEARCH_PATH $CCI_MPF_SRC/HW/cci-mpf-prims
+set_global_assignment -name SEARCH_PATH $CCI_MPF_SRC/HW/cci-mpf-shims
+set_global_assignment -name SEARCH_PATH $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_vtp
 
 ## Type and interface Packages and header files
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-if/ccis_if_pkg.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-if/ccis_if_funcs_pkg.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-if/ccip_if_pkg.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-if/ccip_if_funcs_pkg.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-if/cci_mpf_if_pkg.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-if/cci_csr_if_pkg.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-if/ccip_feature_list_pkg.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci_mpf_csrs.h
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci_mpf_csrs_pkg.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-if/ccis_if_pkg.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-if/ccis_if_funcs_pkg.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-if/ccip_if_pkg.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-if/ccip_if_funcs_pkg.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-if/cci_mpf_if_pkg.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-if/cci_csr_if_pkg.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-if/ccip_feature_list_pkg.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci_mpf_csrs.h
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci_mpf_csrs_pkg.sv
 
 ## Primary MPF module that instantiates the desired shims
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci_mpf.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci_mpf.sv
 
 ## Map CCI wires to MPF's primary interface
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-if/ccip_wires_to_mpf.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-if/ccis_wires_to_mpf.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-if/ccip_wires_to_mpf.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-if/ccis_wires_to_mpf.sv
 
 ## Primitives used by MPF shims
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-prims/cci_mpf_prim_dualport_ram.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-prims/cci_mpf_prim_simple_ram.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-prims/cci_mpf_prim_fifo1.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-prims/cci_mpf_prim_fifo2.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-prims/cci_mpf_prim_fifo_bram.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-prims/cci_mpf_prim_fifo_lutram.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-prims/cci_mpf_prim_filter_cam.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-prims/cci_mpf_prim_filter_counting.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-prims/cci_mpf_prim_heap.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-prims/cci_mpf_prim_lfsr.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-prims/cci_mpf_prim_lutram.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-prims/cci_mpf_prim_repl_lru_pseudo.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-prims/cci_mpf_prim_repl_random.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-prims/cci_mpf_prim_rob.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-prims/cci_mpf_prim_track_multi_write.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_dualport_ram.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_simple_ram.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_fifo1.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_fifo2.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_fifo_bram.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_fifo_lutram.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_filter_cam.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_filter_counting.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_heap.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_lfsr.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_lutram.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_repl_lru_pseudo.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_repl_random.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_rob.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_track_multi_write.sv
 
 ## MPF shims -- the building blocks of constructed MPF instances
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-shims/cci_mpf_shim_buffer_afu.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-shims/cci_mpf_shim_buffer_fiu.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-shims/cci_mpf_shim_buffer_lockstep_afu.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-shims/cci_mpf_shim_csr.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-shims/cci_mpf_shim_detect_eop.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-shims/cci_mpf_shim_edge_connect.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-shims/cci_mpf_shim_mux.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-shims/cci_mpf_shim_null.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-shims/cci_mpf_shim_rsp_order.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_shim_vtp.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_shim_vtp_pipe.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_shim_vtp_pt_walk.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_shim_vtp_tlb.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/cci-mpf-shims/cci_mpf_shim_wro.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_buffer_afu.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_buffer_fiu.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_buffer_lockstep_afu.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_csr.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_detect_eop.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_edge_connect.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_mux.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_null.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_rsp_order.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_shim_vtp.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_shim_vtp_pipe.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_shim_vtp_pt_walk.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_shim_vtp_tlb.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_wro.sv
+
+## Constraints
+set_global_assignment -name SDC_FILE $CCI_MPF_SRC/HW/par/sdc_cci_mpf.sdc

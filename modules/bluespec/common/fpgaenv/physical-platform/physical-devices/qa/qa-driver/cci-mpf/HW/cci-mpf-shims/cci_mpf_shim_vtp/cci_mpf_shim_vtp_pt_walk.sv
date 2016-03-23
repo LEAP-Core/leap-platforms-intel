@@ -94,7 +94,18 @@ module cci_mpf_shim_vtp_pt_walk
     assign page_table_root = csrs.vtp_in_page_table_base;
 
     logic initialized;
-    assign initialized = csrs.vtp_in_page_table_base_valid;
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            initialized <= 1'b0;
+        end
+        else
+        begin
+            initialized <= csrs.vtp_in_page_table_base_valid &&
+                           csrs.vtp_in_mode.enabled;
+        end
+    end
 
 
     // ====================================================================

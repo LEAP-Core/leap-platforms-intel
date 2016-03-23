@@ -66,7 +66,10 @@ module cci_mpf_shim_vtp_tlb
     input  logic clk,
     input  logic reset,
 
-    cci_mpf_shim_vtp_tlb_if.server tlb_if
+    cci_mpf_shim_vtp_tlb_if.server tlb_if,
+
+    // CSRs
+    cci_mpf_csrs.vtp csrs
     );
 
     localparam NUM_TLB_INDEX_BITS = $clog2(NUM_TLB_SETS);
@@ -163,6 +166,11 @@ module cci_mpf_shim_vtp_tlb
     logic initialized;
     assign initialized = tlb_rdy[0][0];
 
+    // Reset (invalidate) the TLB when requested by SW.
+    // inval_translation_cache is held for only one cycle.
+    logic reset_tlb;
+    assign reset_tlb = reset || csrs.vtp_in_mode.inval_translation_cache;
+
     genvar w;
     genvar p;
     generate
@@ -179,7 +187,7 @@ module cci_mpf_shim_vtp_tlb
                   tlb
                    (
                     .clk,
-                    .reset,
+                    .reset(reset_tlb),
                     .rdy(tlb_rdy[p][w]),
 
                     .waddr(tlb_waddr),

@@ -37,7 +37,9 @@
 #ifndef AFU_CCIS_H
 #define AFU_CCIS_H
 
+#include "awb/provides/qa_cci_mpf_hw.h"
 #include "awb/provides/qa_platform_libs.h"
+
 #if (CCI_S_IFC != 0)
 
 // AAL redefines ASSERT and TRACE
@@ -70,6 +72,9 @@ class AFU_CCIS_CLASS : public CAASBase, private MPFVTP_PAGE_TABLE
 
     // Virtual to physical translation for allocated objects
     btPhysAddr SharedBufferVAtoPA(const void* va);
+
+    // Retrieve a counter CSR
+    uint64_t GetStatVTP(t_cci_mpf_vtp_csr_offsets stat);
 
   private:
     // Page allocator used by MPFVTP_PAGE_TABLE to add pages to the

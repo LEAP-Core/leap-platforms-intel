@@ -159,7 +159,8 @@ module cci_mpf
         .clk,
         .fiu(stg1_mpf_fiu),
         .afu(stg2_fiu_csrs),
-        .csrs(mpf_csrs)
+        .csrs(mpf_csrs),
+        .events(mpf_csrs)
         );
 
 
@@ -222,7 +223,8 @@ module cci_mpf
                 .clk,
                 .fiu(stg3_fiu_eop),
                 .afu(stg4_fiu_virtual),
-                .csrs(mpf_csrs)
+                .csrs(mpf_csrs),
+                .events(mpf_csrs)
                 );
         end
         else

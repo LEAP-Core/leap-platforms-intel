@@ -66,7 +66,6 @@
 
 #include "cci_mpf_shim_vtp.h"
 
-
 BEGIN_NAMESPACE(AAL)
 
 
@@ -291,18 +290,34 @@ btPhysAddr MPFVTP::bufferGetIOVA( btVirtAddr Address)
 
 btBool MPFVTP::vtpReset( void )
 {
-   AAL_WARNING(LM_AFU, "Using vtpReset(). This interface is deprecated. Use vtpEnable() instead." << std::endl);
+   m_pALIMMIO->mmioWrite64(m_dfhOffset + CCI_MPF_VTP_CSR_MODE, 2);
+
    return vtpEnable();
 }
 
 btBool MPFVTP::vtpEnable( void )
 {
-   // FIXME: this is likely to change or disappear in beta!
-
    // Write page table physical address CSR
-   return m_pALIMMIO->mmioWrite64(m_dfhOffset + CCI_MPF_VTP_CSR_PAGE_TABLE_PADDR,
-                                  ptGetPageTableRootPA() / CL(1));
+   m_pALIMMIO->mmioWrite64(m_dfhOffset + CCI_MPF_VTP_CSR_PAGE_TABLE_PADDR,
+                           ptGetPageTableRootPA() / CL(1));
+
+   // Enable VTP
+   m_pALIMMIO->mmioWrite64(m_dfhOffset + CCI_MPF_VTP_CSR_MODE, 1);
 }
+
+// Return a statistics counter
+btUnsigned64bitInt MPFVTP::vtpGetCounter( t_cci_mpf_vtp_csr_offsets stat )
+{
+
+   btUnsigned64bitInt cnt;
+   btBool ret;
+
+   ret = m_pALIMMIO->mmioRead64(m_dfhOffset + stat, &cnt);
+   ASSERT(ret);
+
+   return cnt;
+}
+
 
 //-----------------------------------------------------------------------------
 // Private functions

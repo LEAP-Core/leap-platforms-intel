@@ -54,21 +54,19 @@ typedef enum
     //   Bit 1:
     //      0 - Normal
     //      1 - Invalidate current FPGA-side translation cache.
-    //          Bit 0 must be 0 to disable translation during flush.
-    //          Software may also read this register.  Bit 1 in the
-    //          register will return 1 during invalidation and 0 when
-    //          invalidation is complete.
     CCI_MPF_VTP_CSR_MODE = 24,
 
     // Page table physical address (line address) (write)
     CCI_MPF_VTP_CSR_PAGE_TABLE_PADDR = 32,
 
     // Statistics -- all 8 byte read-only CSRs
-    CCI_MPF_VTP_CSR_STAT_NUM_HITS = 40,
-    CCI_MPF_VTP_CSR_STAT_NUM_MISSES = 48,
+    CCI_MPF_VTP_CSR_STAT_4KB_TLB_NUM_HITS = 40,
+    CCI_MPF_VTP_CSR_STAT_4KB_TLB_NUM_MISSES = 48,
+    CCI_MPF_VTP_CSR_STAT_2MB_TLB_NUM_HITS = 56,
+    CCI_MPF_VTP_CSR_STAT_2MB_TLB_NUM_MISSES = 64,
 
     // Must be last
-    CCI_MPF_VTP_CSR_SIZE = 56
+    CCI_MPF_VTP_CSR_SIZE = 72
 }
 t_cci_mpf_vtp_csr_offsets;
 

@@ -79,7 +79,8 @@ module cci_mpf_shim_vtp
     cci_mpf_if.to_afu afu,
 
     // CSRs
-    cci_mpf_csrs.vtp csrs
+    cci_mpf_csrs.vtp csrs,
+    cci_mpf_csrs.vtp_events events
     );
 
     logic reset;
@@ -134,7 +135,8 @@ module cci_mpf_shim_vtp
        (
         .clk,
         .reset,
-        .tlb_if(tlb_if_4kb)
+        .tlb_if(tlb_if_4kb),
+        .csrs
         );
 
 
@@ -151,7 +153,8 @@ module cci_mpf_shim_vtp
        (
         .clk,
         .reset,
-        .tlb_if(tlb_if_2mb)
+        .tlb_if(tlb_if_2mb),
+        .csrs
         );
 
     genvar p;
@@ -207,6 +210,19 @@ module cci_mpf_shim_vtp
     assign tlb_if_2mb.fillVA = tlb_if.fillVA;
     assign tlb_if_2mb.fillPA = tlb_if.fillPA;
     assign tlb_if.fillRdy = tlb_if_4kb.fillRdy && tlb_if_2mb.fillRdy;
+
+    // Statistics
+    always_comb
+    begin
+        events.vtp_out_event_4kb_hit_c0 = tlb_if_4kb.lookupValid[0];
+        events.vtp_out_event_4kb_hit_c1 = tlb_if_4kb.lookupValid[1];
+
+        events.vtp_out_event_2mb_hit_c0 = tlb_if_2mb.lookupValid[0];
+        events.vtp_out_event_2mb_hit_c1 = tlb_if_2mb.lookupValid[1];
+
+        events.vtp_out_event_4kb_miss = tlb_if_4kb.fillEn;
+        events.vtp_out_event_2mb_miss = tlb_if_2mb.fillEn;
+    end
 
 
     // ====================================================================
@@ -267,11 +283,8 @@ module cci_mpf_shim_vtp
 
     always_ff @(posedge clk)
     begin
-        // Record the missing VA
-        for (int c = 0; c < 2; c = c + 1)
-        begin
-            walk_pt_req_va[c] <= tlb_if.lookupMissVA[c];
-        end
+        walk_pt_req_va[0] <= tlb_if.lookupMissVA[0];
+        walk_pt_req_va[1] <= tlb_if.lookupMissVA[1];
     end
 
     always_ff @(posedge clk)

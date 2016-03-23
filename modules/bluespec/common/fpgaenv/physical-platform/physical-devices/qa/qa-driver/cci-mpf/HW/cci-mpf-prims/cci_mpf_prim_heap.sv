@@ -129,9 +129,9 @@ module cci_mpf_prim_heap
     // There are two free list heads to deal with the 2 cycle latency of
     // BRAM reads.  The lists are balanced, since both push and pop of
     // free entries are processed round-robin.
-    t_idx [1:0] free_head_idx;
-    t_idx [1:0] free_head_idx_reg;
-    t_idx [1:0] free_tail_idx;
+    t_idx free_head_idx[0:1];
+    t_idx free_head_idx_reg[0:1];
+    t_idx free_tail_idx[0:1];
     logic head_rr_select;
     logic tail_rr_select;
 

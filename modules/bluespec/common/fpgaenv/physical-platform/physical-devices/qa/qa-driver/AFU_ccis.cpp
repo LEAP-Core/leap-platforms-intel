@@ -98,6 +98,9 @@ AFU_CCIS_CLASS::Initialize()
     // Tell the hardware the address of the table
     m_afu->WriteCSR64(m_csr_base + CCI_MPF_VTP_CSR_PAGE_TABLE_PADDR,
                       ptGetPageTableRootPA() / CL(1));
+
+    // Enable VTP
+    m_afu->WriteCSR64(m_csr_base + CCI_MPF_VTP_CSR_MODE, 1);
 }
 
 
@@ -246,5 +249,11 @@ AFU_CCIS_CLASS::ptAllocSharedPage(btWSSize length, btPhysAddr* pa)
     return btVirtAddr(page->virtualAddress);
 }
 
+
+uint64_t
+AFU_CCIS_CLASS::GetStatVTP(t_cci_mpf_vtp_csr_offsets stat)
+{
+    return m_afu->ReadCSR64(m_csr_base + stat);
+}
 
 #endif // CCI_S_IFC

@@ -37,6 +37,7 @@
 #include <assert.h>
 
 #include "awb/provides/qa_device.h"
+#include "awb/provides/qa_cci_mpf_hw.h"
 #include "awb/provides/qa_cci_hw_if.h"
 
 #include "awb/provides/physical_platform.h"
@@ -651,6 +652,62 @@ void AFU_CLIENT_CLASS::OnWorkspaceFreeFailed(const IEvent &rEvent)
 }
 
 #endif // CCI_S_IFC for OnWorkspace...
+
+
+//
+// Statistics
+//
+
+void
+AFU_CLIENT_CLASS::EmitStats(ofstream &statusFile)
+{
+    statusFile << "CCI_MPF_VTP_CSR_STAT_4KB_TLB_NUM_HITS,"
+               << "\"VTP 4KB TLB Hits\","
+               << GetStatVTP(CCI_MPF_VTP_CSR_STAT_4KB_TLB_NUM_HITS)
+               << endl;
+    statusFile << "CCI_MPF_VTP_CSR_STAT_4KB_TLB_NUM_MISSES,"
+               << "\"VTP 4KB TLB Misses\","
+               << GetStatVTP(CCI_MPF_VTP_CSR_STAT_4KB_TLB_NUM_MISSES)
+               << endl;
+    statusFile << "CCI_MPF_VTP_CSR_STAT_2MB_TLB_NUM_HITS,"
+               << "\"VTP 2MB TLB Hits\","
+               << GetStatVTP(CCI_MPF_VTP_CSR_STAT_2MB_TLB_NUM_HITS)
+               << endl;
+    statusFile << "CCI_MPF_VTP_CSR_STAT_2MB_TLB_NUM_MISSES,"
+               << "\"VTP 2MB TLB Misses\","
+               << GetStatVTP(CCI_MPF_VTP_CSR_STAT_2MB_TLB_NUM_MISSES)
+               << endl;
+}
+
+void
+AFU_CLIENT_CLASS::ResetStats()
+{
+}
+
+uint64_t
+AFU_CLIENT_CLASS::GetStatVTP(t_cci_mpf_vtp_csr_offsets stat)
+{
+#if (CCI_S_IFC != 0)
+    if (afu_ccis_compat)
+    {
+        return afu_ccis_compat->GetStatVTP(stat);
+    }
+    else
+    {
+        return 0;
+    }
+#else
+    if (m_mpf_vtp)
+    {
+        return m_mpf_vtp->vtpGetCounter(stat);
+    }
+    else
+    {
+        return 0;
+    }
+#endif
+}
+
 
 
 // ========================================================================

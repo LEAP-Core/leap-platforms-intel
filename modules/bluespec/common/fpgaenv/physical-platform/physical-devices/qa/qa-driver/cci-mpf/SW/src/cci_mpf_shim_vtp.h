@@ -64,13 +64,11 @@
 
 #include "cci_mpf_shim_vtp_pt.h"
 
+
 BEGIN_NAMESPACE(AAL)
 
 /// @addtogroup VTPService
 /// @{
-
-/// VTP page table physical address CSR offset
-#define CCI_MPF_VTP_CSR_PAGE_TABLE_PADDR 32
 
 class MPFVTP : public CAASBase, public IMPFVTP, private MPFVTP_PAGE_TABLE
 {
@@ -105,11 +103,13 @@ public:
    // reinitialize VTP registers after AFU reset
    btBool vtpEnable( void );
 
-   // FIXME: DEPRECATED
+   // invalidate FPGA-side translation cache
    btBool vtpReset( void );
-   // </IVTP>
 
    btBool isOK( void ) { return m_isOK; }     // < status after initialization
+
+   // Return a statistics counter
+   btUnsigned64bitInt vtpGetCounter( t_cci_mpf_vtp_csr_offsets stat );
 
 protected:
    IALIBuffer            *m_pALIBuffer;

@@ -1,0 +1,6 @@
+%name Intel MPF HW PAR Files
+%desc Intel MPF HW PAR Files
+
+%provides qa_cci_mpf_hw_par
+
+%sources -t SDC -v PRIVATE sdc_cci_mpf.sdc

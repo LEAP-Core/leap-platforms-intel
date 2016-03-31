@@ -55,6 +55,7 @@
 #include <aalsdk/aas/AALService.h>
 #include <aalsdk/IServiceClient.h>
 #include <aalsdk/osal/IDispatchable.h>
+#include <aalsdk/utils/Utilities.h>
 
 #include <aalsdk/service/IALIAFU.h>
 #include <aalsdk/uaia/IAFUProxy.h>
@@ -123,8 +124,14 @@ private:
    // shared page table data structure.
    btVirtAddr ptAllocSharedPage(btWSSize length, btPhysAddr* pa);
 
-   static const size_t pageSize = MB(2);
-   static const size_t pageMask = ~(pageSize - 1);
+   static const size_t SMALL_PAGE_SIZE = KB(4);
+   static const size_t SMALL_PAGE_MASK = ~(SMALL_PAGE_SIZE - 1);
+   static const size_t LARGE_PAGE_SIZE = MB(2);
+   static const size_t LARGE_PAGE_MASK = ~(LARGE_PAGE_SIZE - 1);
+
+   static const size_t CCI_MPF_VTP_LARGE_PAGE_THRESHOLD = KB(256);
+
+   ali_errnum_e _allocate(btVirtAddr va, size_t pageSize);
 };
 
 

@@ -94,7 +94,7 @@ using namespace AAL;
 # define MB(x)                     ((x) * 1024 * 1024)
 #endif // MBA
 
-#define LPBK1_BUFFER_SIZE        MB(2048)
+#define LPBK1_BUFFER_SIZE        (MB(4) + KB(128))
 #define LPBK1_DSM_SIZE           MB(4)
 
 //
@@ -515,11 +515,11 @@ btInt HelloALIVTPNLBApp::run()
 
    // Clean-up and return
 done_5:
-   m_pALIBufferService->bufferFree(m_pOutput);
+   m_pVTPService->bufferFree(m_pOutput);
 done_4:
-   m_pALIBufferService->bufferFree(m_pInput);
+   m_pVTPService->bufferFree(m_pInput);
 done_3:
-   m_pALIBufferService->bufferFree(m_pDSM);
+   m_pVTPService->bufferFree(m_pDSM);
 
 done_2:
    // Freed all three so now Release() the VTP Service through the Services IAALService::Release() method
@@ -791,7 +791,7 @@ void HelloALIVTPNLBApp::serviceAllocateFailed(const IEvent &rEvent)
 //=============================================================================
 int main(int argc, char *argv[])
 {
-   pAALLogger()->AddToMask(LM_All, LOG_INFO);
+   pAALLogger()->AddToMask(LM_All, LOG_DEBUG);
    HelloALIVTPNLBApp theApp;
    if(!theApp.isOK()){
       ERR("Runtime Failed to Start");

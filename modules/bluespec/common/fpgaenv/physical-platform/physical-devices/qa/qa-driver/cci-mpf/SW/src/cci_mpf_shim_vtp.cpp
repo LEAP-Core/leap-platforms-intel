@@ -142,15 +142,35 @@ ali_errnum_e MPFVTP::bufferAllocate( btWSSize             Length,
 {
    AutoLock(this);
 
+   AAL_DEBUG(LM_AFU, "Trying to allocate virtual buffer of size " << std::dec << Length << std::endl);
+
+   btBool ret;
    void *pRet;                      // for error checking
+   ali_errnum_e err;
 
    // FIXME: Input/OUtputArgs are ignored here...
-   // FIXME: we can support optArg ALI_MMAP_TARGET_VADDR_KEY also for
-   //        large VTP mappings (need to add MAP_FIXED to the first mmap
-   //        below).
 
-   // Align request to page size
-   Length = (Length + pageSize - 1) & pageMask;
+   // Round request size to proper page size
+   // If the tail (= remainder of Length that doesn't fill a large buffer)
+   // is large enough, extend Length to fit large buffers. Otherwise, make sure
+   // it at least fills 4k pages.
+   size_t tail = Length % LARGE_PAGE_SIZE;
+   AAL_DEBUG(LM_AFU, "tail: " << std::dec << tail << std::endl);
+   if (tail > CCI_MPF_VTP_LARGE_PAGE_THRESHOLD) {
+      // if tail is large enough, align with large page size
+      Length = (Length + LARGE_PAGE_SIZE - 1) & LARGE_PAGE_MASK;
+      tail = 0;
+   } else {
+      // otherwise, align with small page size
+      Length = (Length + SMALL_PAGE_SIZE - 1) & SMALL_PAGE_MASK;
+      tail = Length % LARGE_PAGE_SIZE;
+   }
+   size_t nLargeBuffers = Length / LARGE_PAGE_SIZE;
+   size_t nSmallBuffers = (Length % LARGE_PAGE_SIZE) / SMALL_PAGE_SIZE;
+   ASSERT( Length % SMALL_PAGE_SIZE == 0 );
+
+   AAL_DEBUG(LM_AFU, "padded Length: " << std::dec << Length << std::endl);
+   AAL_DEBUG(LM_AFU, std::dec << nLargeBuffers << " large and " << nSmallBuffers << " small buffers" << std::endl);
 
    // Map a region of the requested size.  This will reserve a virtual
    // memory address space.  As pages are allocated they will be
@@ -159,99 +179,123 @@ ali_errnum_e MPFVTP::bufferAllocate( btWSSize             Length,
    // An extra page is added to the request in order to enable alignment
    // of the base address.  Linux is only guaranteed to return 4 KB aligned
    // addresses and we want large page aligned virtual addresses.
+   // TODO: Assumption is still that virtual buffer needs to be large-page
+   //        (2MB) aligned, even smaller ones. Make that configurable.
    void* va_base;
-   size_t va_base_len = Length + pageSize;
+   size_t va_base_len = Length + LARGE_PAGE_SIZE;
    va_base = mmap(NULL, va_base_len,
                   PROT_READ | PROT_WRITE,
                   MAP_SHARED | MAP_ANONYMOUS, -1, 0);
    ASSERT(va_base != MAP_FAILED);
    AAL_DEBUG(LM_AFU, "va_base " << std::hex << std::setw(2) << std::setfill('0') << va_base << std::endl);
 
-   void* va_aligned = (void*)((size_t(va_base) + pageSize - 1) & pageMask);
+   void* va_aligned = (void*)((size_t(va_base) + LARGE_PAGE_SIZE - 1) & LARGE_PAGE_MASK);
    AAL_DEBUG(LM_AFU, "va_aligned " << std::hex << std::setw(2) << std::setfill('0') << va_aligned << std::endl);
 
    // Trim off the unnecessary extra space after alignment
-   size_t trim = pageSize - (size_t(va_aligned) - size_t(va_base));
+   size_t trim = LARGE_PAGE_SIZE - (size_t(va_aligned) - size_t(va_base));
    AAL_DEBUG(LM_AFU, "va_base_len trimmed by " << std::hex << std::setw(2) << std::setfill('0') << trim << " to " << va_base_len - trim << std::endl);
    pRet = mremap(va_base, va_base_len, va_base_len - trim, 0);
    ASSERT(va_base == pRet);
    va_base_len -= trim;
 
-   // How many page size buffers are needed to satisfy the request?
-   size_t n_buffers = Length / pageSize;
+   // start at the end of the virtual buffer and work backwards
+   // start with small buffers until we are done or  hit a large buffer
+   // alingment boundary. Then continue with large buffers. If a large buffer
+   // allocation fails, fall back to small pages.
+   // TODO: make large page allocation threshold configurable
 
-   // Buffer mapping will begin at the end of the va_aligned region
-   void* va_alloc = (void*)(size_t(va_aligned) + pageSize * (n_buffers - 1));
+   void * va_alloc = (void *)(size_t(va_aligned) + Length);
 
-   // Prepare bufferAllocate's optional argument to mmap() to a specific address
-   NamedValueSet *bufAllocArgs = new NamedValueSet();
+   // -------------------------------------------------------------------------
+   // small buffer allocation loop
+   // -------------------------------------------------------------------------
+   // Run to allocate small buffers until we can cover the remaining space with
+   // large buffers.
+   while ((size_t(va_alloc) & ( LARGE_PAGE_SIZE-1 )) != 0) {
 
-   // Allocate the buffers
-   for (size_t i = 0; i < n_buffers; i++)
-   {
+      va_alloc = (void *)(size_t(va_alloc) - SMALL_PAGE_SIZE);
+
       // Shrink the reserved area in order to make a hole in the virtual
       // address space.
-      if (va_base_len == pageSize)
-      {
-         munmap(va_base, va_base_len);
-         va_base_len = 0;
-      }
-      else
-      {
-         pRet = mremap(va_base, va_base_len, va_base_len - pageSize, 0);
-         ASSERT(va_base == pRet);
-         va_base_len -= pageSize;
-      }
+      pRet = mremap(va_base, va_base_len, va_base_len - SMALL_PAGE_SIZE, 0);
+      ASSERT(va_base == pRet);
+      va_base_len -= SMALL_PAGE_SIZE;
 
-      // set target virtual address for new buffer
-      bufAllocArgs->Add(ALI_MMAP_TARGET_VADDR_KEY, static_cast<ALI_MMAP_TARGET_VADDR_DATATYPE>(va_alloc));
-
-      // Get a page size buffer
-      void *buffer;
-      ali_errnum_e err = m_pALIBuffer->bufferAllocate(pageSize, (btVirtAddr*)&buffer, *bufAllocArgs);
-      ASSERT(err == ali_errnumOK && buffer != NULL);
-
-      // Handle allocation errors
-      // Possible causes for failure:
-      //    not enough memory
-      //    not able to allocate the requested size
-      //    ...?
+      // allocate buffer
+      err = _allocate((btVirtAddr)va_alloc, SMALL_PAGE_SIZE);
       if (err != ali_errnumOK) {
          AAL_ERR(LM_AFU, "Unable to allocate buffer. Err: " << err);
          return err;
+         // FIXME: leaking already allocated pages!
       }
 
-      // If we didn't get the mapping on our bufferAllocate(), move the shared
-      // buffer's VA to the proper slot
-      // This should not happen, as we requested the proper VA above.
-      // TODO: remove
-      ASSERT(buffer == va_alloc);
-      if (buffer != va_alloc)
-      {
-         AAL_DEBUG(LM_AFU, "remap " << std::hex << std::setw(2) << std::setfill('0') << (void*)buffer << " to " << va_alloc << std::endl);
-         pRet = mremap((void*)buffer, pageSize, pageSize,
-                        MREMAP_MAYMOVE | MREMAP_FIXED,
-                        va_alloc);
-         ASSERT(va_alloc == pRet);
-      }
-
-      // Add the mapping to the page table
-      ptInsertPageMapping(btVirtAddr(va_alloc),
-                          m_pALIBuffer->bufferGetIOVA((unsigned char *)buffer),
-                          MPFVTP_PAGE_2MB);
-
-      // Next VA
-      va_alloc = (void*)(size_t(va_alloc) - pageSize);
-
-      ASSERT((m_pALIBuffer->bufferGetIOVA((unsigned char *)buffer) & ~pageMask) == 0);
-
-      // prepare optArgs for next allocation
-      bufAllocArgs->Delete(ALI_MMAP_TARGET_VADDR_KEY);
-
+      Length -= SMALL_PAGE_SIZE;
    }
 
-   delete bufAllocArgs;
+   AAL_DEBUG(LM_AFU, "len remaining: " << std::dec << Length << std::endl);
 
+
+   // -------------------------------------------------------------------------
+   // large buffer allocation loop
+   // -------------------------------------------------------------------------
+   // Run for the remaining space, which should be an integer multiple of the
+   // large buffer size in size, and aligned to large buffer boundaries. If
+   // large buffer allocation fails, fall back to small buffers.
+   size_t effPageSize = LARGE_PAGE_SIZE;     // page size used for actual allocations
+
+   while (Length > 0) {
+
+      va_alloc = (void *)(size_t(va_alloc) - effPageSize);
+
+      // Shrink the reserved area in order to make a hole in the virtual
+      // address space. If this is the last buffer to allocate, unmap reserved
+      // area.
+      if (va_base_len == effPageSize) {
+         munmap(va_base, va_base_len);
+         va_base_len = 0;
+      } else {
+         pRet = mremap(va_base, va_base_len, va_base_len - effPageSize, 0);
+         ASSERT(va_base == pRet);
+         va_base_len -= effPageSize;
+      }
+
+      // allocate buffer
+      err = _allocate((btVirtAddr)va_alloc, effPageSize);
+      if (err != ali_errnumOK) {
+         if (effPageSize == LARGE_PAGE_SIZE) {
+            // fall back to small buffers:
+            // restore last large mapping
+            if (va_base_len = 0) {
+               // corner case: this was the last mapping - we destroyed it, so
+               // try to restore it.
+               va_base = mmap(va_alloc, LARGE_PAGE_SIZE,
+                     PROT_READ | PROT_WRITE,
+                     MAP_SHARED | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+               ASSERT(va_base == va_alloc);
+            } else {
+               // this was not the last mapping (or va_base is not aligned), so
+               // we still have a valid reserved space. Just resize it back up.
+               pRet = mremap(va_base, va_base_len, va_base_len + LARGE_PAGE_SIZE, 0);
+               ASSERT(pRet == va_base);
+            }
+            va_base_len += LARGE_PAGE_SIZE;
+            va_alloc = (void *)(size_t(va_alloc) + LARGE_PAGE_SIZE);
+            effPageSize = SMALL_PAGE_SIZE;
+            continue;    // try again with smal buffers
+         } else {
+            // already using small buffers, nowhere to fall back to.
+            AAL_ERR(LM_AFU, "Unable to allocate buffer. Err: " << err);
+            return err;
+            // FIXME: leaking already allocated pages!
+         }
+      }
+
+      // mapping successful, on to the next
+      Length -= effPageSize;
+   }
+
+   // clean up
    if (va_base_len != 0)
    {
        munmap(va_base, va_base_len);
@@ -262,6 +306,45 @@ ali_errnum_e MPFVTP::bufferAllocate( btWSSize             Length,
    *pBufferptr = (btVirtAddr)va_aligned;
    return ali_errnumOK;
 }
+
+// allocate page of size pageSize to virtual address va and add entry to VTP
+// page table
+ali_errnum_e MPFVTP::_allocate(btVirtAddr va, size_t pageSize)
+{
+   ali_errnum_e err;
+   MPFVTP_PAGE_SIZE mapType;
+
+   // FIXME: can we reuse this? expensive! static?
+   NamedValueSet *bufAllocArgs = new NamedValueSet();
+   btVirtAddr alloc;
+
+   AAL_DEBUG(LM_AFU, "_allocate(" << std::hex << std::setw(2) << std::setfill('0') << (void *)va << ", " << std::dec << (unsigned int)pageSize << ")" << std::endl);
+
+   // determine mapping type for page table entry
+   if (pageSize == LARGE_PAGE_SIZE) {
+      mapType = MPFVTP_PAGE_2MB;
+   } else if (pageSize == SMALL_PAGE_SIZE) {
+      mapType = MPFVTP_PAGE_4KB;
+   } else {
+      AAL_ERR(LM_AFU, "Invalid page size." << std::endl);
+      return ali_errnumBadParameter;
+   }
+
+   // allocate buffer at va
+   bufAllocArgs->Add(ALI_MMAP_TARGET_VADDR_KEY, static_cast<ALI_MMAP_TARGET_VADDR_DATATYPE>(va));
+   err = m_pALIBuffer->bufferAllocate(pageSize, &alloc, *bufAllocArgs);
+
+   // insert VTP page table entry
+   if (err == ali_errnumOK) {
+      ASSERT(va == alloc);
+      ptInsertPageMapping(btVirtAddr(va),
+                          m_pALIBuffer->bufferGetIOVA((unsigned char *)va),
+                          mapType);
+   }
+   delete bufAllocArgs;
+   return err;
+}
+
 
 ali_errnum_e MPFVTP::bufferFree( btVirtAddr Address)
 {

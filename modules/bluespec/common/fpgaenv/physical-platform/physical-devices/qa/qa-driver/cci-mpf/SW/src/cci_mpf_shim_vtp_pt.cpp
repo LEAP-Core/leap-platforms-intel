@@ -335,7 +335,7 @@ MPFVTP_PAGE_TABLE::DumpPageTableVAtoPA(
                     break;
                 }
 
-                printf("    VA 0x%016llx -> PA 0x%016llx (%s)\n",
+                printf("    VA 0x%016lx -> PA 0x%016lx (%s)\n",
                        va,
                        table->GetTranslatedAddr(idx),
                        kind);

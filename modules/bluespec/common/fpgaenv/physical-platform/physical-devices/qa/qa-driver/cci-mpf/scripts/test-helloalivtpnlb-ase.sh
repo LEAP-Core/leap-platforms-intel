@@ -150,8 +150,8 @@ sed -i "s/^\s*localparam\s\+NEXT_DFH_BYTE_OFFSET.*$/localparam NEXT_DFH_BYTE_OFF
 # -----------------------------------------------------------------------------
 echo "=== SET UP ASE ==="
 cd $ASE_DIR
-make clean
 scripts/generate_ase_environment.py $NLB_MPF -t VCS
+make clean
 
 # fix build order
 rm -f $VLOG_FILES_TEMP

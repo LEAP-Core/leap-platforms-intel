@@ -51,25 +51,66 @@ module cci_mpf_prim_simple_ram
     output logic [N_DATA_BITS-1 : 0] rdata
     );
 
-    logic [N_DATA_BITS-1 : 0] data[0 : N_ENTRIES-1];
-
     logic [N_DATA_BITS-1 : 0] mem_rd[0 : N_OUTPUT_REG_STAGES];
     assign rdata = mem_rd[N_OUTPUT_REG_STAGES];
 
+    // If the output data is registered then request a register stage in
+    // the megafunction, giving it an opportunity to optimize the location.
+    //
+    localparam OUTDATA_REGISTERED = (N_OUTPUT_REG_STAGES == 0) ? "UNREGISTERED" :
+                                                                 "CLOCK0";
+    localparam OUTDATA_IDX = (N_OUTPUT_REG_STAGES == 0) ? 0 : 1;
 
-    always_ff @(posedge clk)
-    begin
-        mem_rd[0] <= data[raddr];
 
-        if (wen)
-        begin
-            data[waddr] <= wdata;
-        end
-    end
+    altsyncram
+      #(
+        .operation_mode("DUAL_PORT"),
+        .width_a(N_DATA_BITS),
+        .widthad_a($clog2(N_ENTRIES)),
+        .numwords_a(N_ENTRIES),
+        .width_b(N_DATA_BITS),
+        .widthad_b($clog2(N_ENTRIES)),
+        .numwords_b(N_ENTRIES),
+        .rdcontrol_reg_b("CLOCK0"),
+        .address_reg_b("CLOCK0"),
+        .outdata_reg_b(OUTDATA_REGISTERED),
+        .read_during_write_mode_mixed_ports("OLD_DATA")
+        )
+      data
+       (
+        .clock0(clk),
+
+        .wren_a(wen),
+        .address_a(waddr),
+        .data_a(wdata),
+
+        .address_b(raddr),
+        .q_b(mem_rd[OUTDATA_IDX]),
+
+        // Legally unconnected ports -- get rid of lint errors
+        .wren_b(),
+        .rden_a(),
+        .rden_b(),
+        .data_b(),
+        .clock1(),
+        .clocken0(),
+        .clocken1(),
+        .clocken2(),
+        .clocken3(),
+        .aclr0(),
+        .aclr1(),
+        .byteena_a(),
+        .byteena_b(),
+        .addressstall_a(),
+        .addressstall_b(),
+        .q_a(),
+        .eccstatus()
+        );
+
 
     genvar s;
     generate
-        for (s = 0; s < N_OUTPUT_REG_STAGES; s = s + 1)
+        for (s = 1; s < N_OUTPUT_REG_STAGES; s = s + 1)
         begin: r
             always_ff @(posedge clk)
             begin

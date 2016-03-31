@@ -53,7 +53,14 @@ typedef logic [$clog2(CCI_MPF_CSR_SIZE64)-1:0] t_mpf_csr_offset;
 parameter CCI_MPF_VTP_CSR_OFFSET = 0;
 parameter CCI_MPF_WRO_CSR_OFFSET = CCI_MPF_VTP_CSR_OFFSET + CCI_MPF_VTP_CSR_SIZE;
 
+// Size of the intermediate statistics counter bucket. These buckets
+// are added periodically to the CSR memory by cci_mpf_shim_csr.
+parameter CCI_MPF_STAT_CNT_WIDTH = 16;
+typedef logic [CCI_MPF_STAT_CNT_WIDTH-1:0] t_cci_mpf_stat_cnt;
+
 parameter CCI_MPF_CSR_NUM_STATS = 4;
+typedef t_mpf_csr_offset [0:CCI_MPF_CSR_NUM_STATS-1] t_stat_csr_offset_vec;
+typedef t_cci_mpf_stat_cnt [0:CCI_MPF_CSR_NUM_STATS-1] t_stat_upd_count_vec;
 
 
 module cci_mpf_shim_csr
@@ -107,8 +114,6 @@ module cci_mpf_shim_csr
 
     assign afu.c0Rx = fiu.c0Rx;
     assign afu.c1Rx = fiu.c1Rx;
-
-    localparam STAT_CNT_WIDTH = 16;
 
     localparam CCI_MPF_CSR_LAST = DFH_MMIO_BASE_ADDR + CCI_MPF_CSR_SIZE;
 
@@ -234,13 +239,10 @@ module cci_mpf_shim_csr
     //
     logic stat_upd_rdy;
     logic stat_upd_en;
-    t_mpf_csr_offset stat_upd_offset_vec[0:CCI_MPF_CSR_NUM_STATS-1];
-    logic [STAT_CNT_WIDTH-1:0] stat_upd_count_vec[0:CCI_MPF_CSR_NUM_STATS-1];
+    t_stat_csr_offset_vec stat_upd_offset_vec;
+    t_stat_upd_count_vec stat_upd_count_vec;
 
     cci_mpf_shim_csr_events
-      #(
-        .STAT_CNT_WIDTH(STAT_CNT_WIDTH)
-        )
       stats
        (
         .clk,
@@ -374,8 +376,8 @@ module cci_mpf_shim_csr
 
     assign stat_upd_rdy = (stat_upd_state == STAT_IDLE);
 
-    t_mpf_csr_offset stat_upd_offsets[0:CCI_MPF_CSR_NUM_STATS-1];
-    logic [STAT_CNT_WIDTH-1:0] stat_upd_counts[0:CCI_MPF_CSR_NUM_STATS-1];
+    t_stat_csr_offset_vec stat_upd_offsets;
+    t_stat_upd_count_vec stat_upd_counts;
 
     logic stat_bucket_upd;
     logic stat_bucket_reset;
@@ -488,11 +490,6 @@ endmodule // cci_mpf_shim_csr
 
 
 module cci_mpf_shim_csr_events
-  #(
-    // Size of the intermediate statistics counter bucket. These buckets
-    // are added periodically to the CSR memory by cci_mpf_shim_csr.
-    parameter STAT_CNT_WIDTH = 16
-    )
    (
     input  logic clk,
     input  logic reset,
@@ -502,21 +499,19 @@ module cci_mpf_shim_csr_events
     // Update counts
     output logic stat_upd_en,
     // Indices of CSR read register being updated
-    output t_mpf_csr_offset stat_upd_offset_vec[0:CCI_MPF_CSR_NUM_STATS-1],
+    output t_stat_csr_offset_vec stat_upd_offset_vec,
     // Counts to add to corresponding CSR read register
-    output logic [STAT_CNT_WIDTH-1:0] stat_upd_count_vec[0:CCI_MPF_CSR_NUM_STATS-1],
+    output t_stat_upd_count_vec stat_upd_count_vec,
 
     cci_mpf_csrs.csr_events events
     );
 
-    typedef logic [STAT_CNT_WIDTH-1:0] t_stat_cnt;
-
     logic consume_counters;
 
-    t_stat_cnt vtp_4kb_hits;
-    t_stat_cnt vtp_4kb_misses;
-    t_stat_cnt vtp_2mb_hits;
-    t_stat_cnt vtp_2mb_misses;
+    t_cci_mpf_stat_cnt vtp_4kb_hits;
+    t_cci_mpf_stat_cnt vtp_4kb_misses;
+    t_cci_mpf_stat_cnt vtp_2mb_hits;
+    t_cci_mpf_stat_cnt vtp_2mb_misses;
 
 
     // ====================================================================
@@ -576,14 +571,14 @@ module cci_mpf_shim_csr_events
     // ====================================================================
 
     // Same as counters above, but 0 if counters are consumed this cycle
-    t_stat_cnt vtp_4kb_hits_cur;
-    t_stat_cnt vtp_4kb_misses_cur;
-    t_stat_cnt vtp_2mb_hits_cur;
-    t_stat_cnt vtp_2mb_misses_cur;
-    assign vtp_4kb_hits_cur = (consume_counters ? t_stat_cnt'(0) : vtp_4kb_hits);
-    assign vtp_4kb_misses_cur = (consume_counters ? t_stat_cnt'(0) : vtp_4kb_misses);
-    assign vtp_2mb_hits_cur = (consume_counters ? t_stat_cnt'(0) : vtp_2mb_hits);
-    assign vtp_2mb_misses_cur = (consume_counters ? t_stat_cnt'(0) : vtp_2mb_misses);
+    t_cci_mpf_stat_cnt vtp_4kb_hits_cur;
+    t_cci_mpf_stat_cnt vtp_4kb_misses_cur;
+    t_cci_mpf_stat_cnt vtp_2mb_hits_cur;
+    t_cci_mpf_stat_cnt vtp_2mb_misses_cur;
+    assign vtp_4kb_hits_cur = (consume_counters ? t_cci_mpf_stat_cnt'(0) : vtp_4kb_hits);
+    assign vtp_4kb_misses_cur = (consume_counters ? t_cci_mpf_stat_cnt'(0) : vtp_4kb_misses);
+    assign vtp_2mb_hits_cur = (consume_counters ? t_cci_mpf_stat_cnt'(0) : vtp_2mb_hits);
+    assign vtp_2mb_misses_cur = (consume_counters ? t_cci_mpf_stat_cnt'(0) : vtp_2mb_misses);
 
 
     logic [1:0] vtp_4kb_hits_incr;
@@ -591,14 +586,14 @@ module cci_mpf_shim_csr_events
     begin
         if (reset)
         begin
-            vtp_4kb_hits <= t_stat_cnt'(0);
+            vtp_4kb_hits <= t_cci_mpf_stat_cnt'(0);
             vtp_4kb_hits_incr <= 2'd0;
         end
         else
         begin
             vtp_4kb_hits_incr <= 2'(events.vtp_out_event_4kb_hit_c0) +
                                  2'(events.vtp_out_event_4kb_hit_c1);
-            vtp_4kb_hits <= vtp_4kb_hits_cur + t_stat_cnt'(vtp_4kb_hits_incr);
+            vtp_4kb_hits <= vtp_4kb_hits_cur + t_cci_mpf_stat_cnt'(vtp_4kb_hits_incr);
         end
     end
 
@@ -607,13 +602,13 @@ module cci_mpf_shim_csr_events
     begin
         if (reset)
         begin
-            vtp_4kb_misses <= t_stat_cnt'(0);
+            vtp_4kb_misses <= t_cci_mpf_stat_cnt'(0);
             vtp_4kb_misses_incr <= 1'b0;
         end
         else
         begin
             vtp_4kb_misses_incr <= events.vtp_out_event_4kb_miss;
-            vtp_4kb_misses <= vtp_4kb_misses_cur + t_stat_cnt'(vtp_4kb_misses_incr);
+            vtp_4kb_misses <= vtp_4kb_misses_cur + t_cci_mpf_stat_cnt'(vtp_4kb_misses_incr);
         end
     end
 
@@ -623,14 +618,14 @@ module cci_mpf_shim_csr_events
     begin
         if (reset)
         begin
-            vtp_2mb_hits <= t_stat_cnt'(0);
+            vtp_2mb_hits <= t_cci_mpf_stat_cnt'(0);
             vtp_2mb_hits_incr <= 2'd0;
         end
         else
         begin
             vtp_2mb_hits_incr <= 2'(events.vtp_out_event_2mb_hit_c0) +
                                  2'(events.vtp_out_event_2mb_hit_c1);
-            vtp_2mb_hits <= vtp_2mb_hits_cur + t_stat_cnt'(vtp_2mb_hits_incr);
+            vtp_2mb_hits <= vtp_2mb_hits_cur + t_cci_mpf_stat_cnt'(vtp_2mb_hits_incr);
         end
     end
 
@@ -639,13 +634,13 @@ module cci_mpf_shim_csr_events
     begin
         if (reset)
         begin
-            vtp_2mb_misses <= t_stat_cnt'(0);
+            vtp_2mb_misses <= t_cci_mpf_stat_cnt'(0);
             vtp_2mb_misses_incr <= 1'b0;
         end
         else
         begin
             vtp_2mb_misses_incr <= events.vtp_out_event_2mb_miss;
-            vtp_2mb_misses <= vtp_2mb_misses_cur + t_stat_cnt'(vtp_2mb_misses_incr);
+            vtp_2mb_misses <= vtp_2mb_misses_cur + t_cci_mpf_stat_cnt'(vtp_2mb_misses_incr);
         end
     end
 

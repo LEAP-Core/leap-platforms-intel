@@ -48,7 +48,7 @@
 #include <aalsdk/xlRuntime.h>
 #include <aalsdk/service/ICCIAFU.h>
 #include <aalsdk/service/ICCIClient.h>
-#include "awb/restricted/cci_mpf_csrs.h"
+#include "cci_mpf_csrs.h"
 #else
 #include <aalsdk/Runtime.h>
 #include <aalsdk/service/IALIAFU.h>

@@ -208,6 +208,9 @@ class Verilog():
         for m in moduleList.getAllDependencies('GIVEN_BDPI_CS'):
             print 'GIVEN_BDPI_CS: ' + str(m)
 
+    # Include Quartus megafunction simulation library
+    vexe_gen_command += ' ' + moduleList.env['ENV']['QUARTUS_HOME'] + '/eda/sim_lib/altera_mf.v'
+
     # Generate a thin wrapper around the verilog executable.  This
     # wrapper is used to address a problem in iverilog in which the
     # simulator does not support shared library search paths.  The

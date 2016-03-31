@@ -733,7 +733,17 @@ module cci_mpf_shim_wro
 
     // Request heap read as fiu responses arrive.  The heap's value will be
     // available the cycle fiu_buf is read.
-    assign c0_heap_readReq = t_C0_REQ_IDX'(fiu.c0Rx.hdr);
+    always_comb
+    begin
+        c0_heap_readReq = t_C0_REQ_IDX'(fiu.c0Rx.hdr);
+
+        // The RAM size is not necessary a power of 2. The simulation library
+        // complains about illegal addresses.
+        if (! cci_c0Rx_isReadRsp(fiu.c0Rx))
+        begin
+            c0_heap_readReq[$bits(c0_heap_readReq)-1] = 1'b0;
+        end
+    end
 
     // Free heap entries as read responses arrive.
     assign c0_heap_freeIdx = t_C0_REQ_IDX'(fiu.c0Rx.hdr);
@@ -777,7 +787,17 @@ module cci_mpf_shim_wro
     // Request heap read as fiu responses arrive. The heap's value will be
     // available the cycle fiu_buf is read. Responses may arrive on either
     // channel!
-    assign c1_heap_readReq = t_C1_REQ_IDX'(fiu.c1Rx.hdr);
+    always_comb
+    begin
+        c1_heap_readReq = t_C1_REQ_IDX'(fiu.c1Rx.hdr);
+
+        // The RAM size is not necessary a power of 2. The simulation library
+        // complains about illegal addresses.
+        if (! cci_c1Rx_isWriteRsp(fiu.c1Rx))
+        begin
+            c1_heap_readReq[$bits(c1_heap_readReq)-1] = 1'b0;
+        end
+    end
 
     // Free heap entries as write responses arrive.
     assign c1_heap_freeIdx = t_C1_REQ_IDX'(fiu.c1Rx.hdr);

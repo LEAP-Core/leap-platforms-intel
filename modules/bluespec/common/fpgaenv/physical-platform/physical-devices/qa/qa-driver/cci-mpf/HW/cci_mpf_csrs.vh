@@ -62,6 +62,7 @@ interface cci_mpf_csrs();
     logic vtp_out_event_2mb_hit_c0;
     logic vtp_out_event_2mb_hit_c1;
     logic vtp_out_event_2mb_miss;
+    logic vtp_out_event_pt_walk_busy;
 
     //
     // WRO -- write/read ordering
@@ -95,7 +96,8 @@ interface cci_mpf_csrs();
         input vtp_out_event_4kb_miss,
         input vtp_out_event_2mb_hit_c0,
         input vtp_out_event_2mb_hit_c1,
-        input vtp_out_event_2mb_miss
+        input vtp_out_event_2mb_miss,
+        input vtp_out_event_pt_walk_busy
         );
 
     modport vtp
@@ -111,7 +113,8 @@ interface cci_mpf_csrs();
         output vtp_out_event_4kb_miss,
         output vtp_out_event_2mb_hit_c0,
         output vtp_out_event_2mb_hit_c1,
-        output vtp_out_event_2mb_miss
+        output vtp_out_event_2mb_miss,
+        output vtp_out_event_pt_walk_busy
         );
 
     modport wro

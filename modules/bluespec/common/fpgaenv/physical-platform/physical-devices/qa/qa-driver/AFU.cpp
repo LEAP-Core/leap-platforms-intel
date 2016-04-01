@@ -677,6 +677,10 @@ AFU_CLIENT_CLASS::EmitStats(ofstream &statusFile)
                << "\"VTP 2MB TLB Misses\","
                << GetStatVTP(CCI_MPF_VTP_CSR_STAT_2MB_TLB_NUM_MISSES)
                << endl;
+    statusFile << "CCI_MPF_VTP_CSR_STAT_PT_WALK_BUSY_CYCLES,"
+               << "\"VTP Page Table Walk Busy Cycles\","
+               << GetStatVTP(CCI_MPF_VTP_CSR_STAT_PT_WALK_BUSY_CYCLES)
+               << endl;
 }
 
 void

@@ -58,7 +58,7 @@ parameter CCI_MPF_WRO_CSR_OFFSET = CCI_MPF_VTP_CSR_OFFSET + CCI_MPF_VTP_CSR_SIZE
 parameter CCI_MPF_STAT_CNT_WIDTH = 16;
 typedef logic [CCI_MPF_STAT_CNT_WIDTH-1:0] t_cci_mpf_stat_cnt;
 
-parameter CCI_MPF_CSR_NUM_STATS = 4;
+parameter CCI_MPF_CSR_NUM_STATS = 5;
 typedef t_mpf_csr_offset [0:CCI_MPF_CSR_NUM_STATS-1] t_stat_csr_offset_vec;
 typedef t_cci_mpf_stat_cnt [0:CCI_MPF_CSR_NUM_STATS-1] t_stat_upd_count_vec;
 
@@ -512,6 +512,7 @@ module cci_mpf_shim_csr_events
     t_cci_mpf_stat_cnt vtp_4kb_misses;
     t_cci_mpf_stat_cnt vtp_2mb_hits;
     t_cci_mpf_stat_cnt vtp_2mb_misses;
+    t_cci_mpf_stat_cnt vtp_pt_walk_busy_cycles;
 
 
     // ====================================================================
@@ -561,6 +562,11 @@ module cci_mpf_shim_csr_events
             t_mpf_csr_offset'((CCI_MPF_VTP_CSR_OFFSET +
                                CCI_MPF_VTP_CSR_STAT_2MB_TLB_NUM_MISSES) >> 3);
         stat_upd_count_vec[3] = vtp_2mb_misses;
+
+        stat_upd_offset_vec[4] =
+            t_mpf_csr_offset'((CCI_MPF_VTP_CSR_OFFSET +
+                               CCI_MPF_VTP_CSR_STAT_PT_WALK_BUSY_CYCLES) >> 3);
+        stat_upd_count_vec[4] = vtp_pt_walk_busy_cycles;
     end
 
 
@@ -575,10 +581,12 @@ module cci_mpf_shim_csr_events
     t_cci_mpf_stat_cnt vtp_4kb_misses_cur;
     t_cci_mpf_stat_cnt vtp_2mb_hits_cur;
     t_cci_mpf_stat_cnt vtp_2mb_misses_cur;
+    t_cci_mpf_stat_cnt vtp_pt_walk_busy_cycles_cur;
     assign vtp_4kb_hits_cur = (consume_counters ? t_cci_mpf_stat_cnt'(0) : vtp_4kb_hits);
     assign vtp_4kb_misses_cur = (consume_counters ? t_cci_mpf_stat_cnt'(0) : vtp_4kb_misses);
     assign vtp_2mb_hits_cur = (consume_counters ? t_cci_mpf_stat_cnt'(0) : vtp_2mb_hits);
     assign vtp_2mb_misses_cur = (consume_counters ? t_cci_mpf_stat_cnt'(0) : vtp_2mb_misses);
+    assign vtp_pt_walk_busy_cycles_cur = (consume_counters ? t_cci_mpf_stat_cnt'(0) : vtp_pt_walk_busy_cycles);
 
 
     logic [1:0] vtp_4kb_hits_incr;
@@ -641,6 +649,21 @@ module cci_mpf_shim_csr_events
         begin
             vtp_2mb_misses_incr <= events.vtp_out_event_2mb_miss;
             vtp_2mb_misses <= vtp_2mb_misses_cur + t_cci_mpf_stat_cnt'(vtp_2mb_misses_incr);
+        end
+    end
+
+    logic vtp_pt_walk_busy_cycles_incr;
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            vtp_pt_walk_busy_cycles <= t_cci_mpf_stat_cnt'(0);
+            vtp_pt_walk_busy_cycles_incr <= 1'b0;
+        end
+        else
+        begin
+            vtp_pt_walk_busy_cycles_incr <= events.vtp_out_event_pt_walk_busy;
+            vtp_pt_walk_busy_cycles <= vtp_pt_walk_busy_cycles_cur + t_cci_mpf_stat_cnt'(vtp_pt_walk_busy_cycles_incr);
         end
     end
 

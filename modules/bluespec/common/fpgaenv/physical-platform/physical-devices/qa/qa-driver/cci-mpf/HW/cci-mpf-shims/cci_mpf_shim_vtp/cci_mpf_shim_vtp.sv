@@ -342,7 +342,9 @@ module cci_mpf_shim_vtp
         .ptReadRdy(! ptReadEn_q),
 
         .ptReadData(fiu.c0Rx.data),
-        .ptReadDataEn
+        .ptReadDataEn,
+
+        .statBusy(events.vtp_out_event_pt_walk_busy)
         );
 
 

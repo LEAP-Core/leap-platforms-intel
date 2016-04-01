@@ -78,7 +78,10 @@ module cci_mpf_shim_vtp_pt_walk
 
     // Response to page table read request
     input t_cci_clData ptReadData,
-    input logic ptReadDataEn
+    input logic ptReadDataEn,
+
+    // Statistics
+    output logic statBusy
     );
 
     initial begin
@@ -188,6 +191,8 @@ module cci_mpf_shim_vtp_pt_walk
     assign walkPtReqRdy = initialized &&
                           (state == STATE_PT_WALK_IDLE) &&
                           ! error_pte_missing;
+
+    assign statBusy = (state != STATE_PT_WALK_IDLE);
 
     //
     // State transition.  One request is processed at a time.

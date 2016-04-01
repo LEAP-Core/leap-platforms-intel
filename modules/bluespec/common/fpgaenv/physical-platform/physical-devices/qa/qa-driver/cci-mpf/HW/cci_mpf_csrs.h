@@ -64,9 +64,10 @@ typedef enum
     CCI_MPF_VTP_CSR_STAT_4KB_TLB_NUM_MISSES = 48,
     CCI_MPF_VTP_CSR_STAT_2MB_TLB_NUM_HITS = 56,
     CCI_MPF_VTP_CSR_STAT_2MB_TLB_NUM_MISSES = 64,
+    CCI_MPF_VTP_CSR_STAT_PT_WALK_BUSY_CYCLES = 72,
 
     // Must be last
-    CCI_MPF_VTP_CSR_SIZE = 72
+    CCI_MPF_VTP_CSR_SIZE = 80
 }
 t_cci_mpf_vtp_csr_offsets;
 

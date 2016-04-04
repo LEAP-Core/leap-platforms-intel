@@ -311,15 +311,23 @@ module cci_mpf_shim_vtp_pipe
     begin
         c0_req_hdr = c0_afu_pipe[AFU_PIPE_LAST_STAGE].hdr;
 
-        // Request's line offset within the page.
-        c0_req_offset = vtp2mbPageOffsetFromVA(c0_req_hdr.base.address);
-
         // Replace the address with the physical address
         if (cci_mpf_c0_getReqAddrIsVirtual(c0_req_hdr))
         begin
             // Page offset remains the same in VA and PA
-            c0_req_hdr.base.address = { vtp4kbTo2mbPA(tlb_if.lookupRspPagePA[0]),
-                                        c0_req_offset };
+            if (tlb_if.lookupIsBigPage[0])
+            begin
+                c0_req_hdr.base.address =
+                    { vtp4kbTo2mbPA(tlb_if.lookupRspPagePA[0]),
+                      vtp2mbPageOffsetFromVA(c0_req_hdr.base.address) };
+            end
+            else
+            begin
+                c0_req_hdr.base.address =
+                    { tlb_if.lookupRspPagePA[0],
+                      vtp4kbPageOffsetFromVA(c0_req_hdr.base.address) };
+            end
+
             c0_req_hdr.ext.addrIsVirtual = 0;
         end
     end
@@ -347,14 +355,22 @@ module cci_mpf_shim_vtp_pipe
     begin
         c1_req_hdr = c1_afu_pipe[AFU_PIPE_LAST_STAGE].hdr;
 
-        // Request's line offset within the page.
-        c1_req_offset = vtp2mbPageOffsetFromVA(c1_req_hdr.base.address);
-
         // Replace the address with the physical address
         if (cci_mpf_c1_getReqAddrIsVirtual(c1_req_hdr))
         begin
-            c1_req_hdr.base.address = { vtp4kbTo2mbPA(tlb_if.lookupRspPagePA[1]),
-                                        c1_req_offset };
+            if (tlb_if.lookupIsBigPage[1])
+            begin
+                c1_req_hdr.base.address =
+                    { vtp4kbTo2mbPA(tlb_if.lookupRspPagePA[1]),
+                      vtp2mbPageOffsetFromVA(c1_req_hdr.base.address) };
+            end
+            else
+            begin
+                c1_req_hdr.base.address =
+                    { tlb_if.lookupRspPagePA[1],
+                      vtp4kbPageOffsetFromVA(c1_req_hdr.base.address) };
+            end
+
             c1_req_hdr.ext.addrIsVirtual = 0;
         end
     end

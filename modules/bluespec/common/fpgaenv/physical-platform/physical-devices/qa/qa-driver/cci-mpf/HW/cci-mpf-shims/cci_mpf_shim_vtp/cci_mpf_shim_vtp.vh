@@ -133,6 +133,7 @@ interface cci_mpf_shim_vtp_tlb_if;
 
     // Respond with page's physical address two cycles after lookupEn
     t_tlb_4kb_pa_page_idx lookupRspPagePA[0:1];
+    logic lookupIsBigPage[0:1];
     // Signal lookupValid two cycles after lookupEn if the page
     // isn't currently in the FPGA-side translation table.
     logic lookupValid[0:1];
@@ -175,6 +176,7 @@ interface cci_mpf_shim_vtp_tlb_if;
         input  lookupRdy,
 
         input  lookupRspPagePA,
+        input  lookupIsBigPage,
         input  lookupValid
         );
 

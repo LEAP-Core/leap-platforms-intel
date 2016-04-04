@@ -568,19 +568,20 @@ module cci_mpf_shim_vtp_tlb
             begin
                 if (tlb_if.lookupEn[p])
                 begin
-                    $display("TLB %s: Lookup chan %0d, VA 0x%x (line)",
+                    $display("TLB %s: Lookup chan %0d, VA 0x%x",
                              DEBUG_NAME,
                              p,
-                             {tlb_if.lookupPageVA[p], CCI_PT_4KB_PAGE_OFFSET_BITS'(0)});
+                             {tlb_if.lookupPageVA[p], CCI_PT_4KB_PAGE_OFFSET_BITS'(0), 6'b0});
                 end
 
                 if (tlb_if.lookupValid[p])
                 begin
-                    $display("TLB %s: Hit chan %0d, idx %0d, way %0d, PA 0x%x",
+                    $display("TLB %s: Hit chan %0d, idx %0d, way %0d, VA 0x%x, PA 0x%x",
                              DEBUG_NAME,
                              p, target_tlb_idx(stg_state[NUM_TLB_LOOKUP_PIPE_STAGES][p].lookup_page_va),
                              lookup_way_hit[p],
-                             {tlb_if.lookupRspPagePA[p], CCI_PT_4KB_PAGE_OFFSET_BITS'(0)});
+                             {stg_state[NUM_TLB_LOOKUP_PIPE_STAGES][p].lookup_page_va, CCI_PT_PAGE_OFFSET_BITS'(0), 6'b0},
+                             {tlb_if.lookupRspPagePA[p], CCI_PT_PAGE_OFFSET_BITS'(0), 6'b0});
                 end
             end
 
@@ -593,8 +594,8 @@ module cci_mpf_shim_vtp_tlb
                         $display("TLB %s: Insert idx %0d, way %0d, VA 0x%x, PA 0x%x",
                                  DEBUG_NAME,
                                  tlb_waddr, way,
-                                 {tlb_wdata.tag, tlb_waddr, CCI_PT_PAGE_OFFSET_BITS'(0)},
-                                 {tlb_wdata.idx, CCI_PT_PAGE_OFFSET_BITS'(0)});
+                                 {tlb_wdata.tag, tlb_waddr, CCI_PT_PAGE_OFFSET_BITS'(0), 6'b0},
+                                 {tlb_wdata.idx, CCI_PT_PAGE_OFFSET_BITS'(0), 6'b0});
                     end
                 end
             end

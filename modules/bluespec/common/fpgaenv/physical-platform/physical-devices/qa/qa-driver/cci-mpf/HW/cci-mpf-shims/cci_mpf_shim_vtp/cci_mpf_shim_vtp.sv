@@ -173,6 +173,7 @@ module cci_mpf_shim_vtp
             // At most one TLB should have a translation for a given address.
             assign tlb_if.lookupValid[p] = tlb_if_4kb.lookupValid[p] ||
                                            tlb_if_2mb.lookupValid[p];
+            assign tlb_if.lookupIsBigPage[p] = tlb_if_2mb.lookupValid[p];
             assign tlb_if.lookupRspPagePA[p] =
                 tlb_if_4kb.lookupValid[p] ? tlb_if_4kb.lookupRspPagePA[p] :
                                             tlb_if_2mb.lookupRspPagePA[p];

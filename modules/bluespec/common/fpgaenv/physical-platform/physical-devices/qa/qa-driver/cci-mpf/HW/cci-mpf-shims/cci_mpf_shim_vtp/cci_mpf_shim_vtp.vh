@@ -76,7 +76,7 @@ typedef logic [CCI_PT_4KB_PAGE_OFFSET_BITS-1 : 0] t_tlb_4kb_page_offset;
 
 
 //
-// Convert a full VA to page index and offset.
+// Convert a full address to page index and offset.
 //
 function automatic t_tlb_2mb_va_page_idx vtp2mbPageIdxFromVA(t_cci_clAddr va);
     return va[CCI_PT_2MB_PAGE_OFFSET_BITS +: CCI_PT_2MB_VA_PAGE_INDEX_BITS];
@@ -92,6 +92,15 @@ endfunction
 
 function automatic t_tlb_4kb_page_offset vtp4kbPageOffsetFromVA(t_cci_clAddr va);
     return va[CCI_PT_4KB_PAGE_OFFSET_BITS-1 : 0];
+endfunction
+
+
+function automatic t_tlb_4kb_pa_page_idx vtp4kbPageIdxFromPA(t_cci_clAddr pa);
+    return pa[CCI_PT_4KB_PAGE_OFFSET_BITS +: CCI_PT_4KB_PA_PAGE_INDEX_BITS];
+endfunction
+
+function automatic t_tlb_4kb_page_offset vtp4kbPageOffsetFromPA(t_cci_clAddr pa);
+    return pa[CCI_PT_4KB_PAGE_OFFSET_BITS-1 : 0];
 endfunction
 
 

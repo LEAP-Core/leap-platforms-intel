@@ -28,6 +28,9 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
+`ifndef CCI_MPF_PRIM_HASH_VH
+`define CCI_MPF_PRIM_HASH_VH
+
 //
 // 32 bit hash function.
 //
@@ -210,3 +213,5 @@ function automatic [31:0] hash32_inv;
 
     hash32_inv = hash;
 endfunction
+
+`endif //  `ifndef CCI_MPF_PRIM_HASH_VH

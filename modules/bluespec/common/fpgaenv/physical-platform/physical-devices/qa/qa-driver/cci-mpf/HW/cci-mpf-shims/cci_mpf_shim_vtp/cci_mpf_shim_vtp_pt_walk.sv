@@ -33,6 +33,7 @@
 `include "cci_mpf_csrs.vh"
 
 `include "cci_mpf_shim_vtp.vh"
+`include "cci_mpf_prim_hash.vh"
 
 
 //
@@ -44,6 +45,50 @@
 // The table being walked is constructed by software.  The format is
 // is described in SW/src/cci_mpf_shim_vtp_pt.cpp.
 //
+
+
+// Hierarchical page table is composed of 4KB pages, each with 512
+// 64 bit pointers either to the translated PA or to the next page
+// in the page table.  Each index is thus 9 bits.
+localparam CCI_MPF_PT_PAGE_IDX_WIDTH = 9;
+typedef logic [CCI_MPF_PT_PAGE_IDX_WIDTH-1 : 0] t_cci_mpf_pt_page_idx;
+
+// Maximum depth (levels of indirection) in the page table.
+localparam CCI_MPF_PT_MAX_DEPTH = 4;
+typedef logic [$clog2(CCI_MPF_PT_MAX_DEPTH)-1 : 0] t_cci_mpf_pt_walk_depth;
+
+// Vector of page indices, representing the set of indices used in a
+// hierarchical page table walk.
+typedef t_cci_mpf_pt_page_idx [CCI_MPF_PT_MAX_DEPTH-1 : 0] t_cci_mpf_pt_page_idx_vec;
+
+
+//
+// Status bits in the low bits of a page table entry.
+//
+typedef struct packed
+{
+    // Translation error (no translation found)
+    logic error;
+
+    // Terminal entry found (the translation)
+    logic terminal;
+}
+t_cci_mpf_pt_walk_status;
+
+function automatic t_cci_mpf_pt_walk_status cci_mpf_ptWalkWordToStatus(logic [63:0] w);
+    t_cci_mpf_pt_walk_status s;
+
+    // The SW initializes entries to ~0.  Check bit 1 as a proxy for
+    // the entire entry being invalid.
+    s.error = w[1];
+
+    // Bit 0 in the response word indicates a successful translation.
+    s.terminal = w[0];
+
+    return s;
+endfunction
+
+
 module cci_mpf_shim_vtp_pt_walk
   #(
     parameter DEBUG_MESSAGES = 0
@@ -93,8 +138,8 @@ module cci_mpf_shim_vtp_pt_walk
     end
 
     // Root address of the page table
-    t_cci_clAddr page_table_root;
-    assign page_table_root = csrs.vtp_in_page_table_base;
+    t_tlb_4kb_pa_page_idx page_table_root;
+    assign page_table_root = vtp4kbPageIdxFromPA(csrs.vtp_in_page_table_base);
 
     logic initialized;
     always_ff @(posedge clk)
@@ -117,16 +162,12 @@ module cci_mpf_shim_vtp_pt_walk
     //
     // ====================================================================
 
-    // Hierarchical page table is composed of 4KB pages, each with 512
-    // 64 bit pointers either to the translated PA or to the next page
-    // in the page table.  Each index is thus 9 bits.
-    localparam PT_PAGE_IDX_WIDTH = 9;
-
     // Page index components: line address and word within line
-    localparam PT_PAGE_WORD_IDX_WIDTH = $clog2(CCI_CLDATA_WIDTH / 64);
-    typedef logic [PT_PAGE_WORD_IDX_WIDTH-1 : 0] t_pt_page_word_idx;
+    localparam PT_WORDS_PER_LINE = CCI_CLDATA_WIDTH / 64;
+    localparam PT_LINE_WORD_IDX_WIDTH = $clog2(PT_WORDS_PER_LINE);
+    typedef logic [PT_LINE_WORD_IDX_WIDTH-1 : 0] t_pt_line_word_idx;
 
-    localparam PT_PAGE_LINE_IDX_WIDTH = PT_PAGE_IDX_WIDTH - PT_PAGE_WORD_IDX_WIDTH;
+    localparam PT_PAGE_LINE_IDX_WIDTH = CCI_MPF_PT_PAGE_IDX_WIDTH - PT_LINE_WORD_IDX_WIDTH;
     typedef logic [PT_PAGE_LINE_IDX_WIDTH-1 : 0] t_pt_page_line_idx;
 
     typedef struct packed
@@ -134,30 +175,23 @@ module cci_mpf_shim_vtp_pt_walk
         // Index of a line within a 4KB page table
         t_pt_page_line_idx line_idx;
         // Index of a word within the line
-        t_pt_page_word_idx word_idx;
+        t_pt_line_word_idx word_idx;
     }
     t_pt_page_idx;
 
-    localparam PT_MAX_DEPTH = 4;
-    typedef logic [$clog2(PT_MAX_DEPTH)-1 : 0] t_pt_walk_depth;
-
     function automatic t_pt_page_line_idx ptPageLineIdx(
-        t_tlb_4kb_va_page_idx pidx_4k
+        t_cci_mpf_pt_page_idx_vec pidx_vec
         );
 
-        // Top bits
-        t_pt_page_idx pidx = pidx_4k[$bits(pidx_4k)-1 -: $bits(t_pt_page_idx)];
-
+        t_pt_page_idx pidx = pidx_vec[0];
         return pidx.line_idx;
     endfunction
 
-    function automatic t_pt_page_word_idx ptLineWordIdx(
-        t_tlb_4kb_va_page_idx pidx_4k
+    function automatic t_pt_line_word_idx ptLineWordIdx(
+        t_cci_mpf_pt_page_idx_vec pidx_vec
         );
 
-        // Top bits
-        t_pt_page_idx pidx = pidx_4k[$bits(pidx_4k)-1 -: $bits(t_pt_page_idx)];
-
+        t_pt_page_idx pidx = pidx_vec[0];
         return pidx.word_idx;
     endfunction
 
@@ -171,6 +205,8 @@ module cci_mpf_shim_vtp_pt_walk
     typedef enum logic [2:0]
     {
         STATE_PT_WALK_IDLE,
+        STATE_PT_WALK_READ_CACHE_REQ,
+        STATE_PT_WALK_READ_CACHE_RSP,
         STATE_PT_WALK_READ_REQ,
         STATE_PT_WALK_READ_WAIT_RSP,
         STATE_PT_WALK_READ_RSP,
@@ -193,32 +229,9 @@ module cci_mpf_shim_vtp_pt_walk
     // Base address of current page being accessed.  During a walk pt_cur_page
     // points to pages in the page table.  When translation is complete it
     // points to the translated physical page.
-    t_cci_clAddr pt_walk_cur_page;
+    t_tlb_4kb_pa_page_idx pt_walk_cur_page;
 
-    typedef struct
-    {
-        // Terminal entry found (the translation)
-        logic success;
-
-        // Translation error (no translation found)
-        logic error;
-    }
-    t_pt_walk_status;
-
-    function automatic t_pt_walk_status pt_walk_word_to_status(logic [63:0] w);
-        t_pt_walk_status s;
-
-        // Bit 0 in the response word indicates a successful translation.
-        s.success = w[0];
-
-        // The SW initializes entries to ~0.  Check bit 1 as a proxy for
-        // the entire entry being invalid.
-        s.error = w[1];
-
-        return s;
-    endfunction
-
-    t_pt_walk_status pt_walk_cur_status;
+    t_cci_mpf_pt_walk_status pt_walk_cur_status;
 
     // Selected word within the response line
     logic [63 : 0] pt_read_rsp_word;
@@ -229,16 +242,61 @@ module cci_mpf_shim_vtp_pt_walk
     // During translation the VA is broken down into 9 bit indices during
     // the tree-based page walk.  This register is shifted as each level
     // is traversed, leaving the next index in the high bits.
-    t_tlb_4kb_va_page_idx translate_va_idx;
-
-    // Record the word in the line requested in the most recent page table
-    // read.
-    t_pt_page_word_idx translate_va_prev_word_idx;
+    t_cci_mpf_pt_page_idx_vec translate_va_idx_vec;
+    t_cci_mpf_pt_page_idx_vec translate_va_lower_idx_vec;
     
+    // High bits of the requested VA are the page table indices
+    t_cci_mpf_pt_page_idx_vec req_va_as_idx_vec;
+    assign req_va_as_idx_vec = walkPtReqVA[($bits(walkPtReqVA)-1) -:
+                                           $bits(t_cci_mpf_pt_page_idx_vec)];
+
 
     // Track the depth while walking the table.  This is one way of detecting
     // a malformed table or missing entry.
-    t_pt_walk_depth translate_depth;
+    t_cci_mpf_pt_walk_depth translate_depth;
+
+
+    //
+    // Cache of previous page table reads.  We don't rely on the small
+    // QPI cache.  Instead, a small cache of recent page table lines is
+    // maintained.
+    //
+    logic ptReadCacheRdy;
+    logic ptReadCacheMissRsp;
+    logic ptReadCacheHitRsp;
+    t_tlb_4kb_pa_page_idx ptReadCachePage;
+    t_cci_mpf_pt_walk_status ptReadCacheStatus;
+
+    cci_mpf_shim_vtp_pt_walk_cache
+      #(
+        .DEBUG_MESSAGES(DEBUG_MESSAGES)
+        )
+      cache
+       (
+        .clk,
+        .reset,
+        .csrs,
+
+        .rdy(ptReadCacheRdy),
+
+        // Request lookup
+        .reqEn(ptReadCacheRdy && (state == STATE_PT_WALK_READ_CACHE_REQ)),
+        .reqPageIdxVec(translate_va_idx_vec),
+        .reqWalkDepth(translate_depth),
+
+        // Lookup response
+        .rspMiss(ptReadCacheMissRsp),
+        .rspHit(ptReadCacheHitRsp),
+        .rspPageAddr(ptReadCachePage),
+        .rspStatus(ptReadCacheStatus),
+
+        // Insert a new line in the cache
+        .insertEn(ptReadDataEn),
+        .insertData(ptReadData),
+        .insertPageIdxVec(translate_va_idx_vec),
+        .insertWalkDepth(translate_depth)
+        );
+
 
     //
     // State transition.  One request is processed at a time.
@@ -258,15 +316,73 @@ module cci_mpf_shim_vtp_pt_walk
                     // New request arrived and not already doing a walk
                     if (walkPtReqEn)
                     begin
-                        state <= STATE_PT_WALK_READ_REQ;
+                        state <= STATE_PT_WALK_READ_CACHE_REQ;
                     end
 
-                    // New request
+                    // New request: start by searching the local page table
+                    // cache (depth first).
                     translate_va <= walkPtReqVA;
-                    translate_va_idx <= walkPtReqVA;
-                    translate_depth <= t_pt_walk_depth'(~0);
+                    translate_va_idx_vec <= req_va_as_idx_vec;
+                    translate_depth <=
+                        t_cci_mpf_pt_walk_depth'(CCI_MPF_PT_MAX_DEPTH - 1);
 
                     pt_walk_cur_page <= page_table_root;
+                end
+
+              STATE_PT_WALK_READ_CACHE_REQ:
+                begin
+                    // Wait until a PT cache read request can fire
+                    if (ptReadCacheRdy)
+                    begin
+                        state <= STATE_PT_WALK_READ_CACHE_RSP;
+                    end
+                end
+
+              STATE_PT_WALK_READ_CACHE_RSP:
+                begin
+                    if (ptReadCacheMissRsp)
+                    begin
+                        // Not in cache.
+                        if (translate_depth != t_cci_mpf_pt_walk_depth'(0))
+                        begin
+                            // Try higher up in the page table hierarchy.
+                            state <= STATE_PT_WALK_READ_CACHE_REQ;
+                            translate_depth <= translate_depth -
+                                               t_cci_mpf_pt_walk_depth'(1);
+
+                            // Shift the page table index vector to represent
+                            // a higher level.
+                            for (int i = 0; i < CCI_MPF_PT_MAX_DEPTH-1; i = i + 1)
+                            begin
+                                translate_va_idx_vec[i] <=
+                                    translate_va_idx_vec[i + 1];
+                                translate_va_lower_idx_vec[i] <=
+                                    translate_va_lower_idx_vec[i + 1];
+                            end
+
+                            translate_va_idx_vec[CCI_MPF_PT_MAX_DEPTH-1] <=
+                                t_cci_mpf_pt_page_idx'(0);
+
+                            // "Lower" vector holds indices only relevant to
+                            // the hierarchy below the current search depth.
+                            translate_va_lower_idx_vec[CCI_MPF_PT_MAX_DEPTH-1] <=
+                                translate_va_idx_vec[0];
+                        end
+                        else
+                        begin
+                            // Reached the root of the table without finding
+                            // the entry.  Read the from page table instead.
+                            state <= STATE_PT_WALK_READ_REQ;
+                        end
+                    end
+                    else if (ptReadCacheHitRsp)
+                    begin
+                        // Hit!  No need to read from host memory.
+                        state <= STATE_PT_WALK_READ_RSP;
+
+                        pt_walk_cur_status <= ptReadCacheStatus;
+                        pt_walk_cur_page <= ptReadCachePage;
+                    end
                 end
 
               STATE_PT_WALK_READ_REQ:
@@ -275,15 +391,6 @@ module cci_mpf_shim_vtp_pt_walk
                     if (ptReadEn)
                     begin
                         state <= STATE_PT_WALK_READ_WAIT_RSP;
-
-                        translate_va_prev_word_idx <= ptLineWordIdx(translate_va_idx);
-
-                        // Read requested from a level of the page table.
-                        // Shift to move to the index of the next level.
-                        translate_va_idx <=
-                            t_tlb_4kb_va_page_idx'({ translate_va_idx,
-                                                     PT_PAGE_IDX_WIDTH'('x) });
-                        translate_depth <= translate_depth + t_pt_walk_depth'(1);
                     end
                 end
 
@@ -294,12 +401,12 @@ module cci_mpf_shim_vtp_pt_walk
                     begin
                         state <= STATE_PT_WALK_READ_RSP;
 
-                        pt_walk_cur_status <= pt_walk_word_to_status(pt_read_rsp_word);
+                        pt_walk_cur_status <= cci_mpf_ptWalkWordToStatus(pt_read_rsp_word);
 
                         // Extract the address of a line from the entry.
                         pt_walk_cur_page <=
-                            pt_read_rsp_word[$clog2(CCI_CLDATA_WIDTH / 8) +:
-                                             CCI_CLADDR_WIDTH];
+                            vtp4kbPageIdxFromPA(pt_read_rsp_word[$clog2(CCI_CLDATA_WIDTH / 8) +:
+                                                                 CCI_CLADDR_WIDTH]);
                     end
                 end
 
@@ -308,11 +415,11 @@ module cci_mpf_shim_vtp_pt_walk
                     // Raise an error if the maximum walk depth is reached without
                     // finding the entry.
                     if (pt_walk_cur_status.error || 
-                        ! pt_walk_cur_status.success && (&(translate_depth) == 1'b1))
+                        ! pt_walk_cur_status.terminal && (&(translate_depth) == 1'b1))
                     begin
                         state <= STATE_PT_WALK_ERROR;
                     end
-                    else if (pt_walk_cur_status.success)
+                    else if (pt_walk_cur_status.terminal)
                     begin
                         // Found the translation
                         state <= STATE_PT_WALK_DONE;
@@ -321,7 +428,16 @@ module cci_mpf_shim_vtp_pt_walk
                     begin
                         // Continue the walk
                         state <= STATE_PT_WALK_READ_REQ;
+                        translate_depth <= translate_depth + t_cci_mpf_pt_walk_depth'(1);
                     end
+
+                    // Shift to move to the index of the next level.
+                    for (int i = 0; i < CCI_MPF_PT_MAX_DEPTH-1; i = i + 1)
+                    begin
+                        translate_va_idx_vec[i + 1] <= translate_va_idx_vec[i];
+                        translate_va_lower_idx_vec[i + 1] <= translate_va_lower_idx_vec[i];
+                    end
+                    translate_va_idx_vec[0] <= translate_va_lower_idx_vec[CCI_MPF_PT_MAX_DEPTH-1];
                 end
 
               STATE_PT_WALK_DONE:
@@ -355,12 +471,15 @@ module cci_mpf_shim_vtp_pt_walk
     // Address of read request
     always_comb
     begin
+        ptReadAddr = t_cci_clAddr'(0);
+
         // Current page in table
-        ptReadAddr = pt_walk_cur_page;
+        ptReadAddr[CCI_PT_4KB_PAGE_OFFSET_BITS +: CCI_PT_4KB_PA_PAGE_INDEX_BITS] =
+            pt_walk_cur_page;
 
         // Select the proper line in this level of the table, based on the
         // portion of the VA corresponding to the level.
-        ptReadAddr[PT_PAGE_LINE_IDX_WIDTH-1 : 0] = ptPageLineIdx(translate_va_idx);
+        ptReadAddr[PT_PAGE_LINE_IDX_WIDTH-1 : 0] = ptPageLineIdx(translate_va_idx_vec);
     end
 
 
@@ -376,7 +495,7 @@ module cci_mpf_shim_vtp_pt_walk
     always_comb
     begin
         pt_read_rsp_word_vec = ptReadData;
-        pt_read_rsp_word = pt_read_rsp_word_vec[translate_va_prev_word_idx];
+        pt_read_rsp_word = pt_read_rsp_word_vec[ptLineWordIdx(translate_va_idx_vec)];
     end
 
 
@@ -391,12 +510,35 @@ module cci_mpf_shim_vtp_pt_walk
                          { walkPtReqVA, CCI_PT_4KB_PAGE_OFFSET_BITS'(0), 6'b0 });
             end
 
+            if ((state == STATE_PT_WALK_READ_CACHE_REQ) && ptReadCacheRdy)
+            begin
+                $display("PT WALK: Cache read [0x%x 0x%x 0x%x 0x%x] depth 0x%x",
+                         translate_va_idx_vec[3],
+                         translate_va_idx_vec[2],
+                         translate_va_idx_vec[1],
+                         translate_va_idx_vec[0],
+                         translate_depth);
+            end
+
+            if ((state == STATE_PT_WALK_READ_CACHE_RSP) && ptReadCacheMissRsp)
+            begin
+                $display("PT WALK: Cache miss");
+            end
+
+            if ((state == STATE_PT_WALK_READ_CACHE_RSP) && ptReadCacheHitRsp)
+            begin
+                $display("PT WALK: Cache hit PA 0x%x (terminal %0d, error %0d)",
+                         {ptReadCachePage, CCI_PT_4KB_PAGE_OFFSET_BITS'(0), 6'b0},
+                         ptReadCacheStatus.terminal,
+                         ptReadCacheStatus.error);
+            end
+
             if (ptReadEn)
             begin
                 $display("PT WALK: PTE read addr 0x%x (PA 0x%x) (line 0x%x, word 0x%x)",
                          ptReadAddr, {ptReadAddr, 6'b0},
-                         ptPageLineIdx(translate_va_idx),
-                         ptLineWordIdx(translate_va_idx));
+                         ptPageLineIdx(translate_va_idx_vec),
+                         ptLineWordIdx(translate_va_idx_vec));
             end
 
             if (ptReadDataEn)
@@ -410,12 +552,19 @@ module cci_mpf_shim_vtp_pt_walk
                          pt_read_rsp_word_vec[2],
                          pt_read_rsp_word_vec[1],
                          pt_read_rsp_word_vec[0]);
+
+                $display("PT WALK: Cache insert [0x%x 0x%x 0x%x 0x%x] depth 0x%x",
+                         translate_va_idx_vec[3],
+                         translate_va_idx_vec[2],
+                         translate_va_idx_vec[1],
+                         translate_va_idx_vec[0],
+                         translate_depth);
             end
 
             if (tlb_fill_if.fillEn)
             begin
-                $display("PT WALK: Response Addr 0x%x (PA 0x%x), size %s",
-                         pt_walk_cur_page, {pt_walk_cur_page, 6'b0},
+                $display("PT WALK: Response PA 0x%x, size %s",
+                         {pt_walk_cur_page, CCI_PT_4KB_PAGE_OFFSET_BITS'(0), 6'b0},
                          (tlb_fill_if.fillBigPage ? "2MB" : "4KB"));
             end
 
@@ -439,11 +588,267 @@ module cci_mpf_shim_vtp_pt_walk
     assign tlb_fill_if.fillEn = (state == STATE_PT_WALK_DONE) &&
                                 tlb_fill_if.fillRdy;
     assign tlb_fill_if.fillVA = translate_va;
-    assign tlb_fill_if.fillPA = pt_walk_cur_page[CCI_PT_4KB_PAGE_OFFSET_BITS +:
-                                                 CCI_PT_4KB_PA_PAGE_INDEX_BITS];
+    assign tlb_fill_if.fillPA = pt_walk_cur_page;
+
     // Use just bit 0 of translate_depth, which is either 2 for a 2MB page
     // or 3 for a 4KB page.
     assign tlb_fill_if.fillBigPage = ! (translate_depth[0]);
 
 endmodule // cci_mpf_shim_vtp_pt_walk
 
+
+//
+// Small cache of previously read lines in the page table.
+//
+module cci_mpf_shim_vtp_pt_walk_cache
+  #(
+    parameter DEBUG_MESSAGES = 0
+    )
+   (
+    input  logic clk,
+    input  logic reset,
+
+    // CSRs
+    cci_mpf_csrs.vtp csrs,
+
+    // Ready for new request?
+    output logic rdy,
+
+    // Look up line/word
+    input  logic reqEn,
+    input  t_cci_mpf_pt_page_idx_vec reqPageIdxVec,
+    input  t_cci_mpf_pt_walk_depth reqWalkDepth,
+
+    // Response
+    output logic rspMiss,
+    output logic rspHit,
+    output t_tlb_4kb_pa_page_idx rspPageAddr,
+    output t_cci_mpf_pt_walk_status rspStatus,
+
+    // Insert data in the cache
+    input  logic insertEn,
+    input  t_cci_clData insertData,
+    input  t_cci_mpf_pt_page_idx_vec insertPageIdxVec,
+    input  t_cci_mpf_pt_walk_depth insertWalkDepth
+    );
+
+    // Number of cache entries.  Each entry has one tag and
+    // PT_WORDS_PER_LINE words.
+    localparam PT_CACHE_ENTRIES = 128;
+    typedef logic [$clog2(PT_CACHE_ENTRIES)-1 : 0] t_pt_cache_idx;
+
+    //
+    // Break the page index vector into two components:
+    //   - The majority is a tag.
+    //   - The low few bits are the index of a word within a CCI line.
+    //     This is what makes the cache useful, since multiple
+    //     page table entries are fetched with each line.
+    //
+    localparam PT_WORDS_PER_LINE = CCI_CLDATA_WIDTH / 64;
+    localparam PT_LINE_WORD_IDX_WIDTH = $clog2(PT_WORDS_PER_LINE);
+    typedef logic [PT_LINE_WORD_IDX_WIDTH-1 : 0] t_pt_line_word_idx;
+
+    // t_cci_mpf_pt_page_idx_vec without the low t_pt_line_word_idx bits
+    typedef logic [$bits(t_cci_mpf_pt_page_idx_vec) - PT_LINE_WORD_IDX_WIDTH - 1 : 0]
+        t_pt_entry_tag;
+
+    //
+    // Cache tag from index vector.  The vector represents the offsets within
+    // each page table, so the set of indices uniquely identifies a page
+    // table entry.  The tag represents a full line so it ignores the low
+    // word index bits.
+    //
+    function automatic t_pt_entry_tag cacheTag(t_cci_mpf_pt_page_idx_vec idxVec);
+        // Ignore the low (word index) bits of the page index vector
+        t_pt_entry_tag tag;
+        t_pt_line_word_idx w_idx;
+        {tag, w_idx} = idxVec;
+
+        return tag;
+    endfunction
+
+    //
+    // Compute the cache index given a page index vector and the depth
+    // in the page table walk.  Each depth gets its own region in the
+    // address space.
+    //
+    function automatic t_pt_cache_idx cacheIdx(t_cci_mpf_pt_page_idx_vec idxVec,
+                                               t_cci_mpf_pt_walk_depth depth);
+        // Hash the tag and include the depth
+        return t_pt_cache_idx'({ hash32(32'(cacheTag(idxVec))), depth });
+    endfunction
+
+
+    logic tag_rdy;
+    logic insert_busy;
+    assign rdy = tag_rdy && ! insert_busy;
+
+
+    // ====================================================================
+    //
+    //  Storage
+    //
+    // ====================================================================
+
+    //
+    // Tag memory
+    //
+    logic ins_tag_en;
+    t_pt_cache_idx ins_idx;
+    t_pt_entry_tag ins_tag;
+
+    t_pt_cache_idx lookup_idx;
+    assign lookup_idx = cacheIdx(reqPageIdxVec, reqWalkDepth);
+    t_pt_entry_tag lookup_tag;
+
+    cci_mpf_prim_simple_ram_init
+      #(
+        .N_ENTRIES(PT_CACHE_ENTRIES),
+        .N_DATA_BITS($bits(t_pt_entry_tag)),
+        .N_OUTPUT_REG_STAGES(1)
+        )
+      tag
+       (
+        .clk,
+        .reset(reset || csrs.vtp_in_mode.inval_translation_cache),
+        .rdy(tag_rdy),
+
+        .waddr(ins_idx),
+        .wen(ins_tag_en),
+        .wdata(ins_tag),
+
+        .raddr(lookup_idx),
+        .rdata(lookup_tag)
+        );
+
+    //
+    // Data memory
+    //
+    logic ins_data_en;
+    t_pt_line_word_idx ins_word_idx;
+    t_tlb_4kb_pa_page_idx ins_data_word;
+    t_cci_mpf_pt_walk_status ins_data_status;
+
+    t_tlb_4kb_pa_page_idx rsp_page_addr;
+    t_cci_mpf_pt_walk_status rsp_status;
+
+    cci_mpf_prim_simple_ram
+      #(
+        .N_ENTRIES(PT_CACHE_ENTRIES * PT_WORDS_PER_LINE),
+        .N_DATA_BITS(CCI_PT_4KB_PA_PAGE_INDEX_BITS +
+                     $bits(t_cci_mpf_pt_walk_status)),
+        .N_OUTPUT_REG_STAGES(1)
+        )
+      data
+       (
+        .clk,
+
+        .waddr({ ins_idx, ins_word_idx }),
+        .wen(ins_data_en),
+        .wdata({ ins_data_word, ins_data_status }),
+
+        .raddr({ lookup_idx, t_pt_line_word_idx'(reqPageIdxVec) }),
+        .rdata({ rsp_page_addr, rsp_status })
+        );
+
+
+    // ====================================================================
+    //
+    //  Lookup pipeline
+    //
+    // ====================================================================
+
+    logic lookup_q;
+    logic lookup_qq;
+    t_pt_entry_tag lookup_tgt_tag_q;
+    t_pt_entry_tag lookup_tgt_tag_qq;
+
+    logic lookup_hit;
+    assign lookup_hit = (lookup_tgt_tag_qq == lookup_tag) && ! rsp_status.error;
+
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            lookup_q <= 1'b0;
+            lookup_qq <= 1'b0;
+
+            rspMiss <= 1'b0;
+            rspHit <= 1'b0;
+        end
+        else
+        begin
+            lookup_q <= reqEn;
+            lookup_qq <= lookup_q;
+
+            rspMiss <= lookup_qq && ! lookup_hit;
+            rspHit <= lookup_qq && lookup_hit;
+        end
+
+        lookup_tgt_tag_q <= cacheTag(reqPageIdxVec);
+        lookup_tgt_tag_qq <= lookup_tgt_tag_q;
+
+        rspPageAddr <= rsp_page_addr;
+        rspStatus <= rsp_status;
+    end
+
+
+    // ====================================================================
+    //
+    //  Insertion state machine
+    //
+    // ====================================================================
+
+    //
+    // Inserting takes multiple cycles since each word in a line is stored
+    // in a separate index.
+    //
+
+    // Break a line into 64 bit words
+    logic [PT_WORDS_PER_LINE-1 : 0][63 : 0] ins_line_words;
+
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            insert_busy <= 1'b0;
+            ins_word_idx <= t_pt_line_word_idx'(0);
+        end
+        else if (insertEn)
+        begin
+            // New line to insert.  The rdy bit guarantees no insert is
+            // happening when insertEn is triggered.
+            insert_busy <= 1'b1;
+
+            ins_idx <= cacheIdx(insertPageIdxVec, insertWalkDepth);
+            ins_tag <= cacheTag(insertPageIdxVec);
+            ins_line_words <= insertData;
+        end
+        else if (insert_busy)
+        begin
+            // Last word?
+            if (ins_tag_en)
+            begin
+                insert_busy <= 1'b0;
+            end
+
+            ins_word_idx <= ins_word_idx + t_pt_line_word_idx'(1);
+
+            // Shift line as words are written to the memory
+            for (int w = 0; w < PT_WORDS_PER_LINE-1; w = w + 1)
+            begin
+                ins_line_words[w] <= ins_line_words[w + 1];
+            end
+        end
+    end
+
+    // Write the tag when the last word in the line is saved to the cache
+    assign ins_tag_en = (&(ins_word_idx) == 1'b1);
+    assign ins_data_en = insert_busy;
+
+    assign ins_data_word =
+        vtp4kbPageIdxFromPA(ins_line_words[0][$clog2(CCI_CLDATA_WIDTH / 8) +:
+                                              CCI_CLADDR_WIDTH]);
+    assign ins_data_status = cci_mpf_ptWalkWordToStatus(ins_line_words[0]);
+
+endmodule // cci_mpf_shim_vtp_pt_walk_cache

@@ -45,6 +45,7 @@
 //****************************************************************************
 
 #include <assert.h>
+#include <atomic>
 
 #include "cci_mpf_shim_vtp_pt.h"
 
@@ -263,6 +264,10 @@ MPFVTP_PAGE_TABLE::AddVAtoPA(btVirtAddr va, btPhysAddr pa, uint32_t depth)
     if (table->EntryExists(leaf_idx)) return false;
 
     table->InsertTranslatedAddr(leaf_idx, pa);
+
+    // Memory fence for updates before claiming the table is ready
+    std::atomic_thread_fence(std::memory_order_seq_cst);
+
     return true;
 }
 

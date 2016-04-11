@@ -51,6 +51,16 @@
 //
 //
 
+// ********************************************************************
+//
+//  Heap buffer sizes in this module must be set large enough to
+//  accommodate an extra cycle of latency of almFull signals in the
+//  direction of the AFU in order to permit registering the almFull
+//  signals on exit from MPF to the AFU.
+//
+// ********************************************************************
+
+
 module cci_mpf_shim_rsp_order
   #(
     // Sort read responses?  CCI returns responses out of order.  This
@@ -93,9 +103,8 @@ module cci_mpf_shim_rsp_order
 
     // Full signals that will come from the ROB and heap used to
     // sort responses.
-    logic rd_rob_notFull;
-    logic wr_heap_notFull;
-
+    logic rd_not_full;
+    logic wr_not_full;
 
     // ====================================================================
     //
@@ -105,8 +114,8 @@ module cci_mpf_shim_rsp_order
     //
     // ====================================================================
 
-    assign afu.c0TxAlmFull = fiu.c0TxAlmFull || ! rd_rob_notFull;
-    assign afu.c1TxAlmFull = fiu.c1TxAlmFull || ! wr_heap_notFull;
+    assign afu.c0TxAlmFull = fiu.c0TxAlmFull || ! rd_not_full;
+    assign afu.c1TxAlmFull = fiu.c1TxAlmFull || ! wr_not_full;
 
 
     // ====================================================================
@@ -132,14 +141,6 @@ module cci_mpf_shim_rsp_order
 
     logic wr_heap_alloc;
     logic wr_heap_free;
-
-    // Buffer not full for timing.  An extra free slot is added to
-    // the heap to account for latency of the not full signal.
-    logic wr_not_full;
-    always_ff @(posedge clk)
-    begin
-        wr_heap_notFull <= wr_not_full;
-    end
 
     cci_mpf_prim_heap
       #(
@@ -205,14 +206,6 @@ module cci_mpf_shim_rsp_order
     logic rd_rob_eop;
     t_cci_clNum rd_rob_cl_num;
     t_cci_clData rd_rob_out_data;
-
-    // Buffer not full for timing.  An extra free slot is added to the
-    // ROB to account for latency of the not full signal.
-    logic rd_not_full;
-    always_ff @(posedge clk)
-    begin
-        rd_rob_notFull <= rd_not_full;
-    end
 
     generate
         if (SORT_READ_RESPONSES)

@@ -168,8 +168,11 @@ module cci_mpf_shim_vtp_tlb
 
     // Reset (invalidate) the TLB when requested by SW.
     // inval_translation_cache is held for only one cycle.
-    logic reset_tlb;
-    assign reset_tlb = reset || csrs.vtp_in_mode.inval_translation_cache;
+    logic reset_tlb = 1'b1;
+    always @(posedge clk)
+    begin
+        reset_tlb <= reset || csrs.vtp_in_mode.inval_translation_cache;
+    end
 
     genvar w;
     genvar p;
@@ -410,7 +413,6 @@ module cci_mpf_shim_vtp_tlb
     t_state_tlb_fill fill_state;
 
     // Translation insertion request from page walker.
-    assign tlb_if.fillRdy = (fill_state == STATE_TLB_FILL_IDLE);
     t_tlb_virtual_tag fill_tag;
     t_tlb_idx fill_idx;
     t_tlb_pa_page_idx fill_pa;
@@ -426,6 +428,7 @@ module cci_mpf_shim_vtp_tlb
         begin
             fill_state <= STATE_TLB_FILL_IDLE;
             fill_bubble <= 1;
+            tlb_if.fillRdy <= 1'b1;
         end
         else
         begin
@@ -439,6 +442,9 @@ module cci_mpf_shim_vtp_tlb
                         // Convert from VA to TLB tag/index
                         { fill_tag, fill_idx } <= tlbVAIdxFrom4K(tlb_if.fillVA);
                         fill_pa <= tlbPAIdxFrom4K(tlb_if.fillPA);
+
+                        // Only accept one fill at a time
+                        tlb_if.fillRdy <= 1'b0;
                     end
                 end
 
@@ -472,6 +478,7 @@ module cci_mpf_shim_vtp_tlb
                     if (fill_bubble == 0)
                     begin
                         fill_state <= STATE_TLB_FILL_IDLE;
+                        tlb_if.fillRdy <= 1'b1;
                     end
                 end
             endcase

@@ -148,32 +148,44 @@ module cci_mpf_shim_vtp_pipe
     assign c1_request_rdy =
         cci_mpf_c1TxIsValid(c1_afu_pipe[AFU_PIPE_LAST_STAGE]);
 
+    // Register outbound almost full logic for timing.  The VTP pipeline
+    // still responds to almost full within a cycle, so this delay is no
+    // problem.
+    logic fiu_c0TxAlmFull_q;
+    logic fiu_c1TxAlmFull_q;
+    always_ff @(posedge clk)
+    begin
+        fiu_c0TxAlmFull_q <= fiu.c0TxAlmFull;
+        fiu_c1TxAlmFull_q <= fiu.c1TxAlmFull;
+    end
+
+
     // Given a request, is the translation ready and can the request be
     // forwarded toward the FIU? TLB miss handler read requests have priority
     // on channel 0. lookupValid will only be set if there was a request.
+    logic c0_afu_pipe_last_is_virtual_read;
+    logic c0_can_fwd_req;
+    assign c0_can_fwd_req =
+        (tlb_if.lookupValid[0] || ! c0_afu_pipe_last_is_virtual_read) &&
+        ! fiu_c0TxAlmFull_q;
     logic c0_fwd_req;
-    assign c0_fwd_req =
-        c0_request_rdy &&
-        (tlb_if.lookupValid[0] ||
-         ! cci_mpf_c0TxIsReadReq(c0_afu_pipe[AFU_PIPE_LAST_STAGE]) ||
-         ! cci_mpf_c0_getReqAddrIsVirtual(c0_afu_pipe[AFU_PIPE_LAST_STAGE].hdr)) &&
-        ! fiu.c0TxAlmFull;
+    assign c0_fwd_req = c0_request_rdy && c0_can_fwd_req;
 
+    logic c1_afu_pipe_last_is_virtual_write;
+    logic c1_can_fwd_req;
+    assign c1_can_fwd_req =
+        (tlb_if.lookupValid[1] || ! c1_afu_pipe_last_is_virtual_write) &&
+        ! fiu_c1TxAlmFull_q;
     logic c1_fwd_req;
-    assign c1_fwd_req =
-        c1_request_rdy &&
-        (tlb_if.lookupValid[1] ||
-         ! cci_mpf_c1TxIsWriteReq(c1_afu_pipe[AFU_PIPE_LAST_STAGE]) ||
-         ! cci_mpf_c1_getReqAddrIsVirtual(c1_afu_pipe[AFU_PIPE_LAST_STAGE].hdr)) &&
-        ! fiu.c1TxAlmFull;
+    assign c1_fwd_req = c1_request_rdy && c1_can_fwd_req;
 
     // Did a request miss in the TLB or fail arbitration?  It will be rotated
     // back to the head of afu_pipe.
     logic c0_retry_req;
-    assign c0_retry_req = c0_request_rdy && ! c0_fwd_req;
+    assign c0_retry_req = c0_request_rdy && ! c0_can_fwd_req;
 
     logic c1_retry_req;
-    assign c1_retry_req = c1_request_rdy && ! c1_fwd_req;
+    assign c1_retry_req = c1_request_rdy && ! c1_can_fwd_req;
 
 
     //
@@ -240,6 +252,9 @@ module cci_mpf_shim_vtp_pipe
             begin
                 c0_afu_pipe[i] <= cci_mpf_c0Tx_clearValids();
                 c1_afu_pipe[i] <= cci_mpf_c1Tx_clearValids();
+
+                c0_afu_pipe_last_is_virtual_read <= 1'b0;
+                c1_afu_pipe_last_is_virtual_write <= 1'b0;
             end
         end
         else
@@ -250,6 +265,14 @@ module cci_mpf_shim_vtp_pipe
                 c0_afu_pipe[i+1] <= c0_afu_pipe[i];
                 c1_afu_pipe[i+1] <= c1_afu_pipe[i];
             end
+
+            c0_afu_pipe_last_is_virtual_read <=
+                cci_mpf_c0TxIsReadReq(c0_afu_pipe[AFU_PIPE_LAST_STAGE-1]) &&
+                cci_mpf_c0_getReqAddrIsVirtual(c0_afu_pipe[AFU_PIPE_LAST_STAGE-1].hdr);
+
+            c1_afu_pipe_last_is_virtual_write <=
+                cci_mpf_c1TxIsWriteReq(c1_afu_pipe[AFU_PIPE_LAST_STAGE-1]) &&
+                cci_mpf_c1_getReqAddrIsVirtual(c1_afu_pipe[AFU_PIPE_LAST_STAGE-1].hdr);
 
             // Ready to accept new entries?
             if (! c0_retry_req)
@@ -307,29 +330,26 @@ module cci_mpf_shim_vtp_pipe
     t_cci_mpf_c0_ReqMemHdr c0_req_hdr;
     t_tlb_2mb_page_offset c0_req_offset;
 
+    // Replace the address with the physical address
     always_comb
     begin
         c0_req_hdr = c0_afu_pipe[AFU_PIPE_LAST_STAGE].hdr;
 
-        // Replace the address with the physical address
-        if (cci_mpf_c0_getReqAddrIsVirtual(c0_req_hdr))
+        // Page offset remains the same in VA and PA
+        if (tlb_if.lookupIsBigPage[0])
         begin
-            // Page offset remains the same in VA and PA
-            if (tlb_if.lookupIsBigPage[0])
-            begin
-                c0_req_hdr.base.address =
-                    { vtp4kbTo2mbPA(tlb_if.lookupRspPagePA[0]),
-                      vtp2mbPageOffsetFromVA(c0_req_hdr.base.address) };
-            end
-            else
-            begin
-                c0_req_hdr.base.address =
-                    { tlb_if.lookupRspPagePA[0],
-                      vtp4kbPageOffsetFromVA(c0_req_hdr.base.address) };
-            end
-
-            c0_req_hdr.ext.addrIsVirtual = 0;
+            c0_req_hdr.base.address =
+                { vtp4kbTo2mbPA(tlb_if.lookupRspPagePA[0]),
+                  vtp2mbPageOffsetFromVA(c0_req_hdr.base.address) };
         end
+        else
+        begin
+            c0_req_hdr.base.address =
+                { tlb_if.lookupRspPagePA[0],
+                  vtp4kbPageOffsetFromVA(c0_req_hdr.base.address) };
+        end
+
+        c0_req_hdr.ext.addrIsVirtual = 0;
     end
 
     // Update channel 0 header with translated address (writes) or pass
@@ -340,7 +360,7 @@ module cci_mpf_shim_vtp_pipe
                                            c0_fwd_req);
 
         // Is the header rewritten for a virtually addressed write?
-        if (cci_mpf_c0TxIsReadReq(c0_afu_pipe[AFU_PIPE_LAST_STAGE]))
+        if (c0_afu_pipe_last_is_virtual_read)
         begin
             fiu.c0Tx.hdr <= c0_req_hdr;
         end
@@ -351,28 +371,25 @@ module cci_mpf_shim_vtp_pipe
     t_cci_mpf_c1_ReqMemHdr c1_req_hdr;
     t_tlb_2mb_page_offset c1_req_offset;
 
+    // Replace the address with the physical address
     always_comb
     begin
         c1_req_hdr = c1_afu_pipe[AFU_PIPE_LAST_STAGE].hdr;
 
-        // Replace the address with the physical address
-        if (cci_mpf_c1_getReqAddrIsVirtual(c1_req_hdr))
+        if (tlb_if.lookupIsBigPage[1])
         begin
-            if (tlb_if.lookupIsBigPage[1])
-            begin
-                c1_req_hdr.base.address =
-                    { vtp4kbTo2mbPA(tlb_if.lookupRspPagePA[1]),
-                      vtp2mbPageOffsetFromVA(c1_req_hdr.base.address) };
-            end
-            else
-            begin
-                c1_req_hdr.base.address =
-                    { tlb_if.lookupRspPagePA[1],
-                      vtp4kbPageOffsetFromVA(c1_req_hdr.base.address) };
-            end
-
-            c1_req_hdr.ext.addrIsVirtual = 0;
+            c1_req_hdr.base.address =
+                { vtp4kbTo2mbPA(tlb_if.lookupRspPagePA[1]),
+                  vtp2mbPageOffsetFromVA(c1_req_hdr.base.address) };
         end
+        else
+        begin
+            c1_req_hdr.base.address =
+                { tlb_if.lookupRspPagePA[1],
+                  vtp4kbPageOffsetFromVA(c1_req_hdr.base.address) };
+        end
+
+        c1_req_hdr.ext.addrIsVirtual = 0;
     end
 
     // Update channel 1 header with translated address (writes) or pass
@@ -383,7 +400,7 @@ module cci_mpf_shim_vtp_pipe
                                            c1_fwd_req);
 
         // Is the header rewritten for a virtually addressed write?
-        if (cci_mpf_c1TxIsWriteReq(c1_afu_pipe[AFU_PIPE_LAST_STAGE]))
+        if (c1_afu_pipe_last_is_virtual_write)
         begin
             fiu.c1Tx.hdr <= c1_req_hdr;
         end

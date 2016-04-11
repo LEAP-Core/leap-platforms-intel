@@ -312,11 +312,28 @@ module cci_mpf_shim_edge_connect
     assign afu.c0Tx = cci_mpf_updC0TxCanonical(afu_edge.c0Tx);
     assign afu.c2Tx = afu_edge.c2Tx;
 
-    assign afu_edge.c0TxAlmFull = afu.c0TxAlmFull;
-    // Never signal almost full in the middle of a packet. Deadlocks can result
-    // since the control flit is already flowing through MPF.
-    assign afu_edge.c1TxAlmFull = (afu.c1TxAlmFull || ! wr_heap_not_full) &&
-                                  ! afu_wr_packet_active;
+    //
+    // Register almost full signals before they reach the AFU.  MPF modules
+    // must accommodate the extra cycle of buffering that may be needed
+    // as a result of signalling almost full a cycle late.
+    //
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            afu_edge.c0TxAlmFull <= 1'b1;
+            afu_edge.c1TxAlmFull <= 1'b1;
+        end
+        else
+        begin
+            afu_edge.c0TxAlmFull <= afu.c0TxAlmFull;
+
+            // Never signal almost full in the middle of a packet. Deadlocks
+            // can result since the control flit is already flowing through MPF.
+            afu_edge.c1TxAlmFull <= (afu.c1TxAlmFull || ! wr_heap_not_full) &&
+                                    ! afu_wr_packet_active;
+        end
+    end
 
     assign afu_edge.c0Rx = afu.c0Rx;
     assign afu_edge.c1Rx = afu.c1Rx;

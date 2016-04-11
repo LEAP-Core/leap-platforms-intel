@@ -538,8 +538,18 @@ module cci_mpf_shim_csr_events
         end
     end
 
-    assign consume_counters = (upd_counts[10] == 1'b1) && stat_upd_rdy;
     assign stat_upd_en = consume_counters;
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            consume_counters = 1'b0;
+        end
+        else
+        begin
+            consume_counters <= (upd_counts[10] == 1'b1) && stat_upd_rdy;
+        end
+    end
 
     always_comb
     begin

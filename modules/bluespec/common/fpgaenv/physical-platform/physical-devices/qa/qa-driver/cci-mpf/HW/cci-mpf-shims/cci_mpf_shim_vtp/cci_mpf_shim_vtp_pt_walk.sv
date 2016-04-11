@@ -230,6 +230,7 @@ module cci_mpf_shim_vtp_pt_walk
     // points to pages in the page table.  When translation is complete it
     // points to the translated physical page.
     t_tlb_4kb_pa_page_idx pt_walk_cur_page;
+    t_tlb_4kb_pa_page_idx pt_walk_next_page;
 
     t_cci_mpf_pt_walk_status pt_walk_cur_status;
 
@@ -266,6 +267,9 @@ module cci_mpf_shim_vtp_pt_walk
     logic ptReadCacheHitRsp;
     t_tlb_4kb_pa_page_idx ptReadCachePage;
     t_cci_mpf_pt_walk_status ptReadCacheStatus;
+
+    t_tlb_4kb_pa_page_idx pt_walk_cache_page;
+    logic pt_walk_page_from_cache;
 
     cci_mpf_shim_vtp_pt_walk_cache
       #(
@@ -381,7 +385,9 @@ module cci_mpf_shim_vtp_pt_walk
                         state <= STATE_PT_WALK_READ_RSP;
 
                         pt_walk_cur_status <= ptReadCacheStatus;
-                        pt_walk_cur_page <= ptReadCachePage;
+
+                        pt_walk_page_from_cache <= 1'b1;
+                        pt_walk_cache_page <= ptReadCachePage;
                     end
                 end
 
@@ -404,7 +410,8 @@ module cci_mpf_shim_vtp_pt_walk
                         pt_walk_cur_status <= cci_mpf_ptWalkWordToStatus(pt_read_rsp_word);
 
                         // Extract the address of a line from the entry.
-                        pt_walk_cur_page <=
+                        pt_walk_page_from_cache <= 1'b0;
+                        pt_walk_next_page <=
                             vtp4kbPageIdxFromPA(pt_read_rsp_word[$clog2(CCI_CLDATA_WIDTH / 8) +:
                                                                  CCI_CLADDR_WIDTH]);
                     end
@@ -412,6 +419,12 @@ module cci_mpf_shim_vtp_pt_walk
 
               STATE_PT_WALK_READ_RSP:
                 begin
+                    // The update of pt_walk_cur_page could logically have been
+                    // in earlier states.  Putting the MUX here is better
+                    // for timing.
+                    pt_walk_cur_page <= pt_walk_page_from_cache ?
+                                        pt_walk_cache_page : pt_walk_next_page;
+
                     // Raise an error if the maximum walk depth is reached without
                     // finding the entry.
                     if (pt_walk_cur_status.error || 

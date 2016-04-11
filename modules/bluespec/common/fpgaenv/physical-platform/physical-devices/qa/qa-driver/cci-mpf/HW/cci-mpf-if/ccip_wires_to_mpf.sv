@@ -44,7 +44,14 @@ module ccip_wires_to_mpf
     logic  clk;
     assign clk = pClk;
 
-    assign fiu.reset = pck_cp2af_softReset;
+    logic reset = 1'b1;
+    assign fiu.reset = reset;
+
+    always @(posedge clk)
+    begin
+        reset <= pck_cp2af_softReset;
+    end
+
 
     // Track multi-beat writes and optionally turn them into single-beat
     // writes.  (Useful for debugging)
@@ -56,7 +63,7 @@ module ccip_wires_to_mpf
      wr_beats
       (
        .clk,
-       .reset(pck_cp2af_softReset),
+       .reset(reset),
        .fiu_c1_tx,
        .afu_c1_tx(fiu.c1Tx)
        );

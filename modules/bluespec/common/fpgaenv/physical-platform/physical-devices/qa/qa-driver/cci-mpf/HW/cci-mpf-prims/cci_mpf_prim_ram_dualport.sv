@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2016, Intel Corporation
+// Copyright (c) 2015, Intel Corporation
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -30,10 +30,12 @@
 //
 
 //
-// Simple dual port Block RAM.
+// Dual port Block RAM.  When write is enabled on a port the rdata response
+// on the same port is the new data.  The rdata for the same address written
+// by the other port is don't care.
 //
 
-module cci_mpf_prim_simple_ram
+module cci_mpf_prim_ram_dualport
   #(
     parameter N_ENTRIES = 32,
     parameter N_DATA_BITS = 64,
@@ -41,58 +43,75 @@ module cci_mpf_prim_simple_ram
     parameter N_OUTPUT_REG_STAGES = 0
     )
    (
-    input  logic clk,
+    input  logic clk0,
+    input  logic [$clog2(N_ENTRIES)-1 : 0] addr0,
+    input  logic wen0,
+    input  logic [N_DATA_BITS-1 : 0] wdata0,
+    output logic [N_DATA_BITS-1 : 0] rdata0,
 
-    input  logic wen,
-    input  logic [$clog2(N_ENTRIES)-1 : 0] waddr,
-    input  logic [N_DATA_BITS-1 : 0] wdata,
-
-    input  logic [$clog2(N_ENTRIES)-1 : 0] raddr,
-    output logic [N_DATA_BITS-1 : 0] rdata
+    input  logic clk1,
+    input  logic [$clog2(N_ENTRIES)-1 : 0] addr1,
+    input  logic wen1,
+    input  logic [N_DATA_BITS-1 : 0] wdata1,
+    output logic [N_DATA_BITS-1 : 0] rdata1
     );
 
-    logic [N_DATA_BITS-1 : 0] mem_rd[0 : N_OUTPUT_REG_STAGES];
-    assign rdata = mem_rd[N_OUTPUT_REG_STAGES];
+
+    logic [N_DATA_BITS-1 : 0] mem_rd0[0 : N_OUTPUT_REG_STAGES];
+    assign rdata0 = mem_rd0[N_OUTPUT_REG_STAGES];
+
+    logic [N_DATA_BITS-1 : 0] mem_rd1[0 : N_OUTPUT_REG_STAGES];
+    assign rdata1 = mem_rd1[N_OUTPUT_REG_STAGES];
 
     // If the output data is registered then request a register stage in
     // the megafunction, giving it an opportunity to optimize the location.
     //
-    localparam OUTDATA_REGISTERED = (N_OUTPUT_REG_STAGES == 0) ? "UNREGISTERED" :
-                                                                 "CLOCK0";
+    localparam OUTDATA_REGISTERED0 = (N_OUTPUT_REG_STAGES == 0) ? "UNREGISTERED" :
+                                                                  "CLOCK0";
+    localparam OUTDATA_REGISTERED1 = (N_OUTPUT_REG_STAGES == 0) ? "UNREGISTERED" :
+                                                                  "CLOCK1";
     localparam OUTDATA_IDX = (N_OUTPUT_REG_STAGES == 0) ? 0 : 1;
 
 
     altsyncram
       #(
-        .operation_mode("DUAL_PORT"),
+        .operation_mode("BIDIR_DUAL_PORT"),
         .width_a(N_DATA_BITS),
         .widthad_a($clog2(N_ENTRIES)),
         .numwords_a(N_ENTRIES),
         .width_b(N_DATA_BITS),
         .widthad_b($clog2(N_ENTRIES)),
         .numwords_b(N_ENTRIES),
-        .rdcontrol_reg_b("CLOCK0"),
-        .address_reg_b("CLOCK0"),
-        .outdata_reg_b(OUTDATA_REGISTERED),
-        .read_during_write_mode_mixed_ports("OLD_DATA")
+        .rdcontrol_reg_a("CLOCK0"),
+        .address_reg_a("CLOCK0"),
+        .outdata_reg_a(OUTDATA_REGISTERED0),
+        .rdcontrol_reg_b("CLOCK1"),
+        .address_reg_b("CLOCK1"),
+        .outdata_reg_b(OUTDATA_REGISTERED1),
+        .read_during_write_mode_mixed_ports("DONT_CARE")
         )
       data
        (
-        .clock0(clk),
+        .clock0(clk0),
+        .clock1(clk1),
 
-        .wren_a(wen),
-        .address_a(waddr),
-        .data_a(wdata),
+        .wren_a(wen0),
+        .address_a(waddr0),
+        .data_a(wdata0),
 
-        .address_b(raddr),
-        .q_b(mem_rd[OUTDATA_IDX]),
+        .address_a(raddr0),
+        .q_a(mem_rd0[OUTDATA_IDX]),
+
+        .wren_b(wen1),
+        .address_b(waddr1),
+        .data_b(wdata1),
+
+        .address_b(raddr1),
+        .q_b(mem_rd1[OUTDATA_IDX]),
 
         // Legally unconnected ports -- get rid of lint errors
-        .wren_b(),
         .rden_a(),
         .rden_b(),
-        .data_b(),
-        .clock1(),
         .clocken0(),
         .clocken1(),
         .clocken2(),
@@ -103,7 +122,6 @@ module cci_mpf_prim_simple_ram
         .byteena_b(),
         .addressstall_a(),
         .addressstall_b(),
-        .q_a(),
         .eccstatus()
         );
 
@@ -112,21 +130,25 @@ module cci_mpf_prim_simple_ram
     generate
         for (s = 1; s < N_OUTPUT_REG_STAGES; s = s + 1)
         begin: r
-            always_ff @(posedge clk)
+            always_ff @(posedge clk0)
             begin
-                mem_rd[s+1] <= mem_rd[s];
+                mem_rd0[s+1] <= mem_rd0[s];
+            end
+
+            always_ff @(posedge clk1)
+            begin
+                mem_rd1[s+1] <= mem_rd1[s];
             end
         end
     endgenerate
 
-endmodule // cci_mpf_prim_simple_ram
-
+endmodule // cci_mpf_prim_ram_dualport
 
 
 //
-// Simple dual port RAM initialized with a constant on reset.
+// Dual port RAM initialized with a constant on reset.
 //
-module cci_mpf_prim_simple_ram_init
+module cci_mpf_prim_ram_dualport_init
   #(
     parameter N_ENTRIES = 32,
     parameter N_DATA_BITS = 64,
@@ -136,24 +158,28 @@ module cci_mpf_prim_simple_ram_init
     parameter INIT_VALUE = N_DATA_BITS'(0)
     )
    (
-    input  logic clk,
     input  logic reset,
     // Goes high after initialization complete and stays high.
     output logic rdy,
 
-    input  logic wen,
-    input  logic [$clog2(N_ENTRIES)-1 : 0] waddr,
-    input  logic [N_DATA_BITS-1 : 0] wdata,
+    input  logic clk0,
+    input  logic [$clog2(N_ENTRIES)-1 : 0] addr0,
+    input  logic wen0,
+    input  logic [N_DATA_BITS-1 : 0] wdata0,
+    output logic [N_DATA_BITS-1 : 0] rdata0,
 
-    input  logic [$clog2(N_ENTRIES)-1 : 0] raddr,
-    output logic [N_DATA_BITS-1 : 0] rdata
+    input  logic clk1,
+    input  logic [$clog2(N_ENTRIES)-1 : 0] addr1,
+    input  logic wen1,
+    input  logic [N_DATA_BITS-1 : 0] wdata1,
+    output logic [N_DATA_BITS-1 : 0] rdata1
     );
 
-    logic [$clog2(N_ENTRIES)-1 : 0] waddr_local;
-    logic wen_local;
-    logic [N_DATA_BITS-1 : 0] wdata_local;
+    logic [$clog2(N_ENTRIES)-1 : 0] addr1_local;
+    logic wen1_local;
+    logic [N_DATA_BITS-1 : 0] wdata1_local;
 
-    cci_mpf_prim_simple_ram
+    cci_mpf_prim_ram_dualport
       #(
         .N_ENTRIES(N_ENTRIES),
         .N_DATA_BITS(N_DATA_BITS),
@@ -161,37 +187,42 @@ module cci_mpf_prim_simple_ram_init
         )
       ram
        (
-        .clk,
-        .waddr(waddr_local),
-        .wen(wen_local),
-        .wdata(wdata_local),
-        .raddr,
-        .rdata
+        .clk0,
+        .addr0,
+        .wen0,
+        .wdata0,
+        .rdata0,
+
+        .clk1,
+        .addr1(addr1_local),
+        .wen1(wen1_local),
+        .wdata1(wdata1_local),
+        .rdata1
         );
+
 
     //
     // Initialization loop
     //
 
-    logic [$clog2(N_ENTRIES)-1 : 0] waddr_init;
+    logic [$clog2(N_ENTRIES)-1 : 0] addr1_init;
 
-    assign waddr_local = rdy ? waddr : waddr_init;
-    assign wen_local = rdy ? wen : 1'b1;
-    assign wdata_local = rdy ? wdata : INIT_VALUE;
+    assign addr1_local = rdy ? addr1 : addr1_init;
+    assign wen1_local = rdy ? wen1 : 1'b1;
+    assign wdata1_local = rdy ? wdata1 : INIT_VALUE;
 
-    always_ff @(posedge clk)
+    always_ff @(posedge clk1)
     begin
         if (reset)
         begin
             rdy <= 1'b0;
-            waddr_init <= 0;
+            addr1_init <= 0;
         end
         else if (! rdy)
         begin
-            waddr_init <= waddr_init + 1;
-            rdy <= (waddr_init == (N_ENTRIES-1));
+            addr1_init <= addr1_init + 1;
+            rdy <= (addr1_init == (N_ENTRIES-1));
         end
     end
 
-endmodule // cci_mpf_prim_simple_ram_init
-
+endmodule // cci_mpf_prim_ram_dualport_init

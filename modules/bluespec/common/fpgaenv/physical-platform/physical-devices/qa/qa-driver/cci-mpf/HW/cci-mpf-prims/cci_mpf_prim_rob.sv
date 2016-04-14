@@ -279,7 +279,7 @@ module cci_mpf_prim_rob
         end
     end
 
-    cci_mpf_prim_simple_ram_init
+    cci_mpf_prim_ram_simple_init
       #(
         .N_ENTRIES(N_ENTRIES),
         .N_DATA_BITS(1),
@@ -315,7 +315,7 @@ module cci_mpf_prim_rob
     //
     // Data
     //
-    cci_mpf_prim_simple_ram
+    cci_mpf_prim_ram_simple
       #(
         .N_ENTRIES(N_ENTRIES),
         .N_DATA_BITS(N_DATA_BITS),
@@ -339,7 +339,7 @@ module cci_mpf_prim_rob
     generate
         if (N_META_BITS != 0)
         begin : genMeta
-            cci_mpf_prim_simple_ram
+            cci_mpf_prim_ram_simple
               #(
                 .N_ENTRIES(N_ENTRIES),
                 .N_DATA_BITS(N_META_BITS),

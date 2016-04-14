@@ -142,7 +142,7 @@ module cci_mpf_prim_repl_lru_pseudo
     logic wen1;
     t_way_vec rdata1;
 
-    cci_mpf_prim_dualport_ram_init
+    cci_mpf_prim_ram_dualport_init
       #(
         .N_ENTRIES(N_ENTRIES),
         .N_DATA_BITS($bits(t_way_vec))

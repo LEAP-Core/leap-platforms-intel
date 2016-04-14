@@ -181,7 +181,7 @@ module cci_mpf_shim_vtp_tlb
         begin : way
             for (p = 0; p < 2; p = p + 1)
             begin : gen_tlb
-                cci_mpf_prim_simple_ram_init
+                cci_mpf_prim_ram_simple_init
                   #(
                     .N_ENTRIES(NUM_TLB_SETS),
                     .N_DATA_BITS($bits(t_tlb_entry)),

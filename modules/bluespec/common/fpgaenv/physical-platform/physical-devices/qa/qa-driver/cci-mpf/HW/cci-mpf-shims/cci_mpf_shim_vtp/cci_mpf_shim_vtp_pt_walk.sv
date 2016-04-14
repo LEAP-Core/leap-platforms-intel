@@ -741,7 +741,7 @@ module cci_mpf_shim_vtp_pt_walk_cache
     assign lookup_idx = cacheIdx(reqPageIdxVec, reqWalkDepth);
     t_pt_entry_tag lookup_tag;
 
-    cci_mpf_prim_simple_ram_init
+    cci_mpf_prim_ram_simple_init
       #(
         .N_ENTRIES(PT_CACHE_ENTRIES),
         .N_DATA_BITS($bits(t_pt_entry_tag)),
@@ -772,7 +772,7 @@ module cci_mpf_shim_vtp_pt_walk_cache
     t_tlb_4kb_pa_page_idx rsp_page_addr;
     t_cci_mpf_pt_walk_status rsp_status;
 
-    cci_mpf_prim_simple_ram
+    cci_mpf_prim_ram_simple
       #(
         .N_ENTRIES(PT_CACHE_ENTRIES * PT_WORDS_PER_LINE),
         .N_DATA_BITS(CCI_PT_4KB_PA_PAGE_INDEX_BITS +

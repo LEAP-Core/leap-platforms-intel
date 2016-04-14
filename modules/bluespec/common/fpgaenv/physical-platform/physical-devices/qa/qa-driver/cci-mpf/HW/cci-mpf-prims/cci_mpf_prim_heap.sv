@@ -102,7 +102,7 @@ module cci_mpf_prim_heap
     //
     // Heap memory
     //
-    cci_mpf_prim_simple_ram
+    cci_mpf_prim_ram_simple
       #(
         .N_ENTRIES(N_ENTRIES),
         .N_DATA_BITS(N_DATA_BITS),
@@ -176,7 +176,7 @@ module cci_mpf_prim_heap
     t_idx free_widx_next;
     t_idx free_rnext;
 
-    cci_mpf_prim_simple_ram
+    cci_mpf_prim_ram_simple
       #(
         .N_ENTRIES(N_ENTRIES),
         .N_DATA_BITS($bits(t_idx)),

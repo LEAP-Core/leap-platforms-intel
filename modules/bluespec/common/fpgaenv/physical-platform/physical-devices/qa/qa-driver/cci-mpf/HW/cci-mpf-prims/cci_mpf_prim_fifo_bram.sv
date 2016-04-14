@@ -286,7 +286,7 @@ module cci_mpf_prim_fifo_bram_data
     // Storage where data will be sorted.  Port 0 is used for writes and
     // port 1 for reads.
     //
-    cci_mpf_prim_dualport_ram
+    cci_mpf_prim_ram_dualport
       #(
         .N_ENTRIES(N_ENTRIES),
         .N_DATA_BITS(N_DATA_BITS),

@@ -724,7 +724,7 @@ module cci_mpf_shim_csr_rd_memory
     logic raddr_upper_part;
     logic [31:0] rdata;
 
-    cci_mpf_prim_simple_ram_init
+    cci_mpf_prim_ram_simple_init
       #(
         .N_ENTRIES(CCI_MPF_CSR_SIZE64 * 2),
         .N_DATA_BITS(32),

@@ -37,8 +37,6 @@ set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-if/ccip_w
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-if/ccis_wires_to_mpf.sv
 
 ## Primitives used by MPF shims
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_dualport_ram.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_simple_ram.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_fifo1.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_fifo2.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_fifo_bram.sv
@@ -48,6 +46,8 @@ set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_heap.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_lfsr.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_lutram.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_ram_dualport.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_ram_simple.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_repl_lru_pseudo.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_repl_random.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_rob.sv

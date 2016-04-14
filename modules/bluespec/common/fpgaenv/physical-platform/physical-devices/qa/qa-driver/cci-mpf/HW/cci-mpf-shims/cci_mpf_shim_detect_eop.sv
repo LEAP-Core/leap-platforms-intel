@@ -290,7 +290,7 @@ module cci_mpf_shim_detect_eop_track_flits
 
     // Packet size of outstanding requests.  Separating this from the count
     // of responses avoids dealing with multiple writers to either memory.
-    cci_mpf_prim_simple_ram
+    cci_mpf_prim_ram_simple
       #(
         .N_ENTRIES(MAX_ACTIVE_REQS),
         .N_DATA_BITS($bits(t_cci_clNum)),
@@ -380,7 +380,7 @@ module cci_mpf_shim_detect_eop_track_flits
     t_cci_clNum rcvd_cnt_upd;
     logic rcvd_wen;
 
-    cci_mpf_prim_simple_ram_init
+    cci_mpf_prim_ram_simple_init
       #(
         .N_ENTRIES(MAX_ACTIVE_REQS),
         .N_DATA_BITS($bits(t_cci_clNum)),

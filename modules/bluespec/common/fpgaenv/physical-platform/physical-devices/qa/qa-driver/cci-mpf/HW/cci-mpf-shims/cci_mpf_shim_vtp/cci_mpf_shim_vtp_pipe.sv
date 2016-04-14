@@ -53,6 +53,7 @@
 
 module cci_mpf_shim_vtp_pipe
   #(
+    parameter AFU_BUF_THRESHOLD = CCI_TX_ALMOST_FULL_THRESHOLD,
     parameter DEBUG_MESSAGES = 0
     )
    (
@@ -90,6 +91,7 @@ module cci_mpf_shim_vtp_pipe
 
     cci_mpf_shim_buffer_afu
       #(
+        .THRESHOLD(AFU_BUF_THRESHOLD),
         .ENABLE_C0_BYPASS(1)
         )
       buffer
@@ -123,7 +125,7 @@ module cci_mpf_shim_vtp_pipe
     //
 
     // Pipeline stage storage
-    localparam AFU_PIPE_LAST_STAGE = 5;
+    localparam AFU_PIPE_LAST_STAGE = 6;
     t_if_cci_mpf_c0_Tx c0_afu_pipe[0 : AFU_PIPE_LAST_STAGE];
     t_if_cci_mpf_c1_Tx c1_afu_pipe[0 : AFU_PIPE_LAST_STAGE];
 

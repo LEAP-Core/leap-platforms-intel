@@ -223,7 +223,7 @@ module cci_mpf_shim_vtp_tlb
         t_tlb_va_page_idx lookup_page_va;
     } t_tlb_stage_state;
 
-    localparam NUM_TLB_LOOKUP_PIPE_STAGES = 4;
+    localparam NUM_TLB_LOOKUP_PIPE_STAGES = 5;
     t_tlb_stage_state stg_state[1 : NUM_TLB_LOOKUP_PIPE_STAGES][0 : 1];
 
     // Pass primary state through the pipeline
@@ -307,8 +307,8 @@ module cci_mpf_shim_vtp_tlb
 
     // The bit reduction of tag comparision is too involved to complete
     // in a single cycle at the desired frequency.  This register holds
-    // the first stage of comparison, with each way's comparison reduced
-    // to as a a bitwise XOR. The consuming stage must simply NOR the bits
+    // the first stage of comparison, with each way's comparison beginning
+    // as a bitwise XOR. The consuming stage must simply NOR the bits
     // together.
     t_tlb_virtual_tag stg3_xor_tag[0 : 1][NUM_TLB_SET_WAYS-1 : 0];
 
@@ -319,8 +319,6 @@ module cci_mpf_shim_vtp_tlb
             // Look for a match in each of the ways in the TLB set
             for (int way = 0; way < NUM_TLB_SET_WAYS; way = way + 1)
             begin
-                // Partial comparion of tags this stage.  The remainder
-                // of the bit reduction will complete in the next cycle.
                 stg3_xor_tag[p][way] <=
                     stg_tlb_rdata[2][p][way].tag ^
                     target_tlb_tag(stg_state[2][p].lookup_page_va);
@@ -330,16 +328,10 @@ module cci_mpf_shim_vtp_tlb
 
 
     //
-    // Stage 3: Complete tag comparison
+    // Stage 3: Reduce previous stage's XOR tag matching to a single bit
     //
+    logic [NUM_TLB_SET_WAYS-1 : 0] stg4_tag_cmp[0 : 1];
 
-    // Tag comparison.
-    logic [NUM_TLB_SET_WAYS-1 : 0] lookup_way_hit_vec[0 : 1];
-    logic [$clog2(NUM_TLB_SET_WAYS)-1 : 0] lookup_way_hit[0 : 1];
-
-    //
-    // Reduce previous stage's XOR tag matching to a single bit
-    //
     always_ff @(posedge clk)
     begin
         for (int p = 0; p < 2; p = p + 1)
@@ -348,8 +340,94 @@ module cci_mpf_shim_vtp_tlb
             begin
                 // Last cycle did a partial comparison, leaving multiple
                 // bits per way that all must be 1 for a match.
+                stg4_tag_cmp[p][way] <= ~ (|(stg3_xor_tag[p][way]));
+            end
+        end
+    end
+
+
+    //
+    // Stage 4: Look for a way hit
+    //
+
+    //
+    // Calculate two things:
+    //   - Did any way hit (stg4_tag_hit)
+    //   - Which way hit (stg4_way_hit)
+    //
+    logic stg4_tag_hit[0 : 1];
+    logic [$clog2(NUM_TLB_SET_WAYS)-1 : 0] stg4_way_hit[0 : 1];
+
+    always_comb
+    begin
+        for (int p = 0; p < 2; p = p + 1)
+        begin
+            // Did any way's tag comparison hit?
+            stg4_tag_hit[p] = |(stg4_tag_cmp[p]);
+
+            // Which way hit?
+            stg4_way_hit[p] = 'x;
+            for (int way = 0; way < NUM_TLB_SET_WAYS; way = way + 1)
+            begin
+                if (stg4_tag_cmp[p][way])
+                begin
+                    // Valid way
+                    stg4_way_hit[p] = way;
+                    break;
+                end
+            end
+        end
+    end
+
+    //
+    // Register the combinational results computed above.
+    //
+    logic lookup_valid[0 : 1];
+    logic lookup_miss[0 : 1];
+    t_tlb_4kb_pa_page_idx lookup_page_pa[0 : 1];
+
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            for (int p = 0; p < 2; p = p + 1)
+            begin
+                lookup_valid[p] <= 1'b0;
+                lookup_miss[p]  <= 1'b0;
+            end
+        end
+        else
+        begin
+            for (int p = 0; p < 2; p = p + 1)
+            begin
+                lookup_valid[p] <= stg_state[4][p].did_lookup && stg4_tag_hit[p];
+                lookup_miss[p]  <= stg_state[4][p].did_lookup && ! stg4_tag_hit[p];
+            end
+        end
+
+        for (int p = 0; p < 2; p = p + 1)
+        begin
+            lookup_page_pa[p] <=
+                tlbPAIdxTo4K(stg_tlb_rdata[4][p][stg4_way_hit[p]].idx);
+        end
+    end
+
+    //
+    // Vector of hits, indexed by way, used to update LRU tracking.
+    //
+    logic [NUM_TLB_SET_WAYS-1 : 0] lookup_way_hit_vec[0 : 1];
+    logic [$clog2(NUM_TLB_SET_WAYS)-1 : 0] lookup_way_hit[0 : 1];
+
+    always_ff @(posedge clk)
+    begin
+        for (int p = 0; p < 2; p = p + 1)
+        begin
+            lookup_way_hit[p] <= stg4_way_hit[p];
+
+            for (int way = 0; way < NUM_TLB_SET_WAYS; way = way + 1)
+            begin
                 lookup_way_hit_vec[p][way] <=
-                    stg_state[3][p].did_lookup && ~ (|(stg3_xor_tag[p][way]));
+                    stg_state[4][p].did_lookup && stg4_tag_cmp[p][way];
             end
         end
     end
@@ -365,31 +443,16 @@ module cci_mpf_shim_vtp_tlb
         for (int p = 0; p < 2; p = p + 1)
         begin
             // Lookup is valid if some way hit
-            tlb_if.lookupValid[p] = |(lookup_way_hit_vec[p]);
+            tlb_if.lookupValid[p] = lookup_valid[p];
 
             // Flag misses.
-            tlb_if.lookupMiss[p] = stg_state[4][p].did_lookup &&
-                                   ! tlb_if.lookupValid[p];
+            tlb_if.lookupMiss[p] = lookup_miss[p];
 
             tlb_if.lookupMissVA[p] =
                 tlbVAIdxTo4K(stg_state[NUM_TLB_LOOKUP_PIPE_STAGES][p].lookup_page_va);
 
             // Get the physical page index from the chosen way
-            tlb_if.lookupRspPagePA[p] = 'x;
-            for (int way = 0; way < NUM_TLB_SET_WAYS; way = way + 1)
-            begin
-                if (lookup_way_hit_vec[p][way])
-                begin
-                    // Valid way
-                    lookup_way_hit[p] = way;
-
-                    // Get the physical page index
-                    tlb_if.lookupRspPagePA[p] =
-                        tlbPAIdxTo4K(stg_tlb_rdata[4][p][way].idx);
-                    break;
-                end
-            end
-
+            tlb_if.lookupRspPagePA[p] = lookup_page_pa[p];
         end
     end
 
@@ -420,7 +483,7 @@ module cci_mpf_shim_vtp_tlb
     logic repl_rdy;
     logic repl_lookup_rsp_rdy;
 
-    logic [1:0] fill_bubble;
+    logic [2:0] fill_bubble;
 
     always_ff @(posedge clk)
     begin

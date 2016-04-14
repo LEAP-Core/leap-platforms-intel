@@ -217,13 +217,17 @@ module cci_mpf_shim_vtp_pt_walk
 
     t_state_pt_walk state;
 
+    // Single-bit registers corresponding to states. Using these helps
+    // some critical timing paths.
+    logic state_is_walk_idle;
+    logic state_is_walk_done;
 
     //
     // The miss handler supports processing only one request at a time.
     //
-    assign walkPtReqRdy = initialized && (state == STATE_PT_WALK_IDLE);
+    assign walkPtReqRdy = initialized && state_is_walk_idle;
 
-    assign statBusy = (state != STATE_PT_WALK_IDLE);
+    assign statBusy = ! state_is_walk_idle;
 
 
     // Base address of current page being accessed.  During a walk pt_cur_page
@@ -256,6 +260,24 @@ module cci_mpf_shim_vtp_pt_walk
     // a malformed table or missing entry.
     t_cci_mpf_pt_walk_depth translate_depth;
 
+    //
+    // Add a register stage to incoming read responses to relax timing.
+    //
+    t_cci_clData ptReadData_q;
+    logic ptReadDataEn_q;
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            ptReadDataEn_q <= 1'b0;
+        end
+        else
+        begin
+            ptReadDataEn_q <= ptReadDataEn;
+        end
+
+        ptReadData_q <= ptReadData;
+    end
 
     //
     // Cache of previous page table reads.  We don't rely on the small
@@ -295,8 +317,8 @@ module cci_mpf_shim_vtp_pt_walk
         .rspStatus(ptReadCacheStatus),
 
         // Insert a new line in the cache
-        .insertEn(ptReadDataEn),
-        .insertData(ptReadData),
+        .insertEn(ptReadDataEn_q),
+        .insertData(ptReadData_q),
         .insertPageIdxVec(translate_va_idx_vec),
         .insertWalkDepth(translate_depth)
         );
@@ -311,6 +333,8 @@ module cci_mpf_shim_vtp_pt_walk
         begin
             state <= STATE_PT_WALK_IDLE;
             notPresent <= 1'b0;
+            state_is_walk_idle <= 1'b1;
+            state_is_walk_done <= 1'b0;
         end
         else
         begin
@@ -321,6 +345,7 @@ module cci_mpf_shim_vtp_pt_walk
                     if (walkPtReqEn)
                     begin
                         state <= STATE_PT_WALK_READ_CACHE_REQ;
+                        state_is_walk_idle <= 1'b0;
                     end
 
                     // New request: start by searching the local page table
@@ -403,7 +428,7 @@ module cci_mpf_shim_vtp_pt_walk
               STATE_PT_WALK_READ_WAIT_RSP:
                 begin
                     // Wait for PT read response
-                    if (ptReadDataEn)
+                    if (ptReadDataEn_q)
                     begin
                         state <= STATE_PT_WALK_READ_RSP;
 
@@ -436,6 +461,7 @@ module cci_mpf_shim_vtp_pt_walk
                     begin
                         // Found the translation
                         state <= STATE_PT_WALK_DONE;
+                        state_is_walk_done <= 1'b1;
                     end
                     else
                     begin
@@ -459,6 +485,8 @@ module cci_mpf_shim_vtp_pt_walk
                     if (tlb_fill_if.fillEn)
                     begin
                         state <= STATE_PT_WALK_IDLE;
+                        state_is_walk_idle <= 1'b1;
+                        state_is_walk_done <= 1'b0;
                     end
                 end
 
@@ -507,7 +535,7 @@ module cci_mpf_shim_vtp_pt_walk
 
     always_comb
     begin
-        pt_read_rsp_word_vec = ptReadData;
+        pt_read_rsp_word_vec = ptReadData_q;
         pt_read_rsp_word = pt_read_rsp_word_vec[ptLineWordIdx(translate_va_idx_vec)];
     end
 
@@ -554,7 +582,7 @@ module cci_mpf_shim_vtp_pt_walk
                          ptLineWordIdx(translate_va_idx_vec));
             end
 
-            if (ptReadDataEn)
+            if (ptReadDataEn_q)
             begin
                 $display("PT WALK: Line arrived 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x",
                          pt_read_rsp_word_vec[7],
@@ -598,8 +626,7 @@ module cci_mpf_shim_vtp_pt_walk
     //
     // TLB insertion (in STATE_PT_WALK_INSERT)
     //
-    assign tlb_fill_if.fillEn = (state == STATE_PT_WALK_DONE) &&
-                                tlb_fill_if.fillRdy;
+    assign tlb_fill_if.fillEn = state_is_walk_done && tlb_fill_if.fillRdy;
     assign tlb_fill_if.fillVA = translate_va;
     assign tlb_fill_if.fillPA = pt_walk_cur_page;
 
@@ -822,12 +849,7 @@ module cci_mpf_shim_vtp_pt_walk_cache
 
     always_ff @(posedge clk)
     begin
-        if (reset)
-        begin
-            insert_busy <= 1'b0;
-            ins_word_idx <= t_pt_line_word_idx'(0);
-        end
-        else if (insertEn)
+        if (insertEn)
         begin
             // New line to insert.  The rdy bit guarantees no insert is
             // happening when insertEn is triggered.
@@ -852,6 +874,12 @@ module cci_mpf_shim_vtp_pt_walk_cache
             begin
                 ins_line_words[w] <= ins_line_words[w + 1];
             end
+        end
+
+        if (reset)
+        begin
+            insert_busy <= 1'b0;
+            ins_word_idx <= t_pt_line_word_idx'(0);
         end
     end
 

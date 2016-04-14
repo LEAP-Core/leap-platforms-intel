@@ -307,6 +307,10 @@ module cci_mpf_shim_edge_connect
     // ====================================================================
 
     logic afu_wr_packet_active;
+    logic afu_wr_sticky_full;
+
+    logic afu_wr_almost_full;
+    assign afu_wr_almost_full = afu.c1TxAlmFull || ! wr_heap_not_full;
 
     // All but write requests flow straight through
     assign afu.c0Tx = cci_mpf_updC0TxCanonical(afu_edge.c0Tx);
@@ -323,6 +327,7 @@ module cci_mpf_shim_edge_connect
         begin
             afu_edge.c0TxAlmFull <= 1'b1;
             afu_edge.c1TxAlmFull <= 1'b1;
+            afu_wr_sticky_full <= 1'b0;
         end
         else
         begin
@@ -330,8 +335,20 @@ module cci_mpf_shim_edge_connect
 
             // Never signal almost full in the middle of a packet. Deadlocks
             // can result since the control flit is already flowing through MPF.
-            afu_edge.c1TxAlmFull <= (afu.c1TxAlmFull || ! wr_heap_not_full) &&
-                                    ! afu_wr_packet_active;
+            afu_edge.c1TxAlmFull <= afu_wr_almost_full &&
+                                    (! afu_wr_packet_active || afu_wr_sticky_full);
+
+            // afu_wr_sticky_full goes high as soon as afu_wr_almost_full is
+            // asserted and no packet is in flight.  It stays high until
+            // afu_wr_almost_full is no longer asserted.
+            if (! afu_wr_almost_full)
+            begin
+                afu_wr_sticky_full <= 1'b0;
+            end
+            else if (afu_wr_almost_full && ! afu_wr_packet_active)
+            begin
+                afu_wr_sticky_full <= 1'b1;
+            end
         end
     end
 

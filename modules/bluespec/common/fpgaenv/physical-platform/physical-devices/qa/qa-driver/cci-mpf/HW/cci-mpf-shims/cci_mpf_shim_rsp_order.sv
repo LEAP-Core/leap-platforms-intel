@@ -203,6 +203,7 @@ module cci_mpf_shim_rsp_order
     t_cci_mdata rd_rob_mdata;
     t_cci_mdata rd_heap_readMdata;
 
+    logic rd_rob_sop;
     logic rd_rob_eop;
     t_cci_clNum rd_rob_cl_num;
     t_cci_clData rd_rob_out_data;
@@ -285,6 +286,21 @@ module cci_mpf_shim_rsp_order
             // forwarded.
             assign rd_rob_eop = (rd_rob_cl_num == rd_packet_len);
 
+            // SOP must follow EOP
+            always_ff @(posedge clk)
+            begin
+                if (reset)
+                begin
+                    rd_rob_sop <= 1'b1;
+                end
+                else if (rd_rob_data_rdy)
+                begin
+                    rd_rob_sop <= rd_rob_eop;
+
+                    assert (rd_rob_sop == (rd_rob_cl_num == 0)) else
+                        $fatal("cci_mpf_shim_rsp_order: Incorrect rd_rob_sop calculation!");
+                end
+            end
 
             // The Mdata field stored in the ROB is valid only for the first
             // beat in multi-line responses.  Since responses are ordered
@@ -292,7 +308,7 @@ module cci_mpf_shim_rsp_order
             // flits in a packet.
             always_comb
             begin
-                if (rd_rob_cl_num == 0)
+                if (rd_rob_sop)
                 begin
                     rd_rob_mdata = rd_beat_mdata;
                     rd_packet_len = rd_beat_packet_len;
@@ -306,7 +322,7 @@ module cci_mpf_shim_rsp_order
 
             always_ff @(posedge clk)
             begin
-                if (rd_rob_data_rdy && (rd_rob_cl_num == 0))
+                if (rd_rob_data_rdy && rd_rob_sop)
                 begin
                     rd_sop_mdata <= rd_beat_mdata;
                     rd_sop_packet_len <= rd_beat_packet_len;

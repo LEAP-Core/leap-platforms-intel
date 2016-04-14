@@ -67,6 +67,7 @@ module cci_mpf_shim_vtp
     // guarantee that some high bits will be zero.
     parameter RESERVED_MDATA_IDX = -1,
 
+    parameter AFU_BUF_THRESHOLD = CCI_TX_ALMOST_FULL_THRESHOLD,
     parameter DEBUG_MESSAGES = 0
     )
    (
@@ -99,6 +100,7 @@ module cci_mpf_shim_vtp
 
     cci_mpf_shim_vtp_pipe
       #(
+        .AFU_BUF_THRESHOLD(AFU_BUF_THRESHOLD),
         .DEBUG_MESSAGES(DEBUG_MESSAGES)
         )
       pipe

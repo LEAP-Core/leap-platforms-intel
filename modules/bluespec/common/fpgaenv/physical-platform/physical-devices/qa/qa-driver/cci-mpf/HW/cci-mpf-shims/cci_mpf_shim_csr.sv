@@ -193,7 +193,7 @@ module cci_mpf_shim_csr
     // ====================================================================
 
     //
-    // Hold response state in LUTRAM
+    // Hold CSR read response state in memory
     //
     logic csr_mem_rd_en;
     t_mpf_csr_offset csr_mem_rd_idx;
@@ -205,6 +205,7 @@ module cci_mpf_shim_csr
     logic csr_mem_wr_en;
     logic [63:0] csr_mem_wr_val;
     t_mpf_csr_offset csr_mem_wr_idx;
+    logic csr_mem_wr_rdy;
 
     cci_mpf_shim_csr_rd_memory
       #(
@@ -230,7 +231,8 @@ module cci_mpf_shim_csr
 
         .csr_mem_wr_en,
         .csr_mem_wr_idx,
-        .csr_mem_wr_val
+        .csr_mem_wr_val,
+        .csr_mem_wr_rdy
         );
 
 
@@ -238,6 +240,7 @@ module cci_mpf_shim_csr
     // Statistics counters
     //
     logic stat_upd_rdy;
+    logic stat_upd_active;
     logic stat_upd_en;
     t_stat_csr_offset_vec stat_upd_offset_vec;
     t_stat_upd_count_vec stat_upd_count_vec;
@@ -275,7 +278,7 @@ module cci_mpf_shim_csr
     logic mmio_read_start;
     logic mmio_read_active;
     assign mmio_read_start = mmio_req_valid && ! mmio_read_active &&
-                             csr_mem_rd_rdy;
+                             csr_mem_rd_rdy && ! stat_upd_active;
 
     // Give priority to existing MMIO responses from the AFU
     assign c2_rsp_en = ! afu.c2Tx.mmioRdValid && c2_rsp.mmioRdValid;
@@ -374,13 +377,10 @@ module cci_mpf_shim_csr
     }
     stat_upd_state;
 
-    assign stat_upd_rdy = (stat_upd_state == STAT_IDLE);
-
     t_stat_csr_offset_vec stat_upd_offsets;
     t_stat_upd_count_vec stat_upd_counts;
 
     logic stat_bucket_upd;
-    logic stat_bucket_reset;
     logic [63:0] stat_bucket_wr_val;
 
     //
@@ -391,9 +391,8 @@ module cci_mpf_shim_csr
         if (reset)
         begin
             stat_upd_state <= STAT_IDLE;
-
-            // First update pass will reset all stored counters
-            stat_bucket_reset <= 1'b1;
+            stat_upd_rdy <= 1'b1;
+            stat_upd_active <= 1'b0;
         end
         else
         begin
@@ -406,6 +405,7 @@ module cci_mpf_shim_csr
                         // small intermediate counters requested by stats
                         // module.
                         stat_upd_state <= STAT_PROCESS_VEC;
+                        stat_upd_rdy <= 1'b0;
                     end
 
                     stat_upd_offsets <= stat_upd_offset_vec;
@@ -419,6 +419,7 @@ module cci_mpf_shim_csr
                     begin
                         // Started the read for one entry
                         stat_upd_state <= STAT_UPDATE;
+                        stat_upd_active <= 1'b1;
                     end
                 end
 
@@ -430,18 +431,7 @@ module cci_mpf_shim_csr
                         stat_upd_state <= STAT_WRITEBACK;
                     end
 
-                    // First pass after reset treats the buckets as having
-                    // zero and overwrites the old value.  Subsequent passes
-                    // add to the existing value.
-                    if (! stat_bucket_reset)
-                    begin
-                        stat_bucket_wr_val <= csr_mem_rd_val +
-                                              64'(stat_upd_counts[0]);
-                    end
-                    else
-                    begin
-                        stat_bucket_wr_val <= 64'(stat_upd_counts[0]);
-                    end
+                    stat_bucket_wr_val <= csr_mem_rd_val + 64'(stat_upd_counts[0]);
                 end
 
               STAT_WRITEBACK:
@@ -450,6 +440,8 @@ module cci_mpf_shim_csr
                     begin
                         // Writeback complete.  Either process the next
                         // bucket or done with current update list.
+                        stat_upd_active <= 1'b0;
+
                         if (stat_upd_offsets[1] != t_mpf_csr_offset'(0))
                         begin
                             stat_upd_state <= STAT_PROCESS_VEC;
@@ -457,7 +449,7 @@ module cci_mpf_shim_csr
                         else
                         begin
                             stat_upd_state <= STAT_IDLE;
-                            stat_bucket_reset <= 1'b0;
+                            stat_upd_rdy <= 1'b1;
                         end
 
                         // Shift the incremental counter update vector
@@ -481,8 +473,7 @@ module cci_mpf_shim_csr
     assign csr_mem_rd_en = mmio_read_start || stat_bucket_upd;
     assign csr_mem_rd_idx = mmio_read_start ? mmio_req_addr : stat_upd_offsets[0];
 
-    // Don't write while reads are in flight
-    assign csr_mem_wr_en = (stat_upd_state == STAT_WRITEBACK) && csr_mem_rd_rdy;
+    assign csr_mem_wr_en = (stat_upd_state == STAT_WRITEBACK) && csr_mem_wr_rdy;
     assign csr_mem_wr_idx = stat_upd_offsets[0];
     assign csr_mem_wr_val = stat_bucket_wr_val;
 
@@ -681,12 +672,9 @@ endmodule // cci_mpf_shim_csr_events
 
 
 //
-// Manage the backing storage for CSR reads.
-//
-// The memory is simple LUTRAM, but read access is managed with a complex
-// protocol in order treat reads as multi-cycle operations.  The read address
-// is registered and held constant and the synthesis tool is given a timing
-// contraint that allows read values to settle over multiple cycles.
+// Manage the backing storage for CSR reads.  The memory holds both device
+// feature headers and other state, such as statistics tracking performance
+// of the features.
 //
 module cci_mpf_shim_csr_rd_memory
   #(
@@ -711,67 +699,247 @@ module cci_mpf_shim_csr_rd_memory
 
     input  logic csr_mem_wr_en,
     input  t_mpf_csr_offset csr_mem_wr_idx,
-    input  logic [63:0] csr_mem_wr_val
+    input  logic [63:0] csr_mem_wr_val,
+    output logic csr_mem_wr_rdy
     );
 
-    reg [63:0] csr_mem[0:CCI_MPF_CSR_SIZE64 - 1] /* synthesis ramstyle = "MLAB, no_rw_check" */;
 
-    logic [63:0] cciMpfCSRMemRdVal /* synthesis keep */;
-    assign csr_mem_rd_val = cciMpfCSRMemRdVal;
-
+    // ====================================================================
     //
-    // Register csr_mem_rd_idx and hold it for 2 cycles to complete a read.
-    // Reads are not pipelined.  New reads aren't allowed to start until the
-    // current one completes.  Upon completion, csr_mem_rd_val_valid is
-    // asserted for one cycle.
+    //   CSR backing storage.  The CSR memory is 32 bits wide and double
+    //   pumped in order to use a single RAM.
     //
-    logic [1:0] rd_active;
-    assign csr_mem_rd_rdy = ~(|(rd_active));
-    assign csr_mem_rd_val_valid = rd_active[1];
+    // ====================================================================
+    
+    logic mem_rdy;
 
-    t_mpf_csr_offset rd_addr;
+    logic wen;
+    t_mpf_csr_offset waddr;
+    // Upper or lower 32 bit half of full 64 bit entry
+    logic waddr_upper_part;
+    logic [31:0] wdata;
+
+    t_mpf_csr_offset raddr;
+    // Upper or lower 32 bit half of full 64 bit entry
+    logic raddr_upper_part;
+    logic [31:0] rdata;
+
+    cci_mpf_prim_simple_ram_init
+      #(
+        .N_ENTRIES(CCI_MPF_CSR_SIZE64 * 2),
+        .N_DATA_BITS(32),
+        .N_OUTPUT_REG_STAGES(1)
+        )
+      csr_mem
+       (
+        .clk,
+        .reset,
+        .rdy(mem_rdy),
+
+        .wen,
+        .waddr({ waddr, waddr_upper_part }),
+        .wdata,
+
+        .raddr({ raddr, raddr_upper_part }),
+        .rdata
+        );
+
+
+    // ====================================================================
+    //
+    //   Writes: a write takes two cycles to push 64 bits through the 32
+    //   bit wide interface.  csr_mem_wr_rdy is false during the second
+    //   half of the write.
+    //
+    // ====================================================================
+
+    // Initialization state.
+    logic initialized;
+    localparam NUM_INIT_ENTRIES = 6;   // Count of 64 bit entries
+    logic [(NUM_INIT_ENTRIES*2)-1 : 0][31:0] init_val;
+    t_mpf_csr_offset [NUM_INIT_ENTRIES-1 : 0] init_idx;
+
+    assign csr_mem_wr_rdy = initialized && ! waddr_upper_part;
+
+    logic csr_mem_wr_en_q;
+    t_mpf_csr_offset csr_mem_wr_idx_q;
+    logic [63:0] csr_mem_wr_val_q;
+
+    // Delay writes by a cycle to reduce MUX depth
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            csr_mem_wr_en_q <= 1'b0;
+            waddr_upper_part <= 1'b0;
+            csr_mem_wr_idx_q <= t_mpf_csr_offset'(0);
+        end
+        else
+        begin
+            csr_mem_wr_en_q <= csr_mem_wr_en;
+            waddr_upper_part <= waddr_upper_part ^ wen;
+
+            if (csr_mem_wr_en)
+            begin
+                csr_mem_wr_idx_q <= csr_mem_wr_idx;
+            end
+        end
+
+        // Manage write data
+        if (csr_mem_wr_en)
+        begin
+            // New incoming write
+            csr_mem_wr_val_q <= csr_mem_wr_val;
+        end
+        else if (csr_mem_wr_en_q && ! waddr_upper_part)
+        begin
+            // Lower part written.  Shift upper part into position.
+            csr_mem_wr_val_q[31:0] <= csr_mem_wr_val_q[63:32];
+        end
+    end
+
+    always_comb
+    begin
+        // Trigger a write either when requested by client, when
+        // completing a 64 bit write or during initialization.
+        wen = mem_rdy && (csr_mem_wr_en_q || waddr_upper_part || ! initialized);
+
+        if (initialized)
+        begin
+            waddr = csr_mem_wr_idx_q;
+            wdata = csr_mem_wr_val_q[31:0];
+        end
+        else
+        begin
+            waddr = init_idx;
+            wdata = init_val[0];
+        end
+    end
+
+
+    // ====================================================================
+    //
+    //   Reads are two phase to retrieve 64 bits from the 32 bit memory
+    //   bus.
+    //
+    // ====================================================================
+
+    // Track read progress
+    logic rd_busy;
+    logic rd_req_q;
+    logic rd_req_qq;
+    logic rd_req_qqq;
+
+    assign csr_mem_rd_rdy = initialized && ! rd_busy;
+
+    t_mpf_csr_offset csr_mem_rd_idx_q;
 
     always_ff @(posedge clk)
     begin
         if (reset)
         begin
-            rd_active <= 2'b0;
+            raddr_upper_part <= 1'b0;
+            csr_mem_rd_idx_q <= t_mpf_csr_offset'(0);
         end
         else
         begin
-            rd_active[0] <= csr_mem_rd_en;
-            rd_active[1] <= rd_active[0];
+            raddr_upper_part <= raddr_upper_part ^
+                                (csr_mem_rd_en || raddr_upper_part);
 
-            if (csr_mem_rd_en)
+            csr_mem_rd_idx_q <= csr_mem_rd_idx;
+        end
+    end
+
+    assign raddr = (raddr_upper_part ? csr_mem_rd_idx_q : csr_mem_rd_idx);
+
+    // Response after 3 cycles
+    assign csr_mem_rd_val_valid = rd_req_qqq;
+
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            rd_busy <= 1'b0;
+            rd_req_q <= 1'b0;
+            rd_req_qq <= 1'b0;
+            rd_req_qqq <= 1'b0;
+        end
+        else
+        begin
+            // Toggle read busy as read requests flow in and then out
+            rd_busy <= rd_busy ^ (csr_mem_rd_en | rd_req_qqq);
+
+            rd_req_q <= csr_mem_rd_en;
+            rd_req_qq <= rd_req_q;
+            rd_req_qqq <= rd_req_qq;
+        end
+    end
+
+    // Hold multi-cycle read response
+    logic [31:0] rd_val_low;
+
+    always_ff @(posedge clk)
+    begin
+        if (rd_req_qq)
+        begin
+            rd_val_low <= rdata;
+        end
+    end
+
+    assign csr_mem_rd_val = { rdata, rd_val_low };
+
+
+    // ====================================================================
+    //
+    //   Initial state of readable CSR memory holds device feature headers
+    //   and other constant state.  Statistics will be incorporated at run
+    //   time.
+    //
+    // ====================================================================
+
+    logic [(NUM_INIT_ENTRIES*2)-1 : 0][31:0] init_val_start;
+    t_mpf_csr_offset [NUM_INIT_ENTRIES-1 : 0] init_idx_start;
+    logic [$clog2(NUM_INIT_ENTRIES) : 0] init_cnt;
+
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            // Populate the initialization vectors on reset
+            initialized <= 1'b0;
+            init_cnt <= (NUM_INIT_ENTRIES - 1);
+            init_val <= init_val_start;
+            init_idx <= init_idx_start;
+        end
+        else if (mem_rdy && ! initialized)
+        begin
+            //
+            // Once the memory is ready one 32 bit initialization will be
+            // written every cycle.
+            //
+
+            // Finishing the upper part of a 64 bit write?
+            if (waddr_upper_part)
             begin
-                rd_addr <= csr_mem_rd_idx;
+                initialized <= (init_cnt == 0);
+                init_cnt <= init_cnt - 1;
 
-                assert (csr_mem_rd_rdy) else
-                    $fatal("cci_mpf_shim_csr.sv: Read request when not ready!");
+                // Shift vector holding indices to initialize
+                for (int i = 0; i < NUM_INIT_ENTRIES-1; i = i + 1)
+                begin
+                    init_idx[i] <= init_idx[i+1];
+                end
+            end
+
+            // Shift init data by 32 bit chunks every write cycle
+            for (int i = 0; i < (NUM_INIT_ENTRIES*2)-1; i = i + 1)
+            begin
+                init_val[i] <= init_val[i+1];
             end
         end
     end
 
-
-    assign cciMpfCSRMemRdVal = csr_mem[rd_addr];
-    always @(posedge clk)
-    begin
-        if (csr_mem_wr_en)
-        begin
-            csr_mem[csr_mem_wr_idx] <= csr_mem_wr_val;
-
-            assert (csr_mem_rd_rdy) else
-                $fatal("cci_mpf_shim_csr.sv: Write request not permitted during read!");
-        end
-    end
-
-
-    //
-    // Initial state of readable CSR memory holds device feature headers
-    // and other constant state.  Statistics will be incorporated at run
-    // time.
-    //
-    initial
+    always_comb
     begin
         t_ccip_dfh vtp_dfh;
         logic [127:0] vtp_uid;
@@ -818,23 +986,25 @@ module cci_mpf_shim_csr_rd_memory
             wro_dfh.next = DFH_MMIO_NEXT_ADDR - CCI_MPF_WRO_CSR_BASE;
         end
 
-        // VTP DFH (device feature header)
-        csr_mem[(CCI_MPF_VTP_CSR_OFFSET + CCI_MPF_VTP_CSR_DFH) >> 3] = vtp_dfh;
+        // Each DFH entry is 64 bits.  Each UID entry is 128 bits.
+        init_val_start = { vtp_dfh, vtp_uid,
+                           wro_dfh, wro_uid };
 
-        // VTP UID low
-        csr_mem[(CCI_MPF_VTP_CSR_OFFSET + CCI_MPF_VTP_CSR_ID_L) >> 3] = vtp_uid[63:0];
+        init_idx_start = {
+            // VTP DFH (device feature header)
+            t_mpf_csr_offset'((CCI_MPF_VTP_CSR_OFFSET + CCI_MPF_VTP_CSR_DFH) >> 3),
+            // VTP UID high
+            t_mpf_csr_offset'((CCI_MPF_VTP_CSR_OFFSET + CCI_MPF_VTP_CSR_ID_H) >> 3),
+            // VTP UID low
+            t_mpf_csr_offset'((CCI_MPF_VTP_CSR_OFFSET + CCI_MPF_VTP_CSR_ID_L) >> 3),
 
-        // VTP UID high
-        csr_mem[(CCI_MPF_VTP_CSR_OFFSET + CCI_MPF_VTP_CSR_ID_H) >> 3] = vtp_uid[127:64];
-
-        // WRO DFH (device feature header)
-        csr_mem[(CCI_MPF_WRO_CSR_OFFSET + CCI_MPF_WRO_CSR_DFH) >> 3] = wro_dfh;
-
-        // WRO UID low
-        csr_mem[(CCI_MPF_WRO_CSR_OFFSET + CCI_MPF_WRO_CSR_ID_L) >> 3] = wro_uid[63:0];
-
-        // WRO UID high
-        csr_mem[(CCI_MPF_WRO_CSR_OFFSET + CCI_MPF_WRO_CSR_ID_H) >> 3] = wro_uid[127:64];
+            // WRO DFH (device feature header)
+            t_mpf_csr_offset'((CCI_MPF_WRO_CSR_OFFSET + CCI_MPF_WRO_CSR_DFH) >> 3),
+            // WRO UID high
+            t_mpf_csr_offset'((CCI_MPF_WRO_CSR_OFFSET + CCI_MPF_WRO_CSR_ID_H) >> 3),
+            // WRO UID low
+            t_mpf_csr_offset'((CCI_MPF_WRO_CSR_OFFSET + CCI_MPF_WRO_CSR_ID_L) >> 3)
+            };
     end
 
 endmodule // cci_mpf_shim_csr_rd_memory

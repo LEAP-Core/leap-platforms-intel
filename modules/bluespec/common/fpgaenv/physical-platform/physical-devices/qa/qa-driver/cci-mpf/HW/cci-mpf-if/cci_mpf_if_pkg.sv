@@ -59,13 +59,15 @@ package cci_mpf_if_pkg;
 
 `ifdef USE_PLATFORM_CCIS
     parameter CCI_PLATFORM_MDATA_WIDTH = CCIS_MDATA_WIDTH;
-    parameter CCI_TX_ALMOST_FULL_THRESHOLD = CCIS_TX_ALMOST_FULL_THRESHOLD;
 `elsif USE_PLATFORM_CCIP
     parameter CCI_PLATFORM_MDATA_WIDTH = CCIP_MDATA_WIDTH;
-    parameter CCI_TX_ALMOST_FULL_THRESHOLD = CCIP_TX_ALMOST_FULL_THRESHOLD;
 `else
     ** ERROR: Select a valid platform
 `endif
+
+    // Always use the CCI-P almost full threshold since we emulate
+    // CCI-P style multi-beat writes on CCI-S.
+    parameter CCI_TX_ALMOST_FULL_THRESHOLD = CCIP_TX_ALMOST_FULL_THRESHOLD;
 
     typedef t_ccip_clAddr t_cci_clAddr;
     typedef t_ccip_clData t_cci_clData;

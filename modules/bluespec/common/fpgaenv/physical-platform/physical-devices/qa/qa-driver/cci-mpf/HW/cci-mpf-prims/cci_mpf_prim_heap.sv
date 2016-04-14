@@ -126,6 +126,35 @@ module cci_mpf_prim_heap
     //
     // ====================================================================
 
+    //
+    // Prefetch the next entry to be allocated.
+    //
+    logic pop_free;
+    logic free_idx_avail;
+    logic [$clog2(N_ENTRIES)-1 : 0] next_free_idx;
+
+    // Need a new entry in allocIdx?
+    logic need_pop_free;
+    // Is a free entry available?
+    assign pop_free = need_pop_free && free_idx_avail;
+
+    cci_mpf_prim_fifo2
+      #(
+        .N_DATA_BITS($clog2(N_ENTRIES))
+        )
+      alloc_fifo
+       (
+        .clk,
+        .reset,
+        .enq_data(next_free_idx),
+        .enq_en(pop_free),
+        .notFull(need_pop_free),
+        .first(allocIdx),
+        .deq_en(enq),
+        .notEmpty(notFull)
+        );
+
+
     // There are two free list heads to deal with the 2 cycle latency of
     // BRAM reads.  The lists are balanced, since both push and pop of
     // free entries are processed round-robin.
@@ -138,7 +167,7 @@ module cci_mpf_prim_heap
     logic initialized;
     t_idx init_idx;
 
-    assign allocIdx = free_head_idx[head_rr_select];
+    assign next_free_idx = free_head_idx[head_rr_select];
 
     //
     // Free list memory
@@ -166,8 +195,8 @@ module cci_mpf_prim_heap
 
 
     // Pop from free list
-    logic enq_q;
-    logic enq_qq;
+    logic pop_free_q;
+    logic pop_free_qq;
     logic head_rr_select_q;
     logic head_rr_select_qq;
 
@@ -175,7 +204,7 @@ module cci_mpf_prim_heap
     begin
         for (int i = 0; i < 2; i = i + 1)
         begin
-            if (enq_qq && (head_rr_select_qq == 1'(i)))
+            if (pop_free_qq && (head_rr_select_qq == 1'(i)))
             begin
                 // Did a pop from this free list two cycles.  Receive the
                 // updated head pointer.
@@ -194,8 +223,8 @@ module cci_mpf_prim_heap
     begin
         if (reset)
         begin
-            enq_q <= 1'b0;
-            enq_qq <= 1'b0;
+            pop_free_q <= 1'b0;
+            pop_free_qq <= 1'b0;
             head_rr_select <= 1'b0;
 
             // Entries 0 and 1 begin as the head pointers
@@ -204,8 +233,8 @@ module cci_mpf_prim_heap
         end
         else
         begin
-            enq_q <= enq;
-            enq_qq <= enq_q;
+            pop_free_q <= pop_free;
+            pop_free_qq <= pop_free_q;
 
             // Register combinationally computed free_head_idx
             free_head_idx_reg[0] <= free_head_idx[0];
@@ -215,7 +244,7 @@ module cci_mpf_prim_heap
         head_rr_select_q <= head_rr_select;
         head_rr_select_qq <= head_rr_select_q;
 
-        if (enq)
+        if (pop_free)
         begin
             head_rr_select <= ~head_rr_select;
         end
@@ -278,7 +307,7 @@ module cci_mpf_prim_heap
             initialized <= 1'b0;
 
             num_free <= t_idx'(0);
-            notFull <= 1'b0;
+            free_idx_avail <= 1'b0;
         end
         else
         begin
@@ -295,7 +324,7 @@ module cci_mpf_prim_heap
                     // This guarantees that neither free_head_idx ever goes
                     // NULL, which would require managing a special case.
                     num_free <= t_idx'(N_ENTRIES - 2);
-                    notFull <= 1'b1;
+                    free_idx_avail <= 1'b1;
 
                     assert (N_ENTRIES > 2 + MIN_FREE_SLOTS) else
                        $fatal("cci_mpf_prim_heap: Heap too small");
@@ -303,18 +332,18 @@ module cci_mpf_prim_heap
             end
             else
             begin
-                if (free_q && ! enq)
+                if (free_q && ! pop_free)
                 begin
                     num_free <= num_free + t_idx'(1);
-                    notFull <= ((num_free + t_idx'(1)) > t_idx'(MIN_FREE_SLOTS));
+                    free_idx_avail <= ((num_free + t_idx'(1)) > t_idx'(MIN_FREE_SLOTS));
 
                     assert (num_free < N_ENTRIES - 2) else
                        $fatal("cci_mpf_prim_heap: Too many free items. Pushed one twice?");
                 end
-                else if (! free_q && enq)
+                else if (! free_q && pop_free)
                 begin
                     num_free <= num_free - t_idx'(1);
-                    notFull <= ((num_free - t_idx'(1)) > t_idx'(MIN_FREE_SLOTS));
+                    free_idx_avail <= ((num_free - t_idx'(1)) > t_idx'(MIN_FREE_SLOTS));
 
                     assert (num_free != 0) else
                        $fatal("cci_mpf_prim_heap: alloc from empty heap!");

@@ -189,7 +189,7 @@ module cci_mpf_prim_simple_ram_init
         else if (! rdy)
         begin
             waddr_init <= waddr_init + 1;
-            rdy <= &(waddr_init);
+            rdy <= (waddr_init == (N_ENTRIES-1));
         end
     end
 

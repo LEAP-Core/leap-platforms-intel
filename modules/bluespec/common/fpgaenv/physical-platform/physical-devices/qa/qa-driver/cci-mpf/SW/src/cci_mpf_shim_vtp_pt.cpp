@@ -45,7 +45,9 @@
 //****************************************************************************
 
 #include <assert.h>
+#if __cplusplus > 199711L
 #include <atomic>
+#endif
 
 #include "cci_mpf_shim_vtp_pt.h"
 
@@ -266,7 +268,15 @@ MPFVTP_PAGE_TABLE::AddVAtoPA(btVirtAddr va, btPhysAddr pa, uint32_t depth)
     table->InsertTranslatedAddr(leaf_idx, pa);
 
     // Memory fence for updates before claiming the table is ready
+#if __cplusplus > 199711L
+    // C++11 knows atomics
     std::atomic_thread_fence(std::memory_order_seq_cst);
+#elif __GNUC__
+    // GNU C++ before C++11 should be able to do the same using inline asm
+    asm volatile ("" : : : "memory");
+#else
+#   warning "Neither C++ 11 atomics nor GNU asm volatile - don't know how to do memory barriers."
+#endif
 
     return true;
 }

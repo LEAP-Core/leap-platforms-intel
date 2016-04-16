@@ -81,7 +81,7 @@ package cci_mpf_if_pkg;
     typedef t_ccip_clNum t_cci_clNum;
     typedef t_ccip_qwIdx t_cci_qwIdx;
     // Maximum number of beats in a multi-line request
-    parameter CCI_MAX_MULTI_LINE_BEATS = 1 << $clog2($bits(t_cci_clNum));
+    parameter CCI_MAX_MULTI_LINE_BEATS = 1 << $bits(t_cci_clNum);
 
     typedef t_ccip_mmioAddr t_cci_mmioAddr;
     typedef t_ccip_mmioData t_cci_mmioData;

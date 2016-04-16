@@ -87,6 +87,7 @@ module qa_driver_main_fiu_tap
         .reset,
         .c1Tx(fiu.c1Tx),
         .c1Tx_en(1'b1),
+        .eop(),
         .packetActive(c1Tx_multi_beat_active),
         .nextBeatNum()
         );

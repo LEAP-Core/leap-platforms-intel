@@ -44,11 +44,24 @@ module cci_mpf_prim_track_multi_write
     // Was the message at the head of the channel processed?
     input  logic c1Tx_en,
 
-    // True if in the middle of a multi-line packet
+    // Is the current beat the end of the packet?
+    output logic eop,
+
+    // True if in the middle of a multi-line packet.
     output logic packetActive,
     // Next beat number expected in the current packet
     output t_cci_clNum nextBeatNum
     );
+
+    always_comb
+    begin
+        eop = 1'b1;
+
+        if (cci_mpf_c1TxIsWriteReq(c1Tx))
+        begin
+            eop = (nextBeatNum == c1Tx.hdr.base.cl_len);
+        end
+    end
 
     // Track the beat number
     always_ff @(posedge clk)

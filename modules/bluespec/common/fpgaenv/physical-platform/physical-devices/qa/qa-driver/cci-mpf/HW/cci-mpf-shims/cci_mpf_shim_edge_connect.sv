@@ -79,14 +79,17 @@ module cci_mpf_shim_edge_connect
     localparam N_WRITE_HEAP_ENTRIES = 128;
     typedef logic [$clog2(N_WRITE_HEAP_ENTRIES)-1 : 0] t_write_heap_idx;
 
+    logic wr_heap_alloc;
     logic wr_heap_not_full;
     t_write_heap_idx wr_heap_enq_idx;
-    t_cci_clData wr_heap_data;
+    t_cci_clNum wr_heap_enq_clNum;
+    t_cci_clData wr_data;
 
     logic wr_heap_deq_en;
     logic wr_heap_deq_en_q;
     t_write_heap_idx wr_heap_deq_idx;
     t_write_heap_idx wr_heap_deq_idx_q;
+    t_cci_clNum wr_heap_deq_clNum;
 
     // Dequeue delayed one cycle for timing
     always_ff @(posedge clk)
@@ -95,37 +98,59 @@ module cci_mpf_shim_edge_connect
         wr_heap_deq_idx_q <= wr_heap_deq_idx;
     end
 
-
-    cci_mpf_prim_heap
+    cci_mpf_prim_heap_ctrl
       #(
         .N_ENTRIES(N_WRITE_HEAP_ENTRIES),
-        .N_DATA_BITS(CCI_CLDATA_WIDTH),
         // Leave space both for the almost full threshold and a full
         // multi-line packet.  To avoid deadlocks we never signal a
         // transition to almost full in the middle of a packet so must
         // be prepared to absorb all flits.
         .MIN_FREE_SLOTS(CCI_TX_ALMOST_FULL_THRESHOLD +
-                        CCI_MAX_MULTI_LINE_BEATS + 1),
-        .N_OUTPUT_REG_STAGES(1)
+                        CCI_MAX_MULTI_LINE_BEATS + 1)
         )
-      wr_heap
+      wr_heap_ctrl
        (
         .clk,
         .reset,
 
-        // Add data to the heap as it arrives from the AFU
-        .enq(cci_mpf_c1TxIsWriteReq(afu_edge.c1Tx)),
-        .enqData(afu_edge.c1Tx.data),
+        // Add entries to the heap as writes arrive from the AFU
+        .enq(wr_heap_alloc),
         .notFull(wr_heap_not_full),
         .allocIdx(wr_heap_enq_idx),
 
-        // Retrieve data as it leaves toward the FIU. The heap index
-        // holding the write data is stored in the low bits of the request
-        // field that would have held the data itself.
-        .readReq(wr_heap_deq_idx),
-        .readRsp(wr_heap_data),
+        // Free entries as writes leave toward the FIU.
         .free(wr_heap_deq_en_q),
         .freeIdx(wr_heap_deq_idx_q)
+        );
+
+
+    //
+    // The true number of write heap entries is larger than
+    // N_WRITE_HEAP_ENTRIES because only one logical slot is used, even
+    // for multi-beat writes.  Multi-beat writes share a heap index and
+    // the index and cl_num for a flit are concatenated to form the
+    // data's heap address.
+    //
+    localparam N_UNIQUE_WRITE_HEAP_ENTRIES =
+        N_WRITE_HEAP_ENTRIES * CCI_MAX_MULTI_LINE_BEATS;
+
+    // Heap data, addressed using the indices handed out by wr_heap_ctrl.
+    cci_mpf_prim_ram_simple
+      #(
+        .N_ENTRIES(N_UNIQUE_WRITE_HEAP_ENTRIES),
+        .N_DATA_BITS(CCI_CLDATA_WIDTH),
+        .N_OUTPUT_REG_STAGES(1)
+        )
+      wr_heap_data
+       (
+        .clk,
+
+        .wen(cci_mpf_c1TxIsWriteReq(afu_edge.c1Tx)),
+        .waddr({ wr_heap_enq_idx, wr_heap_enq_clNum }),
+        .wdata(afu_edge.c1Tx.data),
+
+        .raddr({ wr_heap_deq_idx, wr_heap_deq_clNum }),
+        .rdata(wr_data)
         );
 
 
@@ -188,7 +213,7 @@ module cci_mpf_shim_edge_connect
     logic stg1_fiu_c1Tx_sop;
     logic stg1_packet_done;
     logic stg1_packet_is_new;
-    logic wr_heap_data_rdy;
+    logic stg1_flit_en;
     logic wr_req_may_fire;
 
     // Pipeline stages
@@ -198,13 +223,17 @@ module cci_mpf_shim_edge_connect
 
     always_comb
     begin
-        wr_req_may_fire = ! fiu_edge.c1TxAlmFull && wr_heap_data_rdy;
+        wr_req_may_fire = ! fiu_edge.c1TxAlmFull;
 
         // Processing is complete when all beats have been emitted.
         stg1_packet_done = wr_req_may_fire && (stg1_fiu_wr_beats_rem == 0);
 
-        // Read from the write data heap if there is a write request to process.
-        wr_heap_deq_en = wr_req_may_fire && cci_mpf_c1TxIsWriteReq(stg1_fiu_c1Tx);
+        // Ready to process a write flit?
+        stg1_flit_en = wr_req_may_fire && cci_mpf_c1TxIsWriteReq(stg1_fiu_c1Tx);
+        wr_heap_deq_clNum = stg1_fiu_wr_beat_idx;
+
+        // Release the write data heap entry when a write retires
+        wr_heap_deq_en = stg1_packet_done && cci_mpf_c1TxIsWriteReq(stg1_fiu_c1Tx);
 
         // Take the next request from the buffering FIFO when the current
         // packet is done or there is no packet being processed.
@@ -243,31 +272,19 @@ module cci_mpf_shim_edge_connect
                 stg1_fiu_wr_beat_idx <= 0;
                 stg1_fiu_wr_beats_rem <= fiu_c1Tx_first.hdr.base.cl_len;
 
-                wr_heap_data_rdy <= cci_mpf_c1TxIsValid(fiu_c1Tx_first);
                 wr_heap_deq_idx <= t_write_heap_idx'(fiu_c1Tx_first.data);
             end
             else if (stg1_packet_done)
             begin
                 // Pipeline is moving but no new request is available
                 stg1_fiu_c1Tx <= cci_c1Tx_clearValids();
-                wr_heap_data_rdy <= 1'b0;
             end
-            else if (wr_heap_deq_en)
+            else if (stg1_flit_en)
             begin
                 // In the middle of a multi-beat request
                 stg1_fiu_c1Tx_sop <= 1'b0;
                 stg1_fiu_wr_beat_idx <= stg1_fiu_wr_beat_idx + 1;
                 stg1_fiu_wr_beats_rem <= stg1_fiu_wr_beats_rem - 1;
-
-                wr_heap_deq_idx <= wr_heap_deq_idx + 1;
-                wr_heap_data_rdy <=
-                    ((wr_heap_deq_idx + t_write_heap_idx'(1)) != wr_heap_enq_idx);
-            end
-            else
-            begin
-                wr_heap_data_rdy <=
-                    cci_mpf_c1TxIsValid(stg1_fiu_c1Tx) &&
-                    (wr_heap_deq_idx != wr_heap_enq_idx);
             end
 
             if (wr_req_may_fire)
@@ -296,7 +313,7 @@ module cci_mpf_shim_edge_connect
     always_comb
     begin
         fiu_edge.c1Tx = stg3_fiu_c1Tx;
-        fiu_edge.c1Tx.data = wr_heap_data;
+        fiu_edge.c1Tx.data = wr_data;
     end
 
 
@@ -308,6 +325,9 @@ module cci_mpf_shim_edge_connect
 
     logic afu_wr_packet_active;
     logic afu_wr_sticky_full;
+    logic afu_wr_eop;
+
+    assign wr_heap_alloc = cci_mpf_c1TxIsWriteReq(afu_edge.c1Tx) && afu_wr_eop;
 
     logic afu_wr_almost_full;
     assign afu_wr_almost_full = afu.c1TxAlmFull || ! wr_heap_not_full;
@@ -369,11 +389,21 @@ module cci_mpf_shim_edge_connect
         // through MPF.  The rest are buffered in wr_heap here and the
         // packets will be regenerated when the sop packet exits.
         //
-        // Only pass requests that are either the start of a write or
+        // Only pass requests that are either the end of a write or
         // that aren't writes.
-        afu.c1Tx.valid = afu_edge.c1Tx.valid &&
-                         (afu_edge.c1Tx.hdr.base.sop ||
-                          ! cci_mpf_c1TxIsWriteReq_noCheckValid(afu_edge.c1Tx));
+        if (cci_mpf_c1TxIsWriteReq_noCheckValid(afu_edge.c1Tx))
+        begin
+            // Wait for the final flit to arrive and be buffered, thus
+            // guaranteeing that all the data is ready to be written
+            // as the packet exits to the FIU.
+            afu.c1Tx.valid = afu_edge.c1Tx.valid &&
+                             (wr_heap_enq_clNum == afu_edge.c1Tx.hdr.base.cl_len);
+
+            // Revert the address to the start of packet address
+            afu.c1Tx.hdr.base.sop = 1'b1;
+            afu.c1Tx.hdr.base.address[1:0] = afu_edge.c1Tx.hdr.base.address[1:0] ^
+                                             afu_edge.c1Tx.hdr.base.cl_len;
+        end
     end
 
 
@@ -389,8 +419,9 @@ module cci_mpf_shim_edge_connect
         .reset,
         .c1Tx(afu_edge.c1Tx),
         .c1Tx_en(1'b1),
+        .eop(afu_wr_eop),
         .packetActive(afu_wr_packet_active),
-        .nextBeatNum()
+        .nextBeatNum(wr_heap_enq_clNum)
         );
 
     t_ccip_clAddr afu_wr_prev_addr;

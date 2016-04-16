@@ -29,9 +29,8 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 //
-// A simple heap implementation.  Elements are given out round robin to
-// simplify the allocator.  Values are written to the heap at allocation
-// time.
+// cci_mpf_prim_heap_ctrl manage entry allocation and not data.
+// cci_mpf_prim_heap is a convenience wrapper that manages both.
 //
 
 module cci_mpf_prim_heap
@@ -63,6 +62,29 @@ module cci_mpf_prim_heap
 
     typedef logic [N_DATA_BITS-1 : 0] t_data;
     typedef logic [$clog2(N_ENTRIES)-1 : 0] t_idx;
+
+
+    // ====================================================================
+    //
+    // Control logic.
+    //
+    // ====================================================================
+
+    cci_mpf_prim_heap_ctrl
+      #(
+        .N_ENTRIES(N_ENTRIES),
+        .MIN_FREE_SLOTS(MIN_FREE_SLOTS)
+        )
+      ctrl
+       (
+        .clk,
+        .reset,
+        .enq,
+        .notFull,
+        .allocIdx,
+        .free,
+        .freeIdx
+        );
 
 
     // ====================================================================
@@ -118,6 +140,32 @@ module cci_mpf_prim_heap
         .raddr(readReq),
         .rdata(readRsp)
         );
+
+endmodule // cci_mpf_prim_heap
+
+
+//
+// Just the control portion of heap entry allocation.
+//
+module cci_mpf_prim_heap_ctrl
+  #(
+    parameter N_ENTRIES = 32,
+    // Threshold below which heap asserts "full"
+    parameter MIN_FREE_SLOTS = 1
+    )
+   (
+    input  logic clk,
+    input  logic reset,
+
+    input  logic enq,                                // Allocate an entry
+    output logic notFull,                            // Is scoreboard full?
+    output logic [$clog2(N_ENTRIES)-1 : 0] allocIdx, // Index of new entry
+
+    input  logic free,                               // enable free freeIdx
+    input  logic [$clog2(N_ENTRIES)-1 : 0] freeIdx
+    );
+
+    typedef logic [$clog2(N_ENTRIES)-1 : 0] t_idx;
 
 
     // ====================================================================
@@ -352,4 +400,4 @@ module cci_mpf_prim_heap
         end
     end
 
-endmodule // cci_mpf_prim_heap
+endmodule // cci_mpf_prim_heap_ctrl

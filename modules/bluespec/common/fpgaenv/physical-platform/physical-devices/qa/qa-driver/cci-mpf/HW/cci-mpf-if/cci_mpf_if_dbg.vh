@@ -172,6 +172,11 @@
         endcase
     endfunction
 
+    logic [1:0] cycle = 2'b0;
+    always @(posedge clk)
+    begin
+        cycle <= cycle + 2'b1;
+    end
  
     initial
     begin : logger_proc
@@ -230,8 +235,8 @@
                 /******************* MEM -> AFU Read Response *****************/
                 if (! reset && c0Rx.rspValid)
                 begin
-                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%s\t%x\t%x\n",
-                            $time,
+                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t (%0d)\t%s\t%0d\t%s\t%s\t%x\t%x\n",
+                            $time, cycle,
                             print_channel(c0Rx.hdr.vc_used),
                             c0Rx.hdr.cl_num,
                             ((c0Rx.hdr.cl_num == 0) ? "S" :
@@ -244,8 +249,8 @@
                 /****************** MEM -> AFU Write Response *****************/
                 if (! reset && c1Rx.rspValid)
                 begin
-                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%s\t%x\n",
-                            $time,
+                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t (%0d)\t%s\t%0d\t%s\t%s\t%x\n",
+                            $time, cycle,
                             print_channel(c1Rx.hdr.vc_used),
                             c1Rx.hdr.cl_num,
                             (c1Rx.hdr.format ? "F" : "x"),
@@ -259,8 +264,8 @@
                     t_cci_c0_ReqMmioHdr mmio_hdr;
                     mmio_hdr = t_cci_c0_ReqMmioHdr'(c0Rx.hdr);
 
-                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\tMMIOWrReq\t%x\t%d bytes\t%x\t%x\n",
-                            $time,
+                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t (%0d)\tMMIOWrReq\t%x\t%d bytes\t%x\t%x\n",
+                            $time, cycle,
                             mmio_hdr.tid,
                             csr_len(mmio_hdr.length),
                             mmio_hdr.address,
@@ -273,8 +278,8 @@
                     t_cci_c0_ReqMmioHdr mmio_hdr;
                     mmio_hdr = t_cci_c0_ReqMmioHdr'(c0Rx.hdr);
 
-                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\tMMIORdReq\t%x\t%d bytes\t%x\n",
-                            $time,
+                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t (%0d)\tMMIORdReq\t%x\t%d bytes\t%x\n",
+                            $time, cycle,
                             mmio_hdr.tid,
                             csr_len(mmio_hdr.length),
                             mmio_hdr.address);

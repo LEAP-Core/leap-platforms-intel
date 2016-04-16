@@ -168,6 +168,7 @@ module cci_mpf_shim_mux
                 .reset,
                 .c1Tx(afu_buf[p].c1Tx),
                 .c1Tx_en(deqC1Tx[p]),
+                .eop(),
                 .packetActive(c1_active[p]),
                 .nextBeatNum()
                 );

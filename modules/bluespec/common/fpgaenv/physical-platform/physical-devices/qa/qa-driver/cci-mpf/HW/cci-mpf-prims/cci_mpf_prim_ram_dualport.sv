@@ -96,17 +96,13 @@ module cci_mpf_prim_ram_dualport
         .clock1(clk1),
 
         .wren_a(wen0),
-        .address_a(waddr0),
+        .address_a(addr0),
         .data_a(wdata0),
-
-        .address_a(raddr0),
         .q_a(mem_rd0[OUTDATA_IDX]),
 
         .wren_b(wen1),
-        .address_b(waddr1),
+        .address_b(addr1),
         .data_b(wdata1),
-
-        .address_b(raddr1),
         .q_b(mem_rd1[OUTDATA_IDX]),
 
         // Legally unconnected ports -- get rid of lint errors

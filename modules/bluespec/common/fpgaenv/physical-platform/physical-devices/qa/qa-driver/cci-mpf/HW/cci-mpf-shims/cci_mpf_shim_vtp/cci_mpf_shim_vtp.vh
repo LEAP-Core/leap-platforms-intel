@@ -201,4 +201,71 @@ interface cci_mpf_shim_vtp_tlb_if;
 
 endinterface
 
+
+//
+// Page table walker interface.
+//
+//
+interface cci_mpf_shim_vtp_pt_walk_if;
+    // Enable PT walk request
+    logic reqEn;
+    // VA to translate
+    t_tlb_4kb_va_page_idx reqVA;
+    // Ready to accept a request?
+    logic reqRdy;
+
+    // Requested VA is not in the page table.  This is an error!
+    logic notPresent;
+
+    //
+    // Read the page table from host memory
+    //
+    logic readEn;
+    t_cci_clAddr readAddr;
+    logic readRdy;
+
+    logic readDataEn;
+    t_cci_clData readData;
+
+
+    // Page table walker (server) ports
+    modport pt_walk
+       (
+        input  reqEn,
+        input  reqVA,
+        output reqRdy,
+
+        output notPresent,
+
+        output readEn,
+        output readAddr,
+        input  readRdy,
+
+        input  readDataEn,
+        input  readData
+        );
+
+    // Client (TLB) interface
+    modport client
+       (
+        output reqEn,
+        output reqVA,
+        input  reqRdy,
+
+        input  notPresent
+        );
+
+    // Memory read port, used by the walker to read PT entries in host memory
+    modport mem_read
+       (
+        input  readEn,
+        input  readAddr,
+        output readRdy,
+
+        output readDataEn,
+        output readData
+        );
+
+endinterface
+
 `endif // __CCI_MPF_SHIM_VTP_VH__

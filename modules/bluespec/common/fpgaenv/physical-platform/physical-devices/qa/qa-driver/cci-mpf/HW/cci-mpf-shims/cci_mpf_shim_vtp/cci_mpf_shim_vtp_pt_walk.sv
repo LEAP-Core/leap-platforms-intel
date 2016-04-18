@@ -97,33 +97,14 @@ module cci_mpf_shim_vtp_pt_walk
     input  logic clk,
     input  logic reset,
 
+    // Primary interface
+    cci_mpf_shim_vtp_pt_walk_if.pt_walk pt_walk,
+
     // CSRs
     cci_mpf_csrs.vtp csrs,
 
-    // Request a page walk.
-    input  logic walkPtReqEn,                  // Enable PT walk request
-    input  t_tlb_4kb_va_page_idx walkPtReqVA,  // VA to translate
-    output logic walkPtReqRdy,                 // Ready to accept a request?
-
     // Completed a page walk.  Tell the TLB about a new translation
     cci_mpf_shim_vtp_tlb_if.fill tlb_fill_if,
-
-    // Requested VA is not in the page table.  This is an error!
-    output logic notPresent,
-
-    // Initiate request to read a line from the shared-memory page table.
-    // This is the mechanism by which page table entries are read for
-    // the table walk.  Code that instantiates this module is responsible
-    // for turning the request into a read of the page table and forwarding
-    // the result to ptReadData.
-    output logic ptReadEn,
-    output t_cci_clAddr ptReadAddr,
-    // System ready to accept a read request?
-    input  logic ptReadRdy,
-
-    // Response to page table read request
-    input t_cci_clData ptReadData,
-    input logic ptReadDataEn,
 
     // Statistics
     output logic statBusy
@@ -225,7 +206,7 @@ module cci_mpf_shim_vtp_pt_walk
     //
     // The miss handler supports processing only one request at a time.
     //
-    assign walkPtReqRdy = initialized && state_is_walk_idle;
+    assign pt_walk.reqRdy = initialized && state_is_walk_idle;
 
     assign statBusy = ! state_is_walk_idle;
 
@@ -252,8 +233,8 @@ module cci_mpf_shim_vtp_pt_walk
     
     // High bits of the requested VA are the page table indices
     t_cci_mpf_pt_page_idx_vec req_va_as_idx_vec;
-    assign req_va_as_idx_vec = walkPtReqVA[($bits(walkPtReqVA)-1) -:
-                                           $bits(t_cci_mpf_pt_page_idx_vec)];
+    assign req_va_as_idx_vec = pt_walk.reqVA[($bits(pt_walk.reqVA)-1) -:
+                                             $bits(t_cci_mpf_pt_page_idx_vec)];
 
 
     // Track the depth while walking the table.  This is one way of detecting
@@ -273,10 +254,10 @@ module cci_mpf_shim_vtp_pt_walk
         end
         else
         begin
-            ptReadDataEn_q <= ptReadDataEn;
+            ptReadDataEn_q <= pt_walk.readDataEn;
         end
 
-        ptReadData_q <= ptReadData;
+        ptReadData_q <= pt_walk.readData;
     end
 
     //
@@ -332,7 +313,7 @@ module cci_mpf_shim_vtp_pt_walk
         if (reset)
         begin
             state <= STATE_PT_WALK_IDLE;
-            notPresent <= 1'b0;
+            pt_walk.notPresent <= 1'b0;
             state_is_walk_idle <= 1'b1;
             state_is_walk_done <= 1'b0;
         end
@@ -342,7 +323,7 @@ module cci_mpf_shim_vtp_pt_walk
               STATE_PT_WALK_IDLE:
                 begin
                     // New request arrived and not already doing a walk
-                    if (walkPtReqEn)
+                    if (pt_walk.reqEn)
                     begin
                         state <= STATE_PT_WALK_READ_CACHE_REQ;
                         state_is_walk_idle <= 1'b0;
@@ -350,7 +331,7 @@ module cci_mpf_shim_vtp_pt_walk
 
                     // New request: start by searching the local page table
                     // cache (depth first).
-                    translate_va <= walkPtReqVA;
+                    translate_va <= pt_walk.reqVA;
                     translate_va_idx_vec <= req_va_as_idx_vec;
                     translate_depth <=
                         t_cci_mpf_pt_walk_depth'(CCI_MPF_PT_MAX_DEPTH - 1);
@@ -419,7 +400,7 @@ module cci_mpf_shim_vtp_pt_walk
               STATE_PT_WALK_READ_REQ:
                 begin
                     // Wait until a PT read request can fire
-                    if (ptReadEn)
+                    if (pt_walk.readEn)
                     begin
                         state <= STATE_PT_WALK_READ_WAIT_RSP;
                     end
@@ -493,7 +474,7 @@ module cci_mpf_shim_vtp_pt_walk
               STATE_PT_WALK_ERROR:
                 begin
                     // Terminal state
-                    notPresent <= 1'b1;
+                    pt_walk.notPresent <= 1'b1;
                 end
             endcase
         end
@@ -507,20 +488,20 @@ module cci_mpf_shim_vtp_pt_walk
     // ====================================================================
 
     // Enable a read request?
-    assign ptReadEn = (state == STATE_PT_WALK_READ_REQ) && ptReadRdy;
+    assign pt_walk.readEn = (state == STATE_PT_WALK_READ_REQ) && pt_walk.readRdy;
 
     // Address of read request
     always_comb
     begin
-        ptReadAddr = t_cci_clAddr'(0);
+        pt_walk.readAddr = t_cci_clAddr'(0);
 
         // Current page in table
-        ptReadAddr[CCI_PT_4KB_PAGE_OFFSET_BITS +: CCI_PT_4KB_PA_PAGE_INDEX_BITS] =
+        pt_walk.readAddr[CCI_PT_4KB_PAGE_OFFSET_BITS +: CCI_PT_4KB_PA_PAGE_INDEX_BITS] =
             pt_walk_cur_page;
 
         // Select the proper line in this level of the table, based on the
         // portion of the VA corresponding to the level.
-        ptReadAddr[PT_PAGE_LINE_IDX_WIDTH-1 : 0] = ptPageLineIdx(translate_va_idx_vec);
+        pt_walk.readAddr[PT_PAGE_LINE_IDX_WIDTH-1 : 0] = ptPageLineIdx(translate_va_idx_vec);
     end
 
 
@@ -544,11 +525,11 @@ module cci_mpf_shim_vtp_pt_walk
     begin
         if (! reset && DEBUG_MESSAGES)
         begin
-            if (walkPtReqEn && (state == STATE_PT_WALK_IDLE))
+            if (pt_walk.reqEn && (state == STATE_PT_WALK_IDLE))
             begin
                 $display("PT WALK: New req translate line 0x%x (VA 0x%x)",
-                         { walkPtReqVA, CCI_PT_4KB_PAGE_OFFSET_BITS'(0) },
-                         { walkPtReqVA, CCI_PT_4KB_PAGE_OFFSET_BITS'(0), 6'b0 });
+                         { pt_walk.reqVA, CCI_PT_4KB_PAGE_OFFSET_BITS'(0) },
+                         { pt_walk.reqVA, CCI_PT_4KB_PAGE_OFFSET_BITS'(0), 6'b0 });
             end
 
             if ((state == STATE_PT_WALK_READ_CACHE_REQ) && ptReadCacheRdy)
@@ -574,10 +555,10 @@ module cci_mpf_shim_vtp_pt_walk
                          ptReadCacheStatus.error);
             end
 
-            if (ptReadEn)
+            if (pt_walk.readEn)
             begin
                 $display("PT WALK: PTE read addr 0x%x (PA 0x%x) (line 0x%x, word 0x%x)",
-                         ptReadAddr, {ptReadAddr, 6'b0},
+                         pt_walk.readAddr, {pt_walk.readAddr, 6'b0},
                          ptPageLineIdx(translate_va_idx_vec),
                          ptLineWordIdx(translate_va_idx_vec));
             end
@@ -609,7 +590,7 @@ module cci_mpf_shim_vtp_pt_walk
                          (tlb_fill_if.fillBigPage ? "2MB" : "4KB"));
             end
 
-            if ((state == STATE_PT_WALK_ERROR) && ! notPresent)
+            if ((state == STATE_PT_WALK_ERROR) && ! pt_walk.notPresent)
             begin
                 $display("PT WALK: Error!");
             end

@@ -234,24 +234,25 @@ module cci_mpf_shim_vtp
     //
     // ====================================================================
 
-    logic walk_pt_rdy;
-    logic walk_pt_req_en;
-    t_tlb_4kb_va_page_idx walk_pt_req_va[0 : 1];
+    cci_mpf_shim_vtp_pt_walk_if pt_walk();
 
     // Miss channel arbiter -- used for fairness
     logic last_miss_channel;
+    t_tlb_4kb_va_page_idx walk_pt_req_va[0 : 1];
+
+    assign pt_walk.reqVA = walk_pt_req_va[last_miss_channel];
 
     always_ff @(posedge clk)
     begin
         if (reset)
         begin
             last_miss_channel <= 1'b0;
-            walk_pt_req_en <= 1'b0;
+            pt_walk.reqEn <= 1'b0;
         end
-        else if (walk_pt_req_en)
+        else if (pt_walk.reqEn)
         begin
             // New request forwarded to page walker
-            walk_pt_req_en <= 0;
+            pt_walk.reqEn <= 0;
         end
         else
         begin
@@ -266,19 +267,19 @@ module cci_mpf_shim_vtp
             // would be technically correct but wasteful, since the
             // translation will be added to the TLB within a few cycles.
             //
-            if (walk_pt_req_en || ! walk_pt_rdy || ! tlb_if.fillRdy)
+            if (pt_walk.reqEn || ! pt_walk.reqRdy || ! tlb_if.fillRdy)
             begin
-                walk_pt_req_en <= 0;
+                pt_walk.reqEn <= 0;
             end
             else if (tlb_if.lookupMiss[0] &&
                      ((last_miss_channel == 1) || ! tlb_if.lookupMiss[1]))
             begin
-                walk_pt_req_en <= 1;
+                pt_walk.reqEn <= 1;
                 last_miss_channel <= 0;
             end
             else if (tlb_if.lookupMiss[1])
             begin
-                walk_pt_req_en <= 1;
+                pt_walk.reqEn <= 1;
                 last_miss_channel <= 1;
             end
         end
@@ -292,34 +293,26 @@ module cci_mpf_shim_vtp
 
     always_ff @(posedge clk)
     begin
-        if (! reset && walk_pt_req_en && DEBUG_MESSAGES)
+        if (! reset && pt_walk.reqEn && DEBUG_MESSAGES)
         begin
             $display("VTP: Request page walk for miss chan %0d, VA 0x%x",
                      last_miss_channel,
-                     {walk_pt_req_va[last_miss_channel], CCI_PT_4KB_PAGE_OFFSET_BITS'(0)});
+                     {pt_walk.reqVA, CCI_PT_4KB_PAGE_OFFSET_BITS'(0)});
         end
     end
-
-    // Not present is an error signal. It means that the VA is not present
-    // in the host-memory PTE.
-    logic notPresent;
 
     always_ff @(posedge clk)
     begin
         if (! reset)
         begin
-            assert (! notPresent) else
+            assert (! pt_walk.notPresent) else
                 $fatal("cci_mpf_shim_vtp: VA not present in page table");
         end
     end
 
 
     // Page table read request and response signals
-    logic ptReadEn;
-    logic ptReadEn_q;
-    t_cci_clAddr ptReadAddr;
-    t_cci_clAddr ptReadAddr_q;
-    logic ptReadDataEn;
+    assign pt_walk.readData = fiu.c0Rx.data;
 
     cci_mpf_shim_vtp_pt_walk
       #(
@@ -330,22 +323,9 @@ module cci_mpf_shim_vtp
         .clk,
         .reset,
 
+        .pt_walk,
         .csrs,
-
-        .walkPtReqEn(walk_pt_req_en),
-        .walkPtReqVA(walk_pt_req_va[last_miss_channel]),
-        .walkPtReqRdy(walk_pt_rdy),
-
         .tlb_fill_if(tlb_if),
-
-        .notPresent,
-
-        .ptReadEn,
-        .ptReadAddr,
-        .ptReadRdy(! ptReadEn_q),
-
-        .ptReadData(fiu.c0Rx.data),
-        .ptReadDataEn,
 
         .statBusy(events.vtp_out_event_pt_walk_busy)
         );
@@ -369,6 +349,10 @@ module cci_mpf_shim_vtp
     t_cci_mpf_c0_ReqMemHdr c0_req_hdr;
     logic did_pt_rd;
 
+    logic ptReadEn_q;
+    t_cci_clAddr ptReadAddr_q;
+    assign pt_walk.readRdy = ! ptReadEn_q;
+
     always_ff @(posedge clk)
     begin
         if (reset)
@@ -384,8 +368,8 @@ module cci_mpf_shim_vtp
             // the page table read request arrives.
             if (did_pt_rd || ! ptReadEn_q)
             begin
-                ptReadEn_q <= ptReadEn;
-                ptReadAddr_q   <= ptReadAddr;
+                ptReadEn_q <= pt_walk.readEn;
+                ptReadAddr_q <= pt_walk.readAddr;
             end
         end
     end
@@ -436,10 +420,10 @@ module cci_mpf_shim_vtp
         fiu_pipe.c0Rx = fiu.c0Rx;
 
         // Is the read response for the page table walker?
-        ptReadDataEn = cci_c0Rx_isReadRsp(fiu.c0Rx) && is_pt_rsp;
+        pt_walk.readDataEn = cci_c0Rx_isReadRsp(fiu.c0Rx) && is_pt_rsp;
 
         // Only forward client-generated read responses
-        fiu_pipe.c0Rx.rspValid = fiu.c0Rx.rspValid && ! ptReadDataEn;
+        fiu_pipe.c0Rx.rspValid = fiu.c0Rx.rspValid && ! pt_walk.readDataEn;
     end
 
     assign fiu_pipe.c1Rx = fiu.c1Rx;

@@ -29,19 +29,14 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 //
-// MPF -- Memory Properties Factory
-//
-//   The factory is a composable collection of shims for constructing
-//   Xeon+FPGA memory interfaces with a variety of characteristics.
-//
-//   Shims offer features such as:
-//     - Sort read responses to match request order
-//     - Virtual to physical translation (VTP)
-//     - Preserve read/write and write/write ordering within lines.
+// MPF main wrapper.  This module defines the edge of MPF that attaches
+// to the FIU.  It then instantiates an MPF pipeline to implement the
+// desired MPF services.
 //
 
 `include "cci_mpf_if.vh"
 `include "cci_mpf_csrs.vh"
+`include "cci_mpf_shim_edge.vh"
 
 
 //
@@ -111,30 +106,31 @@ module cci_mpf
     //
     // ====================================================================
 
-    cci_mpf_if stg1_mpf_fiu (.clk);
-    cci_mpf_if stg7_mpf_afu (.clk);
+    cci_mpf_if stgm1_mpf_fiu (.clk);
 
-    cci_mpf_shim_edge_connect
-      mpf_edge
+    // Number of unique write request packets that may be active in MPF.
+    // Multi-flit packets count as one entry. Packets become active when
+    // a TX request arrives from the AFU and are inactivated as the TX
+    // request exits MPF toward the FIU.
+    localparam N_WRITE_HEAP_ENTRIES = 128;
+
+    cci_mpf_shim_edge_if
+      #(
+        .N_WRITE_HEAP_ENTRIES(N_WRITE_HEAP_ENTRIES)
+        )
+      edge_if();
+
+    cci_mpf_shim_edge_fiu
+      #(
+        .N_WRITE_HEAP_ENTRIES(N_WRITE_HEAP_ENTRIES)
+        )
+      mpf_edge_fiu
        (
         .clk,
-        .fiu_edge(fiu),
-        .afu_edge(afu),
-        .fiu(stg1_mpf_fiu),
-        .afu(stg7_mpf_afu)
+        .fiu_ext(fiu),
+        .fiu(stgm1_mpf_fiu),
+        .afu_edge(edge_if)
         );
-
-
-    // ====================================================================
-    //
-    //  Stages here form a pipeline, transforming requests as they enter
-    //  from the AFU through stages that compose to provide a complete
-    //  memory subsystem.
-    //
-    //  The request (Tx) pipeline flows up from the bottom of the stages.
-    //  The response (Rx) pipeline flows down from the top of the file.
-    //
-    // ====================================================================
 
 
     // ====================================================================
@@ -143,7 +139,7 @@ module cci_mpf
     //
     // ====================================================================
 
-    cci_mpf_if stg2_fiu_csrs (.clk);
+    cci_mpf_if stgm2_fiu_csrs (.clk);
     cci_mpf_csrs mpf_csrs ();
 
     cci_mpf_shim_csr
@@ -157,8 +153,8 @@ module cci_mpf
       csr
        (
         .clk,
-        .fiu(stg1_mpf_fiu),
-        .afu(stg2_fiu_csrs),
+        .fiu(stgm1_mpf_fiu),
+        .afu(stgm2_fiu_csrs),
         .csrs(mpf_csrs),
         .events(mpf_csrs)
         );
@@ -166,158 +162,29 @@ module cci_mpf
 
     // ====================================================================
     //
-    //  Detect the end of responses for a multi-beat packet (EOP).
-    //  Single-beat responses will also be tagged EOP.
+    //  Instantiate an MPF pipeline composed of the desired shims
     //
     // ====================================================================
 
-    cci_mpf_if stg3_fiu_eop (.clk);
-
-    cci_mpf_shim_detect_eop
+    cci_mpf_pipe_std
       #(
         .MAX_ACTIVE_REQS(MAX_ACTIVE_REQS),
-        .RESERVED_MDATA_IDX(CCI_PLATFORM_MDATA_WIDTH-2)
-        )
-      eop
-       (
-        .clk,
-        .fiu(stg2_fiu_csrs),
-        .afu(stg3_fiu_eop)
-        );
-
-
-    // ====================================================================
-    //
-    //  Virtual to physical translation.
-    //
-    //  *** This stage may reorder requests relative to each other,
-    //  *** including requests to the same line. Reordering occurs
-    //  *** only on translation miss in order to allow hits to flow
-    //  *** around misses.
-    //  ***
-    //  *** If strict ordering is required within cache lines then
-    //  *** the write order shim (cci_mpf_shim_wro) must be closer
-    //  *** to the AFU than this VTP stage.
-    //
-    // ====================================================================
-
-    cci_mpf_if stg4_fiu_virtual (.clk);
-
-    generate
-        if (ENABLE_VTP)
-        begin : vtp
-            cci_mpf_shim_vtp
-              #(
-                // VTP needs to generate loads internally in order to walk the
-                // page table.  The reserved bit in Mdata is a location offered
-                // to the page table walker to tag internal loads.  The Mdata
-                // location is guaranteed to be zero on all requests flowing
-                // in to VTP from the AFU.  In the composition here,
-                // qa_shim_sort_responses provides this guarantee by rewriting
-                // Mdata as requests and responses as they flow in and out
-                // of the stack.
-                .RESERVED_MDATA_IDX(CCI_PLATFORM_MDATA_WIDTH-2)
-                )
-              v_to_p
-               (
-                .clk,
-                .fiu(stg3_fiu_eop),
-                .afu(stg4_fiu_virtual),
-                .csrs(mpf_csrs),
-                .events(mpf_csrs)
-                );
-        end
-        else
-        begin : no_vtp
-            cci_mpf_shim_null
-              physical
-               (
-                .clk,
-                .fiu(stg3_fiu_eop),
-                .afu(stg4_fiu_virtual)
-                );
-        end
-    endgenerate
-
-
-    // ====================================================================
-    //
-    //  Maintain read/write and write/write order to matching addresses.
-    //  This level of the hierarchy operates on virtual addresses.
-    //  Order preservation is optional, controlled by ENFORCE_WR_ORDER.
-    //
-    // ====================================================================
-
-    cci_mpf_if stg5_fiu_wro (.clk);
-
-    generate
-        if (ENFORCE_WR_ORDER)
-        begin : wro
-            cci_mpf_shim_wro
-              order
-               (
-                .clk,
-                .fiu(stg4_fiu_virtual),
-                .afu(stg5_fiu_wro)
-                );
-        end
-        else
-        begin : no_wro
-            cci_mpf_shim_null
-              unordered
-               (
-                .clk,
-                .fiu(stg4_fiu_virtual),
-                .afu(stg5_fiu_wro)
-                );
-        end
-    endgenerate
-
-
-    // ====================================================================
-    //
-    //  Sort read responses so they arrive in the order they were
-    //  requested.
-    //
-    //  Operates on virtual addresses.
-    //
-    //  *** In addition to sorting responses this stage preserves
-    //  *** Mdata values for both read and write requests.  Mdata
-    //  *** preservation is required early in the flow from the AFU.
-    //  *** If no read response sorting is needed this module may
-    //  *** still be used to preserve Mdata by setting the parameter
-    //  *** SORT_READ_RESPONSES to 0.
-    //
-    // ====================================================================
-
-    cci_mpf_if stg6_fiu_rsp_order (.clk);
-
-    cci_mpf_shim_rsp_order
-      #(
+        .MPF_INSTANCE_ID(MPF_INSTANCE_ID),
+        .DFH_MMIO_BASE_ADDR(DFH_MMIO_BASE_ADDR),
+        .DFH_MMIO_NEXT_ADDR(DFH_MMIO_NEXT_ADDR),
+        .ENABLE_VTP(ENABLE_VTP),
+        .ENFORCE_WR_ORDER(ENFORCE_WR_ORDER),
         .SORT_READ_RESPONSES(SORT_READ_RESPONSES),
         .PRESERVE_WRITE_MDATA(PRESERVE_WRITE_MDATA),
-        .MAX_ACTIVE_REQS(MAX_ACTIVE_REQS)
+        .N_WRITE_HEAP_ENTRIES(N_WRITE_HEAP_ENTRIES)
         )
-      rspOrder
+      mpf_pipe
        (
         .clk,
-        .fiu(stg5_fiu_wro),
-        .afu(stg6_fiu_rsp_order)
-        );
-
-
-    // ====================================================================
-    //
-    //  Register responses to AFU. The stage is inserted for timing.
-    //
-    // ====================================================================
-
-    cci_mpf_shim_buffer_fiu
-      regRsp
-       (
-        .clk,
-        .fiu_raw(stg6_fiu_rsp_order),
-        .fiu_buf(stg7_mpf_afu)
+        .fiu(stgm2_fiu_csrs),
+        .afu,
+        .mpf_csrs,
+        .edge_if
         );
 
 endmodule // cci_mpf

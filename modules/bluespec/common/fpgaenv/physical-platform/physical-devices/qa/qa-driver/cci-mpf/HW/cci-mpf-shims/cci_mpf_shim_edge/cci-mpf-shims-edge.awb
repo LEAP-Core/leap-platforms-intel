@@ -1,0 +1,11 @@
+%name Intel MPF Edge Shim
+%desc Intel MPF Edge Shim
+
+%provides qa_cci_mpf_hw_shims_edge
+
+%notes README
+
+%sources -t VERILOG_H  -v PRIVATE cci_mpf_shim_edge.vh
+
+%sources -t VERILOG    -v PRIVATE cci_mpf_shim_edge_afu.sv
+%sources -t VERILOG    -v PRIVATE cci_mpf_shim_edge_fiu.sv

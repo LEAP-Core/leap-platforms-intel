@@ -2,6 +2,7 @@
 %desc Intel MPF Shims
 
 %provides qa_cci_mpf_hw_shims
+%requires qa_cci_mpf_hw_shims_edge
 %requires qa_cci_mpf_hw_shims_vtp
 
 %notes README
@@ -11,7 +12,6 @@
 %sources -t VERILOG    -v PRIVATE cci_mpf_shim_buffer_fiu.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_shim_csr.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_shim_detect_eop.sv
-%sources -t VERILOG    -v PRIVATE cci_mpf_shim_edge_connect.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_shim_mux.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_shim_null.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_shim_rsp_order.sv

@@ -44,19 +44,19 @@ module cci_mpf_shim_edge_afu
    (
     input  logic clk,
 
-    // External connections to the AFU
-    cci_mpf_if.to_afu afu_ext,
+    // Connection toward the FIU (the end of the MPF pipeline nearest the AFU)
+    cci_mpf_if.to_fiu fiu,
 
-    // Connection to the AFU end of the MPF pipeline
-    cci_mpf_if.to_fiu afu,
+    // External connections to the AFU
+    cci_mpf_if.to_afu afu,
 
     // Interface to the MPF FIU edge module
     cci_mpf_shim_edge_if.edge_afu fiu_edge
     );
 
     logic reset;
-    assign reset = afu.reset;
-    assign afu_ext.reset = afu.reset;
+    assign reset = fiu.reset;
+    assign afu.reset = fiu.reset;
 
 
     //
@@ -108,10 +108,10 @@ module cci_mpf_shim_edge_afu
     //
     // The heap holding write data is in the FIU edge module.
     //
-    assign fiu_edge.wen = cci_mpf_c1TxIsWriteReq(afu_ext.c1Tx);
+    assign fiu_edge.wen = cci_mpf_c1TxIsWriteReq(afu.c1Tx);
     assign fiu_edge.widx = wr_heap_enq_idx;
     assign fiu_edge.wclnum = wr_heap_enq_clNum;
-    assign fiu_edge.wdata = afu_ext.c1Tx.data;
+    assign fiu_edge.wdata = afu.c1Tx.data;
 
 
     // ====================================================================
@@ -124,14 +124,14 @@ module cci_mpf_shim_edge_afu
     logic afu_wr_sticky_full;
     logic afu_wr_eop;
 
-    assign wr_heap_alloc = cci_mpf_c1TxIsWriteReq(afu_ext.c1Tx) && afu_wr_eop;
+    assign wr_heap_alloc = cci_mpf_c1TxIsWriteReq(afu.c1Tx) && afu_wr_eop;
 
     logic afu_wr_almost_full;
-    assign afu_wr_almost_full = afu.c1TxAlmFull || ! wr_heap_not_full;
+    assign afu_wr_almost_full = fiu.c1TxAlmFull || ! wr_heap_not_full;
 
     // All but write requests flow straight through
-    assign afu.c0Tx = cci_mpf_updC0TxCanonical(afu_ext.c0Tx);
-    assign afu.c2Tx = afu_ext.c2Tx;
+    assign fiu.c0Tx = cci_mpf_updC0TxCanonical(afu.c0Tx);
+    assign fiu.c2Tx = afu.c2Tx;
 
     //
     // Register almost full signals before they reach the AFU.  MPF modules
@@ -142,17 +142,17 @@ module cci_mpf_shim_edge_afu
     begin
         if (reset)
         begin
-            afu_ext.c0TxAlmFull <= 1'b1;
-            afu_ext.c1TxAlmFull <= 1'b1;
+            afu.c0TxAlmFull <= 1'b1;
+            afu.c1TxAlmFull <= 1'b1;
             afu_wr_sticky_full <= 1'b0;
         end
         else
         begin
-            afu_ext.c0TxAlmFull <= afu.c0TxAlmFull;
+            afu.c0TxAlmFull <= fiu.c0TxAlmFull;
 
             // Never signal almost full in the middle of a packet. Deadlocks
             // can result since the control flit is already flowing through MPF.
-            afu_ext.c1TxAlmFull <= afu_wr_almost_full &&
+            afu.c1TxAlmFull <= afu_wr_almost_full &&
                                    (! afu_wr_packet_active || afu_wr_sticky_full);
 
             // afu_wr_sticky_full goes high as soon as afu_wr_almost_full is
@@ -169,18 +169,18 @@ module cci_mpf_shim_edge_afu
         end
     end
 
-    assign afu_ext.c0Rx = afu.c0Rx;
-    assign afu_ext.c1Rx = afu.c1Rx;
+    assign afu.c0Rx = fiu.c0Rx;
+    assign afu.c1Rx = fiu.c1Rx;
 
     always_comb
     begin
-        afu.c1Tx = cci_mpf_updC1TxCanonical(afu_ext.c1Tx);
+        fiu.c1Tx = cci_mpf_updC1TxCanonical(afu.c1Tx);
 
-        // The cache line's value stored in afu.c1Tx.data is no longer needed
+        // The cache line's value stored in fiu.c1Tx.data is no longer needed
         // in the pipeline.  Store 'x but use the low bits to hold the
         // local heap index.
-        afu.c1Tx.data = 'x;
-        afu.c1Tx.data[$clog2(N_WRITE_HEAP_ENTRIES) - 1 : 0] = wr_heap_enq_idx;
+        fiu.c1Tx.data = 'x;
+        fiu.c1Tx.data[$clog2(N_WRITE_HEAP_ENTRIES) - 1 : 0] = wr_heap_enq_idx;
 
         // Multi-beat write request?  Only the start of packet beat goes
         // through MPF.  The rest are buffered in wr_heap here and the
@@ -188,18 +188,18 @@ module cci_mpf_shim_edge_afu
         //
         // Only pass requests that are either the end of a write or
         // that aren't writes.
-        if (cci_mpf_c1TxIsWriteReq_noCheckValid(afu_ext.c1Tx))
+        if (cci_mpf_c1TxIsWriteReq_noCheckValid(afu.c1Tx))
         begin
             // Wait for the final flit to arrive and be buffered, thus
             // guaranteeing that all the data is ready to be written
             // as the packet exits to the FIU.
-            afu.c1Tx.valid = afu_ext.c1Tx.valid &&
-                             (wr_heap_enq_clNum == afu_ext.c1Tx.hdr.base.cl_len);
+            fiu.c1Tx.valid = afu.c1Tx.valid &&
+                             (wr_heap_enq_clNum == afu.c1Tx.hdr.base.cl_len);
 
             // Revert the address to the start of packet address
-            afu.c1Tx.hdr.base.sop = 1'b1;
-            afu.c1Tx.hdr.base.address[1:0] = afu_ext.c1Tx.hdr.base.address[1:0] ^
-                                             afu_ext.c1Tx.hdr.base.cl_len;
+            fiu.c1Tx.hdr.base.sop = 1'b1;
+            fiu.c1Tx.hdr.base.address[1:0] = afu.c1Tx.hdr.base.address[1:0] ^
+                                             afu.c1Tx.hdr.base.cl_len;
         end
     end
 
@@ -214,7 +214,7 @@ module cci_mpf_shim_edge_afu
        (
         .clk,
         .reset,
-        .c1Tx(afu_ext.c1Tx),
+        .c1Tx(afu.c1Tx),
         .c1Tx_en(1'b1),
         .eop(afu_wr_eop),
         .packetActive(afu_wr_packet_active),
@@ -232,36 +232,36 @@ module cci_mpf_shim_edge_afu
         end
         else
         begin
-            if (cci_mpf_c0TxIsReadReq(afu_ext.c0Tx))
+            if (cci_mpf_c0TxIsReadReq(afu.c0Tx))
             begin
-                assert((afu_ext.c0Tx.hdr.base.address[1:0] & afu_ext.c0Tx.hdr.base.cl_len) == 2'b0) else
+                assert((afu.c0Tx.hdr.base.address[1:0] & afu.c0Tx.hdr.base.cl_len) == 2'b0) else
                     $fatal("cci_mpf_shim_edge_connect: Multi-beat read address must be naturally aligned");
             end
 
-            if (cci_mpf_c1TxIsWriteReq(afu_ext.c1Tx))
+            if (cci_mpf_c1TxIsWriteReq(afu.c1Tx))
             begin
-                assert(afu_ext.c1Tx.hdr.base.sop != afu_wr_packet_active) else
-                    if (! afu_ext.c1Tx.hdr.base.sop)
+                assert(afu.c1Tx.hdr.base.sop != afu_wr_packet_active) else
+                    if (! afu.c1Tx.hdr.base.sop)
                         $fatal("cci_mpf_shim_edge_connect: Expected SOP flag on write");
                     else
                         $fatal("cci_mpf_shim_edge_connect: Wrong number of multi-beat writes");
 
-                if (afu_ext.c1Tx.hdr.base.sop)
+                if (afu.c1Tx.hdr.base.sop)
                 begin
-                    assert ((afu_ext.c1Tx.hdr.base.address[1:0] & afu_ext.c1Tx.hdr.base.cl_len) == 2'b0) else
+                    assert ((afu.c1Tx.hdr.base.address[1:0] & afu.c1Tx.hdr.base.cl_len) == 2'b0) else
                         $fatal("cci_mpf_shim_edge_connect: Multi-beat write address must be naturally aligned");
                 end
                 else
                 begin
-                    assert (afu_wr_prev_cl_len == afu_ext.c1Tx.hdr.base.cl_len) else
+                    assert (afu_wr_prev_cl_len == afu.c1Tx.hdr.base.cl_len) else
                         $fatal("cci_mpf_shim_edge_connect: cl_len must be the same in all beats of a multi-line write");
 
-                    assert ((afu_wr_prev_addr + 1) == afu_ext.c1Tx.hdr.base.address) else
+                    assert ((afu_wr_prev_addr + 1) == afu.c1Tx.hdr.base.address) else
                         $fatal("cci_mpf_shim_edge_connect: Address must increment with each beat in multi-line write");
                 end
 
-                afu_wr_prev_addr <= afu_ext.c1Tx.hdr.base.address;
-                afu_wr_prev_cl_len <= afu_ext.c1Tx.hdr.base.cl_len;
+                afu_wr_prev_addr <= afu.c1Tx.hdr.base.address;
+                afu_wr_prev_cl_len <= afu.c1Tx.hdr.base.cl_len;
             end
         end
     end

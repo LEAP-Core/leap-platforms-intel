@@ -265,8 +265,8 @@ module cci_mpf_pipe_std
       mpf_edge_afu
        (
         .clk,
-        .afu_ext(afu),
-        .afu(stgp5_mpf_afu),
+        .fiu(stgp5_mpf_afu),
+        .afu,
         .fiu_edge(edge_if)
         );
 

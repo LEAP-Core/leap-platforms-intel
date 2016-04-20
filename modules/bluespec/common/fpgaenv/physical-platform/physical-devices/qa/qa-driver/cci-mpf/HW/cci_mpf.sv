@@ -136,8 +136,8 @@ module cci_mpf
       mpf_edge_fiu
        (
         .clk,
-        .fiu_ext(fiu),
-        .fiu(stgm1_mpf_fiu),
+        .fiu,
+        .afu(stgm1_mpf_fiu),
         .afu_edge(edge_if),
         .pt_walk
         );

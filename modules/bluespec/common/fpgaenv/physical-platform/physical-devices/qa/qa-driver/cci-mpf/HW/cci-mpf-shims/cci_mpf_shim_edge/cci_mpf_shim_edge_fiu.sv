@@ -55,10 +55,10 @@ module cci_mpf_shim_edge_fiu
     input  logic clk,
 
     // External connection to the FIU
-    cci_mpf_if.to_fiu fiu_ext,
+    cci_mpf_if.to_fiu fiu,
 
-    // Connection to the FIU end of the MPF pipeline
-    cci_mpf_if.to_afu fiu,
+    // Connection toward the AFU
+    cci_mpf_if.to_afu afu,
 
     // Interface to the MPF AFU edge module
     cci_mpf_shim_edge_if.edge_fiu afu_edge,
@@ -69,8 +69,8 @@ module cci_mpf_shim_edge_fiu
     );
 
     logic reset;
-    assign reset = fiu_ext.reset;
-    assign fiu.reset = fiu_ext.reset;
+    assign reset = fiu.reset;
+    assign afu.reset = fiu.reset;
 
     //
     // The AFU edge forwards write data to this module, routing the data
@@ -166,11 +166,11 @@ module cci_mpf_shim_edge_fiu
     end
 
     // Stop traffic to make sure a slot for the walk request becomes available
-    assign fiu.c0TxAlmFull = fiu_ext.c0TxAlmFull && ! pt_walk_read_req;
+    assign afu.c0TxAlmFull = fiu.c0TxAlmFull && ! pt_walk_read_req;
 
     // Emit the read for PT walk if a request is outstanding and there is
     // no request from the AFU.
-    assign pt_walk_emit_req = pt_walk_read_req && ! cci_mpf_c0TxIsValid(fiu.c0Tx);
+    assign pt_walk_emit_req = pt_walk_read_req && ! cci_mpf_c0TxIsValid(afu.c0Tx);
 
     // Request header for PT walk reads
     t_cci_mpf_c0_ReqMemHdr pt_walk_read_hdr;
@@ -188,11 +188,11 @@ module cci_mpf_shim_edge_fiu
     //
     always_ff @(posedge clk)
     begin
-        fiu_ext.c0Tx <= cci_mpf_updC0TxCanonical(fiu.c0Tx);
+        fiu.c0Tx <= cci_mpf_updC0TxCanonical(afu.c0Tx);
 
         if (pt_walk_emit_req)
         begin
-            fiu_ext.c0Tx <= cci_mpf_genC0TxReadReq(pt_walk_read_hdr, 1'b1);
+            fiu.c0Tx <= cci_mpf_genC0TxReadReq(pt_walk_read_hdr, 1'b1);
         end
     end
 
@@ -200,17 +200,17 @@ module cci_mpf_shim_edge_fiu
     logic is_pt_rsp;
     always_comb
     begin
-        is_pt_rsp = fiu.c0Rx.hdr[VTP_PT_RESERVED_MDATA_IDX];
-        pt_walk.readDataEn = cci_c0Rx_isReadRsp(fiu_ext.c0Rx) && is_pt_rsp;
-        pt_walk.readData = fiu_ext.c0Rx.data;
+        is_pt_rsp = afu.c0Rx.hdr[VTP_PT_RESERVED_MDATA_IDX];
+        pt_walk.readDataEn = cci_c0Rx_isReadRsp(fiu.c0Rx) && is_pt_rsp;
+        pt_walk.readData = fiu.c0Rx.data;
     end
 
     always_comb
     begin
-        fiu.c0Rx = fiu_ext.c0Rx;
+        afu.c0Rx = fiu.c0Rx;
 
         // Only forward client-generated read responses
-        fiu.c0Rx.rspValid = fiu_ext.c0Rx.rspValid && ! is_pt_rsp;
+        afu.c0Rx.rspValid = fiu.c0Rx.rspValid && ! is_pt_rsp;
     end
 
 
@@ -219,7 +219,7 @@ module cci_mpf_shim_edge_fiu
     //
 
     // Responses
-    assign fiu.c1Rx = fiu_ext.c1Rx;
+    assign afu.c1Rx = fiu.c1Rx;
 
     // Multi-beat writes complete by synthesizing new packets and reading
     // data from wr_heap.  c1 Tx flows through a buffering FIFO since
@@ -240,10 +240,10 @@ module cci_mpf_shim_edge_fiu
         .reset(reset),
 
         // The concatenated field order must match the use of c1_first above.
-        .enq_data(cci_mpf_updC1TxCanonical(fiu.c1Tx)),
-        .enq_en(fiu.c1Tx.valid),
+        .enq_data(cci_mpf_updC1TxCanonical(afu.c1Tx)),
+        .enq_en(afu.c1Tx.valid),
         .notFull(),
-        .almostFull(fiu.c1TxAlmFull),
+        .almostFull(afu.c1TxAlmFull),
 
         .first(fiu_c1Tx_first),
         .deq_en(fiu_c1Tx_deq),
@@ -271,7 +271,7 @@ module cci_mpf_shim_edge_fiu
 
     always_comb
     begin
-        wr_req_may_fire = ! fiu_ext.c1TxAlmFull;
+        wr_req_may_fire = ! fiu.c1TxAlmFull;
 
         // Processing is complete when all beats have been emitted.
         stg1_packet_done = wr_req_may_fire && (stg1_fiu_wr_beats_rem == 0);
@@ -360,8 +360,8 @@ module cci_mpf_shim_edge_fiu
     // Merge FIU-bound data with request
     always_comb
     begin
-        fiu_ext.c1Tx = stg3_fiu_c1Tx;
-        fiu_ext.c1Tx.data = wr_data;
+        fiu.c1Tx = stg3_fiu_c1Tx;
+        fiu.c1Tx.data = wr_data;
     end
 
 
@@ -371,7 +371,7 @@ module cci_mpf_shim_edge_fiu
 
     always_ff @(posedge clk)
     begin
-        fiu_ext.c2Tx <= fiu.c2Tx;
+        fiu.c2Tx <= afu.c2Tx;
     end
 
 
@@ -386,8 +386,8 @@ module cci_mpf_shim_edge_fiu
 
         if (! reset)
         begin
-            assert((fiu.c0Tx.hdr[VTP_PT_RESERVED_MDATA_IDX] == 0) ||
-                   ! fiu.c0Tx.valid) else
+            assert((afu.c0Tx.hdr[VTP_PT_RESERVED_MDATA_IDX] == 0) ||
+                   ! afu.c0Tx.valid) else
                 $fatal("cci_mpf_shim_edge_fiu.sv: AFU C0 Mdata[%d] must be zero", VTP_PT_RESERVED_MDATA_IDX);
         end
     end

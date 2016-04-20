@@ -120,16 +120,26 @@ module cci_mpf
         )
       edge_if();
 
+    cci_mpf_shim_vtp_pt_walk_if pt_walk();
+
     cci_mpf_shim_edge_fiu
       #(
-        .N_WRITE_HEAP_ENTRIES(N_WRITE_HEAP_ENTRIES)
+        .N_WRITE_HEAP_ENTRIES(N_WRITE_HEAP_ENTRIES),
+
+        // VTP needs to generate loads internally in order to walk the
+        // page table.  The reserved bit in Mdata is a location offered
+        // to the page table walker to tag internal loads.  The Mdata
+        // location is guaranteed to be zero on all requests flowing
+        // in to VTP from the AFU.
+        .VTP_PT_RESERVED_MDATA_IDX(CCI_PLATFORM_MDATA_WIDTH-2)
         )
       mpf_edge_fiu
        (
         .clk,
         .fiu_ext(fiu),
         .fiu(stgm1_mpf_fiu),
-        .afu_edge(edge_if)
+        .afu_edge(edge_if),
+        .pt_walk
         );
 
 
@@ -184,7 +194,9 @@ module cci_mpf
         .fiu(stgm2_fiu_csrs),
         .afu,
         .mpf_csrs,
-        .edge_if
+        .edge_if,
+        .pt_walk_walker(pt_walk),
+        .pt_walk_client(pt_walk)
         );
 
 endmodule // cci_mpf

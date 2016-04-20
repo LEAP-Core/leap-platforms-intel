@@ -48,6 +48,7 @@
 `include "cci_mpf_if.vh"
 `include "cci_mpf_csrs.vh"
 `include "cci_mpf_shim_edge.vh"
+`include "cci_mpf_shim_vtp.vh"
 
 module cci_mpf_pipe_std
   #(
@@ -79,7 +80,11 @@ module cci_mpf_pipe_std
     cci_mpf_csrs mpf_csrs,
 
     // Connect MPF's AFU edge module to its FIU edge module
-    cci_mpf_shim_edge_if.edge_afu edge_if
+    cci_mpf_shim_edge_if.edge_afu edge_if,
+
+    // VTP page fill request bus
+    cci_mpf_shim_vtp_pt_walk_if.pt_walk pt_walk_walker,
+    cci_mpf_shim_vtp_pt_walk_if.client pt_walk_client
     );
 
     logic  reset;
@@ -140,22 +145,13 @@ module cci_mpf_pipe_std
         if (ENABLE_VTP)
         begin : vtp
             cci_mpf_shim_vtp
-              #(
-                // VTP needs to generate loads internally in order to walk the
-                // page table.  The reserved bit in Mdata is a location offered
-                // to the page table walker to tag internal loads.  The Mdata
-                // location is guaranteed to be zero on all requests flowing
-                // in to VTP from the AFU.  In the composition here,
-                // qa_shim_sort_responses provides this guarantee by rewriting
-                // Mdata as requests and responses as they flow in and out
-                // of the stack.
-                .RESERVED_MDATA_IDX(CCI_PLATFORM_MDATA_WIDTH-2)
-                )
               v_to_p
                (
                 .clk,
                 .fiu(stgp1_fiu_eop),
                 .afu(stgp2_fiu_virtual),
+                .pt_walk_walker(pt_walk_walker),
+                .pt_walk(pt_walk_client),
                 .csrs(mpf_csrs),
                 .events(mpf_csrs)
                 );

@@ -57,16 +57,6 @@
 
 module cci_mpf_shim_vtp
   #(
-    // The TLB needs to generate loads internally in order to walk the
-    // page table.  The reserved bit in Mdata is a location offered
-    // to the page table walker to tag internal loads.  The Mdata location
-    // must be zero on all requests flowing in to the TLB through the
-    // afu interface below.
-    //
-    // Some shims (e.g. cci_mpf_shim_sort_responses) already manage Mdata and
-    // guarantee that some high bits will be zero.
-    parameter RESERVED_MDATA_IDX = -1,
-
     parameter AFU_BUF_THRESHOLD = CCI_TX_ALMOST_FULL_THRESHOLD,
     parameter DEBUG_MESSAGES = 0
     )
@@ -78,6 +68,10 @@ module cci_mpf_shim_vtp
 
     // Connections toward user code.
     cci_mpf_if.to_afu afu,
+
+    // Page table walker bus
+    cci_mpf_shim_vtp_pt_walk_if.pt_walk pt_walk_walker,
+    cci_mpf_shim_vtp_pt_walk_if.client pt_walk,
 
     // CSRs
     cci_mpf_csrs.vtp csrs,
@@ -234,8 +228,6 @@ module cci_mpf_shim_vtp
     //
     // ====================================================================
 
-    cci_mpf_shim_vtp_pt_walk_if pt_walk();
-
     // Miss channel arbiter -- used for fairness
     logic last_miss_channel;
     t_tlb_4kb_va_page_idx walk_pt_req_va[0 : 1];
@@ -311,9 +303,6 @@ module cci_mpf_shim_vtp
     end
 
 
-    // Page table read request and response signals
-    assign pt_walk.readData = fiu.c0Rx.data;
-
     cci_mpf_shim_vtp_pt_walk
       #(
         .DEBUG_MESSAGES(DEBUG_MESSAGES)
@@ -323,7 +312,7 @@ module cci_mpf_shim_vtp
         .clk,
         .reset,
 
-        .pt_walk,
+        .pt_walk(pt_walk_walker),
         .csrs,
         .tlb_fill_if(tlb_if),
 
@@ -337,113 +326,15 @@ module cci_mpf_shim_vtp
     //
     // ====================================================================
 
-    //
-    // Most connections flow as simple wires between the external fiu
-    // connection and fiu_pipe, coming from the primary translation
-    // pipeline declared above.  The exception is page walker requests,
-    // which are injected on the c0Tx read request and consumed on the
-    // c0Rx read response channels.
-    //
-
-    t_if_cci_mpf_c0_Tx fiu_c0Tx;
-    t_cci_mpf_c0_ReqMemHdr c0_req_hdr;
-    logic did_pt_rd;
-
-    logic ptReadEn_q;
-    t_cci_clAddr ptReadAddr_q;
-    assign pt_walk.readRdy = ! ptReadEn_q;
-
-    always_ff @(posedge clk)
-    begin
-        if (reset)
-        begin
-            ptReadEn_q <= 1'b0;
-        end
-        else
-        begin
-            // Request to read from the page table is held in the register
-            // until it is processed.  Processing may be delayed by traffic
-            // through fiu_pipe.c0Tx.  c0TxAlmFull is asserted when a page
-            // table read is needed, so did_pt_rd will be true soon after
-            // the page table read request arrives.
-            if (did_pt_rd || ! ptReadEn_q)
-            begin
-                ptReadEn_q <= pt_walk.readEn;
-                ptReadAddr_q <= pt_walk.readAddr;
-            end
-        end
-    end
-
-    always_comb
-    begin
-        // Give priority to page table walker read requests.
-        fiu_pipe.c0TxAlmFull = fiu.c0TxAlmFull || ptReadEn_q;
-
-        // Normal read
-        fiu_c0Tx = fiu_pipe.c0Tx;
-        did_pt_rd = 1'b0;
-
-        if (! cci_mpf_c0TxIsValid(fiu_pipe.c0Tx) && ptReadEn_q &&
-            ! fiu.c0TxAlmFull)
-        begin
-            //
-            // Read for TLB miss.
-            //
-            did_pt_rd = 1'b1;
-            c0_req_hdr = cci_mpf_c0_genReqHdr(eREQ_RDLINE_S,
-                                              ptReadAddr_q,
-                                              t_cci_mdata'(0),
-                                              cci_mpf_defaultReqHdrParams(0));
-
-            // Tag the request as a local page table walk
-            c0_req_hdr[RESERVED_MDATA_IDX] = 1'b1;
-            fiu_c0Tx = cci_mpf_genC0TxReadReq(c0_req_hdr, 1'b1);
-        end
-    end
-
-    always_ff @(posedge clk)
-    begin
-        fiu.c0Tx <= fiu_c0Tx;
-    end
+    assign fiu.c0Tx = fiu_pipe.c0Tx;
+    assign fiu_pipe.c0TxAlmFull = fiu.c0TxAlmFull;
 
     assign fiu.c1Tx = fiu_pipe.c1Tx;
     assign fiu_pipe.c1TxAlmFull = fiu.c1TxAlmFull;
 
     assign fiu.c2Tx = fiu_pipe.c2Tx;
 
-    // Is the read response an internal page table reference?
-    logic is_pt_rsp;
-    assign is_pt_rsp = fiu.c0Rx.hdr[RESERVED_MDATA_IDX];
-
-    always_comb
-    begin
-        fiu_pipe.c0Rx = fiu.c0Rx;
-
-        // Is the read response for the page table walker?
-        pt_walk.readDataEn = cci_c0Rx_isReadRsp(fiu.c0Rx) && is_pt_rsp;
-
-        // Only forward client-generated read responses
-        fiu_pipe.c0Rx.rspValid = fiu.c0Rx.rspValid && ! pt_walk.readDataEn;
-    end
-
+    assign fiu_pipe.c0Rx = fiu.c0Rx;
     assign fiu_pipe.c1Rx = fiu.c1Rx;
-
-
-    //
-    // Validate parameter settings and that the Mdata reserved bit is 0
-    // on all incoming read requests.
-    //
-    always_ff @(posedge clk)
-    begin
-        assert ((RESERVED_MDATA_IDX > 0) && (RESERVED_MDATA_IDX < CCI_MDATA_WIDTH)) else
-            $fatal("cci_mpf_shim_vtp.sv: Illegal RESERVED_MDATA_IDX value: %d", RESERVED_MDATA_IDX);
-
-        if (! reset)
-        begin
-            assert((fiu_pipe.c0Tx.hdr[RESERVED_MDATA_IDX] == 0) ||
-                   ! fiu_pipe.c0Tx.valid) else
-                $fatal("cci_mpf_shim_vtp.sv: AFU C0 Mdata[%d] must be zero", RESERVED_MDATA_IDX);
-        end
-    end
 
 endmodule // cci_mpf_shim_vtp

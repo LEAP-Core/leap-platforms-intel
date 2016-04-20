@@ -39,7 +39,17 @@
 
 module cci_mpf_shim_edge_fiu
   #(
-    parameter N_WRITE_HEAP_ENTRIES = 0
+    parameter N_WRITE_HEAP_ENTRIES = 0,
+
+    // The VTP page table walker needs to generate loads in order to read
+    // the page table.  The reserved bit in Mdata is a location offered
+    // to the page table walker to tag internal loads.  The Mdata location
+    // must be zero on all requests flowing into this module through
+    // the MPF pipeline.
+    //
+    // Some shims (e.g. cci_mpf_shim_sort_responses) already manage Mdata and
+    // guarantee that some high bits will be zero.
+    parameter VTP_PT_RESERVED_MDATA_IDX = -1
     )
    (
     input  logic clk,
@@ -51,7 +61,11 @@ module cci_mpf_shim_edge_fiu
     cci_mpf_if.to_afu fiu,
 
     // Interface to the MPF AFU edge module
-    cci_mpf_shim_edge_if.edge_fiu afu_edge
+    cci_mpf_shim_edge_if.edge_fiu afu_edge,
+
+    // Interface to the VTP page table walker.  The page table requests
+    // host memory page table reads through this connection.
+    cci_mpf_shim_vtp_pt_walk_if.mem_read pt_walk
     );
 
     logic reset;
@@ -115,17 +129,96 @@ module cci_mpf_shim_edge_fiu
     //
     // ====================================================================
 
-    // All but write requests flow straight through
+    //
+    // Channel 0 (reads)
+    //
+
+    // Reads flow through undisturbed except for the need to inject reads
+    // requested by the page table walker here.
+
+    logic pt_walk_read_req;
+    logic pt_walk_emit_req;
+    t_cci_clAddr pt_walk_read_addr;
+
+    assign pt_walk.readRdy = ! pt_walk_read_req;
+
+    //
+    // Track requests to read a line in the page table.
+    //
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            pt_walk_read_req <= 1'b0;
+        end
+        else
+        begin
+            // Either a request completed or a new one arrived
+            pt_walk_read_req <= (pt_walk_read_req ^ pt_walk_emit_req) ||
+                                pt_walk.readEn;
+        end
+
+        // Register requested address
+        if (pt_walk.readEn)
+        begin
+            pt_walk_read_addr <= pt_walk.readAddr;
+        end
+    end
+
+    // Stop traffic to make sure a slot for the walk request becomes available
+    assign fiu.c0TxAlmFull = fiu_ext.c0TxAlmFull && ! pt_walk_read_req;
+
+    // Emit the read for PT walk if a request is outstanding and there is
+    // no request from the AFU.
+    assign pt_walk_emit_req = pt_walk_read_req && ! cci_mpf_c0TxIsValid(fiu.c0Tx);
+
+    // Request header for PT walk reads
+    t_cci_mpf_c0_ReqMemHdr pt_walk_read_hdr;
+    always_comb
+    begin
+        pt_walk_read_hdr = cci_mpf_c0_genReqHdr(eREQ_RDLINE_S,
+                                                pt_walk_read_addr,
+                                                t_cci_mdata'(0),
+                                                cci_mpf_defaultReqHdrParams(0));
+        pt_walk_read_hdr[VTP_PT_RESERVED_MDATA_IDX] = 1'b1;
+    end
+
+    //
+    // Forward read requests
+    //
     always_ff @(posedge clk)
     begin
         fiu_ext.c0Tx <= cci_mpf_updC0TxCanonical(fiu.c0Tx);
-        fiu_ext.c2Tx <= fiu.c2Tx;
+
+        if (pt_walk_emit_req)
+        begin
+            fiu_ext.c0Tx <= cci_mpf_genC0TxReadReq(pt_walk_read_hdr, 1'b1);
+        end
     end
 
-    assign fiu.c0TxAlmFull = fiu_ext.c0TxAlmFull;
+    // Is the read response for the page table walker?
+    logic is_pt_rsp;
+    always_comb
+    begin
+        is_pt_rsp = fiu.c0Rx.hdr[VTP_PT_RESERVED_MDATA_IDX];
+        pt_walk.readDataEn = cci_c0Rx_isReadRsp(fiu_ext.c0Rx) && is_pt_rsp;
+        pt_walk.readData = fiu_ext.c0Rx.data;
+    end
+
+    always_comb
+    begin
+        fiu.c0Rx = fiu_ext.c0Rx;
+
+        // Only forward client-generated read responses
+        fiu.c0Rx.rspValid = fiu_ext.c0Rx.rspValid && ! is_pt_rsp;
+    end
+
+
+    //
+    // Channel 1 (writes)
+    //
 
     // Responses
-    assign fiu.c0Rx = fiu_ext.c0Rx;
     assign fiu.c1Rx = fiu_ext.c1Rx;
 
     // Multi-beat writes complete by synthesizing new packets and reading
@@ -271,5 +364,32 @@ module cci_mpf_shim_edge_fiu
         fiu_ext.c1Tx.data = wr_data;
     end
 
-endmodule // cci_mpf_shim_edge_fiu
 
+    //
+    // Channel 2 (MMIO)
+    //
+
+    always_ff @(posedge clk)
+    begin
+        fiu_ext.c2Tx <= fiu.c2Tx;
+    end
+
+
+    //
+    // Validate parameter settings and that the Mdata reserved bit is 0
+    // on all incoming read requests.
+    //
+    always_ff @(posedge clk)
+    begin
+        assert ((VTP_PT_RESERVED_MDATA_IDX > 0) && (VTP_PT_RESERVED_MDATA_IDX < CCI_MDATA_WIDTH)) else
+            $fatal("cci_mpf_shim_edge_fiu.sv: Illegal VTP_PT_RESERVED_MDATA_IDX value: %d", VTP_PT_RESERVED_MDATA_IDX);
+
+        if (! reset)
+        begin
+            assert((fiu.c0Tx.hdr[VTP_PT_RESERVED_MDATA_IDX] == 0) ||
+                   ! fiu.c0Tx.valid) else
+                $fatal("cci_mpf_shim_edge_fiu.sv: AFU C0 Mdata[%d] must be zero", VTP_PT_RESERVED_MDATA_IDX);
+        end
+    end
+
+endmodule // cci_mpf_shim_edge_fiu

@@ -82,9 +82,8 @@ module cci_mpf_pipe_std
     // Connect MPF's AFU edge module to its FIU edge module
     cci_mpf_shim_edge_if.edge_afu edge_if,
 
-    // VTP page fill request bus
-    cci_mpf_shim_vtp_pt_walk_if.pt_walk pt_walk_walker,
-    cci_mpf_shim_vtp_pt_walk_if.client pt_walk_client
+    // VTP translation service ports.  One port for each request channel.
+    cci_mpf_shim_vtp_svc_if.client vtp_svc[0 : 1]
     );
 
     logic  reset;
@@ -150,10 +149,8 @@ module cci_mpf_pipe_std
                 .clk,
                 .fiu(stgp1_fiu_eop),
                 .afu(stgp2_fiu_virtual),
-                .pt_walk_walker(pt_walk_walker),
-                .pt_walk(pt_walk_client),
-                .csrs(mpf_csrs),
-                .events(mpf_csrs)
+                .vtp_svc,
+                .csrs(mpf_csrs)
                 );
         end
         else
@@ -260,7 +257,8 @@ module cci_mpf_pipe_std
 
     cci_mpf_shim_edge_afu
       #(
-        .N_WRITE_HEAP_ENTRIES(N_WRITE_HEAP_ENTRIES)
+        .N_WRITE_HEAP_ENTRIES(N_WRITE_HEAP_ENTRIES),
+        .ENFORCE_WR_ORDER(ENFORCE_WR_ORDER)
         )
       mpf_edge_afu
        (

@@ -124,6 +124,80 @@ function automatic t_tlb_4kb_pa_page_idx vtp2mbTo4kbPA(t_tlb_2mb_pa_page_idx p);
 endfunction
 
 
+// ========================================================================
+//
+// Interface from a VTP shim to the VTP translation service.  A single
+// service instance is shared by all VTP shims, even when multiple VTP
+// pipeline shims are allocated.
+//
+// ========================================================================
+
+// Multiple translation requests may be outstanding and they may be
+// returned out of order.  A tag matches responses to requests.
+localparam CCI_MPF_SHIM_VTP_MAX_SVC_REQS = 8;
+typedef logic [$clog2(CCI_MPF_SHIM_VTP_MAX_SVC_REQS)-1 : 0]
+    t_cci_mpf_shim_vtp_req_tag;
+
+typedef struct packed
+{
+    // Virtual page to translate
+    t_tlb_4kb_va_page_idx pageVA;
+
+    // Dynamically unique tag for lookup request for associating out of order
+    // responses with requests.
+    t_cci_mpf_shim_vtp_req_tag tag;
+}
+t_cci_mpf_shim_vtp_lookup_req;
+
+typedef struct packed
+{
+    // Translated physical address
+    t_tlb_4kb_pa_page_idx pagePA;
+
+    // Tag from lookup request
+    t_cci_mpf_shim_vtp_req_tag tag;
+
+    // Is translation a big page or just a 4KB page?
+    logic isBigPage;
+}
+t_cci_mpf_shim_vtp_lookup_rsp;
+
+
+interface cci_mpf_shim_vtp_svc_if;
+    // Request translation of 4KB aligned address
+    logic lookupEn;         // Enable the request
+    t_cci_mpf_shim_vtp_lookup_req lookupReq;
+    logic lookupRdy;        // Ready to accept a request?
+
+    // Response with translated address.  The response is latency-
+    // insensitive, signaled with lookupRspValid.
+    logic lookupRspValid;
+    t_cci_mpf_shim_vtp_lookup_rsp lookupRsp;
+
+    modport server
+       (
+        input  lookupEn,
+        input  lookupReq,
+        output lookupRdy,
+
+        output lookupRspValid,
+        output lookupRsp
+        );
+
+    modport client
+       (
+        output lookupEn,
+        output lookupReq,
+        input  lookupRdy,
+
+        input  lookupRspValid,
+        input  lookupRsp
+        );
+
+endinterface // cci_mpf_shim_vtp_svc_if
+
+
+// ========================================================================
 //
 // Interface for TLB lookup.
 //
@@ -132,27 +206,29 @@ endfunction
 //   message passing among the VTP pipeline, a TLB and the page table
 //   walker.
 //
+// ========================================================================
+
 interface cci_mpf_shim_vtp_tlb_if;
     // Look up VA in the table and return the PA or signal a miss two cycles
     // later.  The TLB code operates on aligned pages.  It is up to the caller
     // to compute offsets into pages.
-    t_tlb_4kb_va_page_idx lookupPageVA[0:1];
-    logic lookupEn[0:1];         // Enable the request
-    logic lookupRdy[0:1];        // Ready to accept a request?
+    logic lookupEn;         // Enable the request
+    t_tlb_4kb_va_page_idx lookupPageVA;
+    logic lookupRdy;        // Ready to accept a request?
 
-    // Respond with page's physical address two cycles after lookupEn
-    t_tlb_4kb_pa_page_idx lookupRspPagePA[0:1];
-    logic lookupIsBigPage[0:1];
     // Signal lookupValid two cycles after lookupEn if the page
     // isn't currently in the FPGA-side translation table.
-    logic lookupValid[0:1];
+    logic lookupRspValid;
+    // Respond with page's physical address two cycles after lookupEn
+    t_tlb_4kb_pa_page_idx lookupRspPagePA;
+    logic lookupRspIsBigPage;
 
 
     //
     // Signals for handling misses and fills.
     //
-    logic lookupMiss[0:1];
-    t_tlb_4kb_va_page_idx lookupMissVA[0:1];
+    logic lookupMiss;
+    t_tlb_4kb_va_page_idx lookupMissVA;
 
     logic fillEn;
     t_tlb_4kb_va_page_idx fillVA;
@@ -163,12 +239,12 @@ interface cci_mpf_shim_vtp_tlb_if;
 
     modport server
        (
-        input  lookupPageVA,
         input  lookupEn,
+        input  lookupPageVA,
         output lookupRdy,
 
+        output lookupRspValid,
         output lookupRspPagePA,
-        output lookupValid,
 
         output lookupMiss,
         output lookupMissVA,
@@ -180,13 +256,18 @@ interface cci_mpf_shim_vtp_tlb_if;
 
     modport client
        (
-        output lookupPageVA,
         output lookupEn,
+        output lookupPageVA,
         input  lookupRdy,
 
+        // Responses are returned from the TLB in the order translations were
+        // requested.  At the end of a lookup exactly one of lookupRspValid
+        // and lookupMiss will be set for one cycle.  When looukpRspValid is
+        // set the remaining lookupRsp fields also have meaning.
+        input  lookupMiss,
+        input  lookupRspValid,
         input  lookupRspPagePA,
-        input  lookupIsBigPage,
-        input  lookupValid
+        input  lookupRspIsBigPage
         );
 
     // Fill -- add a new translation
@@ -202,10 +283,12 @@ interface cci_mpf_shim_vtp_tlb_if;
 endinterface
 
 
+// ========================================================================
 //
 // Page table walker interface.
 //
-//
+// ========================================================================
+
 interface cci_mpf_shim_vtp_pt_walk_if;
     // Enable PT walk request
     logic reqEn;

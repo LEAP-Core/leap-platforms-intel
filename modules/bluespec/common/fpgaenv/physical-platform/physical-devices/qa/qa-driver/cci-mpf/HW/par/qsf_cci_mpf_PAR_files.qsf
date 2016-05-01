@@ -44,6 +44,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-if/ccip_w
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-if/ccis_wires_to_mpf.sv
 
 ## Primitives used by MPF shims
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_arb_rr.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_fifo1.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_fifo2.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_fifo_bram.sv
@@ -72,9 +73,10 @@ set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_null.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_rsp_order.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_shim_vtp.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_shim_vtp_pipe.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_shim_vtp_pt_walk.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_shim_vtp_tlb.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_svc_vtp.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_svc_vtp_pipe.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_svc_vtp_pt_walk.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_svc_vtp_tlb.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_wro.sv
 
 ## Constraints

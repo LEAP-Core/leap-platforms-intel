@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2015, Intel Corporation
+// Copyright (c) 2016, Intel Corporation
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -29,36 +29,19 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 `include "cci_mpf_if.vh"
-`include "cci_mpf_csrs.vh"
-
 `include "cci_mpf_shim_vtp.vh"
+`include "cci_mpf_prim_hash.vh"
 
 
 //
-// Map virtual to physical addresses.
-//
-// Requests coming from the AFU can be tagged as containing either virtual
-// or physical addresses.  Physical addresses are passed directly to the
-// FIU without translation here.  The tag is accessed with the
-// getReqAddrIsVirtual() function.
-//
-//                             * * * * * * * *
-//
-//   This module freely reorders memory references, including load/store
-//   and store/store order without comparing addresses.  This is a standard
-//   property of CCI.  If order is important in your memory subsystem then
-//   requests coming from an AFU should be filtered by address before
-//   reaching this module to guarantee order within a line.
-//   cci_mpf_shim_write_order.sv provides this function and is included in the
-//   reference memory subsystem.
-//
-//                             * * * * * * * *
+// Virtual to physical pipeline shim performs address translation in
+// an AFU -> FIU stream by forwarding translation requests to the VTP
+// service.
 //
 
 module cci_mpf_shim_vtp
   #(
-    parameter AFU_BUF_THRESHOLD = CCI_TX_ALMOST_FULL_THRESHOLD,
-    parameter DEBUG_MESSAGES = 0
+    parameter AFU_BUF_THRESHOLD = CCI_TX_ALMOST_FULL_THRESHOLD
     )
    (
     input  logic clk,
@@ -69,272 +52,787 @@ module cci_mpf_shim_vtp
     // Connections toward user code.
     cci_mpf_if.to_afu afu,
 
-    // Page table walker bus
-    cci_mpf_shim_vtp_pt_walk_if.pt_walk pt_walk_walker,
-    cci_mpf_shim_vtp_pt_walk_if.client pt_walk,
+    // VTP service translation ports - one for each channel
+    cci_mpf_shim_vtp_svc_if.client vtp_svc[0 : 1],
 
     // CSRs
-    cci_mpf_csrs.vtp csrs,
-    cci_mpf_csrs.vtp_events events
+    cci_mpf_csrs.vtp csrs
     );
 
     logic reset;
     assign reset = fiu.reset;
 
+
     // ====================================================================
     //
-    //   Primary virtual to physical translation pipeline.
+    //  Instantiate a buffer on the AFU request port, making it latency
+    //  insensitive.
     //
     // ====================================================================
 
-    cci_mpf_if fiu_pipe (.clk);
-    assign fiu_pipe.reset = fiu.reset;
+    cci_mpf_if afu_buf (.clk);
+    assign afu_buf.reset = fiu.reset;
 
-    cci_mpf_shim_vtp_tlb_if tlb_if();
+    // Latency-insensitive ports need explicit dequeue (enable).
+    logic deqC0Tx;
+    logic deqC1Tx;
 
-    cci_mpf_shim_vtp_pipe
+    cci_mpf_shim_buffer_afu
+      b
+        (
+         .clk,
+         .afu_raw(afu),
+         .afu_buf(afu_buf),
+         .deqC0Tx(deqC0Tx),
+         .deqC1Tx(deqC1Tx)
+         );
+
+    //
+    // Almost full signals in the buffered input are ignored --
+    // replaced by deq signals and the buffer state.  Set them
+    // to 1 to be sure they are ignored.
+    //
+    assign afu_buf.c0TxAlmFull = 1'b1;
+    assign afu_buf.c1TxAlmFull = 1'b1;
+
+
+    // ====================================================================
+    //
+    //  Channel 0 (reads)
+    //
+    // ====================================================================
+
+    logic c0chan_notFull;
+
+    logic c0chan_outValid;
+    t_if_cci_mpf_c0_Tx c0chan_outTx;
+    t_tlb_4kb_pa_page_idx c0chan_outAddr;
+    logic c0chan_outAddrIsBigPage;
+
+    // Pass TX requests through a translation pipeline
+    cci_mpf_shim_vtp_chan
       #(
-        .AFU_BUF_THRESHOLD(AFU_BUF_THRESHOLD),
-        .DEBUG_MESSAGES(DEBUG_MESSAGES)
+        .N_META_BITS($bits(t_if_cci_mpf_c0_Tx))
         )
-      pipe
-       (
-        .clk,
-        .fiu(fiu_pipe),
-        .afu,
-        .csrs,
-        .tlb_if
-        );
-
-
-    // ====================================================================
-    //
-    //  TLB
-    //
-    // ====================================================================
-
-    //
-    // Allocate two TLBs.  One manages 4KB pages and the other manages
-    // 2MB pages.
-    //
-
-    cci_mpf_shim_vtp_tlb_if tlb_if_4kb();
-
-    cci_mpf_shim_vtp_tlb
-      #(
-        .CCI_PT_PAGE_OFFSET_BITS(CCI_PT_4KB_PAGE_OFFSET_BITS),
-        .NUM_TLB_SETS(1024),
-        .DEBUG_MESSAGES(DEBUG_MESSAGES),
-        .DEBUG_NAME("4KB")
-        )
-      tlb4kb
-       (
-        .clk,
-        .reset,
-        .tlb_if(tlb_if_4kb),
-        .csrs
-        );
-
-
-    cci_mpf_shim_vtp_tlb_if tlb_if_2mb();
-
-    cci_mpf_shim_vtp_tlb
-      #(
-        .CCI_PT_PAGE_OFFSET_BITS(CCI_PT_2MB_PAGE_OFFSET_BITS),
-        .NUM_TLB_SETS(512),
-        .DEBUG_MESSAGES(DEBUG_MESSAGES),
-        .DEBUG_NAME("2MB")
-        )
-      tlb2mb
+      c0_vtp
        (
         .clk,
         .reset,
-        .tlb_if(tlb_if_2mb),
+
+        .notFull(c0chan_notFull),
+        .notEmpty(),
+
+        .cTxValid(deqC0Tx),
+        .cTx(afu_buf.c0Tx),
+        .cTxAddr(vtp4kbPageIdxFromVA(cci_mpf_c0_getReqAddr(afu_buf.c0Tx.hdr))),
+        .cTxAddrIsVirtual(cci_mpf_c0_getReqAddrIsVirtual(afu_buf.c0Tx.hdr)),
+
+        .cTxValid_out(c0chan_outValid),
+        .cTx_out(c0chan_outTx),
+        .cTxAddr_out(c0chan_outAddr),
+        .cTxAddrIsBigPage_out(c0chan_outAddrIsBigPage),
+        .cTxAlmostFull(fiu.c0TxAlmFull),
+
+        .vtp_svc(vtp_svc[0]),
         .csrs
         );
 
-    genvar p;
-    generate
-        for (p = 0; p < 2; p = p + 1)
-        begin : tlb_ports
-            // When the pipeline requests a TLB lookup do it on both pipelines.
-            assign tlb_if_4kb.lookupPageVA[p] = tlb_if.lookupPageVA[p];
-            assign tlb_if_4kb.lookupEn[p] = tlb_if.lookupEn[p];
-            assign tlb_if_2mb.lookupPageVA[p] = tlb_if.lookupPageVA[p];
-            assign tlb_if_2mb.lookupEn[p] = tlb_if.lookupEn[p];
-            assign tlb_if.lookupRdy[p] = tlb_if_4kb.lookupRdy[p] &&
-                                         tlb_if_2mb.lookupRdy[p];
+    // Send the next request when the channel has space
+    assign deqC0Tx = cci_mpf_c0TxIsValid(afu_buf.c0Tx) && c0chan_notFull;
 
-            // The TLB pipeline is fixed length, so responses arrive together.
-            // At most one TLB should have a translation for a given address.
-            assign tlb_if.lookupValid[p] = tlb_if_4kb.lookupValid[p] ||
-                                           tlb_if_2mb.lookupValid[p];
-            assign tlb_if.lookupIsBigPage[p] = tlb_if_2mb.lookupValid[p];
-            assign tlb_if.lookupRspPagePA[p] =
-                tlb_if_4kb.lookupValid[p] ? tlb_if_4kb.lookupRspPagePA[p] :
-                                            tlb_if_2mb.lookupRspPagePA[p];
+    // Route translated requests to the FIU
+    always_ff @(posedge clk)
+    begin
+        fiu.c0Tx <= cci_mpf_c0TxMaskValids(c0chan_outTx, c0chan_outValid);
 
-            // Read the page table if both TLBs miss
-            assign tlb_if.lookupMiss[p] = tlb_if_4kb.lookupMiss[p] &&
-                                          tlb_if_2mb.lookupMiss[p];
-            assign tlb_if.lookupMissVA[p] = tlb_if_4kb.lookupMissVA[p];
-
-            // Validation
-            always_ff @(posedge clk)
+        // Set the physical address.  The page comes from the TLB and the
+        // offset from the original memory request.
+        fiu.c0Tx.hdr.ext.addrIsVirtual <= 1'b0;
+        if (cci_mpf_c0_getReqAddrIsVirtual(c0chan_outTx.hdr))
+        begin
+            if (c0chan_outAddrIsBigPage)
             begin
-                if (! reset)
-                begin
-                    assert(! tlb_if_4kb.lookupValid[p] || ! tlb_if_2mb.lookupValid[p]) else
-                        $fatal("cci_mpf_shim_vtp: Both TLBs valid!");
-
-                    if (tlb_if.lookupMiss[p])
-                    begin
-                        assert(vtp4kbTo2mbVA(tlb_if_4kb.lookupMissVA[p]) ==
-                               vtp4kbTo2mbVA(tlb_if_2mb.lookupMissVA[p])) else
-                            $fatal("cci_mpf_shim_vtp: Both TLBs missed but addresses different!");
-                    end
-                end
+                // 2MB page
+                fiu.c0Tx.hdr.base.address <=
+                    t_cci_clAddr'({ vtp4kbTo2mbPA(c0chan_outAddr),
+                                    vtp2mbPageOffsetFromVA(cci_mpf_c0_getReqAddr(c0chan_outTx.hdr)) });
+            end
+            else
+            begin
+                // 4KB page
+                fiu.c0Tx.hdr.base.address <=
+                    t_cci_clAddr'({ c0chan_outAddr,
+                                    vtp4kbPageOffsetFromVA(cci_mpf_c0_getReqAddr(c0chan_outTx.hdr)) });
             end
         end
-    endgenerate
-
-    // Direct fills to the appropriate TLB depending on the page size
-    assign tlb_if_4kb.fillEn = tlb_if.fillEn && ! tlb_if.fillBigPage;
-    assign tlb_if_2mb.fillEn = tlb_if.fillEn && tlb_if.fillBigPage;
-
-    assign tlb_if_4kb.fillVA = tlb_if.fillVA;
-    assign tlb_if_4kb.fillPA = tlb_if.fillPA;
-    assign tlb_if_2mb.fillVA = tlb_if.fillVA;
-    assign tlb_if_2mb.fillPA = tlb_if.fillPA;
-    assign tlb_if.fillRdy = tlb_if_4kb.fillRdy && tlb_if_2mb.fillRdy;
-
-    // Statistics
-    always_comb
-    begin
-        events.vtp_out_event_4kb_hit_c0 = tlb_if_4kb.lookupValid[0];
-        events.vtp_out_event_4kb_hit_c1 = tlb_if_4kb.lookupValid[1];
-
-        events.vtp_out_event_2mb_hit_c0 = tlb_if_2mb.lookupValid[0];
-        events.vtp_out_event_2mb_hit_c1 = tlb_if_2mb.lookupValid[1];
-
-        events.vtp_out_event_4kb_miss = tlb_if_4kb.fillEn;
-        events.vtp_out_event_2mb_miss = tlb_if_2mb.fillEn;
     end
 
 
+    //
+    // Responses
+    //
+    assign afu_buf.c0Rx = fiu.c0Rx;
+
+
     // ====================================================================
     //
-    //   Page walker.
+    //  Channel 1 (writes)
     //
     // ====================================================================
 
-    // Miss channel arbiter -- used for fairness
-    logic last_miss_channel;
-    t_tlb_4kb_va_page_idx walk_pt_req_va[0 : 1];
+    logic c1chan_notFull;
+    logic c1chan_notEmpty;
 
-    assign pt_walk.reqVA = walk_pt_req_va[last_miss_channel];
+    // Channel 1 has more logic controlling the input pipeline flow, such
+    // as whether a request is a WrFence.  Add a stage in which control
+    // state is reduced.
+    t_if_cci_mpf_c1_Tx c1chan_inTx;
+    logic c1chan_inBlocked;
+
+    logic c1chan_inTx_canFwd;
+    assign c1chan_inTx_canFwd = ! c1chan_inBlocked && c1chan_notFull;
+
+    // Next request is either from the AFU or is sitting in c1chan_inTx
+    // waiting for permission to fire.
+    t_if_cci_mpf_c1_Tx c1chan_inTx_next;
+    assign c1chan_inTx_next =
+        (deqC1Tx ? afu_buf.c1Tx :
+                   cci_mpf_c1TxMaskValids(c1chan_inTx, ! c1chan_inTx_canFwd));
+
+    always_ff @(posedge clk)
+    begin
+        c1chan_inTx <= c1chan_inTx_next;
+
+        if (reset)
+        begin
+            c1chan_inTx.valid <= 1'b0;
+        end
+    end
+
+    // Block order-sensitive requests until all previous translations are
+    // complete so that they aren't reordered in the VTP channel pipeline.
+    logic c1_order_sensitive;
+    assign c1_order_sensitive = cci_mpf_c1TxIsWriteFenceReq(c1chan_inTx_next);
 
     always_ff @(posedge clk)
     begin
         if (reset)
         begin
-            last_miss_channel <= 1'b0;
-            pt_walk.reqEn <= 1'b0;
-        end
-        else if (pt_walk.reqEn)
-        begin
-            // New request forwarded to page walker
-            pt_walk.reqEn <= 0;
+            c1chan_inBlocked <= 1'b1;
         end
         else
         begin
-            //
-            // Did one of the channels miss?  Use the last_miss_channel
-            // arbiter to alternate between channels.
-            //
-            // In addition to the page walker being ready we also require
-            // that the TLB be ready to fill. This is done solely to handle
-            // a corner case in which the TLB is processing a fill to the
-            // same address that is signalling a miss. Processing the fill
-            // would be technically correct but wasteful, since the
-            // translation will be added to the TLB within a few cycles.
-            //
-            if (pt_walk.reqEn || ! pt_walk.reqRdy || ! tlb_if.fillRdy)
-            begin
-                pt_walk.reqEn <= 0;
-            end
-            else if (tlb_if.lookupMiss[0] &&
-                     ((last_miss_channel == 1) || ! tlb_if.lookupMiss[1]))
-            begin
-                pt_walk.reqEn <= 1;
-                last_miss_channel <= 0;
-            end
-            else if (tlb_if.lookupMiss[1])
-            begin
-                pt_walk.reqEn <= 1;
-                last_miss_channel <= 1;
-            end
+            c1chan_inBlocked <= (c1_order_sensitive && c1chan_notEmpty);
         end
     end
 
-    always_ff @(posedge clk)
-    begin
-        walk_pt_req_va[0] <= tlb_if.lookupMissVA[0];
-        walk_pt_req_va[1] <= tlb_if.lookupMissVA[1];
-    end
 
+    logic c1chan_outValid;
+    t_if_cci_mpf_c1_Tx c1chan_outTx;
+    t_tlb_4kb_pa_page_idx c1chan_outAddr;
+    logic c1chan_outAddrIsBigPage;
+
+    // Pass TX requests through a translation pipeline
+    cci_mpf_shim_vtp_chan
+      #(
+        .N_META_BITS($bits(t_if_cci_mpf_c1_Tx))
+        )
+      c1_vtp
+       (
+        .clk,
+        .reset,
+
+        .notFull(c1chan_notFull),
+        .notEmpty(c1chan_notEmpty),
+
+        .cTxValid(cci_mpf_c1TxIsValid(c1chan_inTx) && c1chan_inTx_canFwd),
+        .cTx(c1chan_inTx),
+        .cTxAddr(vtp4kbPageIdxFromVA(cci_mpf_c1_getReqAddr(c1chan_inTx.hdr))),
+        .cTxAddrIsVirtual(cci_mpf_c1_getReqAddrIsVirtual(c1chan_inTx.hdr)),
+
+        .cTxValid_out(c1chan_outValid),
+        .cTx_out(c1chan_outTx),
+        .cTxAddr_out(c1chan_outAddr),
+        .cTxAddrIsBigPage_out(c1chan_outAddrIsBigPage),
+        .cTxAlmostFull(fiu.c1TxAlmFull),
+
+        .vtp_svc(vtp_svc[1]),
+        .csrs
+        );
+
+    // Ready for next request?
+    assign deqC1Tx = cci_mpf_c1TxIsValid(afu_buf.c1Tx) && c1chan_inTx_canFwd;
+
+    // Route translated requests to the FIU
     always_ff @(posedge clk)
     begin
-        if (! reset && pt_walk.reqEn && DEBUG_MESSAGES)
+        fiu.c1Tx <= cci_mpf_c1TxMaskValids(c1chan_outTx, c1chan_outValid);
+
+
+        // Set the physical address.  The page comes from the TLB and the
+        // offset from the original memory request.
+        fiu.c1Tx.hdr.ext.addrIsVirtual <= 1'b0;
+        if (cci_mpf_c1_getReqAddrIsVirtual(c1chan_outTx.hdr))
         begin
-            $display("VTP: Request page walk for miss chan %0d, VA 0x%x",
-                     last_miss_channel,
-                     {pt_walk.reqVA, CCI_PT_4KB_PAGE_OFFSET_BITS'(0)});
+            if (c1chan_outAddrIsBigPage)
+            begin
+                // 2MB page
+                fiu.c1Tx.hdr.base.address <=
+                    t_cci_clAddr'({ vtp4kbTo2mbPA(c1chan_outAddr),
+                                    vtp2mbPageOffsetFromVA(cci_mpf_c1_getReqAddr(c1chan_outTx.hdr)) });
+            end
+            else
+            begin
+                // 4KB page
+                fiu.c1Tx.hdr.base.address <=
+                    t_cci_clAddr'({ c1chan_outAddr,
+                                    vtp4kbPageOffsetFromVA(cci_mpf_c1_getReqAddr(c1chan_outTx.hdr)) });
+            end
         end
     end
+
+
+    //
+    // Responses
+    //
+    assign afu_buf.c1Rx = fiu.c1Rx;
+
+
+    // ====================================================================
+    //
+    //  MMIO (c2Tx)
+    //
+    // ====================================================================
+
+    assign fiu.c2Tx = afu_buf.c2Tx;
+
+endmodule // cci_mpf_shim_vtp
+
+
+//
+// TLB lookup for a single channel.  The code is independent of the request
+// channel data structures so many be instantiated for either.
+//
+// A simple direct mapped cache is maintained as a first level TLB.
+// The L1 TLB here filters translation requests in order to relieve
+// pressure on the shared VTP TLB service.
+//
+module cci_mpf_shim_vtp_chan
+  #(
+    parameter N_META_BITS = 0
+    )
+   (
+    input  logic clk,
+    input  logic reset,
+
+    // Flow control
+    output logic notFull,
+    output logic notEmpty,
+
+    // Abstraction of a TX channel
+    input  logic cTxValid,
+    input  logic [N_META_BITS-1 : 0] cTx,
+    input  t_tlb_4kb_va_page_idx cTxAddr,
+    input  logic cTxAddrIsVirtual,
+
+    // Outbound TX channel
+    output logic cTxValid_out,
+    output logic [N_META_BITS-1 : 0] cTx_out,
+    output t_tlb_4kb_pa_page_idx cTxAddr_out,
+    output logic cTxAddrIsBigPage_out,
+    input  logic cTxAlmostFull,
+
+    // Translation service connection
+    cci_mpf_shim_vtp_svc_if.client vtp_svc,
+
+    // CSRs
+    cci_mpf_csrs.vtp csrs
+    );
+
+    // ====================================================================
+    //
+    //  State to be recorded through the pipeline
+    //
+    // ====================================================================
+
+    // The local cache is direct mapped.  Break a VA into cache index
+    // and tag.
+    typedef logic [8 : 0] t_vtp_tlb_cache_idx;
+    typedef logic [$bits(t_tlb_4kb_va_page_idx)-10 : 0] t_vtp_tlb_4kb_cache_tag;
+    typedef logic [$bits(t_tlb_2mb_va_page_idx)-10 : 0] t_vtp_tlb_2mb_cache_tag;
+
+    // Struct for passing state through the pipeline
+    typedef struct
+    {
+        // Input state
+        logic cTxValid;
+        t_tlb_4kb_va_page_idx cTxAddr;
+        logic cTxAddrIsVirtual;
+
+        // Heap state
+        t_cci_mpf_shim_vtp_req_tag allocIdx;
+
+        // These are derived from splitting up cTxAddr
+        t_vtp_tlb_cache_idx cache_4kb_idx;
+        t_vtp_tlb_4kb_cache_tag cache_4kb_tag_tgt;
+        t_vtp_tlb_cache_idx cache_2mb_idx;
+        t_vtp_tlb_2mb_cache_tag cache_2mb_tag_tgt;
+    }
+    t_vtp_shim_chan_state;
+
+    localparam MAX_STAGE = 3;
+    t_vtp_shim_chan_state state[0 : MAX_STAGE];
+
+    logic tlb_lookup_rsp_rdy;
+
+    logic [N_META_BITS-1 : 0] cTx_q;
+
+    always_comb
+    begin
+        state[0].cTxValid = cTxValid;
+        state[0].cTxAddr = cTxAddr;
+        state[0].cTxAddrIsVirtual = cTxAddrIsVirtual;
+
+        for (int s = 0; s <= MAX_STAGE; s = s + 1)
+        begin
+            { state[s].cache_4kb_tag_tgt, state[s].cache_4kb_idx } =
+                state[s].cTxAddr;
+
+            { state[s].cache_2mb_tag_tgt, state[s].cache_2mb_idx } =
+                vtp4kbTo2mbVA(state[s].cTxAddr);
+        end
+    end
+
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            for (int s = 1; s <= MAX_STAGE; s = s + 1)
+            begin
+                state[s].cTxValid <= 1'b0;
+            end
+        end
+        else
+        begin
+            for (int s = 1; s <= MAX_STAGE; s = s + 1)
+            begin
+                state[s].cTxValid <= state[s - 1].cTxValid;
+            end
+        end
+
+        cTx_q <= cTx;
+
+        for (int s = 1; s <= MAX_STAGE; s = s + 1)
+        begin
+            state[s].cTxAddr <= state[s - 1].cTxAddr;
+            state[s].cTxAddrIsVirtual <= state[s - 1].cTxAddrIsVirtual;
+            state[s].allocIdx <= state[s - 1].allocIdx;
+        end
+    end
+
+
+    // ====================================================================
+    //
+    //  Local L1 cache of 4KB page translations.
+    //
+    // ====================================================================
+
+    logic cache_4kb_rdy;
+    t_tlb_4kb_pa_page_idx cache_4kb_pa;
+    t_tlb_4kb_pa_page_idx cache_4kb_pa_q;
+    t_vtp_tlb_4kb_cache_tag cache_4kb_tag;
+
+    logic cache_4kb_upd_en;
+    t_tlb_4kb_pa_page_idx cache_4kb_upd_pa;
+    t_vtp_tlb_cache_idx cache_4kb_upd_idx;
+    t_vtp_tlb_4kb_cache_tag cache_4kb_upd_tag;
+
+    // Reset (invalidate) the TLB when requested by SW.
+    // inval_translation_cache is held for only one cycle.
+    logic reset_tlb;
+    always @(posedge clk)
+    begin
+        reset_tlb <= csrs.vtp_in_mode.inval_translation_cache;
+
+        if (reset)
+        begin
+            reset_tlb <= 1'b1;
+        end
+    end
+
+    cci_mpf_prim_ram_simple_init
+      #(
+        .N_ENTRIES(512),
+        .N_DATA_BITS($bits(t_tlb_4kb_pa_page_idx) + $bits(t_vtp_tlb_4kb_cache_tag)),
+        .N_OUTPUT_REG_STAGES(1)
+        )
+      cache4kb
+       (
+        .clk,
+        .reset(reset_tlb),
+        .rdy(cache_4kb_rdy),
+
+        .wen(cache_4kb_upd_en),
+        .waddr(cache_4kb_upd_idx),
+        .wdata({ cache_4kb_upd_pa, cache_4kb_upd_tag }),
+
+        // Cache read is initiated in pipeline cycle 0
+        .raddr(state[0].cache_4kb_idx),
+        .rdata({ cache_4kb_pa, cache_4kb_tag })
+        );
+
+    // Cache read data arrives in cycle 2
+    logic cache_4kb_hit;
+    always_ff @(posedge clk)
+    begin
+        cache_4kb_hit <= (state[2].cache_4kb_tag_tgt == cache_4kb_tag);
+        cache_4kb_pa_q <= cache_4kb_pa;
+    end
+
+
+    // ====================================================================
+    //
+    //  Local L1 cache of 2MB page translations.
+    //
+    // ====================================================================
+
+    logic cache_2mb_rdy;
+    t_tlb_2mb_pa_page_idx cache_2mb_pa;
+    t_tlb_2mb_pa_page_idx cache_2mb_pa_q;
+    t_vtp_tlb_2mb_cache_tag cache_2mb_tag;
+
+    logic cache_2mb_upd_en;
+    t_tlb_2mb_pa_page_idx cache_2mb_upd_pa;
+    t_vtp_tlb_cache_idx cache_2mb_upd_idx;
+    t_vtp_tlb_2mb_cache_tag cache_2mb_upd_tag;
+
+    cci_mpf_prim_ram_simple_init
+      #(
+        .N_ENTRIES(512),
+        .N_DATA_BITS($bits(t_tlb_2mb_pa_page_idx) + $bits(t_vtp_tlb_2mb_cache_tag)),
+        .N_OUTPUT_REG_STAGES(1)
+        )
+      cache2mb
+       (
+        .clk,
+        .reset(reset_tlb),
+        .rdy(cache_2mb_rdy),
+
+        .wen(cache_2mb_upd_en),
+        .waddr(cache_2mb_upd_idx),
+        .wdata({ cache_2mb_upd_pa, cache_2mb_upd_tag }),
+
+        // Cache read is initiated in pipeline cycle 0
+        .raddr(state[0].cache_2mb_idx),
+        .rdata({ cache_2mb_pa, cache_2mb_tag })
+        );
+
+    // Cache read data arrives in cycle 2
+    logic cache_2mb_hit;
+    always_ff @(posedge clk)
+    begin
+        cache_2mb_hit <= (state[2].cache_2mb_tag_tgt == cache_2mb_tag);
+        cache_2mb_pa_q <= cache_2mb_pa;
+    end
+
+
+    // ====================================================================
+    //
+    //  Heap for holding TX state
+    //
+    // ====================================================================
+
+    t_cci_mpf_shim_vtp_req_tag freeIdx;
+    logic heap_notFull;
+    t_tlb_4kb_va_page_idx cTxAddr_va_out;
+
+    // Some of the notFull logic can be registered for timing
+    logic notFull_reg;
+    assign notFull = heap_notFull && notFull_reg;
+
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            notFull_reg <= 1'b0;
+        end
+        else
+        begin
+            notFull_reg <= vtp_svc.lookupRdy && cache_4kb_rdy && cache_2mb_rdy &&
+                           ! tlb_lookup_rsp_rdy &&
+                           ! cTxAlmostFull;
+        end
+    end
+
+    // Head indices are allocated in cycle 0
+    cci_mpf_prim_heap_ctrl
+      #(
+        .N_ENTRIES(CCI_MPF_SHIM_VTP_MAX_SVC_REQS)
+        )
+      heap_ctrl
+       (
+        .clk,
+        .reset,
+
+        .enq(state[0].cTxValid),
+        .notFull(heap_notFull),
+        .allocIdx(state[0].allocIdx),
+
+        .free(cTxValid_out),
+        .freeIdx
+        );
+
+    // Heap data is written in cycle 1. It is available in cycle 0 but
+    // not needed yet, so waiting a cycle simplifies timing.
+    t_cci_mpf_shim_vtp_req_tag readIdx;
+    logic [N_META_BITS-1 : 0] read_cTx_out;
+    t_tlb_4kb_va_page_idx read_cTxAddr_va_out;
+
+    cci_mpf_prim_lutram
+      #(
+        .N_ENTRIES(CCI_MPF_SHIM_VTP_MAX_SVC_REQS),
+        .N_DATA_BITS(N_META_BITS + $bits(t_tlb_4kb_va_page_idx))
+        )
+      heap
+       (
+        .clk,
+        .reset,
+
+        .raddr(readIdx),
+        .rdata({ read_cTx_out, read_cTxAddr_va_out }),
+
+        .waddr(state[1].allocIdx),
+        .wen(state[1].cTxValid),
+        .wdata({ cTx_q, state[1].cTxAddr })
+        );
+
+    always_ff @(posedge clk)
+    begin
+        cTx_out <= read_cTx_out;
+        cTxAddr_va_out <= read_cTxAddr_va_out;
+
+        freeIdx <= readIdx;
+    end
+
+
+    // ====================================================================
+    //
+    //  Send translation requests to VTP server
+    //
+    // ====================================================================
+
+    // Request TLB lookup if no translation found locally (cycle 3)
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            vtp_svc.lookupEn <= 1'b0;
+        end
+        else
+        begin
+            vtp_svc.lookupEn <= state[3].cTxValid && state[3].cTxAddrIsVirtual &&
+                                ! cache_4kb_hit &&
+                                ! cache_2mb_hit;
+        end
+
+        vtp_svc.lookupReq.pageVA <= state[3].cTxAddr;
+        vtp_svc.lookupReq.tag <= state[3].allocIdx;
+    end
+
+    //
+    // TLB response timing is latency insensitive.  This FIFO collects
+    // responses until they can be merged into the pipeline.
+    //
+    t_cci_mpf_shim_vtp_lookup_rsp tlb_lookup_rsp;
+    t_cci_mpf_shim_vtp_lookup_rsp tlb_lookup_rsp_q;
+    logic tlb_lookup_deq;
+    logic tlb_lookup_deq_q;
+    logic tlb_lookup_deq_qq;
+
+    cci_mpf_prim_fifo_lutram
+      #(
+        .N_DATA_BITS($bits(t_cci_mpf_shim_vtp_lookup_rsp)),
+        .N_ENTRIES(CCI_MPF_SHIM_VTP_MAX_SVC_REQS)
+        )
+      tlb_fifo_out
+       (
+        .clk,
+        .reset,
+
+        .enq_data(vtp_svc.lookupRsp),
+        .enq_en(vtp_svc.lookupRspValid),
+        .notFull(),
+        .almostFull(),
+
+        .first(tlb_lookup_rsp),
+        .deq_en(tlb_lookup_deq),
+        .notEmpty(tlb_lookup_rsp_rdy)
+        );
+
+    //
+    // Inject the TLB response when there is a bubble in the main pipeline.
+    // Look for the bubble in cycle 2 and register the TLB response so it
+    // is merged in cycle 3.
+    //
+    // A bubble is guaranteed to happen eventually since tlb_lookup_rsp_rdy
+    // causes almostFull to be asserted on the channel.
+    //
+    assign tlb_lookup_deq = tlb_lookup_rsp_rdy && ! state[2].cTxValid;
+
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            tlb_lookup_deq_q <= 1'b0;
+            tlb_lookup_deq_qq <= 1'b0;
+        end
+        else
+        begin
+            tlb_lookup_deq_q <= tlb_lookup_deq;
+            tlb_lookup_deq_qq <= tlb_lookup_deq_q;
+        end
+
+        tlb_lookup_rsp_q <= tlb_lookup_rsp;
+    end
+
+
+    // ====================================================================
+    //
+    //  Responses.
+    //
+    // ====================================================================
+
+    //
+    // Pick the main pipeline if the request doesn't need address
+    // translation or the local cache held the translation.
+    // If nothing is flowing on the main path then then there might be
+    // a response from the TLB.  The TLB response logic above decided
+    // in cycle 1 whether the main path was busy when it set
+    // tlb_lookup_deq.
+    //
+    logic pick_main_path;
+    assign pick_main_path = state[3].cTxValid &&
+                            (! state[3].cTxAddrIsVirtual ||
+                             cache_4kb_hit ||
+                             cache_2mb_hit);
+
+    // Read the full request from the heap
+    always_ff @(posedge clk)
+    begin
+        readIdx <= tlb_lookup_deq ? tlb_lookup_rsp.tag : state[2].allocIdx;
+    end
+
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            cTxValid_out <= 1'b0;
+        end
+        else
+        begin
+            cTxValid_out <= pick_main_path || tlb_lookup_deq_q;
+        end
+
+        if (pick_main_path)
+        begin
+            if (cache_4kb_hit)
+            begin
+                cTxAddr_out <= cache_4kb_pa_q;
+                cTxAddrIsBigPage_out <= 1'b0;
+            end
+            else
+            begin
+                cTxAddr_out <= vtp2mbTo4kbPA(cache_2mb_pa_q);
+                cTxAddrIsBigPage_out <= 1'b1;
+            end
+        end
+        else
+        begin
+            cTxAddr_out <= tlb_lookup_rsp_q.pagePA;
+            cTxAddrIsBigPage_out <= tlb_lookup_rsp_q.isBigPage;
+        end
+    end
+
+    //
+    // Set values for updating the local cache.
+    //
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            cache_4kb_upd_en <= 1'b0;
+            cache_2mb_upd_en <= 1'b0;
+        end
+        else
+        begin
+            cache_4kb_upd_en <= tlb_lookup_deq_qq && ! cTxAddrIsBigPage_out;
+            cache_2mb_upd_en <= tlb_lookup_deq_qq && cTxAddrIsBigPage_out;
+        end
+
+        cache_4kb_upd_pa <= cTxAddr_out;
+        { cache_4kb_upd_tag, cache_4kb_upd_idx } <= cTxAddr_va_out;
+
+        cache_2mb_upd_pa <= vtp4kbTo2mbPA(cTxAddr_out);
+        { cache_2mb_upd_tag, cache_2mb_upd_idx } <= vtp4kbTo2mbVA(cTxAddr_va_out);
+    end
+
+
+    // ====================================================================
+    //
+    //  Track notEmpty by counting transactions
+    //
+    // ====================================================================
+
+    logic [$clog2(CCI_MPF_SHIM_VTP_MAX_SVC_REQS+1)-1 : 0] n_active;
+    logic [$clog2(CCI_MPF_SHIM_VTP_MAX_SVC_REQS+1)-1 : 0] n_active_next;
+
+    always_comb
+    begin
+        if ((state[0].cTxValid ^ cTxValid_out) == 1'b0)
+        begin
+            // No change
+            n_active_next = n_active;
+        end
+        else if (state[0].cTxValid)
+        begin
+            // Only a new entry
+            n_active_next = n_active + 1'b1;
+        end
+        else
+        begin
+            // Only completed an old entry
+            n_active_next = n_active - 1'b1;
+        end
+    end
+
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            notEmpty <= 1'b0;
+            n_active <= 0;
+        end
+        else
+        begin
+            notEmpty <= (n_active_next != 0);
+            n_active <= n_active_next;
+        end
+    end
+
+
+    // ====================================================================
+    //
+    //  Assertions
+    //
+    // ====================================================================
 
     always_ff @(posedge clk)
     begin
         if (! reset)
         begin
-            assert (! pt_walk.notPresent) else
-                $fatal("cci_mpf_shim_vtp: VA not present in page table");
+            assert (! pick_main_path || ! tlb_lookup_deq_q) else
+                $fatal("cci_mpf_shim_vtp: main path and TLB path collission!");
         end
     end
 
-
-    cci_mpf_shim_vtp_pt_walk
-      #(
-        .DEBUG_MESSAGES(DEBUG_MESSAGES)
-        )
-      walker
-       (
-        .clk,
-        .reset,
-
-        .pt_walk(pt_walk_walker),
-        .csrs,
-        .tlb_fill_if(tlb_if),
-
-        .statBusy(events.vtp_out_event_pt_walk_busy)
-        );
-
-
-    // ====================================================================
-    //
-    //   Connection to FIU.
-    //
-    // ====================================================================
-
-    assign fiu.c0Tx = fiu_pipe.c0Tx;
-    assign fiu_pipe.c0TxAlmFull = fiu.c0TxAlmFull;
-
-    assign fiu.c1Tx = fiu_pipe.c1Tx;
-    assign fiu_pipe.c1TxAlmFull = fiu.c1TxAlmFull;
-
-    assign fiu.c2Tx = fiu_pipe.c2Tx;
-
-    assign fiu_pipe.c0Rx = fiu.c0Rx;
-    assign fiu_pipe.c1Rx = fiu.c1Rx;
-
-endmodule // cci_mpf_shim_vtp
+endmodule

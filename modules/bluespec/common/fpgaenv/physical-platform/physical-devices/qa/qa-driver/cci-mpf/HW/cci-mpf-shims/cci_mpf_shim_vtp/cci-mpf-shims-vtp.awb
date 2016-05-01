@@ -8,6 +8,8 @@
 %sources -t VERILOG_H  -v PRIVATE cci_mpf_shim_vtp.vh
 
 %sources -t VERILOG    -v PRIVATE cci_mpf_shim_vtp.sv
-%sources -t VERILOG    -v PRIVATE cci_mpf_shim_vtp_pipe.sv
-%sources -t VERILOG    -v PRIVATE cci_mpf_shim_vtp_pt_walk.sv
-%sources -t VERILOG    -v PRIVATE cci_mpf_shim_vtp_tlb.sv
+
+%sources -t VERILOG    -v PRIVATE cci_mpf_svc_vtp.sv
+%sources -t VERILOG    -v PRIVATE cci_mpf_svc_vtp_pipe.sv
+%sources -t VERILOG    -v PRIVATE cci_mpf_svc_vtp_pt_walk.sv
+%sources -t VERILOG    -v PRIVATE cci_mpf_svc_vtp_tlb.sv

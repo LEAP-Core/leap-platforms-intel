@@ -57,6 +57,7 @@ module cci_mpf_prim_fifo_lutram
     output logic                     notEmpty
     );
 
+    logic fifo_enq;
     logic fifo_deq;
     logic fifo_notEmpty;
     logic [N_DATA_BITS-1 : 0] fifo_first;
@@ -72,7 +73,7 @@ module cci_mpf_prim_fifo_lutram
         .clk,
         .reset,
         .enq_data,
-        .enq_en,
+        .enq_en(fifo_enq),
         .notFull,
         .almostFull,
         .first(fifo_first),
@@ -84,20 +85,31 @@ module cci_mpf_prim_fifo_lutram
         if (REGISTER_OUTPUT == 0)
         begin : nr
             assign first = fifo_first;
+            assign fifo_enq = enq_en;
             assign fifo_deq = deq_en;
             assign notEmpty = fifo_notEmpty;
         end
         else
         begin : r
             //
-            // Output register stage
+            // Output register stage.  The output register is filled either
+            // by draining the FIFO or by bypassing the FIFO when the FIFO
+            // is empty.
             //
             logic [N_DATA_BITS-1 : 0] reg_out;
             logic reg_out_valid;
 
+            // Client consumes from reg_out
             assign first = reg_out;
             assign notEmpty = reg_out_valid;
-            assign fifo_deq = fifo_notEmpty && (deq_en || ! reg_out_valid);
+
+            // New data enq to FIFO unless it is bypassed to reg_out
+            assign fifo_enq = enq_en &&
+                              (fifo_notEmpty || (reg_out_valid && ! deq_en));
+
+            // Move the oldest FIFO entry to reg_out when reg_out becomes
+            // available.
+            assign fifo_deq = fifo_notEmpty && deq_en;
 
             always_ff @(posedge clk)
             begin
@@ -107,11 +119,20 @@ module cci_mpf_prim_fifo_lutram
                 end
                 else
                 begin
-                    if (deq_en || ! reg_out_valid)
-                    begin
-                        reg_out_valid <= fifo_notEmpty;
-                        reg_out <= fifo_first;
-                    end
+                    // Output is valid if:
+                    //  - It was already valid and was not dequeued
+                    //  - The FIFO isn't empty
+                    //  - A new entry was enqueued this cycle
+                    reg_out_valid <= (reg_out_valid && ! deq_en) ||
+                                     fifo_notEmpty ||
+                                     enq_en;
+                end
+
+                // Move the next entry to reg_out on deq either from the FIFO
+                // or via bypass of new data.
+                if (deq_en || ! reg_out_valid)
+                begin
+                    reg_out <= fifo_notEmpty ? fifo_first : enq_data;
                 end
             end
         end
@@ -160,7 +181,10 @@ module cci_mpf_prim_fifo_lutram_base
     assign first = data[rd_idx];
     always_ff @(posedge clk)
     begin
-        if (enq_en)
+        // Write the data as long as the FIFO isn't full.  This leaves the
+        // data path independent of control.  notFull/notEmpty will track
+        // the control messages.
+        if (notFull)
         begin
             data[wr_idx] <= enq_data;
         end

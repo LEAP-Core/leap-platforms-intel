@@ -158,12 +158,7 @@ module cci_mpf_shim_csr
 
     always_ff @(posedge clk)
     begin
-        if (reset)
-        begin
-            csrs.vtp_in_mode <= t_cci_mpf_vtp_csr_mode'(0);
-            csrs.vtp_in_page_table_base_valid <= 1'b0;
-        end
-        else if (cci_csr_isWrite(c0_rx))
+        if (cci_csr_isWrite(c0_rx))
         begin
             if (csrAddrMatches(c0_rx, CCI_MPF_VTP_CSR_BASE +
                                       CCI_MPF_VTP_CSR_MODE))
@@ -182,6 +177,12 @@ module cci_mpf_shim_csr
                 csrs.vtp_in_page_table_base <= t_cci_clAddr'(c0_rx.data);
                 csrs.vtp_in_page_table_base_valid <= 1'b1;
             end
+        end
+
+        if (reset)
+        begin
+            csrs.vtp_in_mode <= t_cci_mpf_vtp_csr_mode'(0);
+            csrs.vtp_in_page_table_base_valid <= 1'b0;
         end
     end
 
@@ -369,10 +370,11 @@ module cci_mpf_shim_csr
          );
 
 
-    enum logic [1:0] {
+    enum logic [2:0] {
         STAT_IDLE,
         STAT_PROCESS_VEC,
-        STAT_UPDATE,
+        STAT_UPDATE0,
+        STAT_UPDATE1,
         STAT_WRITEBACK
     }
     stat_upd_state;
@@ -382,6 +384,8 @@ module cci_mpf_shim_csr
 
     logic stat_bucket_upd;
     logic [63:0] stat_bucket_wr_val;
+    logic stat_bucket_overflow;
+    logic [31:0] csr_mem_rd_high;
 
     //
     // State machine for processing statistics updates.
@@ -418,20 +422,35 @@ module cci_mpf_shim_csr
                     if (stat_bucket_upd)
                     begin
                         // Started the read for one entry
-                        stat_upd_state <= STAT_UPDATE;
+                        stat_upd_state <= STAT_UPDATE0;
                         stat_upd_active <= 1'b1;
                     end
                 end
 
-              STAT_UPDATE:
+              STAT_UPDATE0:
                 begin
                     // Wait for CSR memory read response
                     if (csr_mem_rd_val_valid)
                     begin
-                        stat_upd_state <= STAT_WRITEBACK;
+                        stat_upd_state <= STAT_UPDATE1;
                     end
 
-                    stat_bucket_wr_val <= csr_mem_rd_val + 64'(stat_upd_counts[0]);
+                    // Low half of update plus overflow.  stat_upd_counts
+                    // must be <= 32 bits.
+                    { stat_bucket_overflow, stat_bucket_wr_val[31:0] } <=
+                        { 1'b0, csr_mem_rd_val[31:0] } + 33'(stat_upd_counts[0]);
+
+                    // Preserve the upper half of the current CSR value
+                    csr_mem_rd_high <= csr_mem_rd_val[63:32];
+                end
+
+              STAT_UPDATE1:
+                begin
+                    // High half of update -- just overflow.
+                    stat_upd_state <= STAT_WRITEBACK;
+
+                    stat_bucket_wr_val[63:32] <=
+                        csr_mem_rd_high + 32'(stat_bucket_overflow);
                 end
 
               STAT_WRITEBACK:
@@ -590,18 +609,17 @@ module cci_mpf_shim_csr_events
     assign vtp_pt_walk_busy_cycles_cur = (consume_counters ? t_cci_mpf_stat_cnt'(0) : vtp_pt_walk_busy_cycles);
 
 
-    logic [1:0] vtp_4kb_hits_incr;
+    logic vtp_4kb_hits_incr;
     always_ff @(posedge clk)
     begin
         if (reset)
         begin
+            vtp_4kb_hits_incr <= 1'b0;
             vtp_4kb_hits <= t_cci_mpf_stat_cnt'(0);
-            vtp_4kb_hits_incr <= 2'd0;
         end
         else
         begin
-            vtp_4kb_hits_incr <= 2'(events.vtp_out_event_4kb_hit_c0) +
-                                 2'(events.vtp_out_event_4kb_hit_c1);
+            vtp_4kb_hits_incr <= events.vtp_out_event_4kb_hit;
             vtp_4kb_hits <= vtp_4kb_hits_cur + t_cci_mpf_stat_cnt'(vtp_4kb_hits_incr);
         end
     end
@@ -611,8 +629,8 @@ module cci_mpf_shim_csr_events
     begin
         if (reset)
         begin
-            vtp_4kb_misses <= t_cci_mpf_stat_cnt'(0);
             vtp_4kb_misses_incr <= 1'b0;
+            vtp_4kb_misses <= t_cci_mpf_stat_cnt'(0);
         end
         else
         begin
@@ -622,18 +640,17 @@ module cci_mpf_shim_csr_events
     end
 
 
-    logic [1:0] vtp_2mb_hits_incr;
+    logic vtp_2mb_hits_incr;
     always_ff @(posedge clk)
     begin
         if (reset)
         begin
+            vtp_2mb_hits_incr <= 1'b0;
             vtp_2mb_hits <= t_cci_mpf_stat_cnt'(0);
-            vtp_2mb_hits_incr <= 2'd0;
         end
         else
         begin
-            vtp_2mb_hits_incr <= 2'(events.vtp_out_event_2mb_hit_c0) +
-                                 2'(events.vtp_out_event_2mb_hit_c1);
+            vtp_2mb_hits_incr <= events.vtp_out_event_2mb_hit;
             vtp_2mb_hits <= vtp_2mb_hits_cur + t_cci_mpf_stat_cnt'(vtp_2mb_hits_incr);
         end
     end
@@ -643,8 +660,8 @@ module cci_mpf_shim_csr_events
     begin
         if (reset)
         begin
-            vtp_2mb_misses <= t_cci_mpf_stat_cnt'(0);
             vtp_2mb_misses_incr <= 1'b0;
+            vtp_2mb_misses <= t_cci_mpf_stat_cnt'(0);
         end
         else
         begin
@@ -658,8 +675,8 @@ module cci_mpf_shim_csr_events
     begin
         if (reset)
         begin
-            vtp_pt_walk_busy_cycles <= t_cci_mpf_stat_cnt'(0);
             vtp_pt_walk_busy_cycles_incr <= 1'b0;
+            vtp_pt_walk_busy_cycles <= t_cci_mpf_stat_cnt'(0);
         end
         else
         begin

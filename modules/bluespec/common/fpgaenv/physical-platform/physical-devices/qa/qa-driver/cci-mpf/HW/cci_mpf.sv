@@ -172,6 +172,45 @@ module cci_mpf
 
     // ====================================================================
     //
+    //  If VTP is enabled then add a translation server.  All VTP AFU
+    //  pipeline shims will sends requests to this shared server.
+    //
+    // ====================================================================
+
+    localparam N_VTP_PORTS = 2;
+
+    cci_mpf_shim_vtp_svc_if vtp_svc_ports[0 : N_VTP_PORTS-1] ();
+
+    generate
+        if (ENABLE_VTP)
+        begin : v_to_p
+            cci_mpf_svc_vtp
+              #(
+                .N_VTP_PORTS(N_VTP_PORTS),
+                .DEBUG_MESSAGES(0)
+                )
+              vtp
+               (
+                .clk,
+                .reset,
+                .vtp_svc(vtp_svc_ports),
+                .pt_walk_walker(pt_walk),
+                .pt_walk_client(pt_walk),
+                .csrs(mpf_csrs),
+                .events(mpf_csrs)
+                );
+        end
+        else
+        begin : no_vtp
+            // Tie off page table walker
+            assign pt_walk.readEn = 1'b0;
+            assign pt_walk.readAddr = 'x;
+        end
+    endgenerate
+
+
+    // ====================================================================
+    //
     //  Instantiate an MPF pipeline composed of the desired shims
     //
     // ====================================================================
@@ -195,8 +234,7 @@ module cci_mpf
         .afu,
         .mpf_csrs,
         .edge_if,
-        .pt_walk_walker(pt_walk),
-        .pt_walk_client(pt_walk)
+        .vtp_svc(vtp_svc_ports[0:1])
         );
 
 endmodule // cci_mpf

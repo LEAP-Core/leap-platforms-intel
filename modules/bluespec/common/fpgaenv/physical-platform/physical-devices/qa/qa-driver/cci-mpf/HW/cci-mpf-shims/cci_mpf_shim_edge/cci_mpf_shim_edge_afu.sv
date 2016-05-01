@@ -39,7 +39,10 @@
 
 module cci_mpf_shim_edge_afu
   #(
-    parameter N_WRITE_HEAP_ENTRIES = 0
+    parameter N_WRITE_HEAP_ENTRIES = 0,
+
+    // Enforce write/write and write/read ordering with cache lines?
+    parameter ENFORCE_WR_ORDER = 0
     )
    (
     input  logic clk,
@@ -129,8 +132,24 @@ module cci_mpf_shim_edge_afu
     logic afu_wr_almost_full;
     assign afu_wr_almost_full = fiu.c1TxAlmFull || ! wr_heap_not_full;
 
-    // All but write requests flow straight through
-    assign fiu.c0Tx = cci_mpf_updC0TxCanonical(afu.c0Tx);
+    // All but write requests flow straight through. The c1Tx channel needs
+    // to be registered in this module due to the logic that drops all but
+    // one flit from a multi-beat write.  If read/write order is being
+    // enforced than add the same register latency for c0Tx.
+    generate
+        if (ENFORCE_WR_ORDER)
+        begin : wr_order
+            always_ff @(posedge clk)
+            begin
+                fiu.c0Tx <= cci_mpf_updC0TxCanonical(afu.c0Tx);
+            end
+        end
+        else
+        begin : no_wr_order
+            assign fiu.c0Tx = cci_mpf_updC0TxCanonical(afu.c0Tx);
+        end
+    endgenerate
+
     assign fiu.c2Tx = afu.c2Tx;
 
     //
@@ -172,15 +191,15 @@ module cci_mpf_shim_edge_afu
     assign afu.c0Rx = fiu.c0Rx;
     assign afu.c1Rx = fiu.c1Rx;
 
-    always_comb
+    always_ff @(posedge clk)
     begin
-        fiu.c1Tx = cci_mpf_updC1TxCanonical(afu.c1Tx);
+        fiu.c1Tx <= cci_mpf_updC1TxCanonical(afu.c1Tx);
 
         // The cache line's value stored in fiu.c1Tx.data is no longer needed
         // in the pipeline.  Store 'x but use the low bits to hold the
         // local heap index.
-        fiu.c1Tx.data = 'x;
-        fiu.c1Tx.data[$clog2(N_WRITE_HEAP_ENTRIES) - 1 : 0] = wr_heap_enq_idx;
+        fiu.c1Tx.data <= 'x;
+        fiu.c1Tx.data[$clog2(N_WRITE_HEAP_ENTRIES) - 1 : 0] <= wr_heap_enq_idx;
 
         // Multi-beat write request?  Only the start of packet beat goes
         // through MPF.  The rest are buffered in wr_heap here and the
@@ -193,13 +212,13 @@ module cci_mpf_shim_edge_afu
             // Wait for the final flit to arrive and be buffered, thus
             // guaranteeing that all the data is ready to be written
             // as the packet exits to the FIU.
-            fiu.c1Tx.valid = afu.c1Tx.valid &&
-                             (wr_heap_enq_clNum == afu.c1Tx.hdr.base.cl_len);
+            fiu.c1Tx.valid <= afu.c1Tx.valid &&
+                              (wr_heap_enq_clNum == afu.c1Tx.hdr.base.cl_len);
 
             // Revert the address to the start of packet address
-            fiu.c1Tx.hdr.base.sop = 1'b1;
-            fiu.c1Tx.hdr.base.address[1:0] = afu.c1Tx.hdr.base.address[1:0] ^
-                                             afu.c1Tx.hdr.base.cl_len;
+            fiu.c1Tx.hdr.base.sop <= 1'b1;
+            fiu.c1Tx.hdr.base.address[1:0] <= afu.c1Tx.hdr.base.address[1:0] ^
+                                              afu.c1Tx.hdr.base.cl_len;
         end
     end
 

@@ -11,8 +11,7 @@ HW/cci_mpf.sv
 HW/cci_mpf_pipe_std.sv
 HW/cci-mpf-if/ccip_wires_to_mpf.sv
 HW/cci-mpf-if/ccis_wires_to_mpf.sv
-HW/cci-mpf-prims/cci_mpf_prim_ram_dualport.sv
-HW/cci-mpf-prims/cci_mpf_prim_ram_simple.sv
+HW/cci-mpf-prims/cci_mpf_prim_arb_rr.sv
 HW/cci-mpf-prims/cci_mpf_prim_fifo1.sv
 HW/cci-mpf-prims/cci_mpf_prim_fifo2.sv
 HW/cci-mpf-prims/cci_mpf_prim_fifo_bram.sv
@@ -22,6 +21,8 @@ HW/cci-mpf-prims/cci_mpf_prim_filter_counting.sv
 HW/cci-mpf-prims/cci_mpf_prim_heap.sv
 HW/cci-mpf-prims/cci_mpf_prim_lfsr.sv
 HW/cci-mpf-prims/cci_mpf_prim_lutram.sv
+HW/cci-mpf-prims/cci_mpf_prim_ram_dualport.sv
+HW/cci-mpf-prims/cci_mpf_prim_ram_simple.sv
 HW/cci-mpf-prims/cci_mpf_prim_repl_lru_pseudo.sv
 HW/cci-mpf-prims/cci_mpf_prim_repl_random.sv
 HW/cci-mpf-prims/cci_mpf_prim_rob.sv
@@ -37,7 +38,8 @@ HW/cci-mpf-shims/cci_mpf_shim_mux.sv
 HW/cci-mpf-shims/cci_mpf_shim_null.sv
 HW/cci-mpf-shims/cci_mpf_shim_rsp_order.sv
 HW/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_shim_vtp.sv
-HW/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_shim_vtp_pipe.sv
-HW/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_shim_vtp_pt_walk.sv
-HW/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_shim_vtp_tlb.sv
+HW/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_svc_vtp.sv
+HW/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_svc_vtp_pipe.sv
+HW/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_svc_vtp_pt_walk.sv
+HW/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_svc_vtp_tlb.sv
 HW/cci-mpf-shims/cci_mpf_shim_wro.sv

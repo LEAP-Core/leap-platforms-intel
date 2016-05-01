@@ -46,7 +46,7 @@
 // is the software must guarantee that new page table entries are globally
 // visible in system memory before passing a new virtual address to the FPGA.
 //
-module cci_mpf_shim_vtp_tlb
+module cci_mpf_svc_vtp_tlb
   #(
     // Number of offset bits in pages managed by this TLB instance.  OFFSETS
     // ARE LINES, NOT BYTES.  Typical values are 6 for 4KB pages and 15
@@ -149,7 +149,7 @@ module cci_mpf_shim_vtp_tlb
     // ====================================================================
 
     // The address and write data are broadcast to all ways in a set
-    t_tlb_idx tlb_raddr[0 : 1];
+    t_tlb_idx tlb_raddr;
 
     t_tlb_idx tlb_waddr;
     t_tlb_entry tlb_wdata;
@@ -159,48 +159,51 @@ module cci_mpf_shim_vtp_tlb
     // the head of the flow.  The data is returned from the block RAM in
     // the second cycle, so we label the output tlb_rdata_qq to match
     // other registered signals.
-    t_tlb_entry tlb_rdata[0 : 1][0 : NUM_TLB_SET_WAYS-1];
+    t_tlb_entry tlb_rdata[0 : NUM_TLB_SET_WAYS-1];
 
     // Each way is ready at the same time since the init logic is the same
-    logic tlb_rdy[0 : 1][0 : NUM_TLB_SET_WAYS-1];
+    logic tlb_rdy[0 : NUM_TLB_SET_WAYS-1];
     logic initialized;
-    assign initialized = tlb_rdy[0][0];
+    assign initialized = tlb_rdy[0];
+    assign tlb_if.lookupRdy = initialized;
 
     // Reset (invalidate) the TLB when requested by SW.
     // inval_translation_cache is held for only one cycle.
-    logic reset_tlb = 1'b1;
+    logic reset_tlb;
     always @(posedge clk)
     begin
-        reset_tlb <= reset || csrs.vtp_in_mode.inval_translation_cache;
+        reset_tlb <= csrs.vtp_in_mode.inval_translation_cache;
+
+        if (reset)
+        begin
+            reset_tlb <= 1'b1;
+        end
     end
 
     genvar w;
     genvar p;
     generate
         for (w = 0; w < NUM_TLB_SET_WAYS; w = w + 1)
-        begin : way
-            for (p = 0; p < 2; p = p + 1)
-            begin : gen_tlb
-                cci_mpf_prim_ram_simple_init
-                  #(
-                    .N_ENTRIES(NUM_TLB_SETS),
-                    .N_DATA_BITS($bits(t_tlb_entry)),
-                    .N_OUTPUT_REG_STAGES(1)
-                    )
-                  tlb
-                   (
-                    .clk,
-                    .reset(reset_tlb),
-                    .rdy(tlb_rdy[p][w]),
+        begin : gen_tlb_way
+            cci_mpf_prim_ram_simple_init
+              #(
+                .N_ENTRIES(NUM_TLB_SETS),
+                .N_DATA_BITS($bits(t_tlb_entry)),
+                .N_OUTPUT_REG_STAGES(1)
+                )
+              tlb
+               (
+                .clk,
+                .reset(reset_tlb),
+                .rdy(tlb_rdy[w]),
 
-                    .waddr(tlb_waddr),
-                    .wen(tlb_wen[w]),
-                    .wdata(tlb_wdata),
+                .waddr(tlb_waddr),
+                .wen(tlb_wen[w]),
+                .wdata(tlb_wdata),
 
-                    .raddr(tlb_raddr[p]),
-                    .rdata(tlb_rdata[p][w])
-                    );
-            end
+                .raddr(tlb_raddr),
+                .rdata(tlb_rdata[w])
+                );
         end
     endgenerate
 
@@ -224,25 +227,22 @@ module cci_mpf_shim_vtp_tlb
     } t_tlb_stage_state;
 
     localparam NUM_TLB_LOOKUP_PIPE_STAGES = 5;
-    t_tlb_stage_state stg_state[1 : NUM_TLB_LOOKUP_PIPE_STAGES][0 : 1];
+    t_tlb_stage_state stg_state[1 : NUM_TLB_LOOKUP_PIPE_STAGES];
 
     // Pass primary state through the pipeline
     always_ff @(posedge clk)
     begin
         // Head of the pipeline: register data for stage 1
-        for (int p = 0; p < 2; p = p + 1)
+        if (reset)
         begin
-            if (reset)
-            begin
-                stg_state[1][p].did_lookup <= 0;
-            end
-            else
-            begin
-                stg_state[1][p].did_lookup <= tlb_if.lookupEn[p];
-            end 
-
-            stg_state[1][p].lookup_page_va <= tlbVAIdxFrom4K(tlb_if.lookupPageVA[p]);
+            stg_state[1].did_lookup <= 0;
         end
+        else
+        begin
+            stg_state[1].did_lookup <= tlb_if.lookupEn;
+        end 
+
+        stg_state[1].lookup_page_va <= tlbVAIdxFrom4K(tlb_if.lookupPageVA);
 
         for (int s = 1; s < NUM_TLB_LOOKUP_PIPE_STAGES; s = s + 1)
         begin
@@ -269,7 +269,7 @@ module cci_mpf_shim_vtp_tlb
     //
     // TLB read response data arrives in stage 2.
     //
-    t_tlb_entry stg_tlb_rdata[2 : NUM_TLB_LOOKUP_PIPE_STAGES][0 : 1][0 : NUM_TLB_SET_WAYS-1];
+    t_tlb_entry stg_tlb_rdata[2 : NUM_TLB_LOOKUP_PIPE_STAGES][0 : NUM_TLB_SET_WAYS-1];
 
     assign stg_tlb_rdata[2] = tlb_rdata;
 
@@ -287,8 +287,7 @@ module cci_mpf_shim_vtp_tlb
     //
 
     // Set read address for lookup
-    assign tlb_raddr[0] = t_tlb_idx'(tlbVAIdxFrom4K(tlb_if.lookupPageVA[0]));
-    assign tlb_raddr[1] = t_tlb_idx'(tlbVAIdxFrom4K(tlb_if.lookupPageVA[1]));
+    assign tlb_raddr = t_tlb_idx'(tlbVAIdxFrom4K(tlb_if.lookupPageVA));
 
 
     //
@@ -310,19 +309,16 @@ module cci_mpf_shim_vtp_tlb
     // the first stage of comparison, with each way's comparison beginning
     // as a bitwise XOR. The consuming stage must simply NOR the bits
     // together.
-    t_tlb_virtual_tag stg3_xor_tag[0 : 1][NUM_TLB_SET_WAYS-1 : 0];
+    t_tlb_virtual_tag stg3_xor_tag[NUM_TLB_SET_WAYS-1 : 0];
 
     always_ff @(posedge clk)
     begin
-        for (int p = 0; p < 2; p = p + 1)
+        // Look for a match in each of the ways in the TLB set
+        for (int way = 0; way < NUM_TLB_SET_WAYS; way = way + 1)
         begin
-            // Look for a match in each of the ways in the TLB set
-            for (int way = 0; way < NUM_TLB_SET_WAYS; way = way + 1)
-            begin
-                stg3_xor_tag[p][way] <=
-                    stg_tlb_rdata[2][p][way].tag ^
-                    target_tlb_tag(stg_state[2][p].lookup_page_va);
-            end
+            stg3_xor_tag[way] <=
+                stg_tlb_rdata[2][way].tag ^
+                target_tlb_tag(stg_state[2].lookup_page_va);
         end
     end
 
@@ -330,18 +326,15 @@ module cci_mpf_shim_vtp_tlb
     //
     // Stage 3: Reduce previous stage's XOR tag matching to a single bit
     //
-    logic [NUM_TLB_SET_WAYS-1 : 0] stg4_tag_cmp[0 : 1];
+    logic [NUM_TLB_SET_WAYS-1 : 0] stg4_tag_cmp;
 
     always_ff @(posedge clk)
     begin
-        for (int p = 0; p < 2; p = p + 1)
+        for (int way = 0; way < NUM_TLB_SET_WAYS; way = way + 1)
         begin
-            for (int way = 0; way < NUM_TLB_SET_WAYS; way = way + 1)
-            begin
-                // Last cycle did a partial comparison, leaving multiple
-                // bits per way that all must be 1 for a match.
-                stg4_tag_cmp[p][way] <= ~ (|(stg3_xor_tag[p][way]));
-            end
+            // Last cycle did a partial comparison, leaving multiple
+            // bits per way that all must be 1 for a match.
+            stg4_tag_cmp[way] <= ~ (|(stg3_xor_tag[way]));
         end
     end
 
@@ -355,26 +348,23 @@ module cci_mpf_shim_vtp_tlb
     //   - Did any way hit (stg4_tag_hit)
     //   - Which way hit (stg4_way_hit)
     //
-    logic stg4_tag_hit[0 : 1];
-    logic [$clog2(NUM_TLB_SET_WAYS)-1 : 0] stg4_way_hit[0 : 1];
+    logic stg4_tag_hit;
+    logic [$clog2(NUM_TLB_SET_WAYS)-1 : 0] stg4_way_hit;
 
     always_comb
     begin
-        for (int p = 0; p < 2; p = p + 1)
-        begin
-            // Did any way's tag comparison hit?
-            stg4_tag_hit[p] = |(stg4_tag_cmp[p]);
+        // Did any way's tag comparison hit?
+        stg4_tag_hit = |(stg4_tag_cmp);
 
-            // Which way hit?
-            stg4_way_hit[p] = 'x;
-            for (int way = 0; way < NUM_TLB_SET_WAYS; way = way + 1)
+        // Which way hit?
+        stg4_way_hit = 'x;
+        for (int way = 0; way < NUM_TLB_SET_WAYS; way = way + 1)
+        begin
+            if (stg4_tag_cmp[way])
             begin
-                if (stg4_tag_cmp[p][way])
-                begin
-                    // Valid way
-                    stg4_way_hit[p] = way;
-                    break;
-                end
+                // Valid way
+                stg4_way_hit = way;
+                break;
             end
         end
     end
@@ -382,53 +372,40 @@ module cci_mpf_shim_vtp_tlb
     //
     // Register the combinational results computed above.
     //
-    logic lookup_valid[0 : 1];
-    logic lookup_miss[0 : 1];
-    t_tlb_4kb_pa_page_idx lookup_page_pa[0 : 1];
+    logic lookup_valid;
+    logic lookup_miss;
+    t_tlb_4kb_pa_page_idx lookup_page_pa;
 
     always_ff @(posedge clk)
     begin
         if (reset)
         begin
-            for (int p = 0; p < 2; p = p + 1)
-            begin
-                lookup_valid[p] <= 1'b0;
-                lookup_miss[p]  <= 1'b0;
-            end
+            lookup_valid <= 1'b0;
+            lookup_miss  <= 1'b0;
         end
         else
         begin
-            for (int p = 0; p < 2; p = p + 1)
-            begin
-                lookup_valid[p] <= stg_state[4][p].did_lookup && stg4_tag_hit[p];
-                lookup_miss[p]  <= stg_state[4][p].did_lookup && ! stg4_tag_hit[p];
-            end
+            lookup_valid <= stg_state[4].did_lookup && stg4_tag_hit;
+            lookup_miss  <= stg_state[4].did_lookup && ! stg4_tag_hit;
         end
 
-        for (int p = 0; p < 2; p = p + 1)
-        begin
-            lookup_page_pa[p] <=
-                tlbPAIdxTo4K(stg_tlb_rdata[4][p][stg4_way_hit[p]].idx);
-        end
+        lookup_page_pa <= tlbPAIdxTo4K(stg_tlb_rdata[4][stg4_way_hit].idx);
     end
 
     //
     // Vector of hits, indexed by way, used to update LRU tracking.
     //
-    logic [NUM_TLB_SET_WAYS-1 : 0] lookup_way_hit_vec[0 : 1];
-    logic [$clog2(NUM_TLB_SET_WAYS)-1 : 0] lookup_way_hit[0 : 1];
+    logic [NUM_TLB_SET_WAYS-1 : 0] lookup_way_hit_vec;
+    logic [$clog2(NUM_TLB_SET_WAYS)-1 : 0] lookup_way_hit;
 
     always_ff @(posedge clk)
     begin
-        for (int p = 0; p < 2; p = p + 1)
-        begin
-            lookup_way_hit[p] <= stg4_way_hit[p];
+        lookup_way_hit <= stg4_way_hit;
 
-            for (int way = 0; way < NUM_TLB_SET_WAYS; way = way + 1)
-            begin
-                lookup_way_hit_vec[p][way] <=
-                    stg_state[4][p].did_lookup && stg4_tag_cmp[p][way];
-            end
+        for (int way = 0; way < NUM_TLB_SET_WAYS; way = way + 1)
+        begin
+            lookup_way_hit_vec[way] <=
+                stg_state[4].did_lookup && stg4_tag_cmp[way];
         end
     end
 
@@ -439,21 +416,17 @@ module cci_mpf_shim_vtp_tlb
 
     always_comb
     begin
-        // Set result for both ports (one for reads one for writes)
-        for (int p = 0; p < 2; p = p + 1)
-        begin
-            // Lookup is valid if some way hit
-            tlb_if.lookupValid[p] = lookup_valid[p];
+        // Lookup is valid if some way hit
+        tlb_if.lookupRspValid = lookup_valid;
 
-            // Flag misses.
-            tlb_if.lookupMiss[p] = lookup_miss[p];
+        // Flag misses.
+        tlb_if.lookupMiss = lookup_miss;
 
-            tlb_if.lookupMissVA[p] =
-                tlbVAIdxTo4K(stg_state[NUM_TLB_LOOKUP_PIPE_STAGES][p].lookup_page_va);
+        tlb_if.lookupMissVA =
+            tlbVAIdxTo4K(stg_state[NUM_TLB_LOOKUP_PIPE_STAGES].lookup_page_va);
 
-            // Get the physical page index from the chosen way
-            tlb_if.lookupRspPagePA[p] = lookup_page_pa[p];
-        end
+        // Get the physical page index from the chosen way
+        tlb_if.lookupRspPagePA = lookup_page_pa;
     end
 
 
@@ -487,64 +460,62 @@ module cci_mpf_shim_vtp_tlb
 
     always_ff @(posedge clk)
     begin
+        case (fill_state)
+          STATE_TLB_FILL_IDLE:
+            begin
+                if (tlb_if.fillEn)
+                begin
+                    fill_state <= STATE_TLB_FILL_REQ_WAY;
+
+                    // Convert from VA to TLB tag/index
+                    { fill_tag, fill_idx } <= tlbVAIdxFrom4K(tlb_if.fillVA);
+                    fill_pa <= tlbPAIdxFrom4K(tlb_if.fillPA);
+
+                    // Only accept one fill at a time
+                    tlb_if.fillRdy <= 1'b0;
+                end
+            end
+
+          STATE_TLB_FILL_REQ_WAY:
+            begin
+                if (repl_rdy)
+                begin
+                    fill_state <= STATE_TLB_FILL_RECV_WAY;
+                end
+            end
+
+          STATE_TLB_FILL_RECV_WAY:
+            begin
+                if (repl_lookup_rsp_rdy)
+                begin
+                    fill_state <= STATE_TLB_FILL_INSERT;
+                end
+            end
+
+          STATE_TLB_FILL_INSERT:
+            begin
+                fill_state <= STATE_TLB_FILL_BUBBLE;
+            end
+
+          STATE_TLB_FILL_BUBBLE:
+            begin
+                // Bubble delays transition to IDLE to avoid repeated
+                // requests to the same miss VA.  Fills are only attempted
+                // when the state is idle.
+                fill_bubble <= fill_bubble + 1;
+                if (fill_bubble == 0)
+                begin
+                    fill_state <= STATE_TLB_FILL_IDLE;
+                    tlb_if.fillRdy <= 1'b1;
+                end
+            end
+        endcase
+
         if (reset)
         begin
             fill_state <= STATE_TLB_FILL_IDLE;
             fill_bubble <= 1;
             tlb_if.fillRdy <= 1'b1;
-        end
-        else
-        begin
-            case (fill_state)
-              STATE_TLB_FILL_IDLE:
-                begin
-                    if (tlb_if.fillEn)
-                    begin
-                        fill_state <= STATE_TLB_FILL_REQ_WAY;
-
-                        // Convert from VA to TLB tag/index
-                        { fill_tag, fill_idx } <= tlbVAIdxFrom4K(tlb_if.fillVA);
-                        fill_pa <= tlbPAIdxFrom4K(tlb_if.fillPA);
-
-                        // Only accept one fill at a time
-                        tlb_if.fillRdy <= 1'b0;
-                    end
-                end
-
-              STATE_TLB_FILL_REQ_WAY:
-                begin
-                    if (repl_rdy)
-                    begin
-                        fill_state <= STATE_TLB_FILL_RECV_WAY;
-                    end
-                end
-
-              STATE_TLB_FILL_RECV_WAY:
-                begin
-                    if (repl_lookup_rsp_rdy)
-                    begin
-                        fill_state <= STATE_TLB_FILL_INSERT;
-                    end
-                end
-
-              STATE_TLB_FILL_INSERT:
-                begin
-                    fill_state <= STATE_TLB_FILL_BUBBLE;
-                end
-
-              STATE_TLB_FILL_BUBBLE:
-                begin
-                    // Bubble delays transition to IDLE to avoid repeated
-                    // requests to the same miss VA.  Fills are only attempted
-                    // when the state is idle.
-                    fill_bubble <= fill_bubble + 1;
-                    if (fill_bubble == 0)
-                    begin
-                        fill_state <= STATE_TLB_FILL_IDLE;
-                        tlb_if.fillRdy <= 1'b1;
-                    end
-                end
-            endcase
         end
     end
 
@@ -581,37 +552,18 @@ module cci_mpf_shim_vtp_tlb
          .lookupVecRsp(repl_lookup_vec_rsp),
          .lookupRsp(),
          .lookupRspRdy(repl_lookup_rsp_rdy),
-         .refIdx0(target_tlb_idx(stg_state[NUM_TLB_LOOKUP_PIPE_STAGES][0].lookup_page_va)),
-         .refWayVec0(lookup_way_hit_vec[0]),
-         .refEn0(tlb_if.lookupValid[0]),
-         .refIdx1(target_tlb_idx(stg_state[NUM_TLB_LOOKUP_PIPE_STAGES][1].lookup_page_va)),
-         .refWayVec1(lookup_way_hit_vec[1]),
-         .refEn1(tlb_if.lookupValid[1])
+         .refIdx0(target_tlb_idx(stg_state[NUM_TLB_LOOKUP_PIPE_STAGES].lookup_page_va)),
+         .refWayVec0(lookup_way_hit_vec),
+         .refEn0(tlb_if.lookupRspValid),
+         // Update port 1 not used
+         .refIdx1(t_tlb_idx'(0)),
+         .refWayVec1(NUM_TLB_SET_WAYS'(0)),
+         .refEn1(1'b0)
          );
 
-
-
-    // ====================================================================
     //
-    //   Manage access to TLB port 0.
+    // Set TLB update value and way mask.
     //
-    // ====================================================================
-
-    // Port 0 is trivial since there is no contention on on TLB port 0.
-    // Only the lookup function reads from it and there is no writer
-    // connected to the port.
-    assign tlb_if.lookupRdy[0] = initialized;
-
-
-    // ====================================================================
-    //
-    //   Manage access to TLB port 1.
-    //
-    // ====================================================================
-
-    // Port 1 is used for updates in addition to lookups.
-    assign tlb_if.lookupRdy[1] = initialized;
-
     always_comb
     begin
         // TLB update -- write virtual address TAG and physical page index.
@@ -630,29 +582,32 @@ module cci_mpf_shim_vtp_tlb
         end
     end
 
+
+    // ====================================================================
+    //
+    //   Debugging
+    //
+    // ====================================================================
+
     always_ff @(posedge clk)
     begin
         if (initialized && DEBUG_MESSAGES)
         begin
-            for (int p = 0; p < 2; p = p + 1)
+            if (tlb_if.lookupEn)
             begin
-                if (tlb_if.lookupEn[p])
-                begin
-                    $display("TLB %s: Lookup chan %0d, VA 0x%x",
-                             DEBUG_NAME,
-                             p,
-                             {tlb_if.lookupPageVA[p], CCI_PT_4KB_PAGE_OFFSET_BITS'(0), 6'b0});
-                end
+                $display("VTP TLB %s: Lookup VA 0x%x",
+                         DEBUG_NAME,
+                         {tlb_if.lookupPageVA, CCI_PT_4KB_PAGE_OFFSET_BITS'(0), 6'b0});
+            end
 
-                if (tlb_if.lookupValid[p])
-                begin
-                    $display("TLB %s: Hit chan %0d, idx %0d, way %0d, VA 0x%x, PA 0x%x",
-                             DEBUG_NAME,
-                             p, target_tlb_idx(stg_state[NUM_TLB_LOOKUP_PIPE_STAGES][p].lookup_page_va),
-                             lookup_way_hit[p],
-                             {stg_state[NUM_TLB_LOOKUP_PIPE_STAGES][p].lookup_page_va, CCI_PT_PAGE_OFFSET_BITS'(0), 6'b0},
-                             {tlb_if.lookupRspPagePA[p], CCI_PT_PAGE_OFFSET_BITS'(0), 6'b0});
-                end
+            if (tlb_if.lookupRspValid)
+            begin
+                $display("VTP TLB %s: Hit idx %0d, way %0d, VA 0x%x, PA 0x%x",
+                         DEBUG_NAME,
+                         target_tlb_idx(stg_state[NUM_TLB_LOOKUP_PIPE_STAGES].lookup_page_va),
+                         lookup_way_hit,
+                         {stg_state[NUM_TLB_LOOKUP_PIPE_STAGES].lookup_page_va, CCI_PT_PAGE_OFFSET_BITS'(0), 6'b0},
+                         {tlb_if.lookupRspPagePA, CCI_PT_PAGE_OFFSET_BITS'(0), 6'b0});
             end
 
             if (fill_state == STATE_TLB_FILL_INSERT)
@@ -661,7 +616,7 @@ module cci_mpf_shim_vtp_tlb
                 begin
                     if (tlb_wen[way])
                     begin
-                        $display("TLB %s: Insert idx %0d, way %0d, VA 0x%x, PA 0x%x",
+                        $display("VTP TLB %s: Insert idx %0d, way %0d, VA 0x%x, PA 0x%x",
                                  DEBUG_NAME,
                                  tlb_waddr, way,
                                  {tlb_wdata.tag, tlb_waddr, CCI_PT_PAGE_OFFSET_BITS'(0), 6'b0},
@@ -672,5 +627,5 @@ module cci_mpf_shim_vtp_tlb
         end
     end
 
-endmodule // cci_mpf_shim_vtp_tlb
+endmodule // cci_mpf_svc_vtp_tlb
 

@@ -354,7 +354,10 @@ module cci_mpf_prim_heap_ctrl
             init_idx <= t_idx'(2);
             initialized <= 1'b0;
 
-            num_free <= t_idx'(0);
+            // Reserve two entries that must stay on the free list.
+            // This guarantees that neither free_head_idx ever goes
+            // NULL, which would require managing a special case.
+            num_free <= t_idx'(N_ENTRIES - 2);
             free_idx_avail <= 1'b0;
         end
         else
@@ -367,31 +370,26 @@ module cci_mpf_prim_heap_ctrl
                 begin
                     // Initialization complete
                     initialized <= 1'b1;
-
-                    // Reserve two entries that must stay on the free list.
-                    // This guarantees that neither free_head_idx ever goes
-                    // NULL, which would require managing a special case.
-                    num_free <= t_idx'(N_ENTRIES - 2);
                     free_idx_avail <= 1'b1;
 
                     assert (N_ENTRIES > 2 + MIN_FREE_SLOTS) else
                        $fatal("cci_mpf_prim_heap: Heap too small");
                 end
             end
-            else
+            else if (free_q != pop_free)
             begin
-                if (free_q && ! pop_free)
+                if (free_q)
                 begin
                     num_free <= num_free + t_idx'(1);
-                    free_idx_avail <= ((num_free + t_idx'(1)) > t_idx'(MIN_FREE_SLOTS));
+                    free_idx_avail <= (num_free >= t_idx'(MIN_FREE_SLOTS));
 
                     assert (num_free < N_ENTRIES - 2) else
                        $fatal("cci_mpf_prim_heap: Too many free items. Pushed one twice?");
                 end
-                else if (! free_q && pop_free)
+                else
                 begin
                     num_free <= num_free - t_idx'(1);
-                    free_idx_avail <= ((num_free - t_idx'(1)) > t_idx'(MIN_FREE_SLOTS));
+                    free_idx_avail <= (num_free > t_idx'(MIN_FREE_SLOTS+1));
 
                     assert (num_free != 0) else
                        $fatal("cci_mpf_prim_heap: alloc from empty heap!");

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2015, Intel Corporation
+// Copyright (c) 2016, Intel Corporation
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -29,65 +29,69 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 //
-// FIFO1 --
-//   A FIFO with a single storage element allowing only deq or enq in a cycle
-//   but not both.
+// Round-robin arbiter, derived from the Altera Advanced Synthesis Cookbook.
 //
 
-module cci_mpf_prim_fifo1
-  #(parameter N_DATA_BITS = 32)
-    (input  logic clk,
-     input  logic reset,
+module cci_mpf_prim_arb_rr
+  #(
+    parameter NUM_CLIENTS = 0
+    )
+   (
+    input  logic clk,
+    input  logic reset,
 
-     input  logic [N_DATA_BITS-1 : 0] enq_data,
-     input  logic                     enq_en,
-     output logic                     notFull,
+    input  logic ena,
+    input  logic [NUM_CLIENTS-1: 0] request,
 
-     output logic [N_DATA_BITS-1 : 0] first,
-     input  logic                     deq_en,
-     output logic                     notEmpty
-     );
-     
-    logic [N_DATA_BITS-1 : 0] data;
-    logic valid;
+    // One hot grant (same cycle as request)
+    output logic [NUM_CLIENTS-1 : 0] grant,
+    output logic [$clog2(NUM_CLIENTS)-1 : 0] grantIdx
+    );
 
-    assign first = data;
-    assign notFull = ! valid;
-    assign notEmpty = valid;
+    typedef logic [NUM_CLIENTS-1 : 0] t_vec;
+    typedef logic [2*NUM_CLIENTS-1 : 0] t_dbl_vec;
 
+    // Priority (one hot)
+    t_vec base;
+
+    t_dbl_vec dbl_request;
+    assign dbl_request = {request, request};
+
+    t_dbl_vec dbl_grant;
+    assign dbl_grant = dbl_request & ~(dbl_request - base);
+
+    t_vec grant_reduce;
+    assign grant_reduce = dbl_grant[NUM_CLIENTS-1 : 0] |
+                          dbl_grant[2*NUM_CLIENTS-1 : NUM_CLIENTS];
+
+    always_comb
+    begin
+        grantIdx = 0;
+        for (int i = 0; i < NUM_CLIENTS; i = i + 1)
+        begin
+            grant[i] = grant_reduce[i] && ena;
+
+            if (grant_reduce[i])
+            begin
+                grantIdx = $clog2(NUM_CLIENTS)'(i);
+            end
+        end
+    end
+
+    // Record winner for next cycle's priority
     always_ff @(posedge clk)
     begin
         if (reset)
         begin
-            valid <= 1'b0;
+            base <= t_vec'(1);
         end
-        else if (deq_en)
+        else if (ena && |(request))
         begin
-            valid <= 1'b0;
-
-            assert (notEmpty) else
-                $fatal("cci_mpf_prim_fifo1: Can't DEQ when empty!");
-            assert (! enq_en) else
-                $fatal("cci_mpf_prim_fifo1: Can't DEQ and ENQ in same cycle!");
-        end
-        else if (enq_en)
-        begin
-            valid <= 1'b1;
-
-            assert (notFull) else
-                $fatal("cci_mpf_prim_fifo1: Can't ENQ when full!");
+            // Rotate grant left so that the slot after the current winner
+            // is given priority.
+            base <= { grant_reduce[NUM_CLIENTS-2 : 0],
+                      grant_reduce[NUM_CLIENTS-1] };
         end
     end
 
-    // Write the data as long as the FIFO isn't full.  This leaves the
-    // data path independent of control.  notFull/notEmpty will track
-    // the control messages.
-    always_ff @(posedge clk)
-    begin
-        if (notFull)
-        begin
-            data <= enq_data;
-        end
-    end
-
-endmodule // cci_mpf_prim_fifo1
+endmodule // cci_mpf_prim_arb_rr

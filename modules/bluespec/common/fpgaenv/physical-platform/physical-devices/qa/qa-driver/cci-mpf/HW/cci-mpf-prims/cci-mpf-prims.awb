@@ -5,6 +5,7 @@
 
 %sources -t VERILOG_H  -v PRIVATE cci_mpf_prim_hash.vh
 
+%sources -t VERILOG    -v PRIVATE cci_mpf_prim_arb_rr.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_prim_fifo1.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_prim_fifo2.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_prim_fifo_bram.sv

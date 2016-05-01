@@ -56,11 +56,9 @@ interface cci_mpf_csrs();
 
     // Events: these wires fire to indicate an event. The CSR shim sums
     // events into counters.
-    logic vtp_out_event_4kb_hit_c0;
-    logic vtp_out_event_4kb_hit_c1;
+    logic vtp_out_event_4kb_hit;
     logic vtp_out_event_4kb_miss;
-    logic vtp_out_event_2mb_hit_c0;
-    logic vtp_out_event_2mb_hit_c1;
+    logic vtp_out_event_2mb_hit;
     logic vtp_out_event_2mb_miss;
     logic vtp_out_event_pt_walk_busy;
 
@@ -91,11 +89,9 @@ interface cci_mpf_csrs();
         );
     modport csr_events
        (
-        input vtp_out_event_4kb_hit_c0,
-        input vtp_out_event_4kb_hit_c1,
+        input vtp_out_event_4kb_hit,
         input vtp_out_event_4kb_miss,
-        input vtp_out_event_2mb_hit_c0,
-        input vtp_out_event_2mb_hit_c1,
+        input vtp_out_event_2mb_hit,
         input vtp_out_event_2mb_miss,
         input vtp_out_event_pt_walk_busy
         );
@@ -108,11 +104,9 @@ interface cci_mpf_csrs();
         );
     modport vtp_events
        (
-        output vtp_out_event_4kb_hit_c0,
-        output vtp_out_event_4kb_hit_c1,
+        output vtp_out_event_4kb_hit,
         output vtp_out_event_4kb_miss,
-        output vtp_out_event_2mb_hit_c0,
-        output vtp_out_event_2mb_hit_c1,
+        output vtp_out_event_2mb_hit,
         output vtp_out_event_2mb_miss,
         output vtp_out_event_pt_walk_busy
         );

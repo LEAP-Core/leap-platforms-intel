@@ -9,7 +9,7 @@
 module ccip_wires_to_mpf
   #(
     parameter REGISTER_INPUTS = 1,
-    parameter REGISTER_OUTPUTS = 0
+    parameter REGISTER_OUTPUTS = 1
     )
    (
     // -------------------------------------------------------------------

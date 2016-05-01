@@ -35,7 +35,10 @@
 
 module cci_mpf_prim_fifo2
   #(
-    parameter N_DATA_BITS = 32
+    parameter N_DATA_BITS = 32,
+
+    // Register output if non-zero
+    parameter REGISTER_OUTPUT = 0
     )
    (
     input  logic clk,
@@ -52,6 +55,12 @@ module cci_mpf_prim_fifo2
 
     logic almostFull;
 
-    cci_mpf_prim_fifo_lutram#(.N_DATA_BITS(N_DATA_BITS), .N_ENTRIES(2)) fifo(.*);
+    cci_mpf_prim_fifo_lutram
+      #(
+        .N_DATA_BITS(N_DATA_BITS),
+        .N_ENTRIES(2),
+        .REGISTER_OUTPUT(REGISTER_OUTPUT)
+        )
+      fifo(.*);
 
 endmodule // cci_mpf_prim_fifo2

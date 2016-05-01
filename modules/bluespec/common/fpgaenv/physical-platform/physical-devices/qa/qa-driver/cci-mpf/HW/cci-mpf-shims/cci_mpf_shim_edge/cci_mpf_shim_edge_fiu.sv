@@ -293,6 +293,54 @@ module cci_mpf_shim_edge_fiu
     // Pipeline c1 Tx requests, waiting for heap data.
     always_ff @(posedge clk)
     begin
+        stg1_packet_is_new <= fiu_c1Tx_deq;
+
+        // Head of the pipeline
+        if (fiu_c1Tx_deq)
+        begin
+            // Pipeline is moving and a new request is available
+            stg1_fiu_c1Tx <= fiu_c1Tx_first;
+
+            // The heap data for the SOP is definitely available
+            // since it arrived with the header.
+            stg1_fiu_c1Tx_sop <= 1'b1;
+            stg1_fiu_wr_beat_idx <= 0;
+            stg1_fiu_wr_beats_rem <= fiu_c1Tx_first.hdr.base.cl_len;
+
+            wr_heap_deq_idx <= t_write_heap_idx'(fiu_c1Tx_first.data);
+        end
+        else if (stg1_packet_done)
+        begin
+            // Pipeline is moving but no new request is available
+            stg1_fiu_c1Tx <= cci_c1Tx_clearValids();
+        end
+        else if (stg1_flit_en)
+        begin
+            // In the middle of a multi-beat request
+            stg1_fiu_c1Tx_sop <= 1'b0;
+            stg1_fiu_wr_beat_idx <= stg1_fiu_wr_beat_idx + 1;
+            stg1_fiu_wr_beats_rem <= stg1_fiu_wr_beats_rem - 1;
+        end
+
+        if (wr_req_may_fire)
+        begin
+            // Write request this cycle
+            stg2_fiu_c1Tx <= stg1_fiu_c1Tx;
+            // SOP set only first first beat in a multi-beat packet
+            stg2_fiu_c1Tx.hdr.base.sop <= stg1_fiu_c1Tx_sop;
+            // Low bits of aligned address reflect the beat
+            stg2_fiu_c1Tx.hdr.base.address[$bits(t_ccip_clNum)-1 : 0] <=
+                stg1_fiu_c1Tx.hdr.base.address[$bits(t_ccip_clNum)-1 : 0] |
+                stg1_fiu_wr_beat_idx;
+        end
+        else
+        begin
+            // Nothing starting this cycle
+            stg2_fiu_c1Tx <= cci_c1Tx_clearValids();
+        end
+
+        stg3_fiu_c1Tx <= stg2_fiu_c1Tx;
+
         if (reset)
         begin
             stg1_fiu_c1Tx_sop <= 1'b1;
@@ -303,56 +351,6 @@ module cci_mpf_shim_edge_fiu
             stg1_fiu_c1Tx <= cci_c1Tx_clearValids();
             stg2_fiu_c1Tx <= cci_c1Tx_clearValids();
             stg3_fiu_c1Tx <= cci_c1Tx_clearValids();
-        end
-        else
-        begin
-            stg1_packet_is_new <= fiu_c1Tx_deq;
-
-            // Head of the pipeline
-            if (fiu_c1Tx_deq)
-            begin
-                // Pipeline is moving and a new request is available
-                stg1_fiu_c1Tx <= fiu_c1Tx_first;
-
-                // The heap data for the SOP is definitely available
-                // since it arrived with the header.
-                stg1_fiu_c1Tx_sop <= 1'b1;
-                stg1_fiu_wr_beat_idx <= 0;
-                stg1_fiu_wr_beats_rem <= fiu_c1Tx_first.hdr.base.cl_len;
-
-                wr_heap_deq_idx <= t_write_heap_idx'(fiu_c1Tx_first.data);
-            end
-            else if (stg1_packet_done)
-            begin
-                // Pipeline is moving but no new request is available
-                stg1_fiu_c1Tx <= cci_c1Tx_clearValids();
-            end
-            else if (stg1_flit_en)
-            begin
-                // In the middle of a multi-beat request
-                stg1_fiu_c1Tx_sop <= 1'b0;
-                stg1_fiu_wr_beat_idx <= stg1_fiu_wr_beat_idx + 1;
-                stg1_fiu_wr_beats_rem <= stg1_fiu_wr_beats_rem - 1;
-            end
-
-            if (wr_req_may_fire)
-            begin
-                // Write request this cycle
-                stg2_fiu_c1Tx <= stg1_fiu_c1Tx;
-                // SOP set only first first beat in a multi-beat packet
-                stg2_fiu_c1Tx.hdr.base.sop <= stg1_fiu_c1Tx_sop;
-                // Low bits of aligned address reflect the beat
-                stg2_fiu_c1Tx.hdr.base.address[$bits(t_ccip_clNum)-1 : 0] <=
-                    stg1_fiu_c1Tx.hdr.base.address[$bits(t_ccip_clNum)-1 : 0] |
-                    stg1_fiu_wr_beat_idx;
-            end
-            else
-            begin
-                // Nothing starting this cycle
-                stg2_fiu_c1Tx <= cci_c1Tx_clearValids();
-            end
-
-            stg3_fiu_c1Tx <= stg2_fiu_c1Tx;
         end
     end
 

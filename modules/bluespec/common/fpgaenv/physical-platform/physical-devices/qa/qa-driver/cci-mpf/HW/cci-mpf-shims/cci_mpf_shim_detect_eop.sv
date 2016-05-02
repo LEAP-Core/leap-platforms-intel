@@ -384,7 +384,8 @@ module cci_mpf_shim_detect_eop_track_flits
       #(
         .N_ENTRIES(MAX_ACTIVE_REQS),
         .N_DATA_BITS($bits(t_cci_clNum)),
-        .N_OUTPUT_REG_STAGES(1)
+        .N_OUTPUT_REG_STAGES(1),
+        .REGISTER_WRITES(1)
         )
       wr_rsp_cnt
        (

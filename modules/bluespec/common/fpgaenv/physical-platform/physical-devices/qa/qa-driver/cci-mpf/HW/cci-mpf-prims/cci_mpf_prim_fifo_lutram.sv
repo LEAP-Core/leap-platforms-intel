@@ -225,19 +225,15 @@ module cci_mpf_prim_fifo_lutram_base
     // Update count of live values
     always_ff @(posedge clk)
     begin
+        valid_cnt <= valid_cnt_next;
+        notFull <= (valid_cnt_next != t_COUNTER'(N_ENTRIES));
+        almostFull <= (valid_cnt_next >= t_COUNTER'(N_ENTRIES - THRESHOLD));
+        notEmpty <= (valid_cnt_next != t_COUNTER'(0));
+
         if (reset)
         begin
             valid_cnt <= t_COUNTER'(0);
-            notFull <= 1'b1;
-            almostFull <= 1'b0;
             notEmpty <= 1'b0;
-        end
-        else
-        begin
-            valid_cnt <= valid_cnt_next;
-            notFull <= (valid_cnt_next != t_COUNTER'(N_ENTRIES));
-            almostFull <= (valid_cnt_next >= t_COUNTER'(N_ENTRIES - THRESHOLD));
-            notEmpty <= (valid_cnt_next != t_COUNTER'(0));
         end
     end
 

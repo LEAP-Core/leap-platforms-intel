@@ -284,6 +284,7 @@ module cci_mpf_prim_rob
         .N_ENTRIES(N_ENTRIES),
         .N_DATA_BITS(1),
         .N_OUTPUT_REG_STAGES(VALID_RD_LATENCY - 1),
+        .REGISTER_WRITES(1),
         .INIT_VALUE(1'b0)
         )
       validBits

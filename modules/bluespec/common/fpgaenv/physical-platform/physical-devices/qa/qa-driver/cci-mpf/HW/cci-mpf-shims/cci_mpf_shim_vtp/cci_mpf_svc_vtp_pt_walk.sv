@@ -720,14 +720,16 @@ module cci_mpf_svc_vtp_pt_walk_cache
     assign lookup_idx = cacheIdx(reqPageIdxVec, reqWalkDepth);
     t_pt_entry_tag lookup_tag;
 
-    logic reset_tlb;
+    logic n_reset_tlb[0:1];
     always @(posedge clk)
     begin
-        reset_tlb <= csrs.vtp_in_mode.inval_translation_cache;
+        n_reset_tlb[1] <= ~csrs.vtp_in_mode.inval_translation_cache;
+        n_reset_tlb[0] <= n_reset_tlb[1];
 
         if (reset)
         begin
-            reset_tlb <= 1'b1;
+            n_reset_tlb[1] <= 1'b0;
+            n_reset_tlb[0] <= 1'b0;
         end
     end
 
@@ -740,7 +742,7 @@ module cci_mpf_svc_vtp_pt_walk_cache
       tag
        (
         .clk,
-        .reset(reset_tlb),
+        .reset(~n_reset_tlb[0]),
         .rdy(tag_rdy),
 
         .waddr(ins_idx),

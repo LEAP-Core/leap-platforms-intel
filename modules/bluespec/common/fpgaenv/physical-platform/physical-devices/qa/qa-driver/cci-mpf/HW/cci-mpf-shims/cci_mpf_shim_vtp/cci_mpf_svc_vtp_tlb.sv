@@ -169,14 +169,16 @@ module cci_mpf_svc_vtp_tlb
 
     // Reset (invalidate) the TLB when requested by SW.
     // inval_translation_cache is held for only one cycle.
-    logic reset_tlb;
+    logic n_reset_tlb[0:1];
     always @(posedge clk)
     begin
-        reset_tlb <= csrs.vtp_in_mode.inval_translation_cache;
+        n_reset_tlb[1] <= ~csrs.vtp_in_mode.inval_translation_cache;
+        n_reset_tlb[0] <= n_reset_tlb[1];
 
         if (reset)
         begin
-            reset_tlb <= 1'b1;
+            n_reset_tlb[1] <= 1'b0;
+            n_reset_tlb[0] <= 1'b0;
         end
     end
 
@@ -194,7 +196,7 @@ module cci_mpf_svc_vtp_tlb
               tlb
                (
                 .clk,
-                .reset(reset_tlb),
+                .reset(~n_reset_tlb[0]),
                 .rdy(tlb_rdy[w]),
 
                 .waddr(tlb_waddr),
@@ -474,6 +476,10 @@ module cci_mpf_svc_vtp_tlb
                     // Only accept one fill at a time
                     tlb_if.fillRdy <= 1'b0;
                 end
+                else
+                begin
+                    tlb_if.fillRdy <= 1'b1;
+                end
             end
 
           STATE_TLB_FILL_REQ_WAY:
@@ -503,7 +509,7 @@ module cci_mpf_svc_vtp_tlb
                 // requests to the same miss VA.  Fills are only attempted
                 // when the state is idle.
                 fill_bubble <= fill_bubble + 1;
-                if (fill_bubble == 0)
+                if (&(fill_bubble) == 1'b1)
                 begin
                     fill_state <= STATE_TLB_FILL_IDLE;
                     tlb_if.fillRdy <= 1'b1;
@@ -514,8 +520,7 @@ module cci_mpf_svc_vtp_tlb
         if (reset)
         begin
             fill_state <= STATE_TLB_FILL_IDLE;
-            fill_bubble <= 1;
-            tlb_if.fillRdy <= 1'b1;
+            fill_bubble <= 0;
         end
     end
 

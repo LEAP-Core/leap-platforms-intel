@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2015, Intel Corporation
+// Copyright (c) 2016, Intel Corporation
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -35,10 +35,7 @@
 
 module cci_mpf_prim_fifo2
   #(
-    parameter N_DATA_BITS = 32,
-
-    // Register output if non-zero
-    parameter REGISTER_OUTPUT = 0
+    parameter N_DATA_BITS = 32
     )
    (
     input  logic clk,
@@ -53,14 +50,50 @@ module cci_mpf_prim_fifo2
     output logic                     notEmpty
     );
 
-    logic almostFull;
+    logic [1:0] valid;
+    logic [N_DATA_BITS-1 : 0] data[0 : 1];
 
-    cci_mpf_prim_fifo_lutram
-      #(
-        .N_DATA_BITS(N_DATA_BITS),
-        .N_ENTRIES(2),
-        .REGISTER_OUTPUT(REGISTER_OUTPUT)
-        )
-      fifo(.*);
+    assign notFull = ~valid[0];
+    assign first = data[1];
+    assign notEmpty = valid[1];
+
+    always_ff @(posedge clk)
+    begin
+        // Target output slot if it is empty or dequeued this cycle
+        if (! valid[1] || deq_en)
+        begin
+            // Output slot will be valid next cycle if slot 0 has data
+            // or a new value is enqueued this cycle.  Both can't be
+            // true, so valid[0] will definitely be 0 next cycle.
+            valid[0] <= 1'b0;
+            valid[1] <= valid[0] || enq_en;
+            data[1] <= valid[0] ? data[0] : enq_data;
+        end
+        else
+        begin
+            // Target of enq is slot 0.  It will be valid if there was
+            // data and it didn't shift or if new data is enqueued.
+            valid[0] <= (valid[0] && ! deq_en) || enq_en;
+        end
+
+        // Speculatively store data if the slot is empty. If the slot
+        // was valid then no enqueue will be allowed.
+        if (! valid[0])
+        begin
+            data[0] <= enq_data;
+        end
+
+        if (reset)
+        begin
+            valid <= 2'b0;
+        end
+        else
+        begin
+            assert (! (enq_en && valid[0])) else
+                $fatal("cci_mpf_prim_fifo2: ENQ to full FIFO!");
+            assert (! (deq_en && ! valid[1])) else
+                $fatal("cci_mpf_prim_fifo2: DEQ from empty FIFO!");
+        end
+    end
 
 endmodule // cci_mpf_prim_fifo2

@@ -216,13 +216,11 @@ module cci_mpf_shim_vtp
 
     always_ff @(posedge clk)
     begin
+        c1chan_inBlocked <= (c1_order_sensitive && c1chan_notEmpty);
+
         if (reset)
         begin
-            c1chan_inBlocked <= 1'b1;
-        end
-        else
-        begin
-            c1chan_inBlocked <= (c1_order_sensitive && c1chan_notEmpty);
+            c1chan_inBlocked <= 1'b0;
         end
     end
 
@@ -449,14 +447,16 @@ module cci_mpf_shim_vtp_chan
 
     // Reset (invalidate) the TLB when requested by SW.
     // inval_translation_cache is held for only one cycle.
-    logic reset_tlb;
+    logic n_reset_tlb[0:1];
     always @(posedge clk)
     begin
-        reset_tlb <= csrs.vtp_in_mode.inval_translation_cache;
+        n_reset_tlb[1] <= ~csrs.vtp_in_mode.inval_translation_cache;
+        n_reset_tlb[0] <= n_reset_tlb[1];
 
         if (reset)
         begin
-            reset_tlb <= 1'b1;
+            n_reset_tlb[1] <= 1'b0;
+            n_reset_tlb[0] <= 1'b0;
         end
     end
 
@@ -469,7 +469,7 @@ module cci_mpf_shim_vtp_chan
       cache4kb
        (
         .clk,
-        .reset(reset_tlb),
+        .reset(~n_reset_tlb[0]),
         .rdy(cache_4kb_rdy),
 
         .wen(cache_4kb_upd_en),
@@ -515,7 +515,7 @@ module cci_mpf_shim_vtp_chan
       cache2mb
        (
         .clk,
-        .reset(reset_tlb),
+        .reset(~n_reset_tlb[0]),
         .rdy(cache_2mb_rdy),
 
         .wen(cache_2mb_upd_en),

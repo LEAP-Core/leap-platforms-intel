@@ -78,8 +78,7 @@ module cci_mpf_svc_vtp_pipe
     cci_mpf_prim_fifo2
       #(
         .N_DATA_BITS($bits(t_cci_mpf_shim_vtp_lookup_req) +
-                     $bits(t_cci_mpf_shim_vtp_port_idx)),
-        .REGISTER_OUTPUT(1)
+                     $bits(t_cci_mpf_shim_vtp_port_idx))
         )
       in_fifo
        (

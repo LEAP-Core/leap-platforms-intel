@@ -95,8 +95,11 @@ module cci_mpf
     // Maximum number of outstanding read and write requests per channel
     localparam MAX_ACTIVE_REQS = 128;
 
-    logic  reset;
-    assign reset = fiu.reset;
+    logic reset = 1'b1;
+    always @(posedge clk)
+    begin
+        reset <= fiu.reset;
+    end
 
 
     // ====================================================================

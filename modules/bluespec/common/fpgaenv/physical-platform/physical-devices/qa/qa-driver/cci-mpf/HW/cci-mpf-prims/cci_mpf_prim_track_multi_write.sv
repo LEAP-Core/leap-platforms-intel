@@ -91,13 +91,6 @@ module cci_mpf_prim_track_multi_write
 
             assert(packetActive == (nextBeatNum != 0)) else
                 $fatal("cci_mpf_prim_track_multi_write: packetActive out of phase");
-
-            // Check that the low address bits match the beat number.
-            // The start address of multi-line writes must be aligned to the
-            // total size of the reference.
-            assert(t_cci_clNum'(0) == ((c1Tx.hdr.base.address[$bits(t_cci_clNum)-1 : 0] ^ nextBeatNum) &
-                                       t_cci_clNum'(c1Tx.hdr.base.cl_len))) else
-                $fatal("cci_mpf_prim_track_multi_write: Incorrect address alignment");
         end
     end
 

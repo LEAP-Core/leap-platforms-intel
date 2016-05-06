@@ -712,6 +712,7 @@ package cci_mpf_if_pkg;
         begin
             r_out.hdr.ext.checkLoadStoreOrder = 0;
             r_out.hdr.ext.addrIsVirtual = 0;
+            r_out.hdr.base.cl_len = eCL_LEN_1;
         end
 
         return r_out;
@@ -731,6 +732,7 @@ package cci_mpf_if_pkg;
         begin
             r_out.hdr.ext.checkLoadStoreOrder = 0;
             r_out.hdr.ext.addrIsVirtual = 0;
+            r_out.hdr.base.cl_len = eCL_LEN_1;
         end
 
         return r_out;

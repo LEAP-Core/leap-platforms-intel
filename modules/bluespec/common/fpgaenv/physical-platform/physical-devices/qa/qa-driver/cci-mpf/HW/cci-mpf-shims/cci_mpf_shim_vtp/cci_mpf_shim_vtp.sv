@@ -59,8 +59,11 @@ module cci_mpf_shim_vtp
     cci_mpf_csrs.vtp csrs
     );
 
-    logic reset;
-    assign reset = fiu.reset;
+    logic reset = 1'b1;
+    always @(posedge clk)
+    begin
+        reset <= fiu.reset;
+    end
 
 
     // ====================================================================

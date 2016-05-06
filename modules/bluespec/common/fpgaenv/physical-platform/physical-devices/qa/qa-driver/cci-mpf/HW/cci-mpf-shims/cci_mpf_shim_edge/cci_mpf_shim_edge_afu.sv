@@ -59,7 +59,19 @@ module cci_mpf_shim_edge_afu
 
     logic reset;
     assign reset = fiu.reset;
-    assign afu.reset = fiu.reset;
+
+    // Have the AFU come out of reset a cycle late both to allow the MPF
+    // distributed reset tree to complete and to put the AFU in a separate
+    // reset domain.
+    initial
+    begin
+        afu.reset = 1'b1;
+    end
+
+    always @(posedge clk)
+    begin
+        afu.reset <= fiu.reset;
+    end
 
 
     //
@@ -191,9 +203,41 @@ module cci_mpf_shim_edge_afu
     assign afu.c0Rx = fiu.c0Rx;
     assign afu.c1Rx = fiu.c1Rx;
 
+    //
+    // The CCI spec. allows both address and cl_len of non-sop flits in a
+    // multi-beat packet to be don't care, which is rather annoying.
+    // Register the sop values and add a mux to recover them.
+    //
+    t_cci_clLen c1tx_sop_clLen;
+    t_cci_clAddr c1tx_sop_clAddr;
+
     always_ff @(posedge clk)
     begin
-        fiu.c1Tx <= cci_mpf_updC1TxCanonical(afu.c1Tx);
+        if (afu.c1Tx.hdr.base.sop == 1'b1)
+        begin
+            c1tx_sop_clLen <= afu.c1Tx.hdr.base.cl_len;
+            c1tx_sop_clAddr <= afu.c1Tx.hdr.base.address;
+        end
+    end
+
+    // Generate canonical c1Tx, including cl_len and address.
+    t_if_cci_mpf_c1_Tx afu_canon_c1Tx;
+
+    always_comb
+    begin
+        afu_canon_c1Tx = cci_mpf_updC1TxCanonical(afu.c1Tx);
+
+        if (! afu.c1Tx.hdr.base.sop)
+        begin
+            afu_canon_c1Tx.hdr.base.cl_len = c1tx_sop_clLen;
+            afu_canon_c1Tx.hdr.base.address = c1tx_sop_clAddr;
+        end
+    end
+
+
+    always_ff @(posedge clk)
+    begin
+        fiu.c1Tx <= cci_mpf_updC1TxCanonical(afu_canon_c1Tx);
 
         // The cache line's value stored in fiu.c1Tx.data is no longer needed
         // in the pipeline.  Store 'x but use the low bits to hold the
@@ -207,18 +251,15 @@ module cci_mpf_shim_edge_afu
         //
         // Only pass requests that are either the end of a write or
         // that aren't writes.
-        if (cci_mpf_c1TxIsWriteReq_noCheckValid(afu.c1Tx))
+        if (cci_mpf_c1TxIsWriteReq_noCheckValid(afu_canon_c1Tx))
         begin
             // Wait for the final flit to arrive and be buffered, thus
             // guaranteeing that all the data is ready to be written
             // as the packet exits to the FIU.
-            fiu.c1Tx.valid <= afu.c1Tx.valid &&
-                              (wr_heap_enq_clNum == afu.c1Tx.hdr.base.cl_len);
+            fiu.c1Tx.valid <= afu_canon_c1Tx.valid &&
+                              (wr_heap_enq_clNum == afu_canon_c1Tx.hdr.base.cl_len);
 
-            // Revert the address to the start of packet address
             fiu.c1Tx.hdr.base.sop <= 1'b1;
-            fiu.c1Tx.hdr.base.address[1:0] <= afu.c1Tx.hdr.base.address[1:0] ^
-                                              afu.c1Tx.hdr.base.cl_len;
         end
     end
 
@@ -233,14 +274,13 @@ module cci_mpf_shim_edge_afu
        (
         .clk,
         .reset,
-        .c1Tx(afu.c1Tx),
+        .c1Tx(afu_canon_c1Tx),
         .c1Tx_en(1'b1),
         .eop(afu_wr_eop),
         .packetActive(afu_wr_packet_active),
         .nextBeatNum(wr_heap_enq_clNum)
         );
 
-    t_ccip_clAddr afu_wr_prev_addr;
     t_cci_clLen afu_wr_prev_cl_len;
 
     always_ff @(posedge clk)
@@ -257,7 +297,7 @@ module cci_mpf_shim_edge_afu
                     $fatal("cci_mpf_shim_edge_connect: Multi-beat read address must be naturally aligned");
             end
 
-            if (cci_mpf_c1TxIsWriteReq(afu.c1Tx))
+            if (cci_mpf_c1TxIsWriteReq(afu_canon_c1Tx))
             begin
                 assert(afu.c1Tx.hdr.base.sop != afu_wr_packet_active) else
                     if (! afu.c1Tx.hdr.base.sop)
@@ -267,20 +307,16 @@ module cci_mpf_shim_edge_afu
 
                 if (afu.c1Tx.hdr.base.sop)
                 begin
-                    assert ((afu.c1Tx.hdr.base.address[1:0] & afu.c1Tx.hdr.base.cl_len) == 2'b0) else
+                    assert ((afu.c1Tx.hdr.base.address[1:0] & afu_canon_c1Tx.hdr.base.cl_len) == 2'b0) else
                         $fatal("cci_mpf_shim_edge_connect: Multi-beat write address must be naturally aligned");
                 end
                 else
                 begin
-                    assert (afu_wr_prev_cl_len == afu.c1Tx.hdr.base.cl_len) else
+                    assert (afu_wr_prev_cl_len == afu_canon_c1Tx.hdr.base.cl_len) else
                         $fatal("cci_mpf_shim_edge_connect: cl_len must be the same in all beats of a multi-line write");
-
-                    assert ((afu_wr_prev_addr + 1) == afu.c1Tx.hdr.base.address) else
-                        $fatal("cci_mpf_shim_edge_connect: Address must increment with each beat in multi-line write");
                 end
 
-                afu_wr_prev_addr <= afu.c1Tx.hdr.base.address;
-                afu_wr_prev_cl_len <= afu.c1Tx.hdr.base.cl_len;
+                afu_wr_prev_cl_len <= afu_canon_c1Tx.hdr.base.cl_len;
             end
         end
     end

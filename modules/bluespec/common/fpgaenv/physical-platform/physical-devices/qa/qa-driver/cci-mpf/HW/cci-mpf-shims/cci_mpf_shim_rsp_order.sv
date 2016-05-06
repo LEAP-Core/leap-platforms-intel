@@ -93,9 +93,13 @@ module cci_mpf_shim_rsp_order
     cci_mpf_if.to_afu afu
     );
 
-    logic reset;
-    assign reset = fiu.reset;
     assign afu.reset = fiu.reset;
+
+    logic reset = 1'b1;
+    always @(posedge clk)
+    begin
+        reset <= fiu.reset;
+    end
 
     // Index of a request
     localparam N_REQ_IDX_BITS = $clog2(MAX_ACTIVE_REQS);

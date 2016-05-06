@@ -102,9 +102,13 @@ module cci_mpf_shim_csr
     cci_mpf_csrs.csr_events events
     );
 
-    logic reset;
-    assign reset = fiu.reset;
     assign afu.reset = fiu.reset;
+
+    logic reset = 1'b1;
+    always @(posedge clk)
+    begin
+        reset <= fiu.reset;
+    end
 
     // Most connections flow straight through and are, at most, read in this shim.
     assign fiu.c0Tx = afu.c0Tx;

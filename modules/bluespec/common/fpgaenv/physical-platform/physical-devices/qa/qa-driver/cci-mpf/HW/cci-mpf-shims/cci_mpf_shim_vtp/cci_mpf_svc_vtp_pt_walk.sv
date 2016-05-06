@@ -245,19 +245,27 @@ module cci_mpf_svc_vtp_pt_walk
     // Add a register stage to incoming read responses to relax timing.
     //
     t_cci_clData ptReadData_q;
+    logic [63 : 0] ptReadData_qq;    // Line reduced to a word
     logic ptReadDataEn_q;
+    logic ptReadDataEn_qq;
+
     always_ff @(posedge clk)
     begin
         if (reset)
         begin
             ptReadDataEn_q <= 1'b0;
+            ptReadDataEn_qq <= 1'b0;
         end
         else
         begin
             ptReadDataEn_q <= pt_walk.readDataEn;
+            ptReadDataEn_qq <= ptReadDataEn_q;
         end
 
         ptReadData_q <= pt_walk.readData;
+
+        // pt_read_rsp_word is the word needed from ptReadData_q
+        ptReadData_qq <= pt_read_rsp_word;
     end
 
     //
@@ -400,17 +408,17 @@ module cci_mpf_svc_vtp_pt_walk
           STATE_PT_WALK_READ_WAIT_RSP:
             begin
                 // Wait for PT read response
-                if (ptReadDataEn_q)
+                if (ptReadDataEn_qq)
                 begin
                     state <= STATE_PT_WALK_READ_RSP;
 
-                    pt_walk_cur_status <= cci_mpf_ptWalkWordToStatus(pt_read_rsp_word);
+                    pt_walk_cur_status <= cci_mpf_ptWalkWordToStatus(ptReadData_qq);
 
                     // Extract the address of a line from the entry.
                     pt_walk_page_from_cache <= 1'b0;
                     pt_walk_next_page <=
-                        vtp4kbPageIdxFromPA(pt_read_rsp_word[$clog2(CCI_CLDATA_WIDTH / 8) +:
-                                                             CCI_CLADDR_WIDTH]);
+                        vtp4kbPageIdxFromPA(ptReadData_qq[$clog2(CCI_CLDATA_WIDTH / 8) +:
+                                                          CCI_CLADDR_WIDTH]);
                 end
             end
 

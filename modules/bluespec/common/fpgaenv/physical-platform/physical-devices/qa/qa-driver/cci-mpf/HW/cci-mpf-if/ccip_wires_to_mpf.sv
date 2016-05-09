@@ -4,7 +4,7 @@
 
 `include "cci_mpf_if.vh"
 
-`ifdef USE_PLATFORM_CCIP
+`ifdef MPF_HOST_IFC_CCIP
 
 module ccip_wires_to_mpf
   #(

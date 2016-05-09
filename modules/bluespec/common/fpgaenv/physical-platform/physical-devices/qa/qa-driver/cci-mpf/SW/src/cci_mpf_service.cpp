@@ -164,6 +164,11 @@ btBool MPF::init( IBase               *pclientBase,
       filter.Add( ALI_GETFEATURE_ID_KEY, static_cast<ALI_GETFEATURE_ID_DATATYPE>(mpfFID) );
       filter.Add( ALI_GETFEATURE_GUID_KEY, (ALI_GETFEATURE_GUID_DATATYPE)MPF_VTP_BBB_GUID );
 
+      // FIXME: This is here only because of a caching bug in
+      // ASEALIAFU::mmioGetFeatureAddress() in SR-5.0.2-Beta. Once fixed
+      // this call can be removed.
+      m_pALIMMIO->mmioGetAddress();
+
       if ( false == m_pALIMMIO->mmioGetFeatureOffset( &m_vtpDFHOffset, filter ) ) {
          // No VTP found - this could mean that VTP is not enabled in MPF
          hasVTP = false;
@@ -176,7 +181,8 @@ btBool MPF::init( IBase               *pclientBase,
    // FIXME: may fail silently, e.g. on wrong datatype.
    // Note: this assumes that m_vtpDFHOffset will not be updated if key is not
    // found.
-   if ( ENamedValuesOK == optArgs.Get(MPF_VTP_DFH_OFFSET_KEY, &m_vtpDFHOffset) ) {
+   if ( ! hasVTP &&
+        (ENamedValuesOK == optArgs.Get(MPF_VTP_DFH_OFFSET_KEY, &m_vtpDFHOffset)) ) {
       AAL_DEBUG(LM_AFU, "Using directly specified MPF_VTP_DFH_OFFSET)." <<
             std::endl);
       hasVTP = true;

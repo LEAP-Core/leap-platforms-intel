@@ -39,7 +39,9 @@
 //
 
 // MMIO address range of MPF CSRs
-parameter CCI_MPF_CSR_SIZE = CCI_MPF_VTP_CSR_SIZE + CCI_MPF_WRO_CSR_SIZE;
+parameter CCI_MPF_CSR_SIZE = CCI_MPF_VTP_CSR_SIZE +
+                             CCI_MPF_RSP_ORDER_CSR_SIZE +
+                             CCI_MPF_WRO_CSR_SIZE;
 
 // Size in 64 bit words
 parameter CCI_MPF_CSR_SIZE64 = (CCI_MPF_CSR_SIZE >> 3);
@@ -51,7 +53,10 @@ typedef logic [$clog2(CCI_MPF_CSR_SIZE64)-1:0] t_mpf_csr_offset;
 // similar to base addresses above, but the origin is the first feature
 // managed by MPF.
 parameter CCI_MPF_VTP_CSR_OFFSET = 0;
-parameter CCI_MPF_WRO_CSR_OFFSET = CCI_MPF_VTP_CSR_OFFSET + CCI_MPF_VTP_CSR_SIZE;
+parameter CCI_MPF_RSP_ORDER_CSR_OFFSET = CCI_MPF_VTP_CSR_OFFSET +
+                                         CCI_MPF_VTP_CSR_SIZE;
+parameter CCI_MPF_WRO_CSR_OFFSET = CCI_MPF_RSP_ORDER_CSR_OFFSET +
+                                   CCI_MPF_RSP_ORDER_CSR_SIZE;
 
 // Size of the intermediate statistics counter bucket. These buckets
 // are added periodically to the CSR memory by cci_mpf_shim_csr.
@@ -86,6 +91,7 @@ module cci_mpf_shim_csr
 
     // Is shims enabled?
     parameter MPF_ENABLE_VTP = 0,
+    parameter MPF_ENABLE_RSP_ORDER = 0,
     parameter MPF_ENABLE_WRO = 0
     )
    (
@@ -123,7 +129,10 @@ module cci_mpf_shim_csr
 
     // Base address of each shim's CSR range
     localparam CCI_MPF_VTP_CSR_BASE = DFH_MMIO_BASE_ADDR;
-    localparam CCI_MPF_WRO_CSR_BASE = CCI_MPF_VTP_CSR_BASE + CCI_MPF_VTP_CSR_SIZE;
+    localparam CCI_MPF_RSP_ORDER_CSR_BASE = CCI_MPF_VTP_CSR_BASE +
+                                            CCI_MPF_VTP_CSR_SIZE;
+    localparam CCI_MPF_WRO_CSR_BASE = CCI_MPF_RSP_ORDER_CSR_BASE +
+                                      CCI_MPF_RSP_ORDER_CSR_SIZE;
 
 
     // Register incoming requests
@@ -181,12 +190,25 @@ module cci_mpf_shim_csr
                 csrs.vtp_in_page_table_base <= t_cci_clAddr'(c0_rx.data);
                 csrs.vtp_in_page_table_base_valid <= 1'b1;
             end
+
+            if (csrAddrMatches(c0_rx, CCI_MPF_RSP_ORDER_CSR_BASE +
+                                      CCI_MPF_RSP_ORDER_CSR_C0TX_VA_VC_MAP))
+            begin
+                csrs.rsp_order_c0Tx_va_vc_map <= c0_rx.data[63:0];
+                csrs.rsp_order_c0Tx_va_vc_map_valid <= 1'b1;
+            end
+            else
+            begin
+                // VC map update held only one cycle
+                csrs.rsp_order_c0Tx_va_vc_map_valid <= 1'b0;
+            end
         end
 
         if (reset)
         begin
             csrs.vtp_in_mode <= t_cci_mpf_vtp_csr_mode'(0);
             csrs.vtp_in_page_table_base_valid <= 1'b0;
+            csrs.rsp_order_c0Tx_va_vc_map_valid <= 1'b0;
         end
     end
 
@@ -218,8 +240,10 @@ module cci_mpf_shim_csr
         .DFH_MMIO_NEXT_ADDR(DFH_MMIO_NEXT_ADDR),
 
         .CCI_MPF_VTP_CSR_BASE(CCI_MPF_VTP_CSR_BASE),
+        .CCI_MPF_RSP_ORDER_CSR_BASE(CCI_MPF_RSP_ORDER_CSR_BASE),
         .CCI_MPF_WRO_CSR_BASE(CCI_MPF_WRO_CSR_BASE),
         .MPF_ENABLE_VTP(MPF_ENABLE_VTP),
+        .MPF_ENABLE_RSP_ORDER(MPF_ENABLE_RSP_ORDER),
         .MPF_ENABLE_WRO(MPF_ENABLE_WRO)
         )
       rd_mem
@@ -522,12 +546,6 @@ module cci_mpf_shim_csr_events
 
     logic consume_counters;
 
-    t_cci_mpf_stat_cnt vtp_4kb_hits;
-    t_cci_mpf_stat_cnt vtp_4kb_misses;
-    t_cci_mpf_stat_cnt vtp_2mb_hits;
-    t_cci_mpf_stat_cnt vtp_2mb_misses;
-    t_cci_mpf_stat_cnt vtp_pt_walk_busy_cycles;
-
 
     // ====================================================================
     //
@@ -565,34 +583,6 @@ module cci_mpf_shim_csr_events
         end
     end
 
-    always_comb
-    begin
-        stat_upd_offset_vec[0] =
-            t_mpf_csr_offset'((CCI_MPF_VTP_CSR_OFFSET +
-                               CCI_MPF_VTP_CSR_STAT_4KB_TLB_NUM_HITS) >> 3);
-        stat_upd_count_vec[0] = vtp_4kb_hits;
-
-        stat_upd_offset_vec[1] =
-            t_mpf_csr_offset'((CCI_MPF_VTP_CSR_OFFSET +
-                               CCI_MPF_VTP_CSR_STAT_4KB_TLB_NUM_MISSES) >> 3);
-        stat_upd_count_vec[1] = vtp_4kb_misses;
-
-        stat_upd_offset_vec[2] =
-            t_mpf_csr_offset'((CCI_MPF_VTP_CSR_OFFSET +
-                               CCI_MPF_VTP_CSR_STAT_2MB_TLB_NUM_HITS) >> 3);
-        stat_upd_count_vec[2] = vtp_2mb_hits;
-
-        stat_upd_offset_vec[3] =
-            t_mpf_csr_offset'((CCI_MPF_VTP_CSR_OFFSET +
-                               CCI_MPF_VTP_CSR_STAT_2MB_TLB_NUM_MISSES) >> 3);
-        stat_upd_count_vec[3] = vtp_2mb_misses;
-
-        stat_upd_offset_vec[4] =
-            t_mpf_csr_offset'((CCI_MPF_VTP_CSR_OFFSET +
-                               CCI_MPF_VTP_CSR_STAT_PT_WALK_BUSY_CYCLES) >> 3);
-        stat_upd_count_vec[4] = vtp_pt_walk_busy_cycles;
-    end
-
 
     // ====================================================================
     //
@@ -600,94 +590,45 @@ module cci_mpf_shim_csr_events
     //
     // ====================================================================
 
-    // Same as counters above, but 0 if counters are consumed this cycle
-    t_cci_mpf_stat_cnt vtp_4kb_hits_cur;
-    t_cci_mpf_stat_cnt vtp_4kb_misses_cur;
-    t_cci_mpf_stat_cnt vtp_2mb_hits_cur;
-    t_cci_mpf_stat_cnt vtp_2mb_misses_cur;
-    t_cci_mpf_stat_cnt vtp_pt_walk_busy_cycles_cur;
-    assign vtp_4kb_hits_cur = (consume_counters ? t_cci_mpf_stat_cnt'(0) : vtp_4kb_hits);
-    assign vtp_4kb_misses_cur = (consume_counters ? t_cci_mpf_stat_cnt'(0) : vtp_4kb_misses);
-    assign vtp_2mb_hits_cur = (consume_counters ? t_cci_mpf_stat_cnt'(0) : vtp_2mb_hits);
-    assign vtp_2mb_misses_cur = (consume_counters ? t_cci_mpf_stat_cnt'(0) : vtp_2mb_misses);
-    assign vtp_pt_walk_busy_cycles_cur = (consume_counters ? t_cci_mpf_stat_cnt'(0) : vtp_pt_walk_busy_cycles);
+    // Define a macro for updating a counter's register accumulator.
+    // Each counter gets a small register accumulator which is added
+    // to the main block-RAM counter after some timeout.
 
+    `define MPF_CSR_STAT_ACCUM(IDX, CSR_OFFSET, NAME, EVENT) \
+        t_cci_mpf_stat_cnt NAME; \
+        \
+        /* Map the counter to its position in the block RAM and CSR */ \
+        /* address space. */ \
+        assign stat_upd_offset_vec[IDX] = \
+            t_mpf_csr_offset'((CCI_MPF_VTP_CSR_OFFSET + \
+                               CCI_MPF_VTP_CSR_STAT_``CSR_OFFSET) >> 3); \
+        assign stat_upd_count_vec[IDX] = NAME; \
+        \
+        /* The "_cur" version is either the accumulator's value or 0 if */ \
+        /* the accumulators are consumed this cycle for writing to BRAM. */ \
+        t_cci_mpf_stat_cnt NAME``_cur; \
+        assign NAME``_cur = (consume_counters ? t_cci_mpf_stat_cnt'(0) : NAME); \
+        \
+        logic NAME``_incr; \
+        always_ff @(posedge clk) \
+        begin \
+            if (reset) \
+            begin \
+                NAME``_incr <= 1'b0; \
+                NAME`` <= t_cci_mpf_stat_cnt'(0); \
+            end \
+            else \
+            begin \
+                NAME``_incr <= events.``EVENT; \
+                NAME`` <= NAME``_cur + t_cci_mpf_stat_cnt'(NAME``_incr); \
+            end \
+        end
 
-    logic vtp_4kb_hits_incr;
-    always_ff @(posedge clk)
-    begin
-        if (reset)
-        begin
-            vtp_4kb_hits_incr <= 1'b0;
-            vtp_4kb_hits <= t_cci_mpf_stat_cnt'(0);
-        end
-        else
-        begin
-            vtp_4kb_hits_incr <= events.vtp_out_event_4kb_hit;
-            vtp_4kb_hits <= vtp_4kb_hits_cur + t_cci_mpf_stat_cnt'(vtp_4kb_hits_incr);
-        end
-    end
-
-    logic vtp_4kb_misses_incr;
-    always_ff @(posedge clk)
-    begin
-        if (reset)
-        begin
-            vtp_4kb_misses_incr <= 1'b0;
-            vtp_4kb_misses <= t_cci_mpf_stat_cnt'(0);
-        end
-        else
-        begin
-            vtp_4kb_misses_incr <= events.vtp_out_event_4kb_miss;
-            vtp_4kb_misses <= vtp_4kb_misses_cur + t_cci_mpf_stat_cnt'(vtp_4kb_misses_incr);
-        end
-    end
-
-
-    logic vtp_2mb_hits_incr;
-    always_ff @(posedge clk)
-    begin
-        if (reset)
-        begin
-            vtp_2mb_hits_incr <= 1'b0;
-            vtp_2mb_hits <= t_cci_mpf_stat_cnt'(0);
-        end
-        else
-        begin
-            vtp_2mb_hits_incr <= events.vtp_out_event_2mb_hit;
-            vtp_2mb_hits <= vtp_2mb_hits_cur + t_cci_mpf_stat_cnt'(vtp_2mb_hits_incr);
-        end
-    end
-
-    logic vtp_2mb_misses_incr;
-    always_ff @(posedge clk)
-    begin
-        if (reset)
-        begin
-            vtp_2mb_misses_incr <= 1'b0;
-            vtp_2mb_misses <= t_cci_mpf_stat_cnt'(0);
-        end
-        else
-        begin
-            vtp_2mb_misses_incr <= events.vtp_out_event_2mb_miss;
-            vtp_2mb_misses <= vtp_2mb_misses_cur + t_cci_mpf_stat_cnt'(vtp_2mb_misses_incr);
-        end
-    end
-
-    logic vtp_pt_walk_busy_cycles_incr;
-    always_ff @(posedge clk)
-    begin
-        if (reset)
-        begin
-            vtp_pt_walk_busy_cycles_incr <= 1'b0;
-            vtp_pt_walk_busy_cycles <= t_cci_mpf_stat_cnt'(0);
-        end
-        else
-        begin
-            vtp_pt_walk_busy_cycles_incr <= events.vtp_out_event_pt_walk_busy;
-            vtp_pt_walk_busy_cycles <= vtp_pt_walk_busy_cycles_cur + t_cci_mpf_stat_cnt'(vtp_pt_walk_busy_cycles_incr);
-        end
-    end
+    `MPF_CSR_STAT_ACCUM(0, 4KB_TLB_NUM_HITS, vtp_4kb_hits, vtp_out_event_4kb_hit)
+    `MPF_CSR_STAT_ACCUM(1, 4KB_TLB_NUM_MISSES, vtp_4kb_misses, vtp_out_event_4kb_miss)
+    `MPF_CSR_STAT_ACCUM(2, 2MB_TLB_NUM_HITS, vtp_2mb_hits, vtp_out_event_2mb_hit)
+    `MPF_CSR_STAT_ACCUM(3, 2MB_TLB_NUM_MISSES, vtp_2mb_misses, vtp_out_event_2mb_miss)
+    `MPF_CSR_STAT_ACCUM(4, PT_WALK_BUSY_CYCLES, vtp_pt_walk_busy_cycles, vtp_out_event_pt_walk_busy)
 
 endmodule // cci_mpf_shim_csr_events
 
@@ -703,8 +644,10 @@ module cci_mpf_shim_csr_rd_memory
     parameter DFH_MMIO_NEXT_ADDR = 0,
 
     parameter CCI_MPF_VTP_CSR_BASE = 0,
+    parameter CCI_MPF_RSP_ORDER_CSR_BASE = 0,
     parameter CCI_MPF_WRO_CSR_BASE = 0,
     parameter MPF_ENABLE_VTP = 0,
+    parameter MPF_ENABLE_RSP_ORDER = 0,
     parameter MPF_ENABLE_WRO = 0
     )
    (
@@ -776,7 +719,7 @@ module cci_mpf_shim_csr_rd_memory
 
     // Initialization state.
     logic initialized;
-    localparam NUM_INIT_ENTRIES = 6;   // Count of 64 bit entries
+    localparam NUM_INIT_ENTRIES = 9;   // Count of 64 bit entries
     logic [(NUM_INIT_ENTRIES*2)-1 : 0][31:0] init_val;
     t_mpf_csr_offset [NUM_INIT_ENTRIES-1 : 0] init_idx;
 
@@ -960,55 +903,59 @@ module cci_mpf_shim_csr_rd_memory
         end
     end
 
+    function automatic t_ccip_dfh genDFH(t_ccip_feature_next nextFeature);
+        t_ccip_dfh dfh;
+
+        dfh = ccip_dfh_defaultDFH();
+        dfh.f_type = eFTYP_BBB;
+        dfh.id = t_ccip_feature_id'(MPF_INSTANCE_ID);
+        dfh.nextFeature = nextFeature;
+
+        return dfh;
+    endfunction
+
     always_comb
     begin
         t_ccip_dfh vtp_dfh;
         logic [127:0] vtp_uid;
+        t_ccip_dfh rsp_order_dfh;
+        logic [127:0] rsp_order_uid;
         t_ccip_dfh wro_dfh;
         logic [127:0] wro_uid;
 
         // Construct the feature headers for each feature
-        vtp_dfh = ccip_dfh_defaultDFH();
-        vtp_dfh.f_type = eFTYP_BBB;
-        vtp_dfh.id = t_ccip_feature_id'(MPF_INSTANCE_ID);
-        vtp_dfh.next = CCI_MPF_VTP_CSR_SIZE;
-        if (MPF_ENABLE_VTP != 0)
-        begin
-            // UID of VTP feature (from cci_mpf_csrs.h)
-            vtp_uid = 128'hc8a2982f_ff96_42bf_a705_45727f501901;
-        end
-        else
-        begin
-            vtp_uid = 128'h0;
-        end
+        vtp_dfh = genDFH(CCI_MPF_VTP_CSR_SIZE);
+        vtp_uid = (MPF_ENABLE_VTP != 0) ?
+                      // UID of VTP feature (from cci_mpf_csrs.h)
+                      128'hc8a2982f_ff96_42bf_a705_45727f501901 :
+                      128'h0;
 
-        wro_dfh = ccip_dfh_defaultDFH();
-        wro_dfh.f_type = eFTYP_BBB;
-        wro_dfh.id = t_ccip_feature_id'(MPF_INSTANCE_ID);
-        if (MPF_ENABLE_WRO != 0)
-        begin
-            // UID of WRO feature (from cci_mpf_csrs.h)
-            wro_uid = 128'h56b06b48_9dd7_4004_a47e_0681b4207a6d;
-        end
-        else
-        begin
-            wro_uid = 128'h0;
-        end
+        rsp_order_dfh = genDFH(CCI_MPF_RSP_ORDER_CSR_SIZE);
+        rsp_order_uid = (MPF_ENABLE_RSP_ORDER != 0) ?
+                      // UID of RSP_ORDER feature (from cci_mpf_csrs.h)
+                      128'h4c9c96f4_65ba_4dd8_b383_c70ace57bfe4 :
+                      128'h0;
+
+        wro_dfh = genDFH(CCI_MPF_WRO_CSR_SIZE);
+        wro_uid = (MPF_ENABLE_WRO != 0) ?
+                      // UID of WRO feature (from cci_mpf_csrs.h)
+                      128'h56b06b48_9dd7_4004_a47e_0681b4207a6d :
+                      128'h0;
 
         if (DFH_MMIO_NEXT_ADDR == 0)
         begin
             // WRO is the last feature in the AFU's list
-            wro_dfh.next = CCI_MPF_WRO_CSR_SIZE;
             wro_dfh.eol = 1'b1;
         end
         else
         begin
             // Point to the next feature (outside of MPF)
-            wro_dfh.next = DFH_MMIO_NEXT_ADDR - CCI_MPF_WRO_CSR_BASE;
+            wro_dfh.nextFeature = DFH_MMIO_NEXT_ADDR - CCI_MPF_WRO_CSR_BASE;
         end
 
         // Each DFH entry is 64 bits.  Each UID entry is 128 bits.
         init_val_start = { vtp_dfh, vtp_uid,
+                           rsp_order_dfh, rsp_order_uid,
                            wro_dfh, wro_uid };
 
         init_idx_start = {
@@ -1018,6 +965,13 @@ module cci_mpf_shim_csr_rd_memory
             t_mpf_csr_offset'((CCI_MPF_VTP_CSR_OFFSET + CCI_MPF_VTP_CSR_ID_H) >> 3),
             // VTP UID low
             t_mpf_csr_offset'((CCI_MPF_VTP_CSR_OFFSET + CCI_MPF_VTP_CSR_ID_L) >> 3),
+
+            // RSP_ORDER DFH (device feature header)
+            t_mpf_csr_offset'((CCI_MPF_RSP_ORDER_CSR_OFFSET + CCI_MPF_RSP_ORDER_CSR_DFH) >> 3),
+            // RSP_ORDER UID high
+            t_mpf_csr_offset'((CCI_MPF_RSP_ORDER_CSR_OFFSET + CCI_MPF_RSP_ORDER_CSR_ID_H) >> 3),
+            // RSP_ORDER UID low
+            t_mpf_csr_offset'((CCI_MPF_RSP_ORDER_CSR_OFFSET + CCI_MPF_RSP_ORDER_CSR_ID_L) >> 3),
 
             // WRO DFH (device feature header)
             t_mpf_csr_offset'((CCI_MPF_WRO_CSR_OFFSET + CCI_MPF_WRO_CSR_DFH) >> 3),

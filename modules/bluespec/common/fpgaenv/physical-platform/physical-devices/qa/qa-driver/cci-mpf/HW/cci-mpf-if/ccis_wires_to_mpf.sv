@@ -10,7 +10,7 @@
 
 `include "cci_mpf_if.vh"
 
-`ifdef USE_PLATFORM_CCIS
+`ifdef MPF_HOST_IFC_CCIS
 import ccis_if_pkg::*;
 
 module ccis_wires_to_mpf

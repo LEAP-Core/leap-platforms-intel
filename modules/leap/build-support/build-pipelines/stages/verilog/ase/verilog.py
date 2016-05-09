@@ -151,9 +151,9 @@ class Verilog():
     ## imported from outside LEAP.
     ##
     if (moduleList.getAWBParamSafe('qa_platform_libs', 'CCI_S_IFC')):
-        vexe_gen_command += ' -Xv +define+USE_PLATFORM_CCIS'
+        vexe_gen_command += ' -Xv +define+MPF_PLATFORM_OME'
     if (moduleList.getAWBParamSafe('qa_platform_libs', 'CCI_P_IFC')):
-        vexe_gen_command += ' -Xv +define+USE_PLATFORM_CCIP -Xv +define+BSV_POSITIVE_RESET'
+        vexe_gen_command += ' -Xv +define+MPF_PLATFORM_BDX -Xv +define+BSV_POSITIVE_RESET'
 
     ## Enable simulation mode
     cci_sim = moduleList.getAWBParamSafe('qa_device', 'CCI_SIMULATION')

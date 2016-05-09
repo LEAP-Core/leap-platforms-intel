@@ -43,7 +43,9 @@ import cci_mpf_csrs_pkg::*;
 //
 //   *** Directions are relative to a shim ***
 //
+
 interface cci_mpf_csrs();
+
     //
     // VTP -- virtual to physical translation
     //
@@ -61,6 +63,14 @@ interface cci_mpf_csrs();
     logic vtp_out_event_2mb_hit;
     logic vtp_out_event_2mb_miss;
     logic vtp_out_event_pt_walk_busy;
+
+
+    //
+    // RSP ORDER -- Reorder buffer for sorting read responses
+    //
+    logic [63:0] rsp_order_c0Tx_va_vc_map;
+    logic        rsp_order_c0Tx_va_vc_map_valid;
+
 
     //
     // WRO -- write/read ordering
@@ -81,6 +91,9 @@ interface cci_mpf_csrs();
         output vtp_in_mode,
         output vtp_in_page_table_base,
         output vtp_in_page_table_base_valid,
+
+        output rsp_order_c0Tx_va_vc_map,
+        output rsp_order_c0Tx_va_vc_map_valid,
 
         input  wro_out_num_writes,
         input  wro_out_num_reads,
@@ -109,6 +122,12 @@ interface cci_mpf_csrs();
         output vtp_out_event_2mb_hit,
         output vtp_out_event_2mb_miss,
         output vtp_out_event_pt_walk_busy
+        );
+
+    modport rsp_order
+       (
+        input  rsp_order_c0Tx_va_vc_map,
+        input  rsp_order_c0Tx_va_vc_map_valid
         );
 
     modport wro

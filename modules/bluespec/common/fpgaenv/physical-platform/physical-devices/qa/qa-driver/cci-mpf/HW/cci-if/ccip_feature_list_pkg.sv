@@ -30,7 +30,7 @@ package ccip_feature_list_pkg;
         t_ccip_feature_type f_type;
         logic [18:0]        rsvd0;
         logic               eol;
-        t_ccip_feature_next next;
+        t_ccip_feature_next nextFeature;
         logic [3:0]         version;
         t_ccip_feature_id   id;
     } t_ccip_dfh;

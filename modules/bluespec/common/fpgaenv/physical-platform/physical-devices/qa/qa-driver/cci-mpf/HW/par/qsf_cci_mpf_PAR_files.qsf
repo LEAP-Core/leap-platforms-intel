@@ -6,12 +6,10 @@
 ##
 
 ##
-## MPF support multiple CCI platforms.  One of these macros must be defined
-## specify the platform:
+## MPF support multiple CCI platforms.  One of the platform macros must
+## in cci_mpf_platform.vh must be defined, e.g.:
 ##
-##   set_global_assignment -name VERILOG_MACRO "USE_PLATFORM_CCIP=1"
-##    or
-##   set_global_assignment -name VERILOG_MACRO "USE_PLATFORM_CCIS=1"
+##   set_global_assignment -name VERILOG_MACRO "MPF_PLATFORM_BDX=1"
 ##
 
 

@@ -29,6 +29,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 `include "cci_mpf_if.vh"
+`include "cci_mpf_csrs.vh"
 
 
 //
@@ -90,7 +91,9 @@ module cci_mpf_shim_rsp_order
     cci_mpf_if.to_fiu fiu,
 
     // Connections toward user code.
-    cci_mpf_if.to_afu afu
+    cci_mpf_if.to_afu afu,
+
+    cci_mpf_csrs.rsp_order csrs
     );
 
     assign afu.reset = fiu.reset;
@@ -372,6 +375,60 @@ module cci_mpf_shim_rsp_order
         end
     endgenerate
 
+
+    //
+    // VC Selection:
+    //   CCI allows the client to select an automatic virtual channel: VA.
+    //   In rare cases the application may want to manage the mapping
+    //   explicitly.  Having mapping control is also sometimes useful for
+    //   experiments.
+    //
+    //   A mapping function here uses a CSR holding a vector of
+    //   mappings. The CSR is rotated each time a read from VA is
+    //   encountered. The CSR is configurable by software but begins
+    //   with a default value that uses VA.
+    //
+
+    // Number of entries in the VC mapping vector
+    localparam CCI_MPF_N_VA_VC_MAP = 15;
+
+    t_cci_vc c0Tx_va_vc_map[0 : CCI_MPF_N_VA_VC_MAP-1];
+    logic c0Tx_va_vc_map_rotate;
+
+    always_ff @(posedge clk)
+    begin
+        if (csrs.rsp_order_c0Tx_va_vc_map_valid)
+        begin
+            // Set pattern from host by writing to CSR
+            for (int v = 0; v < CCI_MPF_N_VA_VC_MAP; v = v + 1)
+            begin
+                c0Tx_va_vc_map[v] <=
+                    t_cci_vc'(csrs.rsp_order_c0Tx_va_vc_map[$bits(t_cci_vc) * v +: $bits(t_cci_vc)]);
+            end
+        end
+        else if (c0Tx_va_vc_map_rotate)
+        begin
+            // A read from eVC_VA fired this cycle.  Rotate the selection
+            // vector.
+            c0Tx_va_vc_map[CCI_MPF_N_VA_VC_MAP-1] <= c0Tx_va_vc_map[0];
+
+            for (int v = 1; v < CCI_MPF_N_VA_VC_MAP; v = v + 1)
+            begin
+                c0Tx_va_vc_map[v-1] <= c0Tx_va_vc_map[v];
+            end
+        end
+
+        if (reset)
+        begin
+            // The default mapping uses eVC_VA.
+            for (int v = 0; v < CCI_MPF_N_VA_VC_MAP; v = v + 1)
+            begin
+                c0Tx_va_vc_map[v] <= eVC_VA;
+            end
+        end
+    end
+
+
     // Forward requests toward the FIU.  Replace the Mdata entry with the
     // ROB index.  The original Mdata is saved in the rob
     // and restored when the response is returned.
@@ -379,7 +436,17 @@ module cci_mpf_shim_rsp_order
     begin
         fiu_buf.c0Tx = afu.c0Tx;
         fiu_buf.c0Tx.hdr.base.mdata = t_cci_mdata'(rd_rob_allocIdx);
+
+        // See VC selection above.
+        c0Tx_va_vc_map_rotate = 1'b0;
+        if (SORT_READ_RESPONSES && (afu.c0Tx.hdr.base.vc_sel == eVC_VA) &&
+            cci_mpf_c0TxIsReadReq(afu.c0Tx))
+        begin
+            c0Tx_va_vc_map_rotate = 1'b1;
+            fiu_buf.c0Tx.hdr.base.vc_sel = c0Tx_va_vc_map[0];
+        end
     end
+
 
     logic c0_non_rd_valid;
 

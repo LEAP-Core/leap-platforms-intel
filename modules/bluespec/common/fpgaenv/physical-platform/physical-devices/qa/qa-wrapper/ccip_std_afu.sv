@@ -28,7 +28,9 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-`ifdef USE_PLATFORM_CCIP
+`include "cci_mpf_platform.vh"
+
+`ifdef MPF_HOST_IFC_CCIP
 
 import ccip_if_pkg::*;
 

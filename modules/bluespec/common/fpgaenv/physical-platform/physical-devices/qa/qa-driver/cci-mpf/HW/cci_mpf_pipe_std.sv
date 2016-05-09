@@ -228,7 +228,8 @@ module cci_mpf_pipe_std
        (
         .clk,
         .fiu(stgp3_fiu_wro),
-        .afu(stgp4_fiu_rsp_order)
+        .afu(stgp4_fiu_rsp_order),
+        .csrs(mpf_csrs)
         );
 
 

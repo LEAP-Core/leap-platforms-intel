@@ -119,7 +119,7 @@ module qa_driver_csr_rd
                     // Construct the DFH (CSR 0)
                     afu_dfh = ccip_dfh_defaultDFH();
                     afu_dfh.f_type = eFTYP_AFU;
-                    afu_dfh.next = QA_DRIVER_DFH_SIZE;
+                    afu_dfh.nextFeature = QA_DRIVER_DFH_SIZE;
 
                     c2Tx.mmioRdValid = 1'b1;
                     c2Tx.data = afu_dfh;

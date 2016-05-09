@@ -19,9 +19,11 @@
 // ========================================================================
 //
 //  Before importing this module, define exactly one preprocessor macro
-//  to specify the physical interface.  E.g. USE_PLATFORM_CCIP.
+//  to specify the physical interface.  E.g. MPF_PLATFORM_BDX.
 //
 // ========================================================================
+
+`include "cci_mpf_platform.vh"
 
 package cci_mpf_if_pkg;
     import ccis_if_pkg::*;
@@ -57,9 +59,9 @@ package cci_mpf_if_pkg;
 
     parameter CCI_MDATA_WIDTH = CCIP_MDATA_WIDTH;
 
-`ifdef USE_PLATFORM_CCIS
+`ifdef MPF_HOST_IFC_CCIS
     parameter CCI_PLATFORM_MDATA_WIDTH = CCIS_MDATA_WIDTH;
-`elsif USE_PLATFORM_CCIP
+`elsif MPF_HOST_IFC_CCIP
     parameter CCI_PLATFORM_MDATA_WIDTH = CCIP_MDATA_WIDTH;
 `else
     ** ERROR: Select a valid platform

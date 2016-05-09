@@ -28,7 +28,7 @@ package cci_csr_if_pkg;
 
 
     //
-    // Get the CSR address of a read/write request.
+    // Get the CSR tid from a read request.
     //
     function automatic t_cci_tid cci_csr_getTid(
         input t_if_cci_c0_Rx r
@@ -40,7 +40,7 @@ package cci_csr_if_pkg;
 
 
     //
-    // Get the CSR tid from a read request.
+    // Get the CSR address of a read/write request.
     //
     function automatic t_cci_mmioAddr cci_csr_getAddress(
         input t_if_cci_c0_Rx r

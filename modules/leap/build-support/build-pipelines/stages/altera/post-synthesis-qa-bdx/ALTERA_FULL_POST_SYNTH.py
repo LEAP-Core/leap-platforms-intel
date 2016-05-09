@@ -66,9 +66,9 @@ class PostSynthesize():
         ## imported from outside LEAP.
         ##
         if (moduleList.getAWBParamSafe('qa_platform_libs', 'CCI_S_IFC')):
-            prjFile.write('set_global_assignment -name VERILOG_MACRO "USE_PLATFORM_CCIS=1"\n')
+            prjFile.write('set_global_assignment -name VERILOG_MACRO "MPF_PLATFORM_OME=1"\n')
         if (moduleList.getAWBParamSafe('qa_platform_libs', 'CCI_P_IFC')):
-            prjFile.write('set_global_assignment -name VERILOG_MACRO "USE_PLATFORM_CCIP=1"\n')
+            prjFile.write('set_global_assignment -name VERILOG_MACRO "MPF_PLATFORM_BDX=1"\n')
             prjFile.write('set_global_assignment -name VERILOG_MACRO "BSV_POSITIVE_RESET=1"\n')
 
         prjFile.write('source ' + rel_qsf_src_dir + '/bdx_arria10.qsf\n')

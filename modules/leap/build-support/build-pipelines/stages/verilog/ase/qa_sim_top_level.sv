@@ -41,7 +41,9 @@
 
 import "DPI-C" function string getenv(input string env_name);
 
-`ifdef USE_PLATFORM_CCIP
+`include "cci_mpf_platform.vh"
+
+`ifdef MPF_HOST_IFC_CCIP
 import ccip_if_pkg::*;
 `endif
 
@@ -50,7 +52,7 @@ module qa_sim_top_level(CLK,
     input CLK;
     input RST_N;
 
-`ifdef USE_PLATFORM_CCIS
+`ifdef MPF_HOST_IFC_CCIS
     //
     // ASE for the original Xeon+FPGA SDP.  The emulator instantiates the
     // top level module, named cci_std_afu.
@@ -58,7 +60,7 @@ module qa_sim_top_level(CLK,
     cci_emulator emulator();
 `endif
 
-`ifdef USE_PLATFORM_CCIP
+`ifdef MPF_HOST_IFC_CCIP
     //
     // CCI-P emulation.  The emulator exports wires, which we pass to
     // the design's top level.

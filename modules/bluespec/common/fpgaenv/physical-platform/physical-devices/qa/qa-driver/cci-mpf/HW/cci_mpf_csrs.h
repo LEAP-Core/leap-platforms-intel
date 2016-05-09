@@ -73,6 +73,27 @@ t_cci_mpf_vtp_csr_offsets;
 
 
 //
+// Read responses ordering feature -- {4c9c96f4-65ba-4dd8-b383-c70ace57bfe4}
+//
+typedef enum
+{
+    // MPF write/read order BBB feature header (read)
+    CCI_MPF_RSP_ORDER_CSR_DFH = 0,
+    // BBB feature ID low (read)
+    CCI_MPF_RSP_ORDER_CSR_ID_L = 8,
+    // BBB feature ID high (read)
+    CCI_MPF_RSP_ORDER_CSR_ID_H = 16,
+
+    // eVC_VA to physical channel mapping configuration
+    CCI_MPF_RSP_ORDER_CSR_C0TX_VA_VC_MAP = 24,
+
+    // Must be last
+    CCI_MPF_RSP_ORDER_CSR_SIZE = 32
+}
+t_cci_mpf_rsp_order_csr_offsets;
+
+
+//
 // Write ordering feature -- {56b06b48-9dd7-4004-a47e-0681b4207a6d}
 //
 typedef enum

@@ -22,7 +22,9 @@
 // compilation purposes.
 // ***************************************************************************
 
-`ifdef USE_PLATFORM_CCIS
+`include "cci_mpf_platform.vh"
+
+`ifdef MPF_HOST_IFC_CCIS
 
 module cci_std_afu
     (// Link/Protocol (LP) clocks and reset

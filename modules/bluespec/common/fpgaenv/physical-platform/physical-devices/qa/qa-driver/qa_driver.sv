@@ -58,7 +58,7 @@
 
 `include "qa_driver_csr.vh"
 
-`ifdef USE_PLATFORM_CCIS
+`ifdef MPF_HOST_IFC_CCIS
 import ccis_if_pkg::*;
 `endif
 
@@ -145,7 +145,7 @@ module qa_driver
     //
     // -------------------------------------------------------------------
 
-`ifdef USE_PLATFORM_CCIS
+`ifdef MPF_HOST_IFC_CCIS
     input  logic            vl_clk_LPdomain_32ui,                // CCI Inteface Clock. 32ui link/protocol clock domain.
     input  logic            ffs_vl_LP32ui_lp2sy_SoftReset_n,     // CCI-S soft reset
 
@@ -181,7 +181,7 @@ module qa_driver
     input  logic            ffs_vl_LP32ui_lp2sy_InitDnForSys     // System layer is aok to run
 `endif
 
-`ifdef USE_PLATFORM_CCIP
+`ifdef MPF_HOST_IFC_CCIP
     // CCI-P Clocks and Resets
     input  logic        pClk,                // 400MHz - CCI-P clock domain. Primary interface clock
     input  logic        pClkDiv2,            // 200MHz - CCI-P clock domain.
@@ -202,10 +202,10 @@ module qa_driver
     localparam AFU_ID = 128'h13572468_0d824272_9aeffe5f_84570612;
 
     logic  clk;
-`ifdef USE_PLATFORM_CCIS
+`ifdef MPF_HOST_IFC_CCIS
     assign clk = vl_clk_LPdomain_32ui;
 `endif
-`ifdef USE_PLATFORM_CCIP
+`ifdef MPF_HOST_IFC_CCIP
     assign clk = pClk;
 `endif
 
@@ -233,7 +233,7 @@ module qa_driver
 
     cci_mpf_if#(.ENABLE_LOG(1)) fiu(.clk);
 
-`ifdef USE_PLATFORM_CCIS
+`ifdef MPF_HOST_IFC_CCIS
     ccis_wires_to_mpf
       #(
         .REGISTER_INPUTS(0),
@@ -243,7 +243,7 @@ module qa_driver
       map_ifc(.*);
 `endif
 
-`ifdef USE_PLATFORM_CCIP
+`ifdef MPF_HOST_IFC_CCIP
     ccip_wires_to_mpf
       #(
         .REGISTER_INPUTS(0),

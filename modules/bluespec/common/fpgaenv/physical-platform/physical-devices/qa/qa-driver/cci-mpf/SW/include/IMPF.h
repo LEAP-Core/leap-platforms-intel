@@ -78,6 +78,12 @@ BEGIN_NAMESPACE(AAL)
 /// VTP BBB GUID, used to identify HW VTP component
 #define MPF_VTP_BBB_GUID "C8A2982F-FF96-42BF-A705-45727F501901"
 
+// Read responses ordering feature
+#define MPF_RSP_ORDER_BBB_GUID "4C9C96F4-65BA-4DD8-B383-C70ACE57BFE4"
+
+// Write ordering feature
+#define MPF_WRO_BBB_GUID "56B06B48-9DD7-4004-A47E-0681B4207A6D"
+
 /// MPF Service IID
 #ifndef iidMPFVTPService
 #define iidMPFVTPService __INTC_IID(INTC_sysSampleAFU, 0x0010)

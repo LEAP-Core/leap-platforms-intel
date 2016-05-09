@@ -133,7 +133,7 @@ module qa_driver_main_fiu_tap
                                                     cci_mpf_defaultReqHdrParams(0));
                 fiu.c1Tx.data[127:0] = AFU_ID;
             end
-`ifdef USE_PLATFORM_CCIS
+`ifdef MPF_HOST_IFC_CCIS
             else if (mmio_read_rsp_q.mmioRdValid)
             begin
                 // Map MMIO read response to a memory write. A software-side
@@ -187,7 +187,7 @@ module qa_driver_main_fiu_tap
     // Track compatibility-mode mapping CSR read responses to DSM writes
     // in CCI-S.  Only one CSR read is allowed to be outstanding at a time.
     //
-`ifdef USE_PLATFORM_CCIS
+`ifdef MPF_HOST_IFC_CCIS
     always_ff @(posedge clk)
     begin
         if (reset)

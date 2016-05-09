@@ -93,7 +93,13 @@ module cci_mpf
     );
 
     // Maximum number of outstanding read and write requests per channel
+`ifdef MPF_PLATFORM_BDX
+    localparam MAX_ACTIVE_REQS = 1024;
+`elsif MPF_PLATFORM_OME
     localparam MAX_ACTIVE_REQS = 128;
+`else
+    ** ERROR: Unknown platform
+`endif
 
     logic reset = 1'b1;
     always @(posedge clk)
@@ -161,6 +167,7 @@ module cci_mpf
         .DFH_MMIO_BASE_ADDR(DFH_MMIO_BASE_ADDR),
         .DFH_MMIO_NEXT_ADDR(DFH_MMIO_NEXT_ADDR),
         .MPF_ENABLE_VTP(ENABLE_VTP),
+        .MPF_ENABLE_RSP_ORDER(SORT_READ_RESPONSES),
         .MPF_ENABLE_WRO(ENFORCE_WR_ORDER)
         )
       csr

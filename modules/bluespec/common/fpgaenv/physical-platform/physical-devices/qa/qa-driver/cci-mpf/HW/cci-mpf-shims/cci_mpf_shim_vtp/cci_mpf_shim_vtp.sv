@@ -74,13 +74,16 @@ module cci_mpf_shim_vtp
     // ====================================================================
 
     cci_mpf_if afu_buf (.clk);
-    assign afu_buf.reset = fiu.reset;
+    assign afu_buf.reset = reset;
 
     // Latency-insensitive ports need explicit dequeue (enable).
     logic deqC0Tx;
     logic deqC1Tx;
 
     cci_mpf_shim_buffer_afu
+      #(
+        .REGISTER_OUTPUT(1)
+        )
       b
         (
          .clk,
@@ -594,19 +597,37 @@ module cci_mpf_shim_vtp_chan
     cci_mpf_prim_lutram
       #(
         .N_ENTRIES(CCI_MPF_SHIM_VTP_MAX_SVC_REQS),
-        .N_DATA_BITS(N_META_BITS + $bits(t_tlb_4kb_va_page_idx))
+        .N_DATA_BITS(N_META_BITS)
         )
-      heap
+      heap_ctx
        (
         .clk,
         .reset,
 
         .raddr(readIdx),
-        .rdata({ read_cTx_out, read_cTxAddr_va_out }),
+        .rdata(read_cTx_out),
 
         .waddr(state[1].allocIdx),
         .wen(state[1].cTxValid),
-        .wdata({ cTx_q, state[1].cTxAddr })
+        .wdata(cTx_q)
+        );
+
+    cci_mpf_prim_lutram
+      #(
+        .N_ENTRIES(CCI_MPF_SHIM_VTP_MAX_SVC_REQS),
+        .N_DATA_BITS($bits(t_tlb_4kb_va_page_idx))
+        )
+      heap_addr
+       (
+        .clk,
+        .reset,
+
+        .raddr(readIdx),
+        .rdata(read_cTxAddr_va_out),
+
+        .waddr(state[1].allocIdx),
+        .wen(state[1].cTxValid),
+        .wdata(state[1].cTxAddr)
         );
 
     always_ff @(posedge clk)

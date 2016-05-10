@@ -47,7 +47,10 @@ module cci_mpf_shim_buffer_afu
     // is offered only on channel 0.  Bypassing is not offered on channel
     // 1 both because stores are less latency sensitive and because the
     // cost of a bypass MUX on the line-sized store data is too high.
-    parameter ENABLE_C0_BYPASS = 0
+    parameter ENABLE_C0_BYPASS = 0,
+
+    // Register output with skid buffers on the LUTRAM FIFOs if non-zero.
+    parameter REGISTER_OUTPUT = 0
     )
    (
     input  logic clk,
@@ -141,7 +144,8 @@ module cci_mpf_shim_buffer_afu
       #(
         .N_DATA_BITS(C0TX_BITS),
         .N_ENTRIES(N_ENTRIES),
-        .THRESHOLD(THRESHOLD)
+        .THRESHOLD(THRESHOLD),
+        .REGISTER_OUTPUT(REGISTER_OUTPUT)
         )
       c0_fifo(.clk,
               .reset(afu_buf.reset),
@@ -189,7 +193,8 @@ module cci_mpf_shim_buffer_afu
       #(
         .N_DATA_BITS(C1TX_BITS),
         .N_ENTRIES(N_ENTRIES),
-        .THRESHOLD(THRESHOLD)
+        .THRESHOLD(THRESHOLD),
+        .REGISTER_OUTPUT(REGISTER_OUTPUT)
         )
       c1_fifo(.clk,
               .reset(afu_buf.reset),

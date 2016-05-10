@@ -335,15 +335,35 @@ module cci_mpf_svc_vtp
         end
     end
 
-    // Direct fills to the appropriate TLB depending on the page size
-    assign tlb_if_4kb.fillEn = tlb_if.fillEn && ! tlb_if.fillBigPage;
-    assign tlb_if_2mb.fillEn = tlb_if.fillEn && tlb_if.fillBigPage;
 
-    assign tlb_if_4kb.fillVA = tlb_if.fillVA;
-    assign tlb_if_4kb.fillPA = tlb_if.fillPA;
-    assign tlb_if_2mb.fillVA = tlb_if.fillVA;
-    assign tlb_if_2mb.fillPA = tlb_if.fillPA;
-    assign tlb_if.fillRdy = tlb_if_4kb.fillRdy && tlb_if_2mb.fillRdy;
+    //
+    // Direct fills to the appropriate TLB depending on the page size
+    //
+    logic fill_en_q;
+
+    always_ff @(posedge clk)
+    begin
+        tlb_if_4kb.fillEn <= tlb_if.fillEn && ! tlb_if.fillBigPage;
+        tlb_if_2mb.fillEn <= tlb_if.fillEn && tlb_if.fillBigPage;
+        fill_en_q <= tlb_if.fillEn;
+
+        tlb_if_4kb.fillVA <= tlb_if.fillVA;
+        tlb_if_4kb.fillPA <= tlb_if.fillPA;
+        tlb_if_2mb.fillVA <= tlb_if.fillVA;
+        tlb_if_2mb.fillPA <= tlb_if.fillPA;
+
+        tlb_if.fillRdy <= tlb_if_4kb.fillRdy && tlb_if_2mb.fillRdy &&
+                          ! tlb_if.fillEn && ! fill_en_q;
+
+        if (reset)
+        begin
+            tlb_if_4kb.fillEn <= 1'b0;
+            tlb_if_2mb.fillEn <= 1'b0;
+            tlb_if.fillRdy <= 1'b0;
+            fill_en_q <= 1'b0;
+        end
+    end
+
 
     // Statistics
     always_ff @(posedge clk)
@@ -381,32 +401,37 @@ module cci_mpf_svc_vtp
     // a bus for reading the page table from host memory.
     //
 
+    // Add a register stage to walk requests for travel across the FPGA
+    logic pt_walk_req_en;
+    t_tlb_4kb_va_page_idx pt_walk_req_va;
+
     always_ff @(posedge clk)
     begin
+        //
+        // In addition to the page walker being ready we also require
+        // that the TLB be ready to fill. This is done solely to handle
+        // a corner case in which the TLB is processing a fill to the
+        // same address that is signalling a miss. Processing the fill
+        // would be technically correct but wasteful, since the
+        // translation will be added to the TLB within a few cycles.
+        //
+        // If the page table walker or TLB isn't ready the lookup request
+        // is simply dropped.  It will be reissued by the translation
+        // pipeline.
+        //
+        pt_walk_req_en <= tlb_if.lookupMiss && pt_walk_client.reqRdy &&
+                          tlb_if.fillRdy;
+
+        pt_walk_req_va <= tlb_if.lookupMissVA;
+
+        pt_walk_client.reqEn <= pt_walk_req_en;
+        pt_walk_client.reqVA <= pt_walk_req_va;
+
         if (reset)
         begin
             pt_walk_client.reqEn <= 1'b0;
+            pt_walk_req_en <= 1'b0;
         end
-        else
-        begin
-            //
-            // In addition to the page walker being ready we also require
-            // that the TLB be ready to fill. This is done solely to handle
-            // a corner case in which the TLB is processing a fill to the
-            // same address that is signalling a miss. Processing the fill
-            // would be technically correct but wasteful, since the
-            // translation will be added to the TLB within a few cycles.
-            //
-            // If the page table walker or TLB isn't ready the lookup request
-            // is simply dropped.  It will be reissued by the translation
-            // pipeline.
-            //
-            pt_walk_client.reqEn <= tlb_if.lookupMiss &&
-                                    pt_walk_client.reqRdy &&
-                                    tlb_if.fillRdy;
-        end
-
-        pt_walk_client.reqVA <= tlb_if.lookupMissVA;
     end
 
     always_ff @(posedge clk)

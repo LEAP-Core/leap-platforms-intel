@@ -41,10 +41,12 @@ module cci_mpf_prim_ram_simple
     // Number of extra stages of output register buffering to add
     parameter N_OUTPUT_REG_STAGES = 0,
 
-    // Register writes for a cycle and bypass reads in the delay cycle?
-    // In some cases it is better to impose a delay on the read path for
-    // the bypass when the write path has tighter timing.
-    parameter REGISTER_WRITES = 0
+    // Register writes for a cycle and optionally bypass delayed writes
+    // to reads in the delay cycle?  In some cases it is better to impose
+    // a delay on the read path for the bypass when the write path has
+    // tighter timing.
+    parameter REGISTER_WRITES = 0,
+    parameter BYPASS_REGISTERED_WRITES = 1
     )
    (
     input  logic clk,
@@ -64,7 +66,8 @@ module cci_mpf_prim_ram_simple
         .N_ENTRIES(N_ENTRIES),
         .N_DATA_BITS(N_DATA_BITS),
         .REGISTER_READS(N_OUTPUT_REG_STAGES),
-        .REGISTER_WRITES(REGISTER_WRITES)
+        .REGISTER_WRITES(REGISTER_WRITES),
+        .BYPASS_REGISTERED_WRITES(BYPASS_REGISTERED_WRITES)
         )
       ram
        (
@@ -118,6 +121,7 @@ module cci_mpf_prim_ram_simple_init
     // Number of extra stages of output register buffering to add
     parameter N_OUTPUT_REG_STAGES = 0,
     parameter REGISTER_WRITES = 0,
+    parameter BYPASS_REGISTERED_WRITES = 1,
 
     parameter INIT_VALUE = N_DATA_BITS'(0)
     )
@@ -144,7 +148,8 @@ module cci_mpf_prim_ram_simple_init
         .N_ENTRIES(N_ENTRIES),
         .N_DATA_BITS(N_DATA_BITS),
         .N_OUTPUT_REG_STAGES(N_OUTPUT_REG_STAGES),
-        .REGISTER_WRITES(REGISTER_WRITES)
+        .REGISTER_WRITES(REGISTER_WRITES),
+        .BYPASS_REGISTERED_WRITES(BYPASS_REGISTERED_WRITES)
         )
       ram
        (
@@ -195,10 +200,12 @@ module cci_mpf_prim_ram_simple_base
     // Register reads if non-zero
     parameter REGISTER_READS = 0,
 
-    // Register writes for a cycle and bypass reads in the delay cycle?
-    // In some cases it is better to impose a delay on the read path for
-    // the bypass when the write path has tighter timing.
-    parameter REGISTER_WRITES = 0
+    // Register writes for a cycle and optionally bypass delayed writes
+    // to reads in the delay cycle?  In some cases it is better to impose
+    // a delay on the read path for the bypass when the write path has
+    // tighter timing.
+    parameter REGISTER_WRITES = 0,
+    parameter BYPASS_REGISTERED_WRITES = 1
     )
    (
     input  logic clk,
@@ -283,8 +290,21 @@ module cci_mpf_prim_ram_simple_base
 
             assign rdata = c_rdata;
         end
-        else
+        else if (BYPASS_REGISTERED_WRITES == 0)
         begin : wr
+            // Register writes with no bypass
+            always_ff @(posedge clk)
+            begin
+                c_wen <= wen;
+                c_waddr <= waddr;
+                c_wdata <= wdata;
+
+                rdata <= c_rdata;
+            end
+        end
+        else
+        begin : wrb
+            // Register writes and bypass write data to reads in the delay slot
             logic addr_matched[0 : 1];
             logic [N_DATA_BITS-1 : 0] c_wdata_history[0 : 1];
 

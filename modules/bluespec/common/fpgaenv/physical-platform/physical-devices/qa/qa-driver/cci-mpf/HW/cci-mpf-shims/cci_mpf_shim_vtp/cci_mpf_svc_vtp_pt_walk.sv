@@ -430,14 +430,7 @@ module cci_mpf_svc_vtp_pt_walk
                 pt_walk_cur_page <= pt_walk_page_from_cache ?
                                     pt_walk_cache_page : pt_walk_next_page;
 
-                // Raise an error if the maximum walk depth is reached without
-                // finding the entry.
-                if (pt_walk_cur_status.error || 
-                    ! pt_walk_cur_status.terminal && (&(translate_depth) == 1'b1))
-                begin
-                    state <= STATE_PT_WALK_ERROR;
-                end
-                else if (pt_walk_cur_status.terminal)
+                if (pt_walk_cur_status.terminal)
                 begin
                     // Found the translation
                     state <= STATE_PT_WALK_DONE;
@@ -448,6 +441,14 @@ module cci_mpf_svc_vtp_pt_walk
                     // Continue the walk
                     state <= STATE_PT_WALK_READ_REQ;
                     translate_depth <= translate_depth + t_cci_mpf_pt_walk_depth'(1);
+                end
+
+                // Raise an error if the maximum walk depth is reached without
+                // finding the entry.
+                if (pt_walk_cur_status.error || 
+                    ! pt_walk_cur_status.terminal && (&(translate_depth) == 1'b1))
+                begin
+                    state <= STATE_PT_WALK_ERROR;
                 end
 
                 // Shift to move to the index of the next level.
@@ -777,6 +778,7 @@ module cci_mpf_svc_vtp_pt_walk_cache
         .N_ENTRIES(PT_CACHE_ENTRIES * PT_WORDS_PER_LINE),
         .N_DATA_BITS(CCI_PT_4KB_PA_PAGE_INDEX_BITS +
                      $bits(t_cci_mpf_pt_walk_status)),
+        .REGISTER_WRITES(1),
         .N_OUTPUT_REG_STAGES(1)
         )
       data

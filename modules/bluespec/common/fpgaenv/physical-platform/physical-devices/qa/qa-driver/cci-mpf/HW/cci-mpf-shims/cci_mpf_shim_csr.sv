@@ -381,7 +381,8 @@ module cci_mpf_shim_csr
     cci_mpf_prim_fifo_lutram
       #(
         .N_DATA_BITS($bits(t_mpf_csr_offset) + CCIP_TID_WIDTH),
-        .N_ENTRIES(64)
+        .N_ENTRIES(64),
+        .REGISTER_OUTPUT(1)
         )
       req_fifo
         (

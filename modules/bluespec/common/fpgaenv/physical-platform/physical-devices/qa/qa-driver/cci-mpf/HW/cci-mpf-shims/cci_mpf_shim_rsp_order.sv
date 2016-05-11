@@ -186,7 +186,8 @@ module cci_mpf_shim_rsp_order
     cci_mpf_shim_buffer_fiu
       #(
         // Both the ROB and heaps depend on 2 cycle latency
-        .N_RX_REG_STAGES(2)
+        .N_RX_REG_STAGES(2),
+        .REGISTER_OUTBOUND(1)
         )
       buf_rx
        (
@@ -394,17 +395,21 @@ module cci_mpf_shim_rsp_order
 
     t_cci_vc c0Tx_va_vc_map[0 : CCI_MPF_N_VA_VC_MAP-1];
     logic c0Tx_va_vc_map_rotate;
+    logic c0Tx_force_va;
 
     always_ff @(posedge clk)
     begin
         if (csrs.rsp_order_c0Tx_va_vc_map_valid)
         begin
-            // Set pattern from host by writing to CSR
+            // Set pattern from host by writing to CSR.  See cci_mpf_csrs.h
+            // for bit assignments in rsp_order_c0Tx_va_vc_map.
             for (int v = 0; v < CCI_MPF_N_VA_VC_MAP; v = v + 1)
             begin
                 c0Tx_va_vc_map[v] <=
                     t_cci_vc'(csrs.rsp_order_c0Tx_va_vc_map[$bits(t_cci_vc) * v +: $bits(t_cci_vc)]);
             end
+
+            c0Tx_force_va <= csrs.rsp_order_c0Tx_va_vc_map[32];
         end
         else if (c0Tx_va_vc_map_rotate)
         begin
@@ -425,6 +430,8 @@ module cci_mpf_shim_rsp_order
             begin
                 c0Tx_va_vc_map[v] <= eVC_VA;
             end
+
+            c0Tx_force_va <= 1'b0;
         end
     end
 
@@ -439,11 +446,18 @@ module cci_mpf_shim_rsp_order
 
         // See VC selection above.
         c0Tx_va_vc_map_rotate = 1'b0;
-        if (SORT_READ_RESPONSES && (afu.c0Tx.hdr.base.vc_sel == eVC_VA) &&
-            cci_mpf_c0TxIsReadReq(afu.c0Tx))
+        if (cci_mpf_c0TxIsReadReq(afu.c0Tx))
         begin
-            c0Tx_va_vc_map_rotate = 1'b1;
-            fiu_buf.c0Tx.hdr.base.vc_sel = c0Tx_va_vc_map[0];
+            if (afu.c0Tx.hdr.base.vc_sel == eVC_VA)
+            begin
+                c0Tx_va_vc_map_rotate = 1'b1;
+                fiu_buf.c0Tx.hdr.base.vc_sel = c0Tx_va_vc_map[0];
+            end
+
+            if (c0Tx_force_va)
+            begin
+                fiu_buf.c0Tx.hdr.base.vc_sel = eVC_VA;
+            end
         end
     end
 
@@ -508,6 +522,8 @@ module cci_mpf_shim_rsp_order
     //
     // ====================================================================
 
+    logic c1Tx_force_va;
+
     // Requests: replace the Mdata field with the heap index that holds
     // the preserved value.
     always_comb
@@ -519,6 +535,14 @@ module cci_mpf_shim_rsp_order
         if (wr_heap_alloc)
         begin
             fiu_buf.c1Tx.hdr.base.mdata = t_cci_mdata'(wr_heap_allocIdx);
+
+            // Force writes to use eVC_VA?  See VC selection for reads
+            // above.  This setting is used mostly for research
+            // on channel allocation policies.
+            if (c1Tx_force_va)
+            begin
+                fiu_buf.c1Tx.hdr.base.vc_sel = eVC_VA;
+            end
         end
     end
 
@@ -544,6 +568,20 @@ module cci_mpf_shim_rsp_order
     assign wr_heap_free = cci_c1Rx_isWriteRsp(fiu.c1Rx) ||
                           cci_c1Rx_isWriteFenceRsp(fiu.c1Rx);
 
+
+    // VC selection CSR for writes.
+    always_ff @(posedge clk)
+    begin
+        if (csrs.rsp_order_c0Tx_va_vc_map_valid)
+        begin
+            c1Tx_force_va <= csrs.rsp_order_c0Tx_va_vc_map[33];
+        end
+
+        if (reset)
+        begin
+            c1Tx_force_va <= 1'b0;
+        end
+    end
 
     // ====================================================================
     //

@@ -82,11 +82,7 @@ module cci_mpf_shim_buffer_fiu
             always_comb
             begin
                 fiu_raw.c0Tx = fiu_buf.c0Tx;
-                fiu_buf.c0TxAlmFull = fiu_raw.c0TxAlmFull;
-
                 fiu_raw.c1Tx = fiu_buf.c1Tx;
-                fiu_buf.c1TxAlmFull = fiu_raw.c1TxAlmFull;
-
                 fiu_raw.c2Tx = fiu_buf.c2Tx;
             end
         end
@@ -95,15 +91,15 @@ module cci_mpf_shim_buffer_fiu
             always_ff @(posedge clk)
             begin
                 fiu_raw.c0Tx <= fiu_buf.c0Tx;
-                fiu_buf.c0TxAlmFull <= fiu_raw.c0TxAlmFull;
-
                 fiu_raw.c1Tx <= fiu_buf.c1Tx;
-                fiu_buf.c1TxAlmFull <= fiu_raw.c1TxAlmFull;
-
                 fiu_raw.c2Tx <= fiu_buf.c2Tx;
             end
         end
     endgenerate
+
+    assign fiu_buf.c0TxAlmFull = fiu_raw.c0TxAlmFull;
+    assign fiu_buf.c1TxAlmFull = fiu_raw.c1TxAlmFull;
+
 
     //
     // Rx

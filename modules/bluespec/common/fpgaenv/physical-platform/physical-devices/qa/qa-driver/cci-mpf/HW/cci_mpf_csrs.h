@@ -84,7 +84,20 @@ typedef enum
     // BBB feature ID high (read)
     CCI_MPF_RSP_ORDER_CSR_ID_H = 16,
 
-    // eVC_VA to physical channel mapping configuration
+    // eVC_VA to physical channel mapping configuration.  This is
+    // mostly useful for experiments with physical mapping:
+    //
+    //   Bits 31-0:
+    //      A vector of 16 t_cci_vc entries that are used to map
+    //      read requests on eVC_VA to other other channels.  The
+    //      vector is rotated on each read to VA, allowing the CSR
+    //      to define a pattern of translations.
+    //   Bit 32:
+    //      When set, direct all reads to eVC_VA.  This overrides
+    //      bits 31-0.
+    //   Bit 33:
+    //      When set, direct all writes to eVC_VA.
+    //
     CCI_MPF_RSP_ORDER_CSR_C0TX_VA_VC_MAP = 24,
 
     // Must be last

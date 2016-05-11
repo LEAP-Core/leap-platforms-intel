@@ -108,7 +108,9 @@ module cci_mpf_shim_edge_fiu
       #(
         .N_ENTRIES(N_UNIQUE_WRITE_HEAP_ENTRIES),
         .N_DATA_BITS(CCI_CLDATA_WIDTH),
-        .N_OUTPUT_REG_STAGES(1)
+        .N_OUTPUT_REG_STAGES(1),
+        .REGISTER_WRITES(1),
+        .BYPASS_REGISTERED_WRITES(0)
         )
       wr_heap_data
        (

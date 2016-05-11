@@ -183,11 +183,12 @@ module cci_mpf_svc_vtp_pt_walk
     //
     // ====================================================================
 
-    typedef enum logic [2:0]
+    typedef enum logic [3:0]
     {
         STATE_PT_WALK_IDLE,
         STATE_PT_WALK_READ_CACHE_REQ,
         STATE_PT_WALK_READ_CACHE_RSP,
+        STATE_PT_WALK_READ_CACHE_RETRY,
         STATE_PT_WALK_READ_REQ,
         STATE_PT_WALK_READ_WAIT_RSP,
         STATE_PT_WALK_READ_RSP,
@@ -355,27 +356,7 @@ module cci_mpf_svc_vtp_pt_walk
                     if (translate_depth != t_cci_mpf_pt_walk_depth'(0))
                     begin
                         // Try higher up in the page table hierarchy.
-                        state <= STATE_PT_WALK_READ_CACHE_REQ;
-                        translate_depth <= translate_depth -
-                                           t_cci_mpf_pt_walk_depth'(1);
-
-                        // Shift the page table index vector to represent
-                        // a higher level.
-                        for (int i = 0; i < CCI_MPF_PT_MAX_DEPTH-1; i = i + 1)
-                        begin
-                            translate_va_idx_vec[i] <=
-                                translate_va_idx_vec[i + 1];
-                            translate_va_lower_idx_vec[i] <=
-                                translate_va_lower_idx_vec[i + 1];
-                        end
-
-                        translate_va_idx_vec[CCI_MPF_PT_MAX_DEPTH-1] <=
-                            t_cci_mpf_pt_page_idx'(0);
-
-                        // "Lower" vector holds indices only relevant to
-                        // the hierarchy below the current search depth.
-                        translate_va_lower_idx_vec[CCI_MPF_PT_MAX_DEPTH-1] <=
-                            translate_va_idx_vec[0];
+                        state <= STATE_PT_WALK_READ_CACHE_RETRY;
                     end
                     else
                     begin
@@ -394,6 +375,32 @@ module cci_mpf_svc_vtp_pt_walk
                     pt_walk_page_from_cache <= 1'b1;
                     pt_walk_cache_page <= ptReadCachePage;
                 end
+            end
+
+          STATE_PT_WALK_READ_CACHE_RETRY:
+            begin
+                // Shift to look higher up in the page table hierarchy.
+                state <= STATE_PT_WALK_READ_CACHE_REQ;
+                translate_depth <= translate_depth -
+                                   t_cci_mpf_pt_walk_depth'(1);
+
+                // Shift the page table index vector to represent
+                // a higher level.
+                for (int i = 0; i < CCI_MPF_PT_MAX_DEPTH-1; i = i + 1)
+                begin
+                    translate_va_idx_vec[i] <=
+                        translate_va_idx_vec[i + 1];
+                    translate_va_lower_idx_vec[i] <=
+                        translate_va_lower_idx_vec[i + 1];
+                end
+
+                translate_va_idx_vec[CCI_MPF_PT_MAX_DEPTH-1] <=
+                    t_cci_mpf_pt_page_idx'(0);
+
+                // "Lower" vector holds indices only relevant to
+                // the hierarchy below the current search depth.
+                translate_va_lower_idx_vec[CCI_MPF_PT_MAX_DEPTH-1] <=
+                    translate_va_idx_vec[0];
             end
 
           STATE_PT_WALK_READ_REQ:
@@ -746,6 +753,8 @@ module cci_mpf_svc_vtp_pt_walk_cache
       #(
         .N_ENTRIES(PT_CACHE_ENTRIES),
         .N_DATA_BITS($bits(t_pt_entry_tag)),
+        .REGISTER_WRITES(1),
+        .BYPASS_REGISTERED_WRITES(0),
         .N_OUTPUT_REG_STAGES(1)
         )
       tag
@@ -779,6 +788,7 @@ module cci_mpf_svc_vtp_pt_walk_cache
         .N_DATA_BITS(CCI_PT_4KB_PA_PAGE_INDEX_BITS +
                      $bits(t_cci_mpf_pt_walk_status)),
         .REGISTER_WRITES(1),
+        .BYPASS_REGISTERED_WRITES(0),
         .N_OUTPUT_REG_STAGES(1)
         )
       data

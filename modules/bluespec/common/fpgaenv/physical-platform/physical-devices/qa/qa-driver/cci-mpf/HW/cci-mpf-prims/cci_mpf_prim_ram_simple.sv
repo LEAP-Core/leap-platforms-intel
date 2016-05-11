@@ -298,9 +298,9 @@ module cci_mpf_prim_ram_simple_base
                 c_wen <= wen;
                 c_waddr <= waddr;
                 c_wdata <= wdata;
-
-                rdata <= c_rdata;
             end
+
+            assign rdata = c_rdata;
         end
         else
         begin : wrb

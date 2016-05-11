@@ -416,19 +416,19 @@ module cci_mpf_svc_vtp_tlb
     // Final stage, follows tag comparison
     //
 
-    always_comb
+    always_ff @(posedge clk)
     begin
         // Lookup is valid if some way hit
-        tlb_if.lookupRspValid = lookup_valid;
+        tlb_if.lookupRspValid <= lookup_valid;
 
         // Flag misses.
-        tlb_if.lookupMiss = lookup_miss;
+        tlb_if.lookupMiss <= lookup_miss;
 
-        tlb_if.lookupMissVA =
+        tlb_if.lookupMissVA <=
             tlbVAIdxTo4K(stg_state[NUM_TLB_LOOKUP_PIPE_STAGES].lookup_page_va);
 
         // Get the physical page index from the chosen way
-        tlb_if.lookupRspPagePA = lookup_page_pa;
+        tlb_if.lookupRspPagePA <= lookup_page_pa;
     end
 
 
@@ -559,7 +559,7 @@ module cci_mpf_svc_vtp_tlb
          .lookupRspRdy(repl_lookup_rsp_rdy),
          .refIdx0(target_tlb_idx(stg_state[NUM_TLB_LOOKUP_PIPE_STAGES].lookup_page_va)),
          .refWayVec0(lookup_way_hit_vec),
-         .refEn0(tlb_if.lookupRspValid),
+         .refEn0(lookup_valid),
          // Update port 1 not used
          .refIdx1(t_tlb_idx'(0)),
          .refWayVec1(NUM_TLB_SET_WAYS'(0)),
@@ -605,14 +605,14 @@ module cci_mpf_svc_vtp_tlb
                          {tlb_if.lookupPageVA, CCI_PT_4KB_PAGE_OFFSET_BITS'(0), 6'b0});
             end
 
-            if (tlb_if.lookupRspValid)
+            if (lookup_valid)
             begin
                 $display("VTP TLB %s: Hit idx %0d, way %0d, VA 0x%x, PA 0x%x",
                          DEBUG_NAME,
                          target_tlb_idx(stg_state[NUM_TLB_LOOKUP_PIPE_STAGES].lookup_page_va),
                          lookup_way_hit,
                          {stg_state[NUM_TLB_LOOKUP_PIPE_STAGES].lookup_page_va, CCI_PT_PAGE_OFFSET_BITS'(0), 6'b0},
-                         {tlb_if.lookupRspPagePA, CCI_PT_PAGE_OFFSET_BITS'(0), 6'b0});
+                         {lookup_page_pa, CCI_PT_PAGE_OFFSET_BITS'(0), 6'b0});
             end
 
             if (fill_state == STATE_TLB_FILL_INSERT)

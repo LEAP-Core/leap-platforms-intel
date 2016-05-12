@@ -368,7 +368,7 @@ module cci_mpf_shim_detect_eop_track_flits
         for (int i = 1; i <= 2; i = i + 1)
         begin
             p_rspIdx[i] <= p_rspIdx[i-1];
-            p_rspIsPacked[i] = p_rspIsPacked[i-1];
+            p_rspIsPacked[i] <= p_rspIsPacked[i-1];
             p_num_inflight_same_idx[i] <= p_num_inflight_same_idx[i-1];
         end
     end

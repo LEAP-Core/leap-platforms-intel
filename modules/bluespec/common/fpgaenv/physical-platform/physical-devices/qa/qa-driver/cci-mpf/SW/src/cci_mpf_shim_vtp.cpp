@@ -307,7 +307,9 @@ ali_errnum_e MPFVTP::bufferAllocate( btWSSize             Length,
        munmap(va_base, va_base_len);
    }
 
+#if defined(ENABLE_DEBUG) && (0 != ENABLE_DEBUG)
    ptDumpPageTable();
+#endif
 
    *pBufferptr = (btVirtAddr)va_aligned;
    return ali_errnumOK;

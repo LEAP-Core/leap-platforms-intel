@@ -41,8 +41,7 @@ ifeq (,$(CFLAGS))
 CFLAGS = -g -O2
 endif
 
-ifneq (,$(ndebug))
-else
+ifneq (,$(DEBUG))
 CPPFLAGS += -DENABLE_DEBUG=1
 endif
 ifneq (,$(nassert))

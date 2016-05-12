@@ -28,8 +28,7 @@
 /// @brief Definitions for MPF Service.
 /// @ingroup VTPService
 /// @verbatim
-/// Intel(R) QuickAssist Technology Accelerator Abstraction Layer
-/// Virtual-to-Physical address translation service
+/// Memory Property Factory Basic Building Block Service
 ///
 /// The MPF service provides software interfaces to features exposed by the
 /// cci_mpf basic building block which require software interaction, such as

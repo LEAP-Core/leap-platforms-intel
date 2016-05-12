@@ -59,6 +59,11 @@ The make step should leave you with the following files:
 
 where x/y/z are set according to the version of VTP you have built.
 
+To make your application aware of these libraries, either copy them to a
+directory in you library search path or add the direcory containing them to the
+LD_LIBRARY_PATH environment variable:
+
+   export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:<my_cci_mpf_dir>/SW
 
 
 How to use VTP in your software application or service
@@ -109,11 +114,12 @@ To allocate a VTP service, follow these steps:
                              Manifest,
                              m_VTPTranID);
 
-   4. After resetting the AFU (using afuReset()), *always* call vtpReset().
-      An AFU reset will always also clear internal registers in the MPF,
-      including the VTP feature. vtpReset() reinitializes these. Note that
-      vtpReset() will not clear/initialize the VTP feature, it only
-      reinitializes the CSRs necessary for operation.
+   4. After resetting the AFU (using afuReset()), *always* call vtpReset() or
+      vtpEnable(). An AFU reset will always also clear internal registers in
+      the MPF, including the VTP feature. vtpEnable() reinitializes these.
+      vtpReset() will clear the TLB cache in the HW module and then call
+      vtpEnable().
+
 
 Please refer to the supplied Hello_ALI_VTP_NLB sample application for the
 complete code required.
@@ -128,5 +134,8 @@ virtual addresses, use IVTP's bufferAllocate():
 
 You can now pass the pBuffer pointer (which is a valid virtual address) to your
 AFU, e.g. using a CSR.
+
+At this time, freeing allocated buffers is not supported.
+
 
 

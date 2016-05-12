@@ -28,14 +28,13 @@
 /// @brief Definitions for VTP Service.
 /// @ingroup VTPService
 /// @verbatim
-/// Intel(R) QuickAssist Technology Accelerator Abstraction Layer
 /// Virtual-to-Physical address translation component class
 ///
-/// Provides methods for access to the VTP BBB for address translation.
+/// Provides methods for access to the VTP feature for address translation.
 /// Assumes a VTP BBB DFH to be detected and present.
 ///
 /// On initialization, allocates shared buffer for VTP page hash and
-/// communicates its location to VTP BBB.
+/// communicates its location to VTP feature.
 ///
 /// Provides synchronous methods to update page hash on shared buffer
 /// allocation.

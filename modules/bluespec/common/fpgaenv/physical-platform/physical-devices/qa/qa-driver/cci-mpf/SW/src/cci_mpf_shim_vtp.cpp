@@ -28,14 +28,13 @@
 /// @brief Implementation of MPFVTP.
 /// @ingroup VTPService
 /// @verbatim
-/// Intel(R) QuickAssist Technology Accelerator Abstraction Layer
 /// Virtual-to-Physical address translation component class
 ///
-/// Provides methods for access to the VTP BBB for address translation.
+/// Provides methods for access to the VTP feature for address translation.
 /// Assumes a VTP BBB DFH to be detected and present.
 ///
 /// On initialization, allocates shared buffer for VTP page hash and
-/// communicates its location to VTP BBB.
+/// communicates its location to VTP feature.
 ///
 /// Provides synchronous methods to update page hash on shared buffer
 /// allocation.
@@ -91,6 +90,10 @@ BEGIN_NAMESPACE(AAL)
 // Public functions
 //-----------------------------------------------------------------------------
 
+//
+// Construct MPFVTP object. Check for VTP feature presence, and initialize page
+// table.
+//
 MPFVTP::MPFVTP( IALIBuffer *pBufferService,
                 IALIMMIO   *pMMIOService,
                 btCSROffset vtpDFHOffset ) : m_pALIBuffer( pBufferService),
@@ -127,14 +130,17 @@ MPFVTP::MPFVTP( IALIBuffer *pBufferService,
    ret = ptInitialize();
    ASSERT(ret);
 
-   // Tell the hardware the address of the table
-   ret = vtpEnable();
+   // Invalidate TLB and tell the hardware the address of the table
+   ret = vtpReset();
    ASSERT(ret);
 
    m_isOK = true;
 }
 
-
+//
+// Allocate virtual buffer, potentially assembling it from several physical
+// buffers.
+//
 ali_errnum_e MPFVTP::bufferAllocate( btWSSize             Length,
                                      btVirtAddr          *pBufferptr,
                                      NamedValueSet const &rInputArgs,
@@ -307,8 +313,10 @@ ali_errnum_e MPFVTP::bufferAllocate( btWSSize             Length,
    return ali_errnumOK;
 }
 
+//
 // allocate page of size pageSize to virtual address va and add entry to VTP
 // page table
+//
 ali_errnum_e MPFVTP::_allocate(btVirtAddr va, size_t pageSize)
 {
    ali_errnum_e err;
@@ -345,7 +353,9 @@ ali_errnum_e MPFVTP::_allocate(btVirtAddr va, size_t pageSize)
    return err;
 }
 
-
+//
+// Free buffer (not supported).
+//
 ali_errnum_e MPFVTP::bufferFree( btVirtAddr Address)
 {
    // TODO: not implemented
@@ -353,6 +363,9 @@ ali_errnum_e MPFVTP::bufferFree( btVirtAddr Address)
    return ali_errnumNoMem;
 }
 
+//
+// Free all buffers (not supported).
+//
 ali_errnum_e MPFVTP::bufferFreeAll()
 {
    // TODO: not implemented
@@ -360,6 +373,9 @@ ali_errnum_e MPFVTP::bufferFreeAll()
    return ali_errnumNoMem;
 }
 
+//
+// Get virtual to physical address mapping.
+//
 btPhysAddr MPFVTP::bufferGetIOVA( btVirtAddr Address)
 {
    bool ret;
@@ -371,24 +387,49 @@ btPhysAddr MPFVTP::bufferGetIOVA( btVirtAddr Address)
    return pa;
 }
 
+//
+// Reset MPF/VTP feature. Disables VTP feature (blocks traffic) and invalidates
+// FPGA-side translation cache.
+//
 btBool MPFVTP::vtpReset( void )
 {
-   m_pALIMMIO->mmioWrite64(m_dfhOffset + CCI_MPF_VTP_CSR_MODE, 2);
+   btBool ret = false;
+   ret = m_pALIMMIO->mmioWrite64(m_dfhOffset + CCI_MPF_VTP_CSR_MODE, 2);
+   ASSERT(ret);
+
+   if (!ret) {
+      return ret;
+   }
 
    return vtpEnable();
 }
 
+//
+// Enable MPF/VTP feature.
+//
 btBool MPFVTP::vtpEnable( void )
 {
+   btBool ret = false;
+
    // Write page table physical address CSR
-   m_pALIMMIO->mmioWrite64(m_dfhOffset + CCI_MPF_VTP_CSR_PAGE_TABLE_PADDR,
+   ret = m_pALIMMIO->mmioWrite64(m_dfhOffset + CCI_MPF_VTP_CSR_PAGE_TABLE_PADDR,
                            ptGetPageTableRootPA() / CL(1));
+   ASSERT(ret);
+
+   if (!ret) {
+      return ret;
+   }
 
    // Enable VTP
-   m_pALIMMIO->mmioWrite64(m_dfhOffset + CCI_MPF_VTP_CSR_MODE, 1);
+   ret = m_pALIMMIO->mmioWrite64(m_dfhOffset + CCI_MPF_VTP_CSR_MODE, 1);
+   ASSERT(ret);
+
+   return ret;
 }
 
+//
 // Return a statistics counter
+//
 btUnsigned64bitInt MPFVTP::vtpGetCounter( t_cci_mpf_vtp_csr_offsets stat )
 {
 

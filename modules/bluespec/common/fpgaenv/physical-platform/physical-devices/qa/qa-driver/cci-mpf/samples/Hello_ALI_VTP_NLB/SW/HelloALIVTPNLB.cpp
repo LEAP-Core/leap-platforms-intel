@@ -94,7 +94,7 @@ using namespace AAL;
 # define MB(x)                     ((x) * 1024 * 1024)
 #endif // MBA
 
-#define LPBK1_BUFFER_SIZE        (MB(4) + KB(128))
+#define LPBK1_BUFFER_SIZE        MB(2048)
 #define LPBK1_DSM_SIZE           MB(4)
 
 //
@@ -133,6 +133,7 @@ public:
 
    void serviceReleased(const AAL::TransactionID&);
 
+   void serviceReleaseRequest(IBase *pServiceBase, const IEvent &rEvent);
    void serviceReleaseFailed(const AAL::IEvent&);
 
    void serviceEvent(const IEvent &rEvent);
@@ -450,9 +451,10 @@ btInt HelloALIVTPNLBApp::run()
       // Initiate AFU Reset
       m_pALIResetService->afuReset();
 
-      // AFU Reset clear VTP, too, so reinitialize that
-      // NOTE: this interface is likely to change in future releases of AAL.
-      m_pVTPService->vtpReset();
+      // AFU Reset clear VTP, too, so reinitialize registers
+      // Note: you can also call vtpReset() here, which will additionally clear
+      // the TLB.
+      m_pVTPService->vtpEnable();
 
       // Initiate DSM Reset
       // Set DSM base (virtual, since we have allocated using VTP), high then low
@@ -703,6 +705,16 @@ void HelloALIVTPNLBApp::serviceAllocateFailed(const IEvent &rEvent)
    // Unblock Main()
    m_Sem.Post(1);
 }
+
+ void HelloALIVTPNLBApp::serviceReleaseRequest(IBase *pServiceBase, const IEvent &rEvent)
+ {
+    MSG("Service unexpected requested back");
+    if(NULL != m_pALIAFU_AALService){
+       IAALService *pIAALService = dynamic_ptr<IAALService>(iidService, m_pALIAFU_AALService);
+       ASSERT(pIAALService);
+       pIAALService->Release(TransactionID());
+    }
+ }
 
  void HelloALIVTPNLBApp::serviceReleaseFailed(const IEvent        &rEvent)
  {

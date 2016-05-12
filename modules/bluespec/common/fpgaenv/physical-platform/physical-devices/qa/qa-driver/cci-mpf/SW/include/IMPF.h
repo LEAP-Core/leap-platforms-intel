@@ -109,8 +109,7 @@ public:
    /// Reinitialize VTP after AFU Reset
    virtual btBool vtpEnable( void ) = 0;
 
-   /// DEPRECATED.
-   /// @note This interface is likely to change or disappear in beta
+   /// Reset VTP (invalidate TLB)
    virtual btBool vtpReset( void ) = 0;
 
 };

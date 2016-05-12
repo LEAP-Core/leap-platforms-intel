@@ -101,6 +101,26 @@ BEGIN_NAMESPACE(AAL)
 ///
 /// @see IALIBuffer
 
+// VTP statistics
+typedef struct
+{
+   // Hits and misses in the TLB. The VTP pipeline has local caches
+   // within the pipeline itself that filter requests to the TLB.
+   // The counts here increment only for requests to the TLB service
+   // that are not satisfied in the VTP pipeline caches.
+   btUnsigned64bitInt numTLBHits4KB;
+   btUnsigned64bitInt numTLBMisses4KB;
+   btUnsigned64bitInt numTLBHits2MB;
+   btUnsigned64bitInt numTLBMisses2MB;
+
+   // Number of cycles spent with the page table walker active.  Since
+   // the walker manages only one request at a time the latency of the
+   // page table walker can be computed as:
+   //   numPTWalkBusyCycles / (numTLBMisses4KB + numTLBMisses2MB)
+   btUnsigned64bitInt numPTWalkBusyCycles;
+}
+t_cci_mpf_vtp_stats;
+
 class IMPFVTP : public IALIBuffer
 {
 public:
@@ -112,6 +132,8 @@ public:
    /// Reset VTP (invalidate TLB)
    virtual btBool vtpReset( void ) = 0;
 
+   // Return all statistics counters
+   virtual btBool vtpGetStats( t_cci_mpf_vtp_stats *stats ) = 0;
 };
 
 /// @}

@@ -703,7 +703,7 @@ AFU_CLIENT_CLASS::GetStatVTP(t_cci_mpf_vtp_csr_offsets stat)
 #else
     if (m_mpf_vtp)
     {
-        return m_mpf_vtp->vtpGetCounter(stat);
+        return m_mpf_vtp->vtpGetStatCounter(stat);
     }
     else
     {

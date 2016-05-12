@@ -430,9 +430,22 @@ btBool MPFVTP::vtpEnable( void )
 }
 
 //
+// Return all statistics counters
+//
+btBool MPFVTP::vtpGetStats( t_cci_mpf_vtp_stats *stats )
+{
+    stats->numTLBHits4KB = vtpGetStatCounter(CCI_MPF_VTP_CSR_STAT_4KB_TLB_NUM_HITS);
+    stats->numTLBMisses4KB = vtpGetStatCounter(CCI_MPF_VTP_CSR_STAT_4KB_TLB_NUM_MISSES);
+    stats->numTLBHits2MB = vtpGetStatCounter(CCI_MPF_VTP_CSR_STAT_2MB_TLB_NUM_HITS);
+    stats->numTLBMisses2MB = vtpGetStatCounter(CCI_MPF_VTP_CSR_STAT_2MB_TLB_NUM_MISSES);
+    stats->numPTWalkBusyCycles = vtpGetStatCounter(CCI_MPF_VTP_CSR_STAT_PT_WALK_BUSY_CYCLES);
+    return true;
+}
+
+//
 // Return a statistics counter
 //
-btUnsigned64bitInt MPFVTP::vtpGetCounter( t_cci_mpf_vtp_csr_offsets stat )
+btUnsigned64bitInt MPFVTP::vtpGetStatCounter( t_cci_mpf_vtp_csr_offsets stat )
 {
 
    btUnsigned64bitInt cnt;

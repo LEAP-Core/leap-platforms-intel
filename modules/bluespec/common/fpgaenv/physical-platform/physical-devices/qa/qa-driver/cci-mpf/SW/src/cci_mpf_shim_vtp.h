@@ -108,8 +108,11 @@ public:
 
    btBool isOK( void ) { return m_isOK; }     // < status after initialization
 
+   // Return all statistics counters
+   btBool vtpGetStats( t_cci_mpf_vtp_stats *stats );
+
    // Return a statistics counter
-   btUnsigned64bitInt vtpGetCounter( t_cci_mpf_vtp_csr_offsets stat );
+   btUnsigned64bitInt vtpGetStatCounter( t_cci_mpf_vtp_csr_offsets stat );
 
 protected:
    IALIBuffer            *m_pALIBuffer;
@@ -128,7 +131,7 @@ private:
    static const size_t LARGE_PAGE_SIZE = MB(2);
    static const size_t LARGE_PAGE_MASK = ~(LARGE_PAGE_SIZE - 1);
 
-   static const size_t CCI_MPF_VTP_LARGE_PAGE_THRESHOLD = KB(256);
+   static const size_t CCI_MPF_VTP_LARGE_PAGE_THRESHOLD = KB(128);
 
    ali_errnum_e _allocate(btVirtAddr va, size_t pageSize);
 };

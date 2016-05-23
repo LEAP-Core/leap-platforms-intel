@@ -210,6 +210,9 @@ package cci_mpf_if_pkg;
         // Setting this to zero bypasses ordering logic for this request.
         logic checkLoadStoreOrder;
 
+        // Map eVC_VA to a real physical channel?
+        logic mapVAtoPhysChannel;
+
         // Is the address in the header virtual (1) or physical (0)?
         logic addrIsVirtual;
     } t_cci_mpf_ReqMemHdrExt;
@@ -295,6 +298,21 @@ package cci_mpf_if_pkg;
     endfunction
 
 
+    function automatic logic cci_mpf_c0_getReqMapVA(
+        input t_cci_mpf_c0_ReqMemHdr h
+        );
+
+        return h.ext.mapVAtoPhysChannel;
+    endfunction
+
+    function automatic logic cci_mpf_c1_getReqMapVA(
+        input t_cci_mpf_c1_ReqMemHdr h
+        );
+
+        return h.ext.mapVAtoPhysChannel;
+    endfunction
+
+
     function automatic logic cci_mpf_c0_getReqAddrIsVirtual(
         input t_cci_mpf_c0_ReqMemHdr h
         );
@@ -338,6 +356,7 @@ package cci_mpf_if_pkg;
     // we use a struct to pass non-basic parameters.
     typedef struct {
         logic       checkLoadStoreOrder;
+        logic       mapVAtoPhysChannel;
         logic       addrIsVirtual;
         t_cci_vc    vc_sel;
         t_cci_clLen cl_len;
@@ -356,6 +375,7 @@ package cci_mpf_if_pkg;
 
         t_cci_mpf_ReqMemHdrParams p;
         p.checkLoadStoreOrder = 1'b0;      // Default hardware behavior
+        p.mapVAtoPhysChannel = 1'b0;
         p.addrIsVirtual = 1'(addrIsVirtual);
         p.vc_sel = eVC_VL0;
         p.cl_len = eCL_LEN_1;
@@ -376,6 +396,7 @@ package cci_mpf_if_pkg;
         h = cci_mpf_c0_updReqVAddr(h, address);
 
         h.ext.checkLoadStoreOrder = params.checkLoadStoreOrder;
+        h.ext.mapVAtoPhysChannel = params.mapVAtoPhysChannel;
         h.ext.addrIsVirtual = params.addrIsVirtual;
 
         h.base.req_type = requestType;
@@ -399,6 +420,7 @@ package cci_mpf_if_pkg;
         h = cci_mpf_c1_updReqVAddr(h, address);
 
         h.ext.checkLoadStoreOrder = params.checkLoadStoreOrder;
+        h.ext.mapVAtoPhysChannel = params.mapVAtoPhysChannel;
         h.ext.addrIsVirtual = params.addrIsVirtual;
 
         h.base.req_type = requestType;
@@ -453,6 +475,7 @@ package cci_mpf_if_pkg;
         // that MPF treats the request as a standard CCI request.
         h.ext = 'x;
         h.ext.checkLoadStoreOrder = 0;
+        h.ext.mapVAtoPhysChannel = 0;
         h.ext.addrIsVirtual = 0;
 
         return h;
@@ -470,6 +493,7 @@ package cci_mpf_if_pkg;
         // that MPF treats the request as a standard CCI request.
         h.ext = 'x;
         h.ext.checkLoadStoreOrder = 0;
+        h.ext.mapVAtoPhysChannel = 0;
         h.ext.addrIsVirtual = 0;
 
         return h;
@@ -713,6 +737,7 @@ package cci_mpf_if_pkg;
         if (! cci_mpf_c0TxIsReadReq(r))
         begin
             r_out.hdr.ext.checkLoadStoreOrder = 0;
+            r_out.hdr.ext.mapVAtoPhysChannel = 0;
             r_out.hdr.ext.addrIsVirtual = 0;
             r_out.hdr.base.cl_len = eCL_LEN_1;
         end
@@ -733,6 +758,7 @@ package cci_mpf_if_pkg;
         if (! cci_mpf_c1TxIsWriteReq(r))
         begin
             r_out.hdr.ext.checkLoadStoreOrder = 0;
+            r_out.hdr.ext.mapVAtoPhysChannel = 0;
             r_out.hdr.ext.addrIsVirtual = 0;
             r_out.hdr.base.cl_len = eCL_LEN_1;
         end

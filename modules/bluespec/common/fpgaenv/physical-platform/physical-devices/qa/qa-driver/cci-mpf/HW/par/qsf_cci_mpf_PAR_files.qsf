@@ -70,6 +70,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_mux.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_null.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_rsp_order.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_vc_map.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_shim_vtp.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_svc_vtp.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_svc_vtp_pipe.sv

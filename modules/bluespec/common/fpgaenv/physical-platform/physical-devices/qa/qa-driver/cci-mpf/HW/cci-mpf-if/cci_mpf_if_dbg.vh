@@ -194,12 +194,13 @@
                 /******************* AFU -> MEM Read Request ******************/
                 if (! reset && c0Tx.valid)
                 begin
-                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%x\t%s %x\n",
+                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%x\t%s%s %x\n",
                             $time,
                             print_channel(c0Tx.hdr.base.vc_sel),
                             c0Tx.hdr.base.cl_len,
                             print_c0_reqtype(c0Tx.hdr.base.req_type),
                             c0Tx.hdr.base.mdata,
+                            (c0Tx.hdr.ext.mapVAtoPhysChannel ? "M" : ""),
                             (c0Tx.hdr.ext.addrIsVirtual ? "V" : "P"),
                             c0Tx.hdr.base.address );
 
@@ -209,13 +210,14 @@
                 /******************* AFU -> MEM Write Request *****************/
                 if (! reset && c1Tx.valid)
                 begin
-                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%s\t%x\t%s %x\t%x\n",
+                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%s\t%x\t%s%s %x\t%x\n",
                             $time,
                             print_channel(c1Tx.hdr.base.vc_sel),
                             c1Tx.hdr.base.cl_len,
                             (c1Tx.hdr.base.sop ? "S" : "x"),
                             print_c1_reqtype(c1Tx.hdr.base.req_type),
                             c1Tx.hdr.base.mdata,
+                            (c1Tx.hdr.ext.mapVAtoPhysChannel ? "M" : ""),
                             (c1Tx.hdr.ext.addrIsVirtual ? "V" : "P"),
                             c1Tx.hdr.base.address,
                             c1Tx.data);

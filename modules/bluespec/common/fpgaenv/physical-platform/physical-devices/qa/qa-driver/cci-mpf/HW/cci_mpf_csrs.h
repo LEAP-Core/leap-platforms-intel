@@ -84,26 +84,39 @@ typedef enum
     // BBB feature ID high (read)
     CCI_MPF_RSP_ORDER_CSR_ID_H = 16,
 
-    // eVC_VA to physical channel mapping configuration.  This is
-    // mostly useful for experiments with physical mapping:
-    //
-    //   Bits 31-0:
-    //      A vector of 16 t_cci_vc entries that are used to map
-    //      read requests on eVC_VA to other other channels.  The
-    //      vector is rotated on each read to VA, allowing the CSR
-    //      to define a pattern of translations.
-    //   Bit 32:
-    //      When set, direct all reads to eVC_VA.  This overrides
-    //      bits 31-0.
-    //   Bit 33:
-    //      When set, direct all writes to eVC_VA.
-    //
-    CCI_MPF_RSP_ORDER_CSR_C0TX_VA_VC_MAP = 24,
-
     // Must be last
-    CCI_MPF_RSP_ORDER_CSR_SIZE = 32
+    CCI_MPF_RSP_ORDER_CSR_SIZE = 24
 }
 t_cci_mpf_rsp_order_csr_offsets;
+
+
+//
+// Memory virtual channel mapping feature -- {5046c86f-ba48-4856-b8f9-3b76e3dd4e74}
+//
+typedef enum
+{
+    // MPF vc mapping BBB feature header (read)
+    CCI_MPF_VC_MAP_CSR_DFH = 0,
+    // BBB feature ID low (read)
+    CCI_MPF_VC_MAP_CSR_ID_L = 8,
+    // BBB feature ID high (read)
+    CCI_MPF_VC_MAP_CSR_ID_H = 16,
+
+    //
+    // eVC_VA to physical channel mapping configuration.
+    //
+    //   Bit 0:
+    //      Enable mapping when 1.  When the module is present mapping
+    //      defaults to enabled.  Writing 1 is unnecessary.  Writing 0
+    //      will disable mapping and requests on eVC_VA will be forwarded
+    //      to the FIU remaining on eVC_VA.
+    //
+    CCI_MPF_VC_MAP_CSR_CTRL_REG = 24,
+
+    // Must be last
+    CCI_MPF_VC_MAP_CSR_SIZE = 32
+}
+t_cci_mpf_vc_map_csr_offsets;
 
 
 //

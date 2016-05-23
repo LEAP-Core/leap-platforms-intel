@@ -68,8 +68,20 @@ module cci_mpf
     // Enable virtual to physical translation?
     parameter ENABLE_VTP = 1,
 
+    // Enable mapping of eVC_VA to physical channels?  AFUs that both use
+    // eVC_VA and read back memory locations written by the AFU must either
+    // emit WrFence on VA or use explicit physical channels and enforce
+    // write/read order.  Each method has tradeoffs.  WrFence VA is expensive
+    // and should be emitted only infrequently.  Memory requests to eVC_VA
+    // may have higher bandwidth than explicit mapping.  The MPF module for
+    // physical channel mapping is optimized for each CCI platform.
+    //
+    // The mapVAtoPhysChannel extended header bit must be set on each
+    // request to enable mapping.
+    parameter ENABLE_VC_MAP = 0,
+
     // Enforce write/write and write/read ordering with cache lines?
-    parameter ENFORCE_WR_ORDER = 1,
+    parameter ENFORCE_WR_ORDER = 0,
 
     // Return read responses in the order they were requested?
     parameter SORT_READ_RESPONSES = 1,
@@ -168,6 +180,7 @@ module cci_mpf
         .DFH_MMIO_NEXT_ADDR(DFH_MMIO_NEXT_ADDR),
         .MPF_ENABLE_VTP(ENABLE_VTP),
         .MPF_ENABLE_RSP_ORDER(SORT_READ_RESPONSES),
+        .MPF_ENABLE_VC_MAP(ENABLE_VC_MAP),
         .MPF_ENABLE_WRO(ENFORCE_WR_ORDER)
         )
       csr
@@ -232,6 +245,7 @@ module cci_mpf
         .DFH_MMIO_BASE_ADDR(DFH_MMIO_BASE_ADDR),
         .DFH_MMIO_NEXT_ADDR(DFH_MMIO_NEXT_ADDR),
         .ENABLE_VTP(ENABLE_VTP),
+        .ENABLE_VC_MAP(ENABLE_VC_MAP),
         .ENFORCE_WR_ORDER(ENFORCE_WR_ORDER),
         .SORT_READ_RESPONSES(SORT_READ_RESPONSES),
         .PRESERVE_WRITE_MDATA(PRESERVE_WRITE_MDATA),

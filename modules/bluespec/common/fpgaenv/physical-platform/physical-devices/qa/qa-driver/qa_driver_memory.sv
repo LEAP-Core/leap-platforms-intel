@@ -104,14 +104,12 @@ module qa_driver_memory
     begin
         rd_req_params = cci_mpf_defaultReqHdrParams(1);
 
-        rd_req_params.cl_len = mem_read_req_num_lines;
+        // Let MPF pick the channel
+        rd_req_params.vc_sel = eVC_VA;
+        rd_req_params.mapVAtoPhysChannel = 1'b1;
 
+        rd_req_params.cl_len = mem_read_req_num_lines;
         rd_req_params.checkLoadStoreOrder = mem_read_req_check_order;
-        // Use a single, ordered channel when load/store order matters.
-        if (mem_read_req_check_order)
-        begin
-            rd_req_params.vc_sel = eVC_VL0;
-        end
     end
 
     // Tag requests.  This is pointless since they come back ordered but useful
@@ -142,6 +140,10 @@ module qa_driver_memory
     always_comb
     begin
         wr_req_params = cci_mpf_defaultReqHdrParams();
+
+        // Let MPF pick the channel
+        wr_req_params.vc_sel = eVC_VA;
+        wr_req_params.mapVAtoPhysChannel = 1'b1;
 
         wr_req_params.cl_len = mem_write_req_num_lines;
         wr_req_params.sop = mem_write_req_sop;
@@ -231,6 +233,7 @@ module qa_driver_memory
       #(
         .DFH_MMIO_BASE_ADDR(QA_DRIVER_DFH_SIZE),
         .SORT_READ_RESPONSES(1),
+        .ENABLE_VC_MAP(1),
         .ENFORCE_WR_ORDER(1),
         .PRESERVE_WRITE_MDATA(0)
         )

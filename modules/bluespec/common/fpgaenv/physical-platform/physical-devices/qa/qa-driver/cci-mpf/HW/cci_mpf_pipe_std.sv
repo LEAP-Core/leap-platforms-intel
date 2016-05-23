@@ -62,7 +62,8 @@ module cci_mpf_pipe_std
     parameter DFH_MMIO_BASE_ADDR = 0,
     parameter DFH_MMIO_NEXT_ADDR = 0,
     parameter ENABLE_VTP = 1,
-    parameter ENFORCE_WR_ORDER = 1,
+    parameter ENABLE_VC_MAP = 0,
+    parameter ENFORCE_WR_ORDER = 0,
     parameter SORT_READ_RESPONSES = 1,
     parameter PRESERVE_WRITE_MDATA = 0,
     parameter N_WRITE_HEAP_ENTRIES = 0
@@ -202,6 +203,48 @@ module cci_mpf_pipe_std
 
     // ====================================================================
     //
+    //  Map eVC_VA read/write requests to specific physical channels?
+    //
+    //   Note: placement of eVC_VA mapping before virtual to physical
+    //   translation will generate unpredictable results if multiple
+    //   virtual addresses are mapped to a single physical address.
+    //   The ALI driver does not currently support such mappings.
+    //   Channel mapping must happen before WRO since performance
+    //   through WRO depends on enforcing order only within each channel.
+    //   WRO must run before VTP because VTP may reorder requests,
+    //   allowing TLB hits to flow around misses.
+    //
+    // ====================================================================
+
+    cci_mpf_if stgp4_fiu_vc_map (.clk);
+
+    generate
+        if (ENABLE_VC_MAP)
+        begin : vcm
+            cci_mpf_shim_vc_map
+              vc_map
+               (
+                .clk,
+                .fiu(stgp3_fiu_wro),
+                .afu(stgp4_fiu_vc_map),
+                .csrs(mpf_csrs)
+                );
+        end
+        else
+        begin : nvcm
+            cci_mpf_shim_null
+              no_vc_map
+               (
+                .clk,
+                .fiu(stgp3_fiu_wro),
+                .afu(stgp4_fiu_vc_map)
+                );
+        end
+    endgenerate
+
+
+    // ====================================================================
+    //
     //  Sort read responses so they arrive in the order they were
     //  requested.
     //
@@ -216,7 +259,7 @@ module cci_mpf_pipe_std
     //
     // ====================================================================
 
-    cci_mpf_if stgp4_fiu_rsp_order (.clk);
+    cci_mpf_if stgp5_fiu_rsp_order (.clk);
 
     cci_mpf_shim_rsp_order
       #(
@@ -227,9 +270,8 @@ module cci_mpf_pipe_std
       rspOrder
        (
         .clk,
-        .fiu(stgp3_fiu_wro),
-        .afu(stgp4_fiu_rsp_order),
-        .csrs(mpf_csrs)
+        .fiu(stgp4_fiu_vc_map),
+        .afu(stgp5_fiu_rsp_order)
         );
 
 
@@ -239,14 +281,14 @@ module cci_mpf_pipe_std
     //
     // ====================================================================
 
-    cci_mpf_if stgp5_mpf_afu (.clk);
+    cci_mpf_if stgp6_mpf_afu (.clk);
 
     cci_mpf_shim_buffer_fiu
       regRsp
        (
         .clk,
-        .fiu_raw(stgp4_fiu_rsp_order),
-        .fiu_buf(stgp5_mpf_afu)
+        .fiu_raw(stgp5_fiu_rsp_order),
+        .fiu_buf(stgp6_mpf_afu)
         );
 
 
@@ -264,7 +306,7 @@ module cci_mpf_pipe_std
       mpf_edge_afu
        (
         .clk,
-        .fiu(stgp5_mpf_afu),
+        .fiu(stgp6_mpf_afu),
         .afu,
         .fiu_edge(edge_if)
         );

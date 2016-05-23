@@ -188,13 +188,13 @@ module cci_mpf_shim_edge_fiu
     //
     // Forward read requests
     //
-    always_ff @(posedge clk)
+    always_comb
     begin
-        fiu.c0Tx <= cci_mpf_updC0TxCanonical(afu.c0Tx);
+        fiu.c0Tx = cci_mpf_updC0TxCanonical(afu.c0Tx);
 
         if (pt_walk_emit_req)
         begin
-            fiu.c0Tx <= cci_mpf_genC0TxReadReq(pt_walk_read_hdr, 1'b1);
+            fiu.c0Tx = cci_mpf_genC0TxReadReq(pt_walk_read_hdr, 1'b1);
         end
     end
 

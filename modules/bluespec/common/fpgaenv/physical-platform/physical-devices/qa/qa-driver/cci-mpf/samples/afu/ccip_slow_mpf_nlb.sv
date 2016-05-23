@@ -154,6 +154,21 @@ module ccip_std_afu
         // request header.
         .ENABLE_VTP(1),
 
+        // Enable mapping of eVC_VA to physical channels?  AFUs that both use
+        // eVC_VA and read back memory locations written by the AFU must either
+        // emit WrFence on VA or use explicit physical channels and enforce
+        // write/read order.  Each method has tradeoffs.  WrFence VA is expensive
+        // and should be emitted only infrequently.  Memory requests to eVC_VA
+        // may have higher bandwidth than explicit mapping.  The MPF module for
+        // physical channel mapping is optimized for each CCI platform.
+        //
+        // If you set ENFORCE_WR_ORDER below you probably also want to set
+        // ENABLE_VC_MAP.
+        //
+        // The mapVAtoPhysChannel extended header bit must be set on each
+        // request to enable mapping.
+        .ENABLE_VC_MAP(0),
+
         // Should write/write and write/read ordering within a cache
         // be enforced?  By default CCI makes no guarantees on the order
         // in which operations to the same cache line return.  Setting
@@ -224,6 +239,10 @@ module ccip_std_afu
         begin
             // Treat all addresses as virtual.
             afu.c0Tx.hdr.ext.addrIsVirtual = 1'b1;
+
+            // Enable eVC_VA to physical channel mapping.  This will only
+            // be triggered when ENABLE_VC_MAP is set above.
+            afu.c0Tx.hdr.ext.mapVAtoPhysChannel = 1'b1;
         end
 
         afu.c1Tx = cci_mpf_cvtC1TxFromBase(af2mpf_sTxPort.c1);
@@ -231,6 +250,10 @@ module ccip_std_afu
         begin
             // Treat all addresses as virtual.
             afu.c1Tx.hdr.ext.addrIsVirtual = 1'b1;
+
+            // Enable eVC_VA to physical channel mapping.  This will only
+            // be triggered when ENABLE_VC_MAP is set above.
+            afu.c1Tx.hdr.ext.mapVAtoPhysChannel = 1'b1;
         end
 
         afu.c2Tx = af2mpf_sTxPort.c2;

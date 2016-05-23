@@ -66,10 +66,10 @@ interface cci_mpf_csrs();
 
 
     //
-    // RSP ORDER -- Reorder buffer for sorting read responses
+    // VC MAP -- Mapping eVC_VA to real physical channels.
     //
-    logic [63:0] rsp_order_c0Tx_va_vc_map;
-    logic        rsp_order_c0Tx_va_vc_map_valid;
+    logic [63:0] vc_map_ctrl;
+    logic        vc_map_ctrl_valid;
 
 
     //
@@ -92,8 +92,8 @@ interface cci_mpf_csrs();
         output vtp_in_page_table_base,
         output vtp_in_page_table_base_valid,
 
-        output rsp_order_c0Tx_va_vc_map,
-        output rsp_order_c0Tx_va_vc_map_valid,
+        output vc_map_ctrl,
+        output vc_map_ctrl_valid,
 
         input  wro_out_num_writes,
         input  wro_out_num_reads,
@@ -124,10 +124,10 @@ interface cci_mpf_csrs();
         output vtp_out_event_pt_walk_busy
         );
 
-    modport rsp_order
+    modport vc_map
        (
-        input  rsp_order_c0Tx_va_vc_map,
-        input  rsp_order_c0Tx_va_vc_map_valid
+        input  vc_map_ctrl,
+        input  vc_map_ctrl_valid
         );
 
     modport wro

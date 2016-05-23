@@ -37,6 +37,7 @@ HW/cci-mpf-shims/cci_mpf_shim_edge/cci_mpf_shim_edge_fiu.sv
 HW/cci-mpf-shims/cci_mpf_shim_mux.sv
 HW/cci-mpf-shims/cci_mpf_shim_null.sv
 HW/cci-mpf-shims/cci_mpf_shim_rsp_order.sv
+HW/cci-mpf-shims/cci_mpf_shim_vc_map.sv
 HW/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_shim_vtp.sv
 HW/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_svc_vtp.sv
 HW/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_svc_vtp_pipe.sv

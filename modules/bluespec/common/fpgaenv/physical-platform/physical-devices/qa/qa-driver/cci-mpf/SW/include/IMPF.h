@@ -81,6 +81,9 @@ BEGIN_NAMESPACE(AAL)
 // Read responses ordering feature
 #define MPF_RSP_ORDER_BBB_GUID "4C9C96F4-65BA-4DD8-B383-C70ACE57BFE4"
 
+// Memory virtual channel mapping feature
+#define MPF_VC_MAP_BBB_GUID "5046C86F-BA48-4856-B8F9-3B76E3DD4E74"
+
 // Write ordering feature
 #define MPF_WRO_BBB_GUID "56B06B48-9DD7-4004-A47E-0681B4207A6D"
 

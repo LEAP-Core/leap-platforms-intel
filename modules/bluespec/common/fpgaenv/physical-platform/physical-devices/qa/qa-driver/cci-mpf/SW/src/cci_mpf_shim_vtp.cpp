@@ -403,13 +403,13 @@ btBool MPFVTP::vtpReset( void )
       return ret;
    }
 
-   return vtpEnable();
+   return _vtpEnable();
 }
 
 //
 // Enable MPF/VTP feature.
 //
-btBool MPFVTP::vtpEnable( void )
+btBool MPFVTP::_vtpEnable( void )
 {
    btBool ret = false;
 

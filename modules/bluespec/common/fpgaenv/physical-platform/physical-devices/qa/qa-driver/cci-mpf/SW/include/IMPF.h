@@ -100,7 +100,7 @@ BEGIN_NAMESPACE(AAL)
 ///
 /// @note Since AFU reset will reset all user logic including BBBs like VTP,
 ///       users need to make sure to reinitialize VTP after an AFU reset
-///       using vtpEnable().
+///       using vtpReset().
 ///
 /// @see IALIBuffer
 
@@ -128,9 +128,6 @@ class IMPFVTP : public IALIBuffer
 {
 public:
    virtual ~IMPFVTP() {}
-
-   /// Reinitialize VTP after AFU Reset
-   virtual btBool vtpEnable( void ) = 0;
 
    /// Reset VTP (invalidate TLB)
    virtual btBool vtpReset( void ) = 0;

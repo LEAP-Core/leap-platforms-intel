@@ -100,9 +100,6 @@ public:
    ali_errnum_e bufferFreeAll();
    btPhysAddr   bufferGetIOVA(  btVirtAddr           Address );
 
-   // reinitialize VTP registers after AFU reset
-   btBool vtpEnable( void );
-
    // invalidate FPGA-side translation cache
    btBool vtpReset( void );
 
@@ -134,6 +131,9 @@ private:
    static const size_t CCI_MPF_VTP_LARGE_PAGE_THRESHOLD = KB(128);
 
    ali_errnum_e _allocate(btVirtAddr va, size_t pageSize);
+   // reinitialize VTP registers after vtpReset
+   btBool _vtpEnable( void );
+
 };
 
 

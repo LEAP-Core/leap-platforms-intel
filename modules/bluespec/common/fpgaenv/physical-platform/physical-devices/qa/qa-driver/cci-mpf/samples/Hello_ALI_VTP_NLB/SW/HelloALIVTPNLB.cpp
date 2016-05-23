@@ -451,10 +451,8 @@ btInt HelloALIVTPNLBApp::run()
       // Initiate AFU Reset
       m_pALIResetService->afuReset();
 
-      // AFU Reset clear VTP, too, so reinitialize registers
-      // Note: you can also call vtpReset() here, which will additionally clear
-      // the TLB.
-      m_pVTPService->vtpEnable();
+      // AFU Reset clear VTP, too, so reinitialize hardware
+      m_pVTPService->vtpReset();
 
       // Initiate DSM Reset
       // Set DSM base (virtual, since we have allocated using VTP), high then low

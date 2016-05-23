@@ -114,11 +114,9 @@ To allocate a VTP service, follow these steps:
                              Manifest,
                              m_VTPTranID);
 
-   4. After resetting the AFU (using afuReset()), *always* call vtpReset() or
-      vtpEnable(). An AFU reset will always also clear internal registers in
-      the MPF, including the VTP feature. vtpEnable() reinitializes these.
-      vtpReset() will clear the TLB cache in the HW module and then call
-      vtpEnable().
+   4. After resetting the AFU (using afuReset()), *always* call vtpReset().
+      An AFU reset will always also clear internal registers in the MPF,
+      including the VTP feature. vtpReset() reinitializes these.
 
 
 Please refer to the supplied Hello_ALI_VTP_NLB sample application for the

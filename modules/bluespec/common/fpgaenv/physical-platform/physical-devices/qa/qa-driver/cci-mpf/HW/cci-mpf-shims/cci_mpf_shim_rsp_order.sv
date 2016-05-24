@@ -248,8 +248,8 @@ module cci_mpf_shim_rsp_order
                 .N_ENTRIES(MAX_ACTIVE_REQS),
                 .N_DATA_BITS($bits(t_cci_clNum) + CCI_CLDATA_WIDTH),
                 .N_META_BITS($bits(t_cci_clNum) + CCI_MDATA_WIDTH),
-                .MIN_FREE_SLOTS(CCI_TX_ALMOST_FULL_THRESHOLD * 2),
-                .MAX_ALLOC_PER_CYCLE(4)
+                .MIN_FREE_SLOTS(CCI_TX_ALMOST_FULL_THRESHOLD * CCI_MAX_MULTI_LINE_BEATS),
+                .MAX_ALLOC_PER_CYCLE(CCI_MAX_MULTI_LINE_BEATS)
                 )
               rd_rob
                (

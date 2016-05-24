@@ -706,8 +706,8 @@ module cci_mpf_shim_wro
             //
             if (process_requests)
             begin
-                assert ((filter_verify_req[0] == afu_pipe[1].c0AddrHash) &&
-                        (filter_verify_req[1] == afu_pipe[1].c1AddrHash) &&
+                assert ((! filter_verify_req_en[0] || (filter_verify_req[0] == afu_pipe[1].c0AddrHash)) &&
+                        (! filter_verify_req_en[1] || (filter_verify_req[1] == afu_pipe[1].c1AddrHash)) &&
                         (filter_verify_req_en[0] == cci_mpf_c0TxIsReadReq(afu_pipe[1].c0Tx)) &&
                         (filter_verify_req_en[1] == cci_mpf_c1TxIsWriteReq(afu_pipe[1].c1Tx))) else
                     $fatal("cci_mpf_shim_wro: Incorrect pipeline control");

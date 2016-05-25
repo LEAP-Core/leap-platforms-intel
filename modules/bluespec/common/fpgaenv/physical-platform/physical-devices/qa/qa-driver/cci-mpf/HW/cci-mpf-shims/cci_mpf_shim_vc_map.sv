@@ -493,6 +493,7 @@ module cci_mpf_shim_vc_map
     always_comb
     begin
         req_ratio_vl0_en = 1'b0;
+        req_ratio_vl0 = 'x;
 
         if (sample_ready)
         begin
@@ -500,15 +501,15 @@ module cci_mpf_shim_vc_map
             begin
                 // In a consistent recommended state.  Change to it if not
                 // there already.
-                req_ratio_vl0 = sample_suggestions[0];
                 req_ratio_vl0_en = 1'b1;
+                req_ratio_vl0 = sample_suggestions[0];
             end
             else
             begin
                 // Not in a consistent state.  After waiting a while change
                 // to the default state.
-                req_ratio_vl0 = RATIO_VL0_DEFAULT;
                 req_ratio_vl0_en = damper[$bits(damper)-1];
+                req_ratio_vl0 = RATIO_VL0_DEFAULT;
             end
         end
     end

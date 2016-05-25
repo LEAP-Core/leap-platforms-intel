@@ -1,0 +1,8 @@
+%name Intel CCI-P Edge Clock Crossing FIFOs
+%desc Intel CCI-P Edge Clock Crossing FIFOs
+
+%provides qa_ccip_async_hw
+%requires qa_ccip_async_hw_par
+
+%sources -t VERILOG     -v PRIVATE ccip_afifo_channel.sv
+%sources -t VERILOG     -v PRIVATE ccip_async_shim.sv

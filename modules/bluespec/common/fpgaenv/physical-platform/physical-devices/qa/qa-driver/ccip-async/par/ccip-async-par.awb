@@ -1,0 +1,6 @@
+%name Intel CCI-P Edge Clock Crossing FIFO PAR Files
+%desc Intel CCI-P Edge Clock Crossing FIFO PAR Files
+
+%provides qa_ccip_async_hw_par
+
+%sources -t SDC -v PRIVATE ccip_async.sdc

@@ -5,6 +5,7 @@
 %requires qa_platform_libs
 %requires qa_driver_host_channels
 %requires qa_cci_mpf
+%requires qa_ccip_async_hw
 
 %sources -t H           -v PUBLIC  AFU.h
 %sources -t H           -v PUBLIC  AFU_csr.h

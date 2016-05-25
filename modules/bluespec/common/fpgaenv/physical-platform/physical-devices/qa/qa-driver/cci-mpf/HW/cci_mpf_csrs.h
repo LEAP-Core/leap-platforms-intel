@@ -106,10 +106,23 @@ typedef enum
     // eVC_VA to physical channel mapping configuration.
     //
     //   Bit 0:
-    //      Enable mapping when 1.  When the module is present mapping
-    //      defaults to enabled.  Writing 1 is unnecessary.  Writing 0
-    //      will disable mapping and requests on eVC_VA will be forwarded
-    //      to the FIU remaining on eVC_VA.
+    //      Enable mapping when 1.  Default 1.
+    //      Writing 0 will disable mapping and requests on eVC_VA will be
+    //      forwarded to the FIU remaining on eVC_VA.
+    //   Bit 1:
+    //      Enable dynamic mapping.  Default 1.
+    //      Dynamic mapping monitors traffic and adjusts the ratio of
+    //      mapped channels to optimize throughput.  Optimal mapping
+    //      varies depending on the ratio of reads to writes and the
+    //      number of lines per request.
+    //   Bit 7:
+    //      When 0: Set mapping ratio to default for the platform.
+    //      When 1: Use the ratio specifiers in bits 8-13 and 16-22.
+    //   Bits 8-13:
+    //      When bit 7 is 1 these are used to define the fraction of requests
+    //      mapped to channel VL0.  The value is the number of 64ths that
+    //      should be assigned VL0.  The remaining channel mappings are split
+    //      evenly between VH0 and VH1.
     //
     CCI_MPF_VC_MAP_CSR_CTRL_REG = 24,
 

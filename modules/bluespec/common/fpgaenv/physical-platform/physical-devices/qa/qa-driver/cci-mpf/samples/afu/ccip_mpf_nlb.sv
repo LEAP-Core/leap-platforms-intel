@@ -129,6 +129,12 @@ module ccip_std_afu
         // The mapVAtoPhysChannel extended header bit must be set on each
         // request to enable mapping.
         .ENABLE_VC_MAP(0),
+        // When ENABLE_VC_MAP is set the mapping is either static for the entire
+        // run or dynamic, changing in response to traffic patterns.  The mapper
+        // guarantees synchronization when the mapping changes by emitting a
+        // WrFence on eVC_VA and draining all reads.  Ignored when ENABLE_VC_MAP
+        // is 0.
+        .ENABLE_DYNAMIC_VC_MAPPING(1),
 
         // Should write/write and write/read ordering within a cache
         // be enforced?  By default CCI makes no guarantees on the order

@@ -41,7 +41,7 @@
 
 module cci_mpf_shim_vtp
   #(
-    parameter AFU_BUF_THRESHOLD = CCI_TX_ALMOST_FULL_THRESHOLD
+    parameter AFU_BUF_THRESHOLD = CCI_TX_ALMOST_FULL_THRESHOLD + 4
     )
    (
     input  logic clk,

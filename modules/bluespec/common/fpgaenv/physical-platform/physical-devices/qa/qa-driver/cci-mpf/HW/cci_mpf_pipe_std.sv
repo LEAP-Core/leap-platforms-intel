@@ -63,10 +63,14 @@ module cci_mpf_pipe_std
     parameter DFH_MMIO_NEXT_ADDR = 0,
     parameter ENABLE_VTP = 1,
     parameter ENABLE_VC_MAP = 0,
+    parameter ENABLE_DYNAMIC_VC_MAPPING = 0,
     parameter ENFORCE_WR_ORDER = 0,
     parameter SORT_READ_RESPONSES = 1,
     parameter PRESERVE_WRITE_MDATA = 0,
-    parameter N_WRITE_HEAP_ENTRIES = 0
+    parameter N_WRITE_HEAP_ENTRIES = 0,
+
+    // Computed in cci_mpf module
+    parameter RESERVED_MDATA_IDX = CCI_PLATFORM_MDATA_WIDTH - 1
     )
    (
     input  logic      clk,
@@ -114,7 +118,7 @@ module cci_mpf_pipe_std
     cci_mpf_shim_detect_eop
       #(
         .MAX_ACTIVE_REQS(MAX_ACTIVE_REQS),
-        .RESERVED_MDATA_IDX(CCI_PLATFORM_MDATA_WIDTH-2)
+        .RESERVED_MDATA_IDX(RESERVED_MDATA_IDX)
         )
       eop
        (
@@ -222,6 +226,11 @@ module cci_mpf_pipe_std
         if (ENABLE_VC_MAP)
         begin : vcm
             cci_mpf_shim_vc_map
+              #(
+                .ENABLE_DYNAMIC_VC_MAPPING(ENABLE_DYNAMIC_VC_MAPPING),
+                .MAX_ACTIVE_REQS(MAX_ACTIVE_REQS),
+                .RESERVED_MDATA_IDX(RESERVED_MDATA_IDX)
+                )
               vc_map
                (
                 .clk,

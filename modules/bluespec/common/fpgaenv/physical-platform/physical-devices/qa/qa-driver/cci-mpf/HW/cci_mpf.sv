@@ -79,6 +79,12 @@ module cci_mpf
     // The mapVAtoPhysChannel extended header bit must be set on each
     // request to enable mapping.
     parameter ENABLE_VC_MAP = 0,
+    // When ENABLE_VC_MAP is set the mapping is either static for the entire
+    // run or dynamic, changing in response to traffic patterns.  The mapper
+    // guarantees synchronization when the mapping changes by emitting a
+    // WrFence on eVC_VA and draining all reads.  Ignored when ENABLE_VC_MAP
+    // is 0.
+    parameter ENABLE_DYNAMIC_VC_MAPPING = 1,
 
     // Enforce write/write and write/read ordering with cache lines?
     parameter ENFORCE_WR_ORDER = 0,
@@ -246,10 +252,12 @@ module cci_mpf
         .DFH_MMIO_NEXT_ADDR(DFH_MMIO_NEXT_ADDR),
         .ENABLE_VTP(ENABLE_VTP),
         .ENABLE_VC_MAP(ENABLE_VC_MAP),
+        .ENABLE_DYNAMIC_VC_MAPPING(ENABLE_DYNAMIC_VC_MAPPING),
         .ENFORCE_WR_ORDER(ENFORCE_WR_ORDER),
         .SORT_READ_RESPONSES(SORT_READ_RESPONSES),
         .PRESERVE_WRITE_MDATA(PRESERVE_WRITE_MDATA),
-        .N_WRITE_HEAP_ENTRIES(N_WRITE_HEAP_ENTRIES)
+        .N_WRITE_HEAP_ENTRIES(N_WRITE_HEAP_ENTRIES),
+        .RESERVED_MDATA_IDX(CCI_PLATFORM_MDATA_WIDTH-2)
         )
       mpf_pipe
        (

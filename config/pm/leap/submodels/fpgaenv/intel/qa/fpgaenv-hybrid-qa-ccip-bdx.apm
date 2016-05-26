@@ -173,7 +173,6 @@ Packagehint=leap
 qa_driver_host_channels=Intel QuickAssist Host/FPGA Channels
 qa_cci_mpf=Intel MPF (Memory Protocol Factory)
 qa_platform_libs=Intel QuickAssist CCI-P Platform Libraries
-qa_ccip_async_hw=Intel CCI-P Edge Clock Crossing FIFOs
 
 [Intel QuickAssist Driver]
 File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/qa-driver.awb
@@ -273,3 +272,6 @@ Packagehint=leap-platforms-intel
 [Intel CCI-P Edge Clock Crossing FIFO PAR Files]
 File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/ccip-async/par/ccip-async-par.awb
 Packagehint=leap-platforms-intel
+
+[Intel QuickAssist CCI-P Platform Libraries/Requires]
+qa_ccip_async_hw=Intel CCI-P Edge Clock Crossing FIFOs

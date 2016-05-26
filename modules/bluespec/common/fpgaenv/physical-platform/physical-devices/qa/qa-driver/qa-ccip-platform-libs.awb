@@ -2,6 +2,7 @@
 %desc Intel QuickAssist CCI-P Platform Libraries
 
 %provides qa_platform_libs
+%requires qa_ccip_async_hw
 
 %library libAAS.so
 %library libOSAL.so

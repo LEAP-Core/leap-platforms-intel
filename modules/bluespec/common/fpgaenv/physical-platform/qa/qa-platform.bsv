@@ -51,6 +51,14 @@ import DefaultValue::*;
 `include "awb/provides/fpga_components.bsh"
 `include "awb/provides/soft_connections.bsh"
 
+`include "awb/provides/qa_platform_libs.bsh"
+
+`ifndef CCI_S_IFC_Z
+  `define USE_PLATFORM_CCIS 1
+`endif
+`ifndef CCI_P_IFC_Z
+  `define USE_PLATFORM_CCIP 1
+`endif
 
 // PHYSICAL_DRIVERS
 

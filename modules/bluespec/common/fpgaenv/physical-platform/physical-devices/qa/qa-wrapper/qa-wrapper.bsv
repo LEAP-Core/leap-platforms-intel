@@ -49,7 +49,6 @@ import ConfigReg::*;
 `include "awb/provides/soft_services_lib.bsh"
 `include "awb/provides/soft_services_deps.bsh"
 
-`include "awb/provides/clocks_device.bsh"
 `include "awb/provides/qa_platform_libs.bsh"
 
 `ifndef CCI_S_IFC_Z
@@ -454,6 +453,16 @@ module mkQADeviceSynth#(Clock qaClk, Reset qaRst)
     SyncFIFOIfc#(UMF_CHUNK) syncChannelReadQ <- mkSyncFIFOToCC(16, qaClk, qaRst);
     SyncFIFOIfc#(UMF_CHUNK) syncChannelWriteQ <- mkSyncFIFOFromCC(16, qaClk);
 
+    // Track whether traffic has been seen incoming.  No outbound traffic
+    // is allowed until the software has shown signs of life by sending
+    // a message.
+    Reg#(Bool) maySendToHost <- mkReg(False);
+
+    (* no_implicit_conditions, fire_when_enabled *)
+    rule sawReadChannelTraffic (syncChannelReadQ.notEmpty);
+        maySendToHost <= True;
+    endrule
+
     //
     // Extract UMF_CHUNKS from the incoming cache line sized vector coming
     // from the driver.
@@ -701,7 +710,10 @@ module mkQADeviceSynth#(Clock qaClk, Reset qaRst)
         method first = syncChannelReadQ.first;
         method notEmpty = syncChannelReadQ.notEmpty;
         method write = syncChannelWriteQ.enq;
-        method notFull = syncChannelWriteQ.notFull;
+
+        method Bool notFull();
+            return syncChannelWriteQ.notFull && maySendToHost;
+        endmethod
     endinterface
 
     interface QA_MEMORY_DRIVER memoryDriver;

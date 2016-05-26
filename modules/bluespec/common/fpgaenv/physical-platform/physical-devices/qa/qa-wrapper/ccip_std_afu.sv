@@ -32,6 +32,8 @@
 
 `ifdef MPF_HOST_IFC_CCIP
 
+`include "awb/provides/clocks_device_params.bsh"
+
 import ccip_if_pkg::*;
 
 module ccip_std_afu
@@ -51,8 +53,60 @@ module ccip_std_afu
     output          t_if_ccip_Tx      pck_af2cp_sTx         // CCI-P Tx Port
     );
 
+    //
+    // Quartus doesn't permit creating a new clock Inside the CCI-P partial
+    // reconfiguration region.  The user must currently pick one of the
+    // incoming clocks.
+    //
+    // In the future uClk_usr will be programmable.
+    //
+    logic user_clk;
+
+    localparam MODEL_CLOCK_FREQ = `MODEL_CLOCK_FREQ;
+
+    generate
+        if (MODEL_CLOCK_FREQ == 400)
+            assign user_clk = pClk;
+        else if (MODEL_CLOCK_FREQ == 300)
+            assign user_clk = uClk_usr;
+        else if (MODEL_CLOCK_FREQ == 200)
+            assign user_clk = pClkDiv2;
+        else if (MODEL_CLOCK_FREQ == 150)
+            assign user_clk = uClk_usrDiv2;
+        else if (MODEL_CLOCK_FREQ == 100)
+            assign user_clk = pClkDiv4;
+        else
+            $fatal("Unsupported user clock frequency: %d", MODEL_CLOCK_FREQ);
+    endgenerate
+
+
+    //
+    // Reset synchronizer
+    //
+    (* preserve *) logic user_rst_T1;
+    (* preserve *) logic user_rst_T2;
+    logic user_rst;
+
+    always @(posedge user_clk)
+    begin
+        user_rst_T1 <= pck_cp2af_softReset;
+        user_rst_T2 <= user_rst_T1;
+        user_rst    <= user_rst_T2;
+    end
+
+
     // Instantiate LEAP top level.
-    mk_model_Wrapper model_wrapper(
+    mk_model_Wrapper
+      model_wrapper
+       (
+        // Edge interface clock and reset
+        .pClk,
+        .pck_cp2af_softReset,
+
+        // Clocks to be used by user logic
+        .USER_CLK(user_clk),
+        .USER_RST(user_rst),
+
         .*,
 
         // Unconnected wires exposed by Bluespec that we can't turn off...
@@ -60,8 +114,10 @@ module ccip_std_afu
         .RST_N(1'b1),
         .CLK_qaDevClock(),
         .CLK_GATE_qaDevClock(),
-        .RDY_clock_wire(),
-        .RDY_reset_n_wire(),
+        .RDY_plat_ifc_clock_wire(),
+        .RDY_plat_ifc_reset_wire(),
+        .RDY_user_clock_wire(),
+        .RDY_user_reset_wire(),
         .EN_inputWires(1'b1),
         .RDY_inputWires());
 

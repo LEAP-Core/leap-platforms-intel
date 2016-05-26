@@ -130,19 +130,9 @@ Packagehint=leap-platforms-intel
 
 [Intel QuickAssist Platform/Requires]
 qa_device=Intel QuickAssist Device
-clocks_device=Single-Ended Crystal Clocks Device
+clocks_device=Dual Frequency Provided Clocks Device
 physical_platform_utils=Common Physical Platform Utilities
 ddr_sdram_device=Null DDR SDRAM Physical Device
-
-[Single-Ended Crystal Clocks Device]
-File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/clocks/single-ended/single-ended-clocks-device.awb
-Packagehint=leap-platforms
-
-[Single-Ended Crystal Clocks Device/Params]
-CRYSTAL_CLOCK_FREQ=400
-MODEL_CLOCK_FREQ=400
-SINGLE_ENDED_CLOCKS_CLK="pClk"
-SINGLE_ENDED_CLOCKS_RST_N="pck_cp2af_softReset"
 
 [Intel QuickAssist Device/Requires]
 qa_driver=Intel QuickAssist Driver
@@ -275,3 +265,14 @@ Packagehint=leap-platforms-intel
 
 [Intel QuickAssist CCI-P Platform Libraries/Requires]
 qa_ccip_async_hw=Intel CCI-P Edge Clock Crossing FIFOs
+
+[Dual Frequency Provided Clocks Device]
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/clocks/dual-clock/dual-clock-device.awb
+Packagehint=leap-platforms
+
+[Dual Frequency Provided Clocks Device/Params]
+CRYSTAL_CLOCK_FREQ=400
+MODEL_CLOCK_FREQ=300
+USER_CLOCK_RST="USER_RST"
+PLAT_IFC_CLOCK_CLK="pClk"
+PLAT_IFC_CLOCK_RST="pck_cp2af_softReset"

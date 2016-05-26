@@ -38,8 +38,11 @@ module qa_drv_hc_root
     // Start of the CSR region for the host channel
     parameter CSR_HC_BASE_ADDR = 0,
 
-    // Which virtual channel should be used?
-    parameter MEM_VIRTUAL_CHANNEL = 3  // eVC_VH1
+    // Which virtual channel should be used?  Most likely you should leave
+    // this at the default eVC_VL0.  We want to use the FPGA-side cache to
+    // avoid repeatedly using the system bus to read an unchanging control
+    // line.
+    parameter MEM_VIRTUAL_CHANNEL = 1
     )
    (
     input  logic                 clk,

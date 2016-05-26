@@ -398,13 +398,19 @@ AFU_CLIENT_CLASS::InitService(const char* afuID)
 
 #else
 
+    if (m_pALIResetService->afuReset())
+    {
+        fprintf(stderr, "ERROR: Failed AFU reset\n");
+        exit(1);
+    }
+
     btcString sGUID = MPF_VTP_BBB_GUID;
     NamedValueSet featureFilter;
     featureFilter.Add(ALI_GETFEATURE_TYPE_KEY, static_cast<ALI_GETFEATURE_TYPE_DATATYPE>(2));
     featureFilter.Add(ALI_GETFEATURE_GUID_KEY, static_cast<ALI_GETFEATURE_GUID_DATATYPE>(sGUID));
     if (true != m_pALIMMIOService->mmioGetFeatureOffset(&m_VTPDFHOffset, featureFilter))
     {
-        fprintf(stderr, "ERROR: Failed find VTP feature in hardware\n");
+        fprintf(stderr, "ERROR: Failed to find VTP feature in hardware\n");
         exit(1);
     }
 

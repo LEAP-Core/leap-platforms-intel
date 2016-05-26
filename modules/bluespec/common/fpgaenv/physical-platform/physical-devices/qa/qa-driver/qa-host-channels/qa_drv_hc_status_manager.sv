@@ -172,9 +172,7 @@ module qa_drv_hc_status_manager
         //
         t_cci_mpf_ReqMemHdrParams read_params;
         read_params = cci_mpf_defaultReqHdrParams(0);
-        // Use eVC_VL0 -- we want to use the FPGA-side cache to avoid
-        // repeatedly using the system bus to read an unchanging control line.
-        read_params.vc_sel = eVC_VL0;
+        read_params.vc_sel = t_ccip_vc'(MEM_VIRTUAL_CHANNEL);
 
         status_mgr_req.readHeader =
             cci_mpf_c0_genReqHdr(eREQ_RDLINE_S,

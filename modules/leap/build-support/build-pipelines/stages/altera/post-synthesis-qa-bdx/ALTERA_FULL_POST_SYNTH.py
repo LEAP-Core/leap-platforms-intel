@@ -2,6 +2,7 @@ import os
 import re
 import sys
 import string
+import shutil
 import SCons.Script
 import model
 import synthesis_library
@@ -9,17 +10,43 @@ import synthesis_library
 class PostSynthesize():
 
     def __init__(self, moduleList):
-        altera_apm_name = moduleList.compileDirectory + '/' + moduleList.apmName
         qsf_src_dir = moduleList.env['DEFS']['ROOT_DIR_HW_MODEL']
-
-        # If the compilation directory doesn't exist, create it.
-        if(not os.path.exists(moduleList.compileDirectory)):
-            os.mkdir(moduleList.compileDirectory)
-
         rel_qsf_src_dir = model.rel_if_not_abspath(qsf_src_dir, moduleList.compileDirectory)
 
-        # pick up awb parameters.
-        paramTclFile = moduleList.topModule.moduleDependency['PARAM_TCL'][0]
+        # If the compilation directory doesn't exist, create it.
+        if (not os.path.exists(moduleList.compileDirectory)):
+            os.mkdir(moduleList.compileDirectory)
+
+        try:
+            aal_hw = moduleList.env['ENV']['AAL_QA_HW']
+        except:
+            print "Environment variable AAL_QA_HW must point to the AAL Base/HW directory"
+            sys.exit(1)
+
+        ##
+        ## Make a link to the Xeon+FPGA release directory
+        ##
+        if (not os.path.exists(moduleList.compileDirectory + '/lib')):
+            os.symlink(aal_hw + '/bdw_pr_pkg/lib', moduleList.compileDirectory + '/lib')
+            # Copy blue bitstream base components
+            os.system('rsync -a ' + moduleList.compileDirectory + '/lib/blue/bdw_static_db/ ' + \
+                      moduleList.compileDirectory + '/')
+            # Copy some build scripts
+            os.system('rsync -a ' + moduleList.compileDirectory + '/lib/../scripts/*.tcl ' + \
+                      moduleList.compileDirectory + '/')
+
+        ##
+        ## Make links to the QSF and QPF files
+        ##
+        qsf = map(model.modify_path_hw,
+                  moduleList.getAllDependenciesWithPaths('GIVEN_QSFS')) + \
+              map(model.modify_path_hw,
+                  moduleList.getAllDependenciesWithPaths('GIVEN_QPFS'))
+        for tgt in qsf:
+            q = moduleList.compileDirectory + '/' + os.path.basename(tgt)
+            if (not os.path.exists(q)):
+                # Make copies because Quartus modifies them with tags
+                shutil.copy2(tgt, q)
 
         ## QA build expects to find sys_cfg_pkg.svh in the build directory
         if (os.path.exists(qsf_src_dir + '/sys_cfg_pkg.svh') and
@@ -27,39 +54,33 @@ class PostSynthesize():
             os.symlink(rel_qsf_src_dir + '/sys_cfg_pkg.svh',
                        moduleList.compileDirectory + '/sys_cfg_pkg.svh')
 
-        ## Quartus looks for the MIF files in the build directory
-        mif_root = os.environ['AAL_QA_HW'] + '/RTL/bdx_fpga/design/fiu/ptmgr/'
-        mif_src_files = ['PMBUS_SourceTree/ptmgr_pmbus_mach_xact_XACT_ROM.mif',
-                         'TEMPERATURE_SourceTree/ptmgr_temp_cmp_ROM.mif',
-                         'TEMPERATURE_SourceTree/ptmgr_temp_cnv_ROM.mif' ]
-        for mif_src in mif_src_files:
-            mif_path = mif_root + mif_src
-            mif_leaf = os.path.basename(mif_path)
-            # Does the MIF file exist in the release tree?
-            if (not os.path.exists(mif_path)):
-                print "ALTERA_FULL_POST_SYNTH: Failed to find " + mif_path
-                sys.exit(1)
-            # Make a link in build directory
-            if (not os.path.exists(moduleList.compileDirectory + '/' + mif_leaf)):
-                os.symlink(mif_path, moduleList.compileDirectory + '/' + mif_leaf)
+        # pick up awb parameters.
+        paramTclFile = moduleList.topModule.moduleDependency['PARAM_TCL'][0]
 
-        altera_qsf = altera_apm_name + '.tcl'
-        altera_qpf = altera_apm_name + '.qpf'
 
-        prjFile = open(altera_qsf, 'w')
+        ##
+        ## List SDC (Tcl) files in a file that can be included in the project.
+        ## These must be included in a specific order to honor dependencies
+        ## among them.
+        ##
+        sdcs = map(model.modify_path_hw,
+                   moduleList.getAllDependenciesWithPaths('GIVEN_TCL_HEADERS')) + \
+               map(model.modify_path_hw,
+                   moduleList.getAllDependenciesWithPaths('GIVEN_SDCS')) + \
+               map(model.modify_path_hw,
+                   moduleList.getAllDependenciesWithPaths('GIVEN_SDC_ALGEBRAS'))
 
-        prjFile.write('package require ::quartus::project\n')
-        prjFile.write('package require ::quartus::flow\n')
-        prjFile.write('package require ::quartus::incremental_compilation\n')
+        constrFile_name = moduleList.compileDirectory + '/project_constraints.tcl'
+        constrFile = open(constrFile_name, 'w')
+        constrFile.write('set_global_assignment -name SEED ' + \
+                         str(moduleList.getAWBParamSafe('post_synthesis_tool', 'SEED')) + \
+                         '\n')
+        for tcl_header in [paramTclFile] + sorted(sdcs):
+            constrFile.write('set_global_assignment -name SDC_FILE ' + model.rel_if_not_abspath(tcl_header, moduleList.compileDirectory)+ '\n')
+        constrFile.close()
 
-        # Check for the existence of a project here, so that we can
-        # make use of incremental compilation.
-        prjFile.write('set created_project [project_exists ' + moduleList.apmName +']\n')
-        prjFile.write('if $created_project {\n')
-        prjFile.write('    project_open ' + moduleList.apmName +' \n')
-        prjFile.write('} else  {\n')
-        prjFile.write('    project_new ' + moduleList.apmName +'\n')
-        prjFile.write('}\n\n')
+        prjFile_name = moduleList.compileDirectory + '/project_sources.tcl'
+        prjFile = open(prjFile_name, 'w')
 
         ##
         ## Define which version of CCI is in use for SystemVerilog packages
@@ -71,19 +92,16 @@ class PostSynthesize():
             prjFile.write('set_global_assignment -name VERILOG_MACRO "MPF_PLATFORM_BDX=1"\n')
             prjFile.write('set_global_assignment -name VERILOG_MACRO "BSV_POSITIVE_RESET=1"\n')
 
-        prjFile.write('source ' + rel_qsf_src_dir + '/bdx_arria10.qsf\n')
-
         # Include file path
         inc_dirs = ['hw/include']
         for inc in inc_dirs:
             inc = model.rel_if_not_abspath(inc, moduleList.compileDirectory)
             prjFile.write('set_global_assignment -name SEARCH_PATH ' + inc + '\n');
 
-        # Include SDC (Tcl) files. These must be included in a specific order to honor dependencies among them.
-        sdcs = map(model.modify_path_hw, moduleList.getAllDependenciesWithPaths('GIVEN_TCL_HEADERS')) + map(model.modify_path_hw, moduleList.getAllDependenciesWithPaths('GIVEN_SDCS')) + map(model.modify_path_hw, moduleList.getAllDependenciesWithPaths('GIVEN_SDC_ALGEBRAS'))
-
-        for tcl_header in [paramTclFile] + sdcs:
-            prjFile.write('set_global_assignment -name SDC_FILE ' + model.rel_if_not_abspath(tcl_header, moduleList.compileDirectory)+ '\n')
+        # List SystemVerilog packages first
+        for pkg in moduleList.getAllDependenciesWithPaths('GIVEN_VERILOG_PKGS'):
+            v = model.rel_if_not_abspath(pkg, moduleList.compileDirectory)
+            prjFile.write('set_global_assignment -name SYSTEMVERILOG_FILE ' + v + '\n');
 
         # Add in all the verilog here.
         [globalVerilogs, globalVHDs] = synthesis_library.globalRTLs(moduleList, moduleList.moduleList)
@@ -92,44 +110,70 @@ class PostSynthesize():
         for module in [ mod for mod in moduleList.synthBoundaries()] + [moduleList.topModule]:
             globalVerilogs += [model.get_temp_path(moduleList,module) + module.wrapperName() + '.v']
 
-        for v in globalVerilogs:
+        for v in sorted(globalVerilogs):
             t = 'VERILOG'
             if ((v[-2:] == 'sv') or (v[-2:] == 'vh')):
                 t = 'SYSTEMVERILOG'
             v = model.rel_if_not_abspath(v, moduleList.compileDirectory)
             prjFile.write('set_global_assignment -name ' + t + '_FILE ' + v + '\n');
 
-        for v in globalVHDs:
+        for v in sorted(globalVHDs):
             v = model.rel_if_not_abspath(v, moduleList.compileDirectory)
             prjFile.write('set_global_assignment -name VHDL_FILE ' + v + '\n');
 
         # add the verilogs of the files generated by quartus system builder
-        for v in model.Utils.clean_split(moduleList.env['DEFS']['GIVEN_ALTERAVS'], sep = ' ') :
+        for v in sorted(model.Utils.clean_split(moduleList.env['DEFS']['GIVEN_ALTERAVS'], sep = ' ')):
             v = model.rel_if_not_abspath(v, moduleList.compileDirectory)
             prjFile.write('set_global_assignment -name VERILOG_FILE ' + v + '\n');
 
-        fullCompilePath = os.path.abspath(moduleList.compileDirectory)
-
-        prjFile.write('execute_module  -tool map -args "--verilog_macro=\\"QUARTUS_COMPILATION=1\\" --lib_path ' + fullCompilePath + ' " \n')
-        prjFile.write('execute_module  -tool cdb -args "--merge"  \n')
-        prjFile.write('execute_module  -tool fit \n')
-        prjFile.write('execute_module  -tool sta \n')
-        prjFile.write('execute_module  -tool sta -args "--do_report_timing"\n')
-        prjFile.write('execute_module  -tool asm  \n')
-
-        prjFile.write('project_close \n')
         prjFile.close()
 
-        altera_sof = moduleList.env.Command(altera_apm_name + '.sof',
-                                            globalVerilogs + globalVHDs + [altera_apm_name + '.tcl'] + [paramTclFile] + sdcs,
-                                            ['cd ' + moduleList.compileDirectory + '; quartus_sh -t ' + moduleList.apmName + '.tcl' ])
 
-        moduleList.topModule.moduleDependency['BIT'] = [altera_sof]
+        ##
+        ## Rules for building...
+        ##
+
+        output_dir = moduleList.compileDirectory + '/output_files/'
+        proj_name_base = 'bdw_502_base_rc5_fbc9_seed6'
+        proj_name_synth = 'bdw_502_pr_afu_synth'
+        proj_name = 'bdw_502_pr_afu'
+
+        altera_syn = moduleList.env.Command(
+            output_dir + proj_name_synth + '.syn.rpt',
+            globalVerilogs + globalVHDs + [constrFile_name] + [prjFile_name] + [paramTclFile] + sdcs,
+            ['cd ' + moduleList.compileDirectory + \
+             '; quartus_sh -t synth_pr.tcl ' + proj_name_base + ' ' + proj_name_synth + ' ' + proj_name ])
+
+        altera_sof = moduleList.env.Command(
+            output_dir + proj_name + '.sof',
+            altera_syn,
+            ['cd ' + moduleList.compileDirectory + \
+             '; quartus_sh -t fit_pr.tcl ' + proj_name_base + ' ' + proj_name_synth + ' ' + proj_name ])
+
+        altera_sta = moduleList.env.Command(
+            output_dir + proj_name + '.sta.rpt',
+            altera_sof,
+            ['cd ' + moduleList.compileDirectory + \
+             '; quartus_sta --do_report_timing ' + proj_name_base + ' -c ' + proj_name ])
+
+        altera_pmsf = moduleList.env.Command(
+            output_dir + proj_name + '.pmsf',
+            altera_sof,
+            ['cd ' + output_dir + \
+             '; quartus_cpf -p ' + proj_name + '.x*y*.msf ' + proj_name + '.sof ' + proj_name + '.pmsf' ])
+
+        altera_rbf = moduleList.env.Command(
+            output_dir + proj_name + '.rbf',
+            altera_pmsf,
+            ['cd ' + output_dir + \
+             '; quartus_cpf -c ' + proj_name + '.pmsf ' + proj_name + '.rbf' ])
+
+        moduleList.topModule.moduleDependency['BIT'] = [altera_rbf]
 
         # generate the download program
         newDownloadFile = open('config/' + moduleList.apmName + '.download.temp', 'w')
         newDownloadFile.write('#!/bin/sh\n')
-        newDownloadFile.write('nios2-configure-sof ' + altera_apm_name + '.sof\n')
+        newDownloadFile.write('aliconfafu --bitstream=' + output_dir + proj_name + '.rbf\n')
         newDownloadFile.close()
 
         altera_download = moduleList.env.Command(
@@ -140,12 +184,12 @@ class PostSynthesize():
 
         altera_loader = moduleList.env.Command(
             moduleList.apmName + '_hw.errinfo',
-            moduleList.swExe + moduleList.topModule.moduleDependency['BIT'] + altera_download,
+            moduleList.swExe + moduleList.topModule.moduleDependency['BIT'] + altera_download + altera_sta,
             ['@ln -fs ' + moduleList.swExeOrTarget + ' ' + moduleList.apmName,
              SCons.Script.Delete(moduleList.apmName + '_hw.exe'),
              SCons.Script.Delete(moduleList.apmName + '_hw.vexe'),
              '@echo "++++++++++++ Post-Place & Route ++++++++"',
-             synthesis_library.leap_physical_summary(altera_apm_name + '.sta.rpt', moduleList.apmName + '_hw.errinfo', 'Timing Analyzer was successful', 'Timing requirements not met')])
+             synthesis_library.leap_physical_summary(str(altera_sta[0]), moduleList.apmName + '_hw.errinfo', 'Timing Analyzer was successful', 'Timing requirements not met')])
 
         moduleList.topModule.moduleDependency['LOADER'] = [altera_loader]
         moduleList.topDependency = moduleList.topDependency + [altera_loader]

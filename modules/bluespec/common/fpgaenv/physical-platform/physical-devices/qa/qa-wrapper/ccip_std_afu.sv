@@ -53,6 +53,78 @@ module ccip_std_afu
     output          t_if_ccip_Tx      pck_af2cp_sTx         // CCI-P Tx Port
     );
 
+    // Register incoming signals an extra time to relax timing
+    t_if_ccip_Rx pck_cp2af_sRx_q;
+
+    always_ff @(posedge pClk)
+    begin
+        pck_cp2af_sRx_q <= pck_cp2af_sRx;
+    end
+
+
+    // ====================================================================
+    //
+    // Select the clock for the platform interface driver.
+    //
+    // ====================================================================
+
+    logic plIfc_clk;
+
+    localparam PLAT_IFC_CLOCK_FREQ = `CRYSTAL_CLOCK_FREQ;
+
+    generate
+        if (PLAT_IFC_CLOCK_FREQ == 400)
+            assign plIfc_clk = pClk;
+        else if (PLAT_IFC_CLOCK_FREQ == 300)
+            assign plIfc_clk = uClk_usr;
+        else if (PLAT_IFC_CLOCK_FREQ == 200)
+            assign plIfc_clk = pClkDiv2;
+        else if (PLAT_IFC_CLOCK_FREQ == 150)
+            assign plIfc_clk = uClk_usrDiv2;
+        else if (PLAT_IFC_CLOCK_FREQ == 100)
+            assign plIfc_clk = pClkDiv4;
+        else
+            $fatal("Unsupported platform clock frequency: %d", PLAT_IFC_CLOCK_FREQ);
+    endgenerate
+
+    logic plIfc_reset;
+
+    t_if_ccip_Rx plIfc_cp2af_sRx;
+    t_if_ccip_Tx plIfc_af2cp_sTx;
+
+    //
+    // If the platform interface driver isn't using pClk then add a clock
+    // crossing.
+    //
+    generate
+        if (PLAT_IFC_CLOCK_FREQ == 400)
+        begin : nc
+            assign plIfc_reset = pck_cp2af_softReset;
+            assign plIfc_cp2af_sRx = pck_cp2af_sRx_q;
+            assign pck_af2cp_sTx = plIfc_af2cp_sTx;
+        end
+        else
+        begin : c
+            ccip_async_shim
+              afu_clock_crossing
+               (
+                // Blue bitstream interface (pClk)
+                .bb_softreset(pck_cp2af_softReset),
+                .bb_clk(pClk),
+                .bb_rx(pck_cp2af_sRx_q),
+                .bb_tx(pck_af2cp_sTx),
+
+                // Platform interface driver
+                .afu_softreset(plIfc_reset),
+                .afu_clk(plIfc_clk),
+                .afu_rx(plIfc_cp2af_sRx),
+                .afu_tx(plIfc_af2cp_sTx)
+                );
+        end
+    endgenerate
+
+
+    // ====================================================================
     //
     // Quartus doesn't permit creating a new clock Inside the CCI-P partial
     // reconfiguration region.  The user must currently pick one of the
@@ -60,6 +132,8 @@ module ccip_std_afu
     //
     // In the future uClk_usr will be programmable.
     //
+    // ====================================================================
+
     logic user_clk;
 
     localparam MODEL_CLOCK_FREQ = `MODEL_CLOCK_FREQ;
@@ -83,25 +157,32 @@ module ccip_std_afu
     //
     // Reset synchronizer
     //
-    (* preserve *) logic user_rst_T1;
-    (* preserve *) logic user_rst_T2;
-    logic user_rst;
+    (* preserve *) logic user_rst_T1 = 1'b1;
+    (* preserve *) logic user_rst_T2 = 1'b1;
+    logic user_rst = 1'b1;
 
     always @(posedge user_clk)
     begin
-        user_rst_T1 <= pck_cp2af_softReset;
+        user_rst_T1 <= plIfc_reset;
         user_rst_T2 <= user_rst_T1;
         user_rst    <= user_rst_T2;
     end
 
 
+    // ====================================================================
+    //
     // Instantiate LEAP top level.
+    //
+    // ====================================================================
+
     mk_model_Wrapper
       model_wrapper
        (
         // Edge interface clock and reset
-        .pClk,
-        .pck_cp2af_softReset,
+        .pClk(plIfc_clk),
+        .pck_cp2af_softReset(plIfc_reset),
+        .pck_cp2af_sRx(plIfc_cp2af_sRx),
+        .pck_af2cp_sTx(plIfc_af2cp_sTx),
 
         // Clocks to be used by user logic
         .USER_CLK(user_clk),

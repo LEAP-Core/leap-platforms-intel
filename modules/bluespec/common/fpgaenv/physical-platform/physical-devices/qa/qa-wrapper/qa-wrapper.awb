@@ -13,7 +13,6 @@
 
 %sources -t VERILOG -v PRIVATE cci_std_afu.sv
 %sources -t VERILOG -v PRIVATE ccip_std_afu.sv
-%sources -t SDC     -v PRIVATE qa.sdc
 
 %generated -t VERILOG mkQADeviceSynth.v
 

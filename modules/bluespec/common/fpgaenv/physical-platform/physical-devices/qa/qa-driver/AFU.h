@@ -240,6 +240,8 @@ public:
 #endif
     }
 
+    void ResetAFU();
+
     //
     // Allocate a memory buffer shared by the host and an FPGA.
     //

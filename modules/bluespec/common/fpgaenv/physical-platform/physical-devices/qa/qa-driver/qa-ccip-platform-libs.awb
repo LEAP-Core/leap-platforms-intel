@@ -8,5 +8,7 @@
 %library libOSAL.so
 %library libaalrt.so
 
+%sources -t SDC -v PRIVATE qa-ccip-platform.sdc
+
 %param CCI_S_IFC        0      "Use CCI-S interface"
 %param CCI_P_IFC        1      "Use CCI-P interface"

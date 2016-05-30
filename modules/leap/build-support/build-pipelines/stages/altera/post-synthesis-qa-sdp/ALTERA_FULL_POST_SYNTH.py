@@ -71,6 +71,11 @@ class PostSynthesize():
         for tcl_header in [paramTclFile] + sdcs:
             prjFile.write('set_global_assignment -name SDC_FILE ' + model.rel_if_not_abspath(tcl_header, moduleList.compileDirectory)+ '\n')
 
+        # List SystemVerilog packages first
+        for pkg in moduleList.getAllDependenciesWithPaths('GIVEN_VERILOG_PKGS'):
+            v = model.rel_if_not_abspath(pkg, moduleList.compileDirectory)
+            prjFile.write('set_global_assignment -name SYSTEMVERILOG_FILE ' + v + '\n');
+
         # Add in all the verilog here.
         [globalVerilogs, globalVHDs] = synthesis_library.globalRTLs(moduleList, moduleList.moduleList)
 

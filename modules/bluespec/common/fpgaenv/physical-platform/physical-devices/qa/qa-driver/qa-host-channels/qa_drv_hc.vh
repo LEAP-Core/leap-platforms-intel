@@ -34,4 +34,6 @@
 import qa_drv_hc_types::*;
 import qa_drv_hc_csr_types::*;
 
+`include "cci_mpf_if.vh"
+
 `endif //  `ifndef QA_DRV_HC_VH

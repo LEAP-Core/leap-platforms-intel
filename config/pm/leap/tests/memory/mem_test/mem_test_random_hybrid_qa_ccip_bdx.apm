@@ -51,5 +51,3 @@ Packagehint=leap-debug
 File=config/pm/leap/submodels/fpgaenv/intel/qa/fpgaenv-hybrid-qa-ccip-bdx.apm
 Packagehint=leap-platforms-intel
 
-[Intel QuickAssist CCI-P FPGA BDX Xeon+FPGA/Params]
-MODEL_CLOCK_FREQ=150

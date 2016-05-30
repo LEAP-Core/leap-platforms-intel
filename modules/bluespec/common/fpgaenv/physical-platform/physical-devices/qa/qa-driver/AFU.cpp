@@ -127,23 +127,7 @@ AFU_CLASS::SharedBufferVAtoPA(const void* va)
 void
 AFU_CLASS::ResetAFU()
 {
-#if (CCI_S_IFC != 0)
-    bt32bitCSR csr;
-
-    const uint32_t CIPUCTL_RESET_BIT = 0x01000000;
-
-    // Assert CAFU Reset
-    csr = 0;
-    afuClient->ReadCSR(CSR_CIPUCTL, &csr);
-    csr |= CIPUCTL_RESET_BIT;
-    WriteCSR(CSR_CIPUCTL, csr);
-  
-    // De-assert CAFU Reset
-    csr = 0;
-    afuClient->ReadCSR(CSR_CIPUCTL, &csr);
-    csr &= ~CIPUCTL_RESET_BIT;
-    WriteCSR(CSR_CIPUCTL, csr);
-#endif
+    afuClient->ResetAFU();
 }
 
 
@@ -398,12 +382,6 @@ AFU_CLIENT_CLASS::InitService(const char* afuID)
 
 #else
 
-    if (m_pALIResetService->afuReset())
-    {
-        fprintf(stderr, "ERROR: Failed AFU reset\n");
-        exit(1);
-    }
-
     btcString sGUID = MPF_VTP_BBB_GUID;
     NamedValueSet featureFilter;
     featureFilter.Add(ALI_GETFEATURE_TYPE_KEY, static_cast<ALI_GETFEATURE_TYPE_DATATYPE>(2));
@@ -421,6 +399,7 @@ AFU_CLIENT_CLASS::InitService(const char* afuID)
                            m_pALIMMIOService,
                            m_VTPDFHOffset);
     assert(m_mpf_vtp->isOK());
+
 #endif
 
     return m_Result;
@@ -434,6 +413,54 @@ AFU_CLIENT_CLASS::UninitService()
     m_Sem.Wait();
 
     m_runtimeClient->end();
+}
+
+
+void
+AFU_CLIENT_CLASS::ResetAFU()
+{
+#if (CCI_S_IFC != 0)
+    bt32bitCSR csr;
+
+    const uint32_t CIPUCTL_RESET_BIT = 0x01000000;
+
+    // Assert CAFU Reset
+    csr = 0;
+    ReadCSR(CSR_CIPUCTL, &csr);
+    csr |= CIPUCTL_RESET_BIT;
+    WriteCSR(CSR_CIPUCTL, csr);
+  
+    // De-assert CAFU Reset
+    csr = 0;
+    ReadCSR(CSR_CIPUCTL, &csr);
+    csr &= ~CIPUCTL_RESET_BIT;
+    WriteCSR(CSR_CIPUCTL, csr);
+#else
+    if (m_pALIResetService->afuReset())
+    {
+        fprintf(stderr, "ERROR: Failed AFU reset\n");
+        exit(1);
+    }
+
+    // Reset VTP
+    m_mpf_vtp->vtpReset();
+
+    //
+    // Find the virtual channel mapping feature.
+    //
+    NamedValueSet vc_filter;
+    vc_filter.Add(ALI_GETFEATURE_TYPE_KEY, static_cast<ALI_GETFEATURE_TYPE_DATATYPE>(ALI_DFH_TYPE_BBB));
+    vc_filter.Add(ALI_GETFEATURE_ID_KEY, static_cast<ALI_GETFEATURE_ID_DATATYPE>(1));
+    vc_filter.Add(ALI_GETFEATURE_GUID_KEY, (ALI_GETFEATURE_GUID_DATATYPE)MPF_VC_MAP_BBB_GUID);
+
+    // Offset to VC map feature
+    btCSROffset m_mapDFHOffset;
+    if (m_pALIMMIOService->mmioGetFeatureOffset(&m_mapDFHOffset, vc_filter))
+    {
+        printf("Found VC map CSR at 0x%lx\n", m_mapDFHOffset + CCI_MPF_VC_MAP_CSR_CTRL_REG);
+        m_pALIMMIOService->mmioWrite64(m_mapDFHOffset + CCI_MPF_VC_MAP_CSR_CTRL_REG, 1);
+    }
+#endif
 }
 
 

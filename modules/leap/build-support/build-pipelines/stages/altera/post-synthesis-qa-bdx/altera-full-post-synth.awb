@@ -8,18 +8,15 @@
 
 %scons %library ALTERA_FULL_POST_SYNTH.py
 
-%sources -t QSF -v PRIVATE bdx_arria10.qsf
-%sources -t QSF -v PRIVATE qsf_env_settings.qsf
+%sources -t QPF -v PRIVATE bdw_502_base_rc5_fbc9_seed6.qpf
+%sources -t QSF -v PRIVATE bdw_502_pr_afu.qsf
+%sources -t QSF -v PRIVATE bdw_502_pr_afu_synth.qsf
+%sources -t QSF -v PRIVATE quartus.ini
 
-%sources -t QSF -v PRIVATE qsf_qph_PAR_files.qsf
-%sources -t QSF -v PRIVATE qsf_pinouts_PAR_files.qsf
-%sources -t QSF -v PRIVATE qsf_hssi_pinouts_PAR_files.qsf
-%sources -t QSF -v PRIVATE qsf_qlp_PAR_files.qsf
-%sources -t QSF -v PRIVATE qsf_ccip_PAR_files.qsf
-%sources -t QSF -v PRIVATE qsf_fiu_PAR_files.qsf
-%sources -t QSF -v PRIVATE qsf_pcie_PAR_files.qsf
-%sources -t QSF -v PRIVATE qsf_hssi_PAR_files.qsf
+%sources -t SDC -v PRIVATE sdc_a10q15_1_2.sdc
 
 %sources -t TCL_HEADER -v PRIVATE altera-timing.sdc
 
-%sources -t VERILOG_H  -v PRIVATE sys_cfg_pkg.svh
+%sources -t VERILOG_H -v PRIVATE sys_cfg_pkg.svh
+
+%param SEED   0      "Quartus SEED"

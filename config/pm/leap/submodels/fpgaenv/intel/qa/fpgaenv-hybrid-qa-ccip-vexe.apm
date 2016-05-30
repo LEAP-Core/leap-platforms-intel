@@ -271,8 +271,8 @@ File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/clocks/d
 Packagehint=leap-platforms
 
 [Dual Frequency Provided Clocks Device/Params]
-CRYSTAL_CLOCK_FREQ=400
-MODEL_CLOCK_FREQ=300
+CRYSTAL_CLOCK_FREQ=300
+MODEL_CLOCK_FREQ=200
 USER_CLOCK_RST="USER_RST"
 PLAT_IFC_CLOCK_CLK="pClk"
 PLAT_IFC_CLOCK_RST="pck_cp2af_softReset"

@@ -14,3 +14,4 @@
 %sources -t H   -v PUBLIC  qa-platform.h
 
 %param QA_PLATFORM_MEMTEST   0      "Enable memory test (disables normal LEAP operations)"
+%param FPGA_PLATFORM         "Xeon+FPGA"      "Platform name"

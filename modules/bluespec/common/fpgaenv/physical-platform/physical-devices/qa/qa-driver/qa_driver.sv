@@ -57,6 +57,7 @@
 // ========================================================================
 
 `include "qa_driver_csr.vh"
+`include "cci_mpf_if.vh"
 
 `ifdef MPF_HOST_IFC_CCIS
 import ccis_if_pkg::*;

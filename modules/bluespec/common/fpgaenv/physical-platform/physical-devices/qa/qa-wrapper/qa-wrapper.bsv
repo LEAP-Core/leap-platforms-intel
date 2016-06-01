@@ -620,7 +620,7 @@ module mkQADeviceSynth#(Clock qaClk, Reset qaRst)
 
     // A stream of counts of completed writes.
     SyncFIFOIfc#(Bit#(QA_DEVICE_WRITE_ACK_BITS)) syncMemoryWriteAckQ <-
-        mkSyncFIFOToCC(valueOf(QA_MAX_MEM_READS), qaClk, qaRst);
+        mkSyncFIFOToCC(valueOf(QA_MAX_MEM_WRITES), qaClk, qaRst);
 
     // Count operations in flight to prevent overflows
     COUNTER#(TLog#(TAdd#(QA_MAX_MEM_READS, 1))) activeMemReads <- mkLCounter(0);

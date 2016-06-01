@@ -63,7 +63,7 @@ module [CONNECTED_MODULE] mkPhysicalPlatformDebugger#(PHYSICAL_DRIVERS drivers)
     //
 
     // Client connection
-    CONNECTION_RECV#(QA_SREG) sregUpdateQ <- mkConnectionRecvOptional("qa_sreg_dbg_ring");
+    CONNECTION_RECV#(QA_SREG) sregUpdateQ <- mkConnectionRecvOptional("qa_sreg_dbg");
 
     // 512 entry ring buffer
     MEMORY_IFC#(Bit#(9), QA_SREG) sregs <- mkBRAM();

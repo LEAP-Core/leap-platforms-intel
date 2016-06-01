@@ -163,8 +163,15 @@ module qa_driver_csr_rd
     //
     // SREG
     //
-    assign sreg_req_rdy = is_csr_read &&
-                          (csr_addr == (CSR_AFU_SREG_READ >> 2));
+    always_ff @(posedge clk)
+    begin
+        sreg_req_rdy <= cci_csr_isRead(fiu.c0Rx) &&
+                        (cci_csr_getAddress(fiu.c0Rx) == (CSR_AFU_SREG_READ >> 2));
+        if (reset)
+        begin
+            sreg_req_rdy <= 1'b0;
+        end
+    end
 
     // Record read request's TID
     always_ff @(posedge clk)

@@ -59,11 +59,11 @@ import ConfigReg::*;
 `endif
 
 // Maximum outstanding memory requests
-typedef 80 QA_MAX_MEM_READS;
+typedef 512 QA_MAX_MEM_READS;
 
 // Maximum outstanding memory requests.  Allow many writes since the overhead
 // here is low.  (Just a counter.)
-typedef 256 QA_MAX_MEM_WRITES;
+typedef 512 QA_MAX_MEM_WRITES;
 
 typedef Bit#(32) QA_SREG_ADDR;
 typedef Bit#(64) QA_SREG;

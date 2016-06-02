@@ -450,8 +450,8 @@ module mkQADeviceSynth#(Clock qaClk, Reset qaRst)
     // Host/FPGA Channels
     //
 
-    SyncFIFOIfc#(UMF_CHUNK) syncChannelReadQ <- mkSyncFIFOToCC(16, qaClk, qaRst);
-    SyncFIFOIfc#(UMF_CHUNK) syncChannelWriteQ <- mkSyncFIFOFromCC(16, qaClk);
+    SyncFIFOIfc#(UMF_CHUNK) syncChannelReadQ <- mkQASyncFIFOToCC(16, qaClk, qaRst);
+    SyncFIFOIfc#(UMF_CHUNK) syncChannelWriteQ <- mkQASyncFIFOFromCC(16, qaClk);
 
     // Track whether traffic has been seen incoming.  No outbound traffic
     // is allowed until the software has shown signs of life by sending
@@ -614,13 +614,13 @@ module mkQADeviceSynth#(Clock qaClk, Reset qaRst)
     // Memory
     //
 
-    SyncFIFOIfc#(QA_MEM_REQ) syncMemoryReqQ <- mkSyncFIFOFromCC(16, qaClk);
+    SyncFIFOIfc#(QA_MEM_REQ) syncMemoryReqQ <- mkQASyncFIFOFromCC(16, qaClk);
     SyncFIFOIfc#(QA_CCI_DATA) syncMemoryReadRspQ <-
-        mkSyncFIFOToCC(valueOf(QA_MAX_MEM_READS), qaClk, qaRst);
+        mkQASyncFIFOToCC(valueOf(QA_MAX_MEM_READS), qaClk, qaRst);
 
     // A stream of counts of completed writes.
     SyncFIFOIfc#(Bit#(QA_DEVICE_WRITE_ACK_BITS)) syncMemoryWriteAckQ <-
-        mkSyncFIFOToCC(valueOf(QA_MAX_MEM_WRITES), qaClk, qaRst);
+        mkQASyncFIFOToCC(valueOf(QA_MAX_MEM_WRITES), qaClk, qaRst);
 
     // Count operations in flight to prevent overflows
     COUNTER#(TLog#(TAdd#(QA_MAX_MEM_READS, 1))) activeMemReads <- mkLCounter(0);
@@ -690,8 +690,8 @@ module mkQADeviceSynth#(Clock qaClk, Reset qaRst)
     // Status registers
     //
 
-    SyncFIFOIfc#(QA_SREG_ADDR) syncSregReqQ <- mkSyncFIFOToCC(1, qaClk, qaRst);
-    SyncFIFOIfc#(QA_SREG) syncSregRspQ <- mkSyncFIFOFromCC(1, qaClk);
+    SyncFIFOIfc#(QA_SREG_ADDR) syncSregReqQ <- mkQASyncFIFOToCC(1, qaClk, qaRst);
+    SyncFIFOIfc#(QA_SREG) syncSregRspQ <- mkQASyncFIFOFromCC(1, qaClk);
 
     (* fire_when_enabled *)
     rule sregReqIn;

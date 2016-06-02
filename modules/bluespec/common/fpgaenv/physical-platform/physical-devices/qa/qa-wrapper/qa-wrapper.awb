@@ -7,12 +7,14 @@
 %notes README
 
 %public qa-wrapper.bsv
+%public qa-wrapper-sync-fifo.bsv
 
 %sources -t H       -v PUBLIC  qa-wrapper.h
 %sources -t CPP     -v PRIVATE qa-wrapper.cpp
 
 %sources -t VERILOG -v PRIVATE cci_std_afu.sv
 %sources -t VERILOG -v PRIVATE ccip_std_afu.sv
+%sources -t VERILOG -v PRIVATE qa_wrapper_dcfifo.sv
 
 %generated -t VERILOG mkQADeviceSynth.v
 

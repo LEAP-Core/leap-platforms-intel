@@ -400,6 +400,21 @@ AFU_CLIENT_CLASS::InitService(const char* afuID)
                            m_VTPDFHOffset);
     assert(m_mpf_vtp->isOK());
 
+
+    //
+    // Find the virtual channel mapping feature.
+    //
+    NamedValueSet vc_filter;
+    vc_filter.Add(ALI_GETFEATURE_TYPE_KEY, static_cast<ALI_GETFEATURE_TYPE_DATATYPE>(ALI_DFH_TYPE_BBB));
+    vc_filter.Add(ALI_GETFEATURE_ID_KEY, static_cast<ALI_GETFEATURE_ID_DATATYPE>(1));
+    vc_filter.Add(ALI_GETFEATURE_GUID_KEY, (ALI_GETFEATURE_GUID_DATATYPE)MPF_VC_MAP_BBB_GUID);
+
+    m_mpf_vc_map = NULL;
+    if (m_pALIMMIOService->mmioGetFeatureOffset(&m_VCMAPDFHOffset, vc_filter))
+    {
+        m_mpf_vc_map = new MPFVCMAP(m_pALIMMIOService, m_VCMAPDFHOffset);
+        assert(m_mpf_vc_map->isOK());
+    }
 #endif
 
     return m_Result;
@@ -444,22 +459,7 @@ AFU_CLIENT_CLASS::ResetAFU()
 
     // Reset VTP
     m_mpf_vtp->vtpReset();
-
-    //
-    // Find the virtual channel mapping feature.
-    //
-    NamedValueSet vc_filter;
-    vc_filter.Add(ALI_GETFEATURE_TYPE_KEY, static_cast<ALI_GETFEATURE_TYPE_DATATYPE>(ALI_DFH_TYPE_BBB));
-    vc_filter.Add(ALI_GETFEATURE_ID_KEY, static_cast<ALI_GETFEATURE_ID_DATATYPE>(1));
-    vc_filter.Add(ALI_GETFEATURE_GUID_KEY, (ALI_GETFEATURE_GUID_DATATYPE)MPF_VC_MAP_BBB_GUID);
-
-    // Offset to VC map feature
-    btCSROffset m_mapDFHOffset;
-    if (m_pALIMMIOService->mmioGetFeatureOffset(&m_mapDFHOffset, vc_filter))
-    {
-        printf("Found VC map CSR at 0x%lx\n", m_mapDFHOffset + CCI_MPF_VC_MAP_CSR_CTRL_REG);
-        m_pALIMMIOService->mmioWrite64(m_mapDFHOffset + CCI_MPF_VC_MAP_CSR_CTRL_REG, 1);
-    }
+    m_mpf_vc_map->vcmapSetMode(true, true);
 #endif
 }
 
@@ -714,6 +714,16 @@ AFU_CLIENT_CLASS::EmitStats(ofstream &statusFile)
                << "\"VTP Page Table Walk Busy Cycles\","
                << GetStatVTP(CCI_MPF_VTP_CSR_STAT_PT_WALK_BUSY_CYCLES)
                << endl;
+
+#if (CCI_S_IFC == 0)
+    if (m_mpf_vc_map)
+    {
+        statusFile << "CCI_MPF_VC_MAP_CSR_STAT_NUM_MAPPING_CHANGES,"
+                   << "\"VC MAP Number of Mapping Changes\","
+                   << m_mpf_vc_map->vcmapGetStatCounter(CCI_MPF_VC_MAP_CSR_STAT_NUM_MAPPING_CHANGES)
+                   << endl;
+    }
+#endif
 }
 
 void

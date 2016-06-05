@@ -66,7 +66,7 @@ parameter CCI_MPF_WRO_CSR_OFFSET =       CCI_MPF_VC_MAP_CSR_OFFSET +
 parameter CCI_MPF_STAT_CNT_WIDTH = 16;
 typedef logic [CCI_MPF_STAT_CNT_WIDTH-1:0] t_cci_mpf_stat_cnt;
 
-parameter CCI_MPF_CSR_NUM_STATS = 5;
+parameter CCI_MPF_CSR_NUM_STATS = 6;
 typedef t_mpf_csr_offset [0:CCI_MPF_CSR_NUM_STATS-1] t_stat_csr_offset_vec;
 typedef t_cci_mpf_stat_cnt [0:CCI_MPF_CSR_NUM_STATS-1] t_stat_upd_count_vec;
 
@@ -603,14 +603,14 @@ module cci_mpf_shim_csr_events
     // Each counter gets a small register accumulator which is added
     // to the main block-RAM counter after some timeout.
 
-    `define MPF_CSR_STAT_ACCUM(IDX, CSR_OFFSET, NAME, EVENT) \
+    `define MPF_CSR_STAT_ACCUM(FEATURE, IDX, CSR_OFFSET, NAME, EVENT) \
         t_cci_mpf_stat_cnt NAME; \
         \
         /* Map the counter to its position in the block RAM and CSR */ \
         /* address space. */ \
         assign stat_upd_offset_vec[IDX] = \
-            t_mpf_csr_offset'((CCI_MPF_VTP_CSR_OFFSET + \
-                               CCI_MPF_VTP_CSR_STAT_``CSR_OFFSET) >> 3); \
+            t_mpf_csr_offset'((CCI_MPF_``FEATURE``_CSR_OFFSET + \
+                               CCI_MPF_``FEATURE``_CSR_STAT_``CSR_OFFSET) >> 3); \
         assign stat_upd_count_vec[IDX] = NAME; \
         \
         /* The "_cur" version is either the accumulator's value or 0 if */ \
@@ -633,11 +633,13 @@ module cci_mpf_shim_csr_events
             end \
         end
 
-    `MPF_CSR_STAT_ACCUM(0, 4KB_TLB_NUM_HITS, vtp_4kb_hits, vtp_out_event_4kb_hit)
-    `MPF_CSR_STAT_ACCUM(1, 4KB_TLB_NUM_MISSES, vtp_4kb_misses, vtp_out_event_4kb_miss)
-    `MPF_CSR_STAT_ACCUM(2, 2MB_TLB_NUM_HITS, vtp_2mb_hits, vtp_out_event_2mb_hit)
-    `MPF_CSR_STAT_ACCUM(3, 2MB_TLB_NUM_MISSES, vtp_2mb_misses, vtp_out_event_2mb_miss)
-    `MPF_CSR_STAT_ACCUM(4, PT_WALK_BUSY_CYCLES, vtp_pt_walk_busy_cycles, vtp_out_event_pt_walk_busy)
+    `MPF_CSR_STAT_ACCUM(VTP, 0, 4KB_TLB_NUM_HITS, vtp_4kb_hits, vtp_out_event_4kb_hit)
+    `MPF_CSR_STAT_ACCUM(VTP, 1, 4KB_TLB_NUM_MISSES, vtp_4kb_misses, vtp_out_event_4kb_miss)
+    `MPF_CSR_STAT_ACCUM(VTP, 2, 2MB_TLB_NUM_HITS, vtp_2mb_hits, vtp_out_event_2mb_hit)
+    `MPF_CSR_STAT_ACCUM(VTP, 3, 2MB_TLB_NUM_MISSES, vtp_2mb_misses, vtp_out_event_2mb_miss)
+    `MPF_CSR_STAT_ACCUM(VTP, 4, PT_WALK_BUSY_CYCLES, vtp_pt_walk_busy_cycles, vtp_out_event_pt_walk_busy)
+
+    `MPF_CSR_STAT_ACCUM(VC_MAP, 5, NUM_MAPPING_CHANGES, vc_map_mapping_changes, vc_map_out_event_mapping_changed)
 
 endmodule // cci_mpf_shim_csr_events
 

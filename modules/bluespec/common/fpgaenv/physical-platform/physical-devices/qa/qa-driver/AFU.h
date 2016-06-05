@@ -302,6 +302,10 @@ public:
     // Shared translation and virtual memory manager.
     MPFVTP        *m_mpf_vtp;
     btCSROffset    m_VTPDFHOffset;      ///< VTP DFH offset
+
+    // Virtual channel mapping
+    MPFVCMAP      *m_mpf_vc_map;
+    btCSROffset    m_VCMAPDFHOffset;    ///< VC MAP DFH offset
 #endif
     AFU_RUNTIME_CLIENT m_runtimeClient;
     CSemaphore     m_Sem;            // For synchronizing with the AAL runtime.

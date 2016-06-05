@@ -115,10 +115,14 @@ typedef enum
     //      mapped channels to optimize throughput.  Optimal mapping
     //      varies depending on the ratio of reads to writes and the
     //      number of lines per request.
+    //   Bits 5-2:
+    //      Log2 of the dynamic sampling window size in cycles.  The
+    //      dynamic mapper will consider changing only after 16
+    //      consecutive windows suggest the same ratio.
     //   Bit 7:
     //      When 0: Set mapping ratio to default for the platform.
-    //      When 1: Use the ratio specifiers in bits 8-13 and 16-22.
-    //   Bits 8-13:
+    //      When 1: Use the ratio specifiers in bits 13-8.
+    //   Bits 13-8:
     //      When bit 7 is 1 these are used to define the fraction of requests
     //      mapped to channel VL0.  The value is the number of 64ths that
     //      should be assigned VL0.  The remaining channel mappings are split
@@ -126,8 +130,11 @@ typedef enum
     //
     CCI_MPF_VC_MAP_CSR_CTRL_REG = 24,
 
+    // Statistics -- all 8 byte read-only CSRs
+    CCI_MPF_VC_MAP_CSR_STAT_NUM_MAPPING_CHANGES = 32,
+
     // Must be last
-    CCI_MPF_VC_MAP_CSR_SIZE = 32
+    CCI_MPF_VC_MAP_CSR_SIZE = 40
 }
 t_cci_mpf_vc_map_csr_offsets;
 

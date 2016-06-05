@@ -24,7 +24,7 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,  EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 //****************************************************************************
-/// @file cci_mpf_shim_vtp.cpp
+/// @file cci_mpf_service.cpp
 /// @brief Implementation of MPF Service.
 /// @ingroup VTPService
 /// @verbatim
@@ -148,6 +148,7 @@ btBool MPF::init( IBase               *pclientBase,
    // It will take precedence over the feature ID.
 
    btBool hasVTP = false;
+   btBool hasVCMAP = false;
 
    // If MPF_FEATURE_ID is specified, try to detect available features.
    MPF_FEATURE_ID_DATATYPE mpfFID;
@@ -158,21 +159,57 @@ btBool MPF::init( IBase               *pclientBase,
       //
 
       // Ask ALI for a BBB with MPF's feature ID and the expected VTP GUID
-      NamedValueSet filter;
-      filter.Add( ALI_GETFEATURE_TYPE_KEY, static_cast<ALI_GETFEATURE_TYPE_DATATYPE>(ALI_DFH_TYPE_BBB) );
-      filter.Add( ALI_GETFEATURE_ID_KEY, static_cast<ALI_GETFEATURE_ID_DATATYPE>(mpfFID) );
-      filter.Add( ALI_GETFEATURE_GUID_KEY, (ALI_GETFEATURE_GUID_DATATYPE)MPF_VTP_BBB_GUID );
+      NamedValueSet filter_vtp;
+      filter_vtp.Add( ALI_GETFEATURE_TYPE_KEY, static_cast<ALI_GETFEATURE_TYPE_DATATYPE>(ALI_DFH_TYPE_BBB) );
+      filter_vtp.Add( ALI_GETFEATURE_ID_KEY, static_cast<ALI_GETFEATURE_ID_DATATYPE>(mpfFID) );
+      filter_vtp.Add( ALI_GETFEATURE_GUID_KEY, (ALI_GETFEATURE_GUID_DATATYPE)MPF_VTP_BBB_GUID );
 
       // FIXME: This is here only because of a caching bug in
       // ASEALIAFU::mmioGetFeatureAddress() in SR-5.0.2-Beta. Once fixed
       // this call can be removed.
       m_pALIMMIO->mmioGetAddress();
 
-      if ( false == m_pALIMMIO->mmioGetFeatureOffset( &m_vtpDFHOffset, filter ) ) {
+      if ( false == m_pALIMMIO->mmioGetFeatureOffset( &m_vtpDFHOffset, filter_vtp ) ) {
          // No VTP found - this could mean that VTP is not enabled in MPF
          hasVTP = false;
       } else {
          hasVTP = true;
+      }
+
+
+      //
+      // VC MAP
+      //
+
+      // Ask ALI for a BBB with MPF's feature ID and the expected VC_MAP GUID
+      NamedValueSet filter_vcmap;
+      filter_vcmap.Add( ALI_GETFEATURE_TYPE_KEY, static_cast<ALI_GETFEATURE_TYPE_DATATYPE>(ALI_DFH_TYPE_BBB) );
+      filter_vcmap.Add( ALI_GETFEATURE_ID_KEY, static_cast<ALI_GETFEATURE_ID_DATATYPE>(mpfFID) );
+      filter_vcmap.Add( ALI_GETFEATURE_GUID_KEY, (ALI_GETFEATURE_GUID_DATATYPE)MPF_VC_MAP_BBB_GUID );
+
+      if ( false == m_pALIMMIO->mmioGetFeatureOffset( &m_vcmapDFHOffset, filter_vcmap ) ) {
+         // No VC MAP found - this could mean that VC MAP is not enabled in MPF
+         hasVCMAP = false;
+         AAL_INFO(LM_AFU, "No VC MAP feature." << std::endl);
+      } else {
+         hasVCMAP = true;
+         AAL_INFO(LM_All, "Using MMIO address 0x" << std::hex << m_vcmapDFHOffset <<
+                  " for VC MAP." << std::endl);
+
+         // Instantiate component class
+         m_pVCMAP = new MPFVCMAP( m_pALIMMIO, m_vcmapDFHOffset );
+
+         if ( ! m_pVCMAP->isOK() ) {
+            initFailed(new CExceptionTransactionEvent( NULL,
+                     rtid,
+                     errBadParameter,
+                     reasFeatureNotSupported,
+                     "VC MAP initialization failed."));
+            return true;
+         }
+
+         // found VC MAP, expose interface to outside
+         SetInterface(iidMPFVCMAPService, dynamic_cast<IMPFVCMAP *>(m_pVCMAP));
       }
    }
 
@@ -188,7 +225,6 @@ btBool MPF::init( IBase               *pclientBase,
    } else {
       AAL_DEBUG(LM_AFU, "No direct MPF_VTP_DFH_OFFSET supplied." << std::endl);
    }
-
 
    if (hasVTP) {
       AAL_INFO(LM_All, "Using MMIO address 0x" << std::hex << m_vtpDFHOffset <<

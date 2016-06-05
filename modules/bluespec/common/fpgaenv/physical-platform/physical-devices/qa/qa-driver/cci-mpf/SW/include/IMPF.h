@@ -81,13 +81,10 @@ BEGIN_NAMESPACE(AAL)
 // Read responses ordering feature
 #define MPF_RSP_ORDER_BBB_GUID "4C9C96F4-65BA-4DD8-B383-C70ACE57BFE4"
 
-// Memory virtual channel mapping feature
-#define MPF_VC_MAP_BBB_GUID "5046C86F-BA48-4856-B8F9-3B76E3DD4E74"
-
 // Write ordering feature
 #define MPF_WRO_BBB_GUID "56B06B48-9DD7-4004-A47E-0681B4207A6D"
 
-/// MPF Service IID
+/// MPF VTP Service IID
 #ifndef iidMPFVTPService
 #define iidMPFVTPService __INTC_IID(INTC_sysSampleAFU, 0x0010)
 #endif
@@ -134,6 +131,62 @@ public:
 
    // Return all statistics counters
    virtual btBool vtpGetStats( t_cci_mpf_vtp_stats *stats ) = 0;
+};
+
+/// @}
+
+
+/// @addtogroup VCMAPService
+/// @{
+
+#define MPF_VC_MAP_DFH_ADDRESS_KEY "MPFVCMAPDFHAddress"
+#define MPF_VC_MAP_DFH_ADDRESS_DATATYPE btObjectType
+#define MPF_VC_MAP_DFH_OFFSET_KEY "MPFVCMAPDFHOffset"
+#define MPF_VC_MAP_DFH_OFFSET_DATATYPE btCSROffset
+
+/// Memory virtual channel mapping feature
+#define MPF_VC_MAP_BBB_GUID "5046C86F-BA48-4856-B8F9-3B76E3DD4E74"
+
+/// MPF VTP Service IID
+#ifndef iidMPFVCMAPService
+#define iidMPFVCMAPService __INTC_IID(INTC_sysSampleAFU, 0x0011)
+#endif
+
+
+typedef struct
+{
+   // Number of times the mapping function has changed
+   btUnsigned64bitInt numMappingChanges;
+}
+t_cci_mpf_vc_map_stats;
+
+
+class IMPFVCMAP
+{
+public:
+   virtual ~IMPFVCMAP() {}
+
+   // Set the mapping mode:
+   //  - enable_mapping turns on eVC_VA to physical channel mapping
+   //  - enable_dynamic_mapping turns on automatic tuning of the channel
+   //    ratios based on traffic. (Ignored when enable_mapping is false.)
+   //  - sampling_window_radix determines the sizes of sampling windows for
+   //    dynamic mapping and, consequently, controls the frequency at
+   //    which dynamic changes may occur.  Dynamic changes are expensive
+   //    since a write fence must be emitted to synchronize traffic.
+   //    Passing 0 picks the default value.
+   virtual btBool vcmapSetMode( btBool enable_mapping,
+                                btBool enable_dynamic_mapping,
+                                btUnsigned32bitInt sampling_window_radix = 0 ) = 0;
+
+   // Disable mapping
+   virtual btBool vcmapDisable( void ) = 0;
+
+   // Set fixed mapping where VL0 gets r 64ths of the traffic
+   virtual btBool vcmapSetFixedMapping( btUnsigned32bitInt r ) = 0;
+
+   // Return all statistics counters
+   virtual btBool vcmapGetStats( t_cci_mpf_vc_map_stats *stats ) = 0;
 };
 
 /// @}

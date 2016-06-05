@@ -54,6 +54,7 @@
 #include "IMPF.h"              // Public MPF service interface
 #include "MPFService.h"
 
+#include "cci_mpf_shim_vc_map.h"
 #include "cci_mpf_shim_vtp.h"
 
 BEGIN_NAMESPACE(AAL)
@@ -79,7 +80,9 @@ public:
       m_pALIBuffer(NULL),
       m_pALIMMIO(NULL),
       m_vtpDFHOffset(-1),
-      m_pVTP(NULL)
+      m_pVTP(NULL),
+      m_vcmapDFHOffset(-1),
+      m_pVCMAP(NULL)
    {
       // MPF exposes service interfaces of component classes (delegate
       // pattern). As such, the "SetInterface()" calls are deferred until the
@@ -117,8 +120,12 @@ protected:
    IBase                 *m_pALIAFU;         //< Pointer to ALIAFU class
    IALIBuffer            *m_pALIBuffer;      //< Pointer to ALIAFUs Buffer IF
    IALIMMIO              *m_pALIMMIO;        //< Pointer to ALIAFUs MMIO IF
+
    btCSROffset            m_vtpDFHOffset;    //< Offset to VTP feature
    MPFVTP                *m_pVTP;            //< Pointer to VTP SW component
+
+   btCSROffset            m_vcmapDFHOffset;  //< Offset to VC MAP feature
+   MPFVCMAP              *m_pVCMAP;          //< Pointer to VC MAP SW component
 
 };
 
@@ -126,5 +133,5 @@ protected:
 
 END_NAMESPACE(AAL)
 
-#endif //__VTP_H__
+#endif //__MPF_H__
 

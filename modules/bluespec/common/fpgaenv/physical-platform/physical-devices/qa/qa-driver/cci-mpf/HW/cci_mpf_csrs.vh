@@ -71,6 +71,8 @@ interface cci_mpf_csrs();
     logic [63:0] vc_map_ctrl;
     logic        vc_map_ctrl_valid;
 
+    logic vc_map_out_event_mapping_changed;
+
 
     //
     // WRO -- write/read ordering
@@ -106,7 +108,8 @@ interface cci_mpf_csrs();
         input vtp_out_event_4kb_miss,
         input vtp_out_event_2mb_hit,
         input vtp_out_event_2mb_miss,
-        input vtp_out_event_pt_walk_busy
+        input vtp_out_event_pt_walk_busy,
+        input vc_map_out_event_mapping_changed
         );
 
     modport vtp
@@ -128,6 +131,10 @@ interface cci_mpf_csrs();
        (
         input  vc_map_ctrl,
         input  vc_map_ctrl_valid
+        );
+    modport vc_map_events
+       (
+        output vc_map_out_event_mapping_changed
         );
 
     modport wro

@@ -236,7 +236,8 @@ module cci_mpf_pipe_std
                 .clk,
                 .fiu(stgp3_fiu_wro),
                 .afu(stgp4_fiu_vc_map),
-                .csrs(mpf_csrs)
+                .csrs(mpf_csrs),
+                .events(mpf_csrs)
                 );
         end
         else

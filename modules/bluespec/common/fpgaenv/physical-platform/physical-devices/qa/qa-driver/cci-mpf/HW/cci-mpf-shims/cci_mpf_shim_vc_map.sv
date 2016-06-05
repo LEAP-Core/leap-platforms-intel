@@ -68,11 +68,12 @@ module cci_mpf_shim_vc_map
     // Connections toward user code.
     cci_mpf_if.to_afu afu,
 
-    cci_mpf_csrs.vc_map csrs
+    cci_mpf_csrs.vc_map csrs,
+    cci_mpf_csrs.vc_map_events events
     );
 
     // How often to sample for a new ratio (cycles)
-    localparam SAMPLE_CYCLES = 1024;
+    localparam MAX_SAMPLE_CYCLES_RADIX = 16;
 
     // Sample in groups of N_SAMPLE_REGIONS.  When N_SAMPLE_REGIONS successive
     // regions all have the same recommended configuration then update the
@@ -144,12 +145,18 @@ module cci_mpf_shim_vc_map
     logic new_ratio_vl0_en;
     t_map_ratio new_ratio_vl0;
 
+    logic [$clog2(MAX_SAMPLE_CYCLES_RADIX)-1 : 0] sample_interval_idx;
+    // Default to sampling every 1K cycles
+    localparam DEFAULT_SAMPLE_INTERVAL_IDX = 10;
+
     always_ff @(posedge clk)
     begin
         if (reset)
         begin
             mapping_disabled <= 1'b0;
             dynamic_mapping_disabled <= (ENABLE_DYNAMIC_VC_MAPPING == 0);
+            sample_interval_idx <= DEFAULT_SAMPLE_INTERVAL_IDX;
+
             ratio_vl0 <= RATIO_VL0_DEFAULT;
         end
         else if (csrs.vc_map_ctrl_valid)
@@ -157,8 +164,12 @@ module cci_mpf_shim_vc_map
             // See cci_mpf_csrs.h for bit assignments in the control word.
             mapping_disabled <= ~ csrs.vc_map_ctrl[0];
             dynamic_mapping_disabled <= ~ csrs.vc_map_ctrl[1];
-            ratio_vl0 <= (csrs.vc_map_ctrl[7] ? csrs.vc_map_ctrl[13:8] :
-                                                RATIO_VL0_DEFAULT);
+            sample_interval_idx <=
+                (csrs.vc_map_ctrl[5:2] != 4'b0) ? csrs.vc_map_ctrl[5:2] :
+                                                  DEFAULT_SAMPLE_INTERVAL_IDX;
+
+            ratio_vl0 <= csrs.vc_map_ctrl[7] ? csrs.vc_map_ctrl[13:8] :
+                                               RATIO_VL0_DEFAULT;
         end
         else if (new_ratio_vl0_en)
         begin
@@ -389,6 +400,7 @@ module cci_mpf_shim_vc_map
             begin
                 // New request to change the ratio?
                 if (req_ratio_vl0_en &&
+                    ! mapping_disabled &&
                     ! dynamic_mapping_disabled &&
                     (req_ratio_vl0 != ratio_vl0))
                 begin
@@ -412,6 +424,7 @@ module cci_mpf_shim_vc_map
                 if (is_vc_map_wrfence_rsp)
                 begin
                     new_ratio_vl0_en <= 1'b1;
+                    events.vc_map_out_event_mapping_changed <= 1'b1;
                     state <= CCI_MPF_VC_MAP_WAIT_READS;
                 end
             end
@@ -419,6 +432,7 @@ module cci_mpf_shim_vc_map
           CCI_MPF_VC_MAP_WAIT_READS:
             begin
                 new_ratio_vl0_en <= 1'b0;
+                events.vc_map_out_event_mapping_changed <= 1'b0;
 
                 // Wait for all previous reads to complete since they are now
                 // tracked on the wrong channel.  The WRO module only compares
@@ -426,7 +440,6 @@ module cci_mpf_shim_vc_map
                 // commit before outstanding reads complete.
                 if (num_outstanding_reads == 0)
                 begin
-                    new_ratio_vl0_en <= 1'b1;
                     block_tx_traffic <= 1'b0;
 
                     state <= CCI_MPF_VC_MAP_SAMPLING;
@@ -438,7 +451,7 @@ module cci_mpf_shim_vc_map
         begin
             state <= CCI_MPF_VC_MAP_SAMPLING;
             block_tx_traffic <= 1'b0;
-            new_ratio_vl0_en <= 1'b0;
+            events.vc_map_out_event_mapping_changed <= 1'b0;
         end
     end
 
@@ -454,13 +467,14 @@ module cci_mpf_shim_vc_map
         cci_c1Rx_isWriteFenceRsp(fiu.c1Rx) &&
         fiu.c1Rx.hdr.mdata[RESERVED_MDATA_IDX];
 
-    typedef logic [$clog2(SAMPLE_CYCLES)-1 : 0] t_sample_cnt;
+    typedef logic [MAX_SAMPLE_CYCLES_RADIX-1 : 0] t_sample_cnt;
     t_sample_cnt n_sampled_reads;
     t_sample_cnt n_sampled_writes;
 
-    logic [$clog2(SAMPLE_CYCLES) : 0] n_sampled_len1;
-    logic [$clog2(SAMPLE_CYCLES) : 0] n_sampled_len2;
-    logic [$clog2(SAMPLE_CYCLES) : 0] n_sampled_len4;
+    // reads + writes, hence larger counters
+    logic [MAX_SAMPLE_CYCLES_RADIX : 0] n_sampled_len1;
+    logic [MAX_SAMPLE_CYCLES_RADIX : 0] n_sampled_len2;
+    logic [MAX_SAMPLE_CYCLES_RADIX : 0] n_sampled_len4;
 
     // Was a request on VA present?  No point in change unless there are some.
     logic saw_va_req;
@@ -603,8 +617,8 @@ module cci_mpf_shim_vc_map
     //
     // ====================================================================
 
-    logic [$clog2(SAMPLE_CYCLES) : 0] cycle_cnt;
-    assign sample_region_done = (cycle_cnt[$clog2(SAMPLE_CYCLES)] == 1'b1);
+    logic [MAX_SAMPLE_CYCLES_RADIX : 0] cycle_cnt;
+    assign sample_region_done = (cycle_cnt[sample_interval_idx] == 1'b1);
 
     logic rd_len1;
     logic rd_len2;

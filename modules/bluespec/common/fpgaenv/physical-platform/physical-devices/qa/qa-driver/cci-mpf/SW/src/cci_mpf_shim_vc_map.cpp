@@ -149,8 +149,8 @@ btBool MPFVCMAP::vcmapDisable( void )
 
 btBool MPFVCMAP::vcmapSetFixedMapping( btUnsigned32bitInt r )
 {
-   ASSERT(r < 64);
-   if (r >= 64) return false;
+   ASSERT(r <= 64);
+   if (r > 64) return false;
 
    btBool ret;
 

@@ -129,6 +129,7 @@ module cci_mpf_shim_vc_map
     // Fraction of requests to map to VL0 (of 64)
     typedef logic [5:0] t_map_ratio;
     t_map_ratio ratio_vl0;
+    logic always_use_vl0;
 
 `ifdef MPF_PLATFORM_OME
     // Don't care (only one physical channel)
@@ -158,6 +159,7 @@ module cci_mpf_shim_vc_map
             sample_interval_idx <= DEFAULT_SAMPLE_INTERVAL_IDX;
 
             ratio_vl0 <= RATIO_VL0_DEFAULT;
+            always_use_vl0 <= 1'b0;
         end
         else if (csrs.vc_map_ctrl_valid)
         begin
@@ -170,11 +172,13 @@ module cci_mpf_shim_vc_map
 
             ratio_vl0 <= csrs.vc_map_ctrl[7] ? csrs.vc_map_ctrl[13:8] :
                                                RATIO_VL0_DEFAULT;
+            always_use_vl0 <= csrs.vc_map_ctrl[14];
         end
         else if (new_ratio_vl0_en)
         begin
             // Dynamic logic has suggested a better ratio
             ratio_vl0 <= new_ratio_vl0;
+            always_use_vl0 <= 1'b0;
         end
     end
 
@@ -202,7 +206,7 @@ module cci_mpf_shim_vc_map
         t_map_ratio hashed_idx = t_map_ratio'(hash32(addr_swizzle));
 
         // Now that entries are hashed we can just use ranges in the mapping.
-        if (hashed_idx < ratio_vl0)
+        if ((hashed_idx < ratio_vl0) || always_use_vl0)
         begin
             vc = eVC_VL0;
         end

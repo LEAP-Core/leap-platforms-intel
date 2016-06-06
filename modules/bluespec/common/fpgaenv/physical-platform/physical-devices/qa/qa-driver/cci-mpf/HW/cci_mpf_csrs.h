@@ -122,7 +122,7 @@ typedef enum
     //   Bit 7:
     //      When 0: Set mapping ratio to default for the platform.
     //      When 1: Use the ratio specifiers in bits 13-8.
-    //   Bits 13-8:
+    //   Bits 14-8:
     //      When bit 7 is 1 these are used to define the fraction of requests
     //      mapped to channel VL0.  The value is the number of 64ths that
     //      should be assigned VL0.  The remaining channel mappings are split

@@ -118,6 +118,13 @@ typedef struct
    // page table walker can be computed as:
    //   numPTWalkBusyCycles / (numTLBMisses4KB + numTLBMisses2MB)
    btUnsigned64bitInt numPTWalkBusyCycles;
+
+   // Number of failed virtual to physical translations. The VTP page
+   // table walker currently goes into a terminal error state when a
+   // translation failure is seen and blocks all future requests.
+   // If this number is non-zero the program has passed an illegal
+   // address and should be fixed.
+   btUnsigned64bitInt numFailedTranslations;
 }
 t_cci_mpf_vtp_stats;
 

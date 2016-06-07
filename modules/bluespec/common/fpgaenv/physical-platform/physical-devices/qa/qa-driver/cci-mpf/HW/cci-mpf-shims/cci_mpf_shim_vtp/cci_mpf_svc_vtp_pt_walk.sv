@@ -193,7 +193,8 @@ module cci_mpf_svc_vtp_pt_walk
         STATE_PT_WALK_READ_WAIT_RSP,
         STATE_PT_WALK_READ_RSP,
         STATE_PT_WALK_DONE,
-        STATE_PT_WALK_ERROR
+        STATE_PT_WALK_ERROR,
+        STATE_PT_WALK_HALT
     }
     t_state_pt_walk;
 
@@ -456,6 +457,7 @@ module cci_mpf_svc_vtp_pt_walk
                     ! pt_walk_cur_status.terminal && (&(translate_depth) == 1'b1))
                 begin
                     state <= STATE_PT_WALK_ERROR;
+                    state_is_walk_done <= 1'b0;
                 end
 
                 // Shift to move to the index of the next level.
@@ -482,6 +484,15 @@ module cci_mpf_svc_vtp_pt_walk
             begin
                 // Terminal state
                 pt_walk.notPresent <= 1'b1;
+                state <= STATE_PT_WALK_HALT;
+
+                $fatal("VTP PT WALK: No translation found for VA 0x%x",
+                       { translate_va, CCI_PT_4KB_PAGE_OFFSET_BITS'(0), 6'b0 });
+            end
+
+          STATE_PT_WALK_HALT:
+            begin
+                pt_walk.notPresent <= 1'b0;
             end
         endcase
 
@@ -602,11 +613,6 @@ module cci_mpf_svc_vtp_pt_walk
                 $display("VTP PT WALK: Response PA 0x%x, size %s",
                          {pt_walk_cur_page, CCI_PT_4KB_PAGE_OFFSET_BITS'(0), 6'b0},
                          (tlb_fill_if.fillBigPage ? "2MB" : "4KB"));
-            end
-
-            if ((state == STATE_PT_WALK_ERROR) && ! pt_walk.notPresent)
-            begin
-                $display("VTP PT WALK: Error!");
             end
         end
     end

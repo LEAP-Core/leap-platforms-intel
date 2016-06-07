@@ -63,6 +63,7 @@ interface cci_mpf_csrs();
     logic vtp_out_event_2mb_hit;
     logic vtp_out_event_2mb_miss;
     logic vtp_out_event_pt_walk_busy;
+    logic vtp_out_event_failed_translation;
 
 
     //
@@ -109,6 +110,7 @@ interface cci_mpf_csrs();
         input vtp_out_event_2mb_hit,
         input vtp_out_event_2mb_miss,
         input vtp_out_event_pt_walk_busy,
+        input vtp_out_event_failed_translation,
         input vc_map_out_event_mapping_changed
         );
 
@@ -124,7 +126,8 @@ interface cci_mpf_csrs();
         output vtp_out_event_4kb_miss,
         output vtp_out_event_2mb_hit,
         output vtp_out_event_2mb_miss,
-        output vtp_out_event_pt_walk_busy
+        output vtp_out_event_pt_walk_busy,
+        output vtp_out_event_failed_translation
         );
 
     modport vc_map

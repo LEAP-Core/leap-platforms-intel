@@ -439,6 +439,7 @@ btBool MPFVTP::vtpGetStats( t_cci_mpf_vtp_stats *stats )
     stats->numTLBHits2MB = vtpGetStatCounter(CCI_MPF_VTP_CSR_STAT_2MB_TLB_NUM_HITS);
     stats->numTLBMisses2MB = vtpGetStatCounter(CCI_MPF_VTP_CSR_STAT_2MB_TLB_NUM_MISSES);
     stats->numPTWalkBusyCycles = vtpGetStatCounter(CCI_MPF_VTP_CSR_STAT_PT_WALK_BUSY_CYCLES);
+    stats->numFailedTranslations = vtpGetStatCounter(CCI_MPF_VTP_CSR_STAT_FAILED_TRANSLATIONS);
     return true;
 }
 

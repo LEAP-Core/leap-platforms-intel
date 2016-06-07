@@ -723,6 +723,11 @@ AFU_CLIENT_CLASS::EmitStats(ofstream &statusFile)
                    << m_mpf_vc_map->vcmapGetStatCounter(CCI_MPF_VC_MAP_CSR_STAT_NUM_MAPPING_CHANGES)
                    << endl;
     }
+
+    statusFile << "CCI_MPF_VTP_CSR_STAT_FAILED_TRANSLATIONS,"
+               << "\"VTP Failed Translations\","
+               << GetStatVTP(CCI_MPF_VTP_CSR_STAT_FAILED_TRANSLATIONS)
+               << endl;
 #endif
 }
 

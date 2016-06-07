@@ -445,10 +445,13 @@ module cci_mpf_svc_vtp
 
     always_ff @(posedge clk)
     begin
+        events.vtp_out_event_failed_translation <= pt_walk_client.notPresent;
+
         if (! reset)
         begin
             assert (! pt_walk_client.notPresent) else
-                $fatal("cci_mpf_svc_vtp: VA not present in page table");
+                $display("cci_mpf_svc_vtp: VA not present in page table");
+//                $fatal("cci_mpf_svc_vtp: VA not present in page table");
         end
     end
 

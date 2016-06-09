@@ -27,12 +27,9 @@ class PostSynthesize():
         ## Make a link to the Xeon+FPGA release directory
         ##
         if (not os.path.exists(moduleList.compileDirectory + '/lib')):
-            os.symlink(aal_hw + '/bdw_pr_pkg/lib', moduleList.compileDirectory + '/lib')
+            os.symlink(aal_hw + '/bdw_pr_pkg.16/lib', moduleList.compileDirectory + '/lib')
             # Copy blue bitstream base components
             os.system('rsync -a ' + moduleList.compileDirectory + '/lib/blue/bdw_static_db/ ' + \
-                      moduleList.compileDirectory + '/')
-            # Copy some build scripts
-            os.system('rsync -a ' + moduleList.compileDirectory + '/lib/../scripts/*.tcl ' + \
                       moduleList.compileDirectory + '/')
 
         ##
@@ -134,7 +131,7 @@ class PostSynthesize():
         ##
 
         output_dir = moduleList.compileDirectory + '/output_files/'
-        proj_name_base = 'bdw_502_base_rc5_fbc9_seed6'
+        proj_name_base = 'PR_enabled_BDW_refresh_fbc9_seed0'
         proj_name_synth = 'bdw_502_pr_afu_synth'
         proj_name = 'bdw_502_pr_afu'
 
@@ -142,13 +139,29 @@ class PostSynthesize():
             output_dir + proj_name_synth + '.syn.rpt',
             globalVerilogs + globalVHDs + [constrFile_name] + [prjFile_name] + [paramTclFile] + sdcs,
             ['cd ' + moduleList.compileDirectory + \
-             '; quartus_sh -t synth_pr.tcl ' + proj_name_base + ' ' + proj_name_synth + ' ' + proj_name ])
+             '; quartus_syn ' + proj_name_base + ' -c ' + proj_name_synth ])
+
+        altera_syn_qdb = moduleList.env.Command(
+            moduleList.compileDirectory + '/' + proj_name_synth + '.qdb',
+            altera_syn,
+            ['cd ' + moduleList.compileDirectory + \
+               '; quartus_cdb ' + proj_name_synth + ' --export_block root_partition --snapshot synthesized --file ' + proj_name_synth + '.qdb', \
+             'cd ' + moduleList.compileDirectory + \
+               '; quartus_cdb ' + proj_name + ' --import_block root_partition --file ' + proj_name_base + '.qdb', \
+             'cd ' + moduleList.compileDirectory + \
+               '; quartus_cdb ' + proj_name + ' --import_block persona1 --file ' + proj_name_synth + '.qdb' ])
+
+        altera_fit = moduleList.env.Command(
+            output_dir + proj_name + '.fit.rpt',
+            altera_syn_qdb,
+            ['cd ' + moduleList.compileDirectory + \
+             '; quartus_fit ' + proj_name_base + ' -c ' + proj_name ])
 
         altera_sof = moduleList.env.Command(
             output_dir + proj_name + '.sof',
-            altera_syn,
+            altera_fit,
             ['cd ' + moduleList.compileDirectory + \
-             '; quartus_sh -t fit_pr.tcl ' + proj_name_base + ' ' + proj_name_synth + ' ' + proj_name ])
+             '; quartus_asm ' + proj_name_base + ' -c ' + proj_name ])
 
         altera_sta = moduleList.env.Command(
             output_dir + proj_name + '.sta.rpt',
@@ -160,7 +173,7 @@ class PostSynthesize():
             output_dir + proj_name + '.pmsf',
             altera_sof,
             ['cd ' + output_dir + \
-             '; quartus_cpf -p ' + proj_name + '.x*y*.msf ' + proj_name + '.sof ' + proj_name + '.pmsf' ])
+             '; quartus_cpf -p ' + proj_name + '.persona1.msf ' + proj_name + '.sof ' + proj_name + '.pmsf' ])
 
         altera_rbf = moduleList.env.Command(
             output_dir + proj_name + '.rbf',

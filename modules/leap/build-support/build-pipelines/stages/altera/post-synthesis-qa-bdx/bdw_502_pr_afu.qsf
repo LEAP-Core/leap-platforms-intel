@@ -1,9 +1,6 @@
 set_global_assignment -name TOP_LEVEL_ENTITY bdw_502_pr_afu
-set_instance_assignment -name IMPORT_BLOCK /bdw_502_base_rc5_fbc9_seed6/root_partition/final -to |
-set_instance_assignment -name IMPORT_BLOCK /bdw_502_pr_afu_synth/root_partition/synthesized -to inst_ccip_interface_reg|inst_green_top
 set_global_assignment -name EDA_GENERATE_FUNCTIONAL_NETLIST ON -section_id eda_simulation
-set_global_assignment -name SDC_FILE lib/blue/bdw_base.sdc
-set_global_assignment -name BASE_REVISION base
+set_global_assignment -name SDC_FILE lib/blue/BDW_refresh.sdc
 
 #---------------------------------------------------------------------------#
 #                       Synthesis Options                                   #
@@ -53,11 +50,6 @@ set_global_assignment -name ACTIVE_SERIAL_CLOCK FREQ_100MHZ
 
 set_global_assignment -name OUTPUT_IO_TIMING_NEAR_END_VMEAS "HALF VCCIO"
 set_global_assignment -name OUTPUT_IO_TIMING_FAR_END_VMEAS "HALF SIGNAL SWING"
-
-# Set clock uncertainty for all user AFU clks
-# This is a workaround to get past hold violations in Quartus 15.1.2 
-# Expected to be fixed in Quartus 16.0
-set_global_assignment -name SDC_FILE sdc_a10q15_1_2.sdc
 
 # ==============================================================================================================================
 # DO NOT MODIFY the contents above this

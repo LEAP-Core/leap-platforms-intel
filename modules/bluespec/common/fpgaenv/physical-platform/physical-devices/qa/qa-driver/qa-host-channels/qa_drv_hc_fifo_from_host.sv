@@ -70,7 +70,8 @@ module qa_drv_hc_fifo_from_host
       #(
         .N_DATA_BITS(CCI_CLDATA_WIDTH),
         .N_ENTRIES(4),
-        .THRESHOLD(2)
+        .THRESHOLD(2),
+        .REGISTER_OUTPUT(1)
         )
       outQ
         (

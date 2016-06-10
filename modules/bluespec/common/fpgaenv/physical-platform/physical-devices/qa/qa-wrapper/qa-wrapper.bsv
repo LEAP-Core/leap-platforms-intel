@@ -468,37 +468,44 @@ module mkQADeviceSynth#(Clock qaClk, Reset qaRst)
     // from the driver.
     //
     Reg#(t_CHUNK_VEC) readChunkVec <- mkRegU(clocked_by qaClk, reset_by qaRst);
+
     // Number of chunks remaining in current line
     Reg#(t_NUM_CHUNKS) nReadVecChunksRem <- mkConfigReg(0, clocked_by qaClk, reset_by qaRst);
+    Reg#(Bool) readVecChunksRem <- mkReg(False, clocked_by qaClk, reset_by qaRst);
+
     // Number of chunks remaining in current UMF packet
     Reg#(UMF_MSG_LENGTH) nReadPacketChunksRem <- mkConfigReg(0, clocked_by qaClk, reset_by qaRst);
+    Reg#(Bool) readPacketChunksRem <- mkReg(False, clocked_by qaClk, reset_by qaRst);
 
     //
     // Convert incoming lines from the channel to UMF_CHUNKs.
     //
     rule pullDataIn;
         t_CHUNK_VEC v;
-        if (nReadVecChunksRem == 0)
+        if (! readVecChunksRem)
         begin
             // Time for a new line from the channel
             v = unpack(qaChannelDriver.first);
             qaChannelDriver.deq();
             nReadVecChunksRem <= fromInteger(valueOf(n_CHUNKS_PER_LINE) - 1);
+            readVecChunksRem <= (0 != valueOf(n_CHUNKS_PER_LINE) - 1);
         end
         else
         begin
             // Chunks remain in the current line
             v = shiftInAtN(readChunkVec, ?);
             nReadVecChunksRem <= nReadVecChunksRem - 1;
+            readVecChunksRem <= (0 != (nReadVecChunksRem - 1));
         end
 
         readChunkVec <= v;
 
-        if (nReadPacketChunksRem == 0)
+        if (! readPacketChunksRem)
         begin
             // Beginning of a UMF packet.  Find the length of the packet.
             UMF_MSG_LENGTH rem = truncate(v[0]);
             nReadPacketChunksRem <= rem;
+            readPacketChunksRem <= (0 != rem);
 
             // Is this chunk a header or is it just filler in the line for
             // alignment?  It is a header if the packet length is not zero.
@@ -511,6 +518,7 @@ module mkQADeviceSynth#(Clock qaClk, Reset qaRst)
         begin
             syncChannelReadQ.enq(v[0]);
             nReadPacketChunksRem <= nReadPacketChunksRem - 1;
+            readPacketChunksRem <= (0 != (nReadPacketChunksRem - 1));
         end
     endrule
 

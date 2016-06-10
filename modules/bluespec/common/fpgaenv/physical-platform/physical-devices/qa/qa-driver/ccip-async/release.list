@@ -1,0 +1,10 @@
+./HW/ccip_async_shim.sv
+./HW/ccip_afifo_channel.sv
+./release.list
+./par/ccip_async_addenda.qsf
+./par/ccip_async.sdc
+./par/sample_ccip_async_import.qsf
+./samples/async_nlb150.sv
+./samples/async_nlb200.sv
+./samples/async_nlb300.sv
+./samples/async_nlb100.sv

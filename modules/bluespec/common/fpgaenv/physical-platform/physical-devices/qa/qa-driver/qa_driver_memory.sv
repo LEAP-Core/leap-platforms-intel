@@ -158,7 +158,7 @@ module qa_driver_memory
             cci_mpf_genC1TxWriteReq(
                 cci_mpf_c1_genReqHdr(mem_write_req_cached ? eREQ_WRLINE_M : eREQ_WRLINE_I,
                                      mem_write_addr,
-                                     t_cci_mdata'(write_req_tag_next),
+                                     t_cci_mdata'(write_req_tag),
                                      wr_req_params),
                 mem_write_data,
                 mem_write_enable);

@@ -253,10 +253,14 @@ module qa_drv_hc_fifo_to_host
 
     // Write only allowed if space is available in the shared memory buffer
     logic allow_write;
-    assign allow_write = (cur_data_idx + t_fifo_to_host_idx'(1) != oldest_write_idx);
+    always_ff @(posedge clk)
+    begin
+        allow_write <= (cur_data_idx + t_fifo_to_host_idx'(1) != oldest_write_idx) &&
+                       (cur_data_idx + t_fifo_to_host_idx'(2) != oldest_write_idx) &&
+                       csr.hc_en;
+    end
 
-    assign frame_writer.write.request = csr.hc_en &&
-                                        allow_write &&
+    assign frame_writer.write.request = allow_write &&
                                         (lineIn_notEmpty ||
                                          (state == STATE_EMIT_FENCE));
 

@@ -4,6 +4,7 @@
 %provides qa_cci_mpf_hw_shims
 %requires qa_cci_mpf_hw_shims_edge
 %requires qa_cci_mpf_hw_shims_vtp
+%requires qa_cci_mpf_hw_shims_wro
 
 %notes README
 
@@ -17,4 +18,3 @@
 %sources -t VERILOG    -v PRIVATE cci_mpf_shim_null.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_shim_rsp_order.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_shim_vc_map.sv
-%sources -t VERILOG    -v PRIVATE cci_mpf_shim_wro.sv

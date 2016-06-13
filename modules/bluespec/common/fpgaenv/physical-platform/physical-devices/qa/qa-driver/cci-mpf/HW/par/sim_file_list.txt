@@ -43,4 +43,5 @@ HW/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_svc_vtp.sv
 HW/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_svc_vtp_pipe.sv
 HW/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_svc_vtp_pt_walk.sv
 HW/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_svc_vtp_tlb.sv
-HW/cci-mpf-shims/cci_mpf_shim_wro.sv
+HW/cci-mpf-shims/cci_mpf_shim_wro/cci_mpf_shim_wro.sv
+HW/cci-mpf-shims/cci_mpf_shim_wro/cci_mpf_shim_wro_cam_group.sv

@@ -1,0 +1,9 @@
+%name Intel MPF WRO Shim
+%desc Intel MPF WRO Shim
+
+%provides qa_cci_mpf_hw_shims_wro
+
+%notes README
+
+%sources -t VERILOG    -v PRIVATE cci_mpf_shim_wro.sv
+%sources -t VERILOG    -v PRIVATE cci_mpf_shim_wro_cam_group.sv

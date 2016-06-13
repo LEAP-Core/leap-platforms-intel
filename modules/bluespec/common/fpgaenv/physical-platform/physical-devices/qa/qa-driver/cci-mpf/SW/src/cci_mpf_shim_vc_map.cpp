@@ -119,17 +119,21 @@ MPFVCMAP::MPFVCMAP( IALIMMIO   *pMMIOService,
 //
 btBool MPFVCMAP::vcmapSetMode( btBool enable_mapping,
                                btBool enable_dynamic_mapping,
-                               btUnsigned32bitInt sampling_window_radix )
+                               btUnsigned32bitInt sampling_window_radix,
+                               btBool map_all_requests )
 {
    ASSERT(sampling_window_radix < 16);
    if (sampling_window_radix >= 16) return false;
 
    btBool ret;
 
+   btUnsigned32bitInt map_all = (map_all_requests ? (1 << 6) : 0);
+
    ret = m_pALIMMIO->mmioWrite64(m_dfhOffset + CCI_MPF_VC_MAP_CSR_CTRL_REG,
                                  (enable_mapping ? 1 : 0) |
                                  (enable_dynamic_mapping ? 2 : 0) |
-                                 (sampling_window_radix << 2));
+                                 (sampling_window_radix << 2) |
+                                 map_all);
    ASSERT(ret);
 
    return ret;
@@ -147,15 +151,18 @@ btBool MPFVCMAP::vcmapDisable( void )
 }
 
 
-btBool MPFVCMAP::vcmapSetFixedMapping( btUnsigned32bitInt r )
+btBool MPFVCMAP::vcmapSetFixedMapping( btUnsigned32bitInt r,
+                                       btBool map_all_requests )
 {
    ASSERT(r <= 64);
    if (r > 64) return false;
 
    btBool ret;
 
+   btUnsigned32bitInt map_all = (map_all_requests ? (1 << 6) : 0);
+
    ret = m_pALIMMIO->mmioWrite64(m_dfhOffset + CCI_MPF_VC_MAP_CSR_CTRL_REG,
-                                 (1 | (1 << 7) | (r << 8)));
+                                 (1 | (1 << 7) | (r << 8) | map_all));
    ASSERT(ret);
 
    return ret;

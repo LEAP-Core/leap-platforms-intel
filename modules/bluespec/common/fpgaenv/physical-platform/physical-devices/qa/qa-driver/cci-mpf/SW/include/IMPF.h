@@ -182,15 +182,21 @@ public:
    //    which dynamic changes may occur.  Dynamic changes are expensive
    //    since a write fence must be emitted to synchronize traffic.
    //    Passing 0 picks the default value.
+   //  - map_all_requests:  When false, only incoming eVC_VA requests are
+   //    mapped.  When true, all incoming requests are remapped.
    virtual btBool vcmapSetMode( btBool enable_mapping,
                                 btBool enable_dynamic_mapping,
-                                btUnsigned32bitInt sampling_window_radix = 0 ) = 0;
+                                btUnsigned32bitInt sampling_window_radix = 0,
+                                btBool map_all_requests = false ) = 0;
 
    // Disable mapping
    virtual btBool vcmapDisable( void ) = 0;
 
-   // Set fixed mapping where VL0 gets r 64ths of the traffic
-   virtual btBool vcmapSetFixedMapping( btUnsigned32bitInt r ) = 0;
+   // Set fixed mapping where VL0 gets r 64ths of the traffic.
+   //  - map_all_requests:  When false, only incoming eVC_VA requests are
+   //    mapped.  When true, all incoming requests are remapped.
+   virtual btBool vcmapSetFixedMapping( btUnsigned32bitInt r,
+                                        btBool map_all_requests = false ) = 0;
 
    // Return all statistics counters
    virtual btBool vcmapGetStats( t_cci_mpf_vc_map_stats *stats ) = 0;

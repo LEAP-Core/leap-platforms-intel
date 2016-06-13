@@ -120,6 +120,11 @@ typedef enum
     //      Log2 of the dynamic sampling window size in cycles.  The
     //      dynamic mapper will consider changing only after 16
     //      consecutive windows suggest the same ratio.
+    //   Bit 6:
+    //      When 0: Only change the mapping on incoming requests to eVC_VA.
+    //      When 1: Treat all incoming requests as though they were on eVC_VA.
+    //              All requests will then be mapped using whatever policy
+    //              is set for eVC_VA.
     //   Bit 7:
     //      When 0: Set mapping ratio to default for the platform.
     //      When 1: Use the ratio specifiers in bits 13-8.

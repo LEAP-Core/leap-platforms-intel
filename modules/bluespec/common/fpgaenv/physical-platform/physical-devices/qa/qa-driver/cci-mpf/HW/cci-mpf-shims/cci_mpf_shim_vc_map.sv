@@ -125,6 +125,7 @@ module cci_mpf_shim_vc_map
 
     logic mapping_disabled;
     logic dynamic_mapping_disabled;
+    logic map_all;
 
     // Fraction of requests to map to VL0 (of 64)
     typedef logic [5:0] t_map_ratio;
@@ -142,6 +143,11 @@ module cci_mpf_shim_vc_map
     ** ERROR: Unknown platform
 `endif
 
+    // Should request be mapped?
+    function automatic logic req_needs_mapping(t_cci_vc vc_sel);
+        return ((vc_sel == eVC_VA) || map_all);
+    endfunction
+
     // Set when dynamic logic below suggests a better ratio.
     logic new_ratio_vl0_en;
     t_map_ratio new_ratio_vl0;
@@ -158,6 +164,7 @@ module cci_mpf_shim_vc_map
             dynamic_mapping_disabled <= (ENABLE_DYNAMIC_VC_MAPPING == 0);
             sample_interval_idx <= DEFAULT_SAMPLE_INTERVAL_IDX;
 
+            map_all <= 1'b0;
             ratio_vl0 <= RATIO_VL0_DEFAULT;
             always_use_vl0 <= 1'b0;
         end
@@ -170,6 +177,7 @@ module cci_mpf_shim_vc_map
                 (csrs.vc_map_ctrl[5:2] != 4'b0) ? csrs.vc_map_ctrl[5:2] :
                                                   DEFAULT_SAMPLE_INTERVAL_IDX;
 
+            map_all <= csrs.vc_map_ctrl[6];
             ratio_vl0 <= csrs.vc_map_ctrl[7] ? csrs.vc_map_ctrl[13:8] :
                                                RATIO_VL0_DEFAULT;
             always_use_vl0 <= csrs.vc_map_ctrl[14];
@@ -245,7 +253,7 @@ module cci_mpf_shim_vc_map
 
         if (! mapping_disabled &&
             cci_mpf_c0_getReqMapVA(c0_tx.hdr) &&
-            (c0_tx.hdr.base.vc_sel == eVC_VA))
+            req_needs_mapping(c0_tx.hdr.base.vc_sel))
         begin
             fiu.c0Tx.hdr.base.vc_sel = c0_vc_map;
         end
@@ -259,7 +267,7 @@ module cci_mpf_shim_vc_map
 
         if (! mapping_disabled &&
             cci_mpf_c1_getReqMapVA(c1_tx.hdr) &&
-            (c1_tx.hdr.base.vc_sel == eVC_VA))
+            req_needs_mapping(c1_tx.hdr.base.vc_sel))
         begin
             fiu.c1Tx.hdr.base.vc_sel = c1_vc_map;
         end
@@ -682,7 +690,7 @@ module cci_mpf_shim_vc_map
             begin
                 n_sampled_reads <= n_sampled_reads + 1;
 
-                if (c0_tx.hdr.base.vc_sel == eVC_VA)
+                if (req_needs_mapping(c0_tx.hdr.base.vc_sel))
                 begin
                     saw_va_req <= 1;
                 end
@@ -692,7 +700,7 @@ module cci_mpf_shim_vc_map
             begin
                 n_sampled_writes <= n_sampled_writes + 1;
 
-                if (c1_tx.hdr.base.vc_sel == eVC_VA)
+                if (req_needs_mapping(c1_tx.hdr.base.vc_sel))
                 begin
                     saw_va_req <= 1;
                 end

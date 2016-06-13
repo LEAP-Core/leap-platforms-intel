@@ -43,6 +43,10 @@ required for a particular application.  Shims include:
 
 * Read response sorting
 
+* VC_MAP - Address-based virtual channel selection, useful when the order
+  guarantees from channel eVC_VA are too relaxed and using write fences
+  is too expensive.
+
 
 Hardware implementation
 -----------------------

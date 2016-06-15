@@ -166,6 +166,9 @@ module cci_mpf_shim_wro_cam_group
     //
     // ====================================================================
 
+    localparam FILTER_PIPE_DEPTH = 3;
+    localparam FILTER_PIPE_LAST = FILTER_PIPE_DEPTH-1;
+
     typedef logic [$clog2(N_C0_CAM_IDX_ENTRIES)-1 : 0] t_C0_REQ_IDX;
     typedef logic [$clog2(N_C1_CAM_IDX_ENTRIES)-1 : 0] t_C1_REQ_IDX;
 
@@ -216,7 +219,9 @@ module cci_mpf_shim_wro_cam_group
                .test_value(filter_test_req[1]),
                .test_en(filter_test_req_en[1]),
                .test_notPresent(),
-               .test_notPresent_q(rd_filter_test_notPresent),
+               .test_notPresent_q(),
+               // Use the 2 cycle latency output since the CAM is large
+               .test_notPresent_qq(rd_filter_test_notPresent),
                .insert_idx(rd_filter_insert_idx),
                .insert_value(rd_filter_insert_hash),
                .insert_en(cci_mpf_c0TxIsReadReq(fiu_buf.c0Tx)),
@@ -235,7 +240,9 @@ module cci_mpf_shim_wro_cam_group
                .test_value(filter_test_req),
                .test_en(filter_test_req_en),
                .test_notPresent(),
-               .test_notPresent_q(wr_filter_test_notPresent),
+               .test_notPresent_q(),
+               // Use the 2 cycle latency output since the CAM is large
+               .test_notPresent_qq(wr_filter_test_notPresent),
                .insert_idx(wr_filter_insert_idx),
                .insert_value(wr_filter_insert_hash),
                .insert_en(cci_mpf_c1TxIsWriteReq(fiu_buf.c1Tx)),
@@ -246,13 +253,27 @@ module cci_mpf_shim_wro_cam_group
     // Hold the hashed address associated with the buffered test result.
     // This is used only in assertions below and should be dropped
     // during dead code elimination when synthesized.
-    t_hash [0 : 1] filter_verify_req;
-    logic  [0 : 1] filter_verify_req_en;
+    t_hash [0 : 1] filter_verify_req[1 : FILTER_PIPE_LAST];
+    logic  [0 : 1] filter_verify_req_en[1 : FILTER_PIPE_LAST];
 
     always_ff @(posedge clk)
     begin
-        filter_verify_req <= filter_test_req;
-        filter_verify_req_en <= filter_test_req_en;
+        filter_verify_req[1] <= filter_test_req;
+        filter_verify_req_en[1] <= filter_test_req_en;
+
+        for (int i = 2; i < FILTER_PIPE_DEPTH; i = i + 1)
+        begin
+            filter_verify_req[i] <= filter_verify_req[i - 1];
+            filter_verify_req_en[i] <= filter_verify_req_en[i - 1];
+        end
+
+        if (reset)
+        begin
+            for (int i = 0; i < FILTER_PIPE_DEPTH; i = i + 1)
+            begin
+                filter_verify_req_en[i] <= 2'b0;
+            end
+        end
     end
 
 
@@ -373,9 +394,7 @@ module cci_mpf_shim_wro_cam_group
     t_REQUEST_PIPE;
 
     // Pipeline stage storage
-    localparam AFU_PIPE_DEPTH = 2;
-    localparam AFU_PIPE_LAST = AFU_PIPE_DEPTH-1;
-    t_REQUEST_PIPE afu_pipe[0 : AFU_PIPE_LAST];
+    t_REQUEST_PIPE afu_pipe[0 : FILTER_PIPE_LAST];
 
     //
     // Work backwards in the pipeline.  First decide whether the oldest
@@ -385,28 +404,16 @@ module cci_mpf_shim_wro_cam_group
 
     // Is either AFU making a request?
     logic c0_request_rdy;
-    assign c0_request_rdy = cci_mpf_c0TxIsValid(afu_pipe[AFU_PIPE_LAST].c0Tx);
+    assign c0_request_rdy = cci_mpf_c0TxIsValid(afu_pipe[FILTER_PIPE_LAST].c0Tx);
 
     logic c1_request_rdy;
-    assign c1_request_rdy = cci_mpf_c1TxIsValid(afu_pipe[AFU_PIPE_LAST].c1Tx);
+    assign c1_request_rdy = cci_mpf_c1TxIsValid(afu_pipe[FILTER_PIPE_LAST].c1Tx);
 
     // Does the request want order to be enforced?
     logic c0_enforce_order;
-    assign c0_enforce_order = cci_mpf_c0_getReqCheckOrder(afu_pipe[AFU_PIPE_LAST].c0Tx.hdr);
+    assign c0_enforce_order = cci_mpf_c0_getReqCheckOrder(afu_pipe[FILTER_PIPE_LAST].c0Tx.hdr);
     logic c1_enforce_order;
-    assign c1_enforce_order = cci_mpf_c1_getReqCheckOrder(afu_pipe[AFU_PIPE_LAST].c1Tx.hdr);
-
-    // Was the request pipeline stalled last cycle?  If yes then the
-    // filter is a function of the request at the end of the afu_pipe.
-    // If it was not blocked then the filter is a function of an
-    // earlier stage in the pipeline.  We have this stage for timing
-    // despite the complexity it adds.
-    logic was_blocked;
-
-    // A pipeline bubble must be inserted every time was_blocked changes
-    // in order for the tested filter test to catch up due to the
-    // use of registers to break the test across cycles.
-    logic pipeline_bubble;
+    assign c1_enforce_order = cci_mpf_c1_getReqCheckOrder(afu_pipe[FILTER_PIPE_LAST].c1Tx.hdr);
 
     //
     // Compute whether new requests can be inserted into the filters.
@@ -441,14 +448,13 @@ module cci_mpf_shim_wro_cam_group
     // read and write requests stay ordered relative to each other.
     logic process_requests;
     assign process_requests = (c0_request_rdy || c1_request_rdy) &&
-                              ! (c0_blocked || c1_blocked) &&
-                              ! pipeline_bubble;
+                              ! (c0_blocked || c1_blocked);
 
     // Set the hashed value to insert in the filter when requests are
     // processed.
-    assign rd_filter_insert_hash = afu_pipe[AFU_PIPE_LAST].c0AddrHash;
+    assign rd_filter_insert_hash = afu_pipe[FILTER_PIPE_LAST].c0AddrHash;
     assign rd_filter_insert_idx = c0_heap_allocIdx;
-    assign wr_filter_insert_hash = afu_pipe[AFU_PIPE_LAST].c1AddrHash;
+    assign wr_filter_insert_hash = afu_pipe[FILTER_PIPE_LAST].c1AddrHash;
     assign wr_filter_insert_idx = c1_heap_allocIdx;
 
     //
@@ -458,7 +464,7 @@ module cci_mpf_shim_wro_cam_group
 
     // Advance if the oldest request was processed or the last stage is empty.
     logic advance_pipeline;
-    assign advance_pipeline = ((process_requests && ! was_blocked) ||
+    assign advance_pipeline = (process_requests ||
                                ! (c0_request_rdy || c1_request_rdy));
 
     // Is the incoming pipeline moving?
@@ -475,7 +481,7 @@ module cci_mpf_shim_wro_cam_group
     begin
         if (reset)
         begin
-            for (int i = 0; i < AFU_PIPE_DEPTH; i = i + 1)
+            for (int i = 0; i < FILTER_PIPE_DEPTH; i = i + 1)
             begin
                 afu_pipe[i].c0Tx <= cci_mpf_c0Tx_clearValids();
                 afu_pipe[i].c1Tx <= cci_mpf_c1Tx_clearValids();
@@ -486,7 +492,7 @@ module cci_mpf_shim_wro_cam_group
             if (advance_pipeline)
             begin
                 afu_pipe[0] <= afu_pipe_init;
-                for (int i = 1; i < AFU_PIPE_DEPTH; i = i + 1)
+                for (int i = 1; i < FILTER_PIPE_DEPTH; i = i + 1)
                 begin
                     afu_pipe[i] <= afu_pipe[i - 1];
                 end
@@ -495,8 +501,8 @@ module cci_mpf_shim_wro_cam_group
             begin
                 // Oldest was blocked.  Try moving a newer entry around the
                 // oldest.  They have been proven to be independent.
-                afu_pipe[0] <= afu_pipe[AFU_PIPE_LAST];
-                for (int i = 1; i < AFU_PIPE_DEPTH; i = i + 1)
+                afu_pipe[0] <= afu_pipe[FILTER_PIPE_LAST];
+                for (int i = 1; i < FILTER_PIPE_DEPTH; i = i + 1)
                 begin
                     afu_pipe[i] <= afu_pipe[i - 1];
                 end
@@ -506,8 +512,8 @@ module cci_mpf_shim_wro_cam_group
                 // Pipeline restarted after a bubble. Drop the request
                 // that left the pipeline but don't advance yet so the
                 // filter pipeline can catch up.
-                afu_pipe[AFU_PIPE_LAST].c0Tx <= cci_mpf_c0Tx_clearValids();
-                afu_pipe[AFU_PIPE_LAST].c1Tx <= cci_mpf_c1Tx_clearValids();
+                afu_pipe[FILTER_PIPE_LAST].c0Tx <= cci_mpf_c0Tx_clearValids();
+                afu_pipe[FILTER_PIPE_LAST].c1Tx <= cci_mpf_c1Tx_clearValids();
             end
         end
     end
@@ -588,7 +594,7 @@ module cci_mpf_shim_wro_cam_group
             new_wr_conflict[h] = 1'b0;
             if (c1_hash_valid[h])
             begin
-                for (int i = 0; i < AFU_PIPE_DEPTH; i = i + 1)
+                for (int i = 0; i < FILTER_PIPE_DEPTH; i = i + 1)
                 begin
                     new_wr_conflict[h] =
                         new_wr_conflict[h] ||
@@ -603,7 +609,7 @@ module cci_mpf_shim_wro_cam_group
             new_rd_conflict[h] = 1'b0;
             if (c0_hash_valid[h])
             begin
-                for (int i = 0; i < AFU_PIPE_DEPTH; i = i + 1)
+                for (int i = 0; i < FILTER_PIPE_DEPTH; i = i + 1)
                 begin
                     new_rd_conflict[h] =
                         new_rd_conflict[h] ||
@@ -639,7 +645,7 @@ module cci_mpf_shim_wro_cam_group
     always_comb
     begin
         c1_pipe_notEmpty = c1_hash_valid[0] || c1_hash_valid[1];
-        for (int i = 0; i < AFU_PIPE_DEPTH; i = i + 1)
+        for (int i = 0; i < FILTER_PIPE_DEPTH; i = i + 1)
         begin
             c1_pipe_notEmpty = c1_pipe_notEmpty ||
                                cci_mpf_c1TxIsValid(afu_pipe[i].c1Tx);
@@ -656,54 +662,25 @@ module cci_mpf_shim_wro_cam_group
 
     // If the pipeline is about to block try swapping the entries to avoid
     // blocking.
-    logic can_swap_oldest;
-    assign can_swap_oldest = 1'b1;
-    assign swap_entries = (c0_blocked || c1_blocked) && can_swap_oldest &&
-                          ! was_blocked;
-
-    logic blocked_next;
-    assign blocked_next = (c0_blocked || c1_blocked) && ! can_swap_oldest;
+    assign swap_entries = (c0_blocked || c1_blocked);
 
     always_ff @(posedge clk)
     begin
         if (reset)
         begin
             filter_test_req_en <= 0;
-            was_blocked <= 0;
-            pipeline_bubble <= 0;
         end
         else
         begin
-            if (blocked_next)
-            begin
-                // The pipeline advanced beyond the current test.  Restore
-                // the test of the blocked request.
-                filter_test_req[0] <= afu_pipe[1].c0AddrHash;
-                filter_test_req[1] <= afu_pipe[1].c1AddrHash;
-
-                filter_test_req_en[0] <= cci_mpf_c0TxIsReadReq(afu_pipe[1].c0Tx);
-                filter_test_req_en[1] <= cci_mpf_c1TxIsWriteReq(afu_pipe[1].c1Tx);
-            end
-            else if (was_blocked)
-            begin
-                // The pipeline was blocked by the filter in the previous
-                // cycle.  Now that the flow is resuming test the next
-                // value, already stored in the first stage of the pipeline.
-                filter_test_req[0] <= afu_pipe[0].c0AddrHash;
-                filter_test_req[1] <= afu_pipe[0].c1AddrHash;
-
-                filter_test_req_en[0] <= cci_mpf_c0TxIsReadReq(afu_pipe[0].c0Tx);
-                filter_test_req_en[1] <= cci_mpf_c1TxIsWriteReq(afu_pipe[0].c1Tx);
-            end
-            else if (swap_entries)
+            if (swap_entries)
             begin
                 // The oldest entry is moving to the position of the newest.
                 // Put its filtering request back in the pipeline.
-                filter_test_req[0] <= afu_pipe[1].c0AddrHash;
-                filter_test_req[1] <= afu_pipe[1].c1AddrHash;
+                filter_test_req[0] <= afu_pipe[FILTER_PIPE_LAST].c0AddrHash;
+                filter_test_req[1] <= afu_pipe[FILTER_PIPE_LAST].c1AddrHash;
 
-                filter_test_req_en[0] <= cci_mpf_c0TxIsReadReq(afu_pipe[1].c0Tx);
-                filter_test_req_en[1] <= cci_mpf_c1TxIsWriteReq(afu_pipe[1].c1Tx);
+                filter_test_req_en[0] <= cci_mpf_c0TxIsReadReq(afu_pipe[FILTER_PIPE_LAST].c0Tx);
+                filter_test_req_en[1] <= cci_mpf_c1TxIsWriteReq(afu_pipe[FILTER_PIPE_LAST].c1Tx);
             end
             else
             begin
@@ -716,21 +693,16 @@ module cci_mpf_shim_wro_cam_group
                 filter_test_req_en[1] <= cci_mpf_c1TxIsWriteReq(afu_pipe_init.c1Tx);
             end
 
-            // Remember whether pipeline was blocked and whether a pipeline
-            // bubble must be inserted due to a change in filter test source.
-            pipeline_bubble <= (! was_blocked && blocked_next);
-            was_blocked <= blocked_next;
-
             //
             // This pipeline has complicated control flow.  Confirm that
             // decisions made this cycle were based on the correct addresses.
             //
             if (process_requests)
             begin
-                assert ((! filter_verify_req_en[0] || (filter_verify_req[0] == afu_pipe[1].c0AddrHash)) &&
-                        (! filter_verify_req_en[1] || (filter_verify_req[1] == afu_pipe[1].c1AddrHash)) &&
-                        (filter_verify_req_en[0] == cci_mpf_c0TxIsReadReq(afu_pipe[1].c0Tx)) &&
-                        (filter_verify_req_en[1] == cci_mpf_c1TxIsWriteReq(afu_pipe[1].c1Tx))) else
+                assert ((! filter_verify_req_en[FILTER_PIPE_LAST][0] || (filter_verify_req[FILTER_PIPE_LAST][0] == afu_pipe[FILTER_PIPE_LAST].c0AddrHash)) &&
+                        (! filter_verify_req_en[FILTER_PIPE_LAST][1] || (filter_verify_req[FILTER_PIPE_LAST][1] == afu_pipe[FILTER_PIPE_LAST].c1AddrHash)) &&
+                        (filter_verify_req_en[FILTER_PIPE_LAST][0] == cci_mpf_c0TxIsReadReq(afu_pipe[FILTER_PIPE_LAST].c0Tx)) &&
+                        (filter_verify_req_en[FILTER_PIPE_LAST][1] == cci_mpf_c1TxIsWriteReq(afu_pipe[FILTER_PIPE_LAST].c1Tx))) else
                     $fatal("cci_mpf_shim_wro: Incorrect pipeline control");
             end
         end
@@ -748,13 +720,13 @@ module cci_mpf_shim_wro_cam_group
     // heap and restored when the response is returned.
     always_comb
     begin
-        fiu_buf.c0Tx = afu_pipe[AFU_PIPE_LAST].c0Tx;
+        fiu_buf.c0Tx = afu_pipe[FILTER_PIPE_LAST].c0Tx;
         fiu_buf.c0Tx.hdr.base.mdata[$bits(c0_heap_allocIdx)-1 : 0] = c0_heap_allocIdx;
         fiu_buf.c0Tx.valid = process_requests && c0_request_rdy;
     end
 
     // Save state that will be used when the response is returned.
-    assign c0_heap_enqData.mdata = t_C0_REQ_IDX'(afu_pipe[AFU_PIPE_LAST].c0Tx.hdr.base.mdata);
+    assign c0_heap_enqData.mdata = t_C0_REQ_IDX'(afu_pipe[FILTER_PIPE_LAST].c0Tx.hdr.base.mdata);
 
     // Request heap read as fiu responses arrive.  The heap's value will be
     // available the cycle fiu_buf is read.
@@ -798,16 +770,16 @@ module cci_mpf_shim_wro_cam_group
     // details.
     always_comb
     begin
-        fiu_buf.c1Tx = cci_mpf_c1TxMaskValids(afu_pipe[AFU_PIPE_LAST].c1Tx, process_requests);
+        fiu_buf.c1Tx = cci_mpf_c1TxMaskValids(afu_pipe[FILTER_PIPE_LAST].c1Tx, process_requests);
 
-        if (cci_mpf_c1TxIsWriteReq(afu_pipe[AFU_PIPE_LAST].c1Tx))
+        if (cci_mpf_c1TxIsWriteReq(afu_pipe[FILTER_PIPE_LAST].c1Tx))
         begin
             fiu_buf.c1Tx.hdr.base.mdata[$bits(c1_heap_allocIdx)-1 : 0] = c1_heap_allocIdx;
         end
     end
 
     // Save state that will be used when the response is returned.
-    assign c1_heap_enqData.mdata = t_C1_REQ_IDX'(afu_pipe[AFU_PIPE_LAST].c1Tx.hdr.base.mdata);
+    assign c1_heap_enqData.mdata = t_C1_REQ_IDX'(afu_pipe[FILTER_PIPE_LAST].c1Tx.hdr.base.mdata);
 
     // Request heap read as fiu responses arrive. The heap's value will be
     // available the cycle fiu_buf is read. Responses may arrive on either
@@ -872,14 +844,14 @@ module cci_mpf_shim_wro_cam_group
             begin
                 $display("XX A 0 %d %x %d",
                          c0_heap_allocIdx,
-                         getReqAddrMPF(fiu_buf.c0Tx.hdr),
+                         cci_mpf_c0_getReqAddr(fiu_buf.c0Tx.hdr),
                          cycle);
             end
             if (cci_mpf_c1TxIsWriteReq(fiu_buf.c1Tx))
             begin
                 $display("XX A 1 %d %x %d",
                          c1_heap_allocIdx,
-                         getReqAddrMPF(fiu_buf.c1Tx.hdr),
+                         cci_mpf_c1_getReqAddr(fiu_buf.c1Tx.hdr),
                          cycle);
             end
 

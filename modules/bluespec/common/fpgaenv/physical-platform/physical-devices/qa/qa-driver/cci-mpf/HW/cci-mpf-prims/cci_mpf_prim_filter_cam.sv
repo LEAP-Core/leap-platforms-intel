@@ -53,10 +53,14 @@ module cci_mpf_prim_filter_cam
     input  logic [0 : N_TEST_CLIENTS-1][BITS_PER_BUCKET-1 : 0] test_value,
     input  logic [0 : N_TEST_CLIENTS-1]                 test_en,
     output logic [0 : N_TEST_CLIENTS-1]                 test_notPresent,
-    // Mirrors test_notPresent but one cycle delayed. Internally this gives
-    // the logic more time to implement the CAM and the computation is split
-    // across the cycles.
+
+    // Mirrors test_notPresent but one or two cycles delayed. Internally
+    // this gives the logic more time to implement the CAM and the
+    // computation is split across the cycles.  The code instantiating the
+    // CAM should pick a latency appropriate to the target frequency
+    // and hardware.
     output logic [0 : N_TEST_CLIENTS-1]                 test_notPresent_q,
+    output logic [0 : N_TEST_CLIENTS-1]                 test_notPresent_qq,
 
     // Insert one value into the CAM in a specific slot. Slots are managed
     // outside this module.
@@ -145,7 +149,7 @@ module cci_mpf_prim_filter_cam
                                   // Does any valid entry match?
                                   (! (|(valid & test_match[c])) &&
                                    // Does an in-flight entry match?
-                                   ! (|(inflight_test_match[c]))));
+                                   ! (inflight_test_match[c])));
         end
     end
 
@@ -161,6 +165,32 @@ module cci_mpf_prim_filter_cam
     end
 
       
+    // Two cycle version of test_notPresent, with an intermediate comparison
+    // stage.  This should produce the same state as test_notPresent_q delayed
+    // one cycle.
+    logic [0 : N_TEST_CLIENTS-1] test_en_q;
+    logic [0 : N_BUCKETS-1] valid_q;
+    logic [0 : N_TEST_CLIENTS-1][0 : N_BUCKETS-1] test_match_q;
+    logic [0 : N_TEST_CLIENTS-1] inflight_test_match_q;
+
+    always_ff @(posedge clk)
+    begin
+        for (int c = 0; c < N_TEST_CLIENTS; c = c + 1)
+        begin
+            test_notPresent_qq[c] <= (! test_en_q[c] ||
+                                      // Does any valid entry match?
+                                      (! (|(valid_q & test_match_q[c])) &&
+                                       // Does an in-flight entry match?
+                                       ! (inflight_test_match_q[c])));
+        end
+
+        test_en_q <= test_en;
+        valid_q <= valid;
+        test_match_q <= test_match;
+        inflight_test_match_q <= inflight_test_match;
+    end
+
+
     //
     // Insert new entries
     //

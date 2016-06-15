@@ -210,6 +210,10 @@ module ccip_std_afu
             // Enable eVC_VA to physical channel mapping.  This will only
             // be triggered when ENABLE_VC_MAP is set above.
             afu.c0Tx.hdr.ext.mapVAtoPhysChannel = 1'b1;
+
+            // Enforce load/store and store/store ordering within lines.
+            // This will only be triggered when ENFORCE_WR_ORDER is set.
+            afu.c0Tx.hdr.ext.checkLoadStoreOrder = 1'b1;
         end
 
         afu.c1Tx = cci_mpf_cvtC1TxFromBase(af2mpf_sTxPort.c1);
@@ -221,6 +225,10 @@ module ccip_std_afu
             // Enable eVC_VA to physical channel mapping.  This will only
             // be triggered when ENABLE_VC_MAP is set above.
             afu.c1Tx.hdr.ext.mapVAtoPhysChannel = 1'b1;
+
+            // Enforce load/store and store/store ordering within lines.
+            // This will only be triggered when ENFORCE_WR_ORDER is set.
+            afu.c1Tx.hdr.ext.checkLoadStoreOrder = 1'b1;
         end
 
         afu.c2Tx = af2mpf_sTxPort.c2;

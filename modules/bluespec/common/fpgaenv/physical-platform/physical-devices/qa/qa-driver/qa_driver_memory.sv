@@ -152,6 +152,11 @@ module qa_driver_memory
         wr_req_params.addrIsVirtual = 1'b1;
     end
 
+`ifdef WRFENCE_TEST
+    logic maybeEmitWrFence;
+    logic [9:0] emitWrFence_cnt;
+`endif
+
     always_ff @(posedge clk)
     begin
         afu_if.c1Tx <=
@@ -162,6 +167,24 @@ module qa_driver_memory
                                      wr_req_params),
                 mem_write_data,
                 mem_write_enable);
+
+`ifdef WRFENCE_TEST
+        if (! mem_write_enable && mem_write_rdy && maybeEmitWrFence)
+        begin
+            afu_if.c1Tx.valid <= 1'b1;
+            afu_if.c1Tx.hdr <= t_cci_mpf_c1_ReqMemHdr'(0);
+            afu_if.c1Tx.hdr.base.sop <= 1'b1;
+            afu_if.c1Tx.hdr.base.cl_len <= 0;
+            afu_if.c1Tx.hdr.base.req_type <= eREQ_WRFENCE;
+        end
+
+        maybeEmitWrFence <= (emitWrFence_cnt == 0);
+        emitWrFence_cnt <= emitWrFence_cnt + 1;
+        if (reset)
+        begin
+            emitWrFence_cnt <= 0;
+        end
+`endif
     end
 
     assign mem_write_rdy = ! afu_if.c1TxAlmFull;

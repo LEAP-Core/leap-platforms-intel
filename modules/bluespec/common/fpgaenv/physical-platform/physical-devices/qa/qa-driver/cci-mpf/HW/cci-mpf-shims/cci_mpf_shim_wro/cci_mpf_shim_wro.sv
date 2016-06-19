@@ -59,8 +59,23 @@ module cci_mpf_shim_wro
 
     logic c1_notEmpty;
 
+`ifdef MPF_PLATFORM_BDX
+    localparam N_C0_CAM_IDX_ENTRIES = 160;
+    localparam N_C1_CAM_IDX_ENTRIES = 88;
+    localparam ADDRESS_HASH_BITS = 13;
+`elsif MPF_PLATFORM_OME
+    localparam N_C0_CAM_IDX_ENTRIES = 80;
+    localparam N_C1_CAM_IDX_ENTRIES = 48;
+    localparam ADDRESS_HASH_BITS = 9;
+`else
+    ** ERROR: Unknown platform
+`endif
+
     cci_mpf_shim_wro_cam_group
       #(
+        .N_C0_CAM_IDX_ENTRIES(N_C0_CAM_IDX_ENTRIES),
+        .N_C1_CAM_IDX_ENTRIES(N_C1_CAM_IDX_ENTRIES),
+        .ADDRESS_HASH_BITS(ADDRESS_HASH_BITS),
         .AFU_BUF_THRESHOLD(AFU_BUF_THRESHOLD)
         )
       pipe

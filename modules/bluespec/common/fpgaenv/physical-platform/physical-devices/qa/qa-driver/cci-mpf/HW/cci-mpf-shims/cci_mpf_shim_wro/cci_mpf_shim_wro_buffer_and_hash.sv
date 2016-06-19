@@ -50,18 +50,17 @@ module cci_mpf_shim_wro_buffer_and_hash
     // Buffered connection to AFU
     cci_mpf_if.to_fiu afu_buf,
 
-    // Address hashes for requests at the head of afu_buf.  Two hashes
-    // are exposed for each channel: the hashes of both the oldest (index 0)
-    // and next oldest requests (index 1).  Exposing both is necessary
-    // in the parent module, mostly to satisfy timing using registered
-    // stale state instead of up-to-date combinational state.
+    // Address hashes for requests at the head of afu_buf.  Two sets are
+    // exported because of pipelining in this module.  Index 0 always
+    // corresponds to the oldest request.
     output logic [ADDRESS_HASH_BITS-1 : 0] c0_hash[0:1],
-    output logic c0_hash_valid[0:1],
+    input  logic c0_hash_conflicts[0:1],
     output logic [ADDRESS_HASH_BITS-1 : 0] c1_hash[0:1],
-    output logic c1_hash_valid[0:1],
+    input  logic c1_hash_conflicts[0:1],
 
     // Consume the oldest requests
-    input  logic deqTx,
+    input  logic c0_deqTx,
+    input  logic c1_deqTx,
 
     //
     // Not empty signals are used to figure out whether the pipeline is
@@ -105,163 +104,189 @@ module cci_mpf_shim_wro_buffer_and_hash
     assign afu_fifo.c0Rx = afu_buf.c0Rx;
     assign afu_fifo.c1Rx = afu_buf.c1Rx;
 
-    t_if_cci_mpf_c0_Tx afu_fifo_c0Tx;;
-    assign afu_fifo_c0Tx = cci_mpf_c0TxMaskValids(afu_fifo.c0Tx, ! block_new_requests);
-    t_if_cci_mpf_c1_Tx afu_fifo_c1Tx;
-    assign afu_fifo_c1Tx = cci_mpf_c1TxMaskValids(afu_fifo.c1Tx, ! block_new_requests);
-
-    //
-    // Register c0Tx and c1Tx.
-    //
-    t_if_cci_mpf_c0_Tx c0Tx;
-    t_if_cci_mpf_c0_Tx c0Tx_q;
-    t_if_cci_mpf_c1_Tx c1Tx;
-    t_if_cci_mpf_c1_Tx c1Tx_q;
-
-    // Move afu_fifo output to registers if the pipeline is moving or empty.
-    logic move_to_regs;
-    logic move_to_regs_q;
-    assign move_to_regs = move_to_regs_q || ! (cci_mpf_c0TxIsValid(c0Tx) ||
-                                               cci_mpf_c1TxIsValid(c1Tx));
-    assign move_to_regs_q = deqTx || ! (cci_mpf_c0TxIsValid(c0Tx_q) ||
-                                        cci_mpf_c1TxIsValid(c1Tx_q));
-
-    // Dequeue from afu_fifo if the pipeline is moving and afu_fifo
-    // isn't empty.
-    assign afu_deq = move_to_regs &&
-                     ! same_req_rw_addr_conflict &&
-                     (cci_mpf_c0TxIsValid(afu_fifo_c0Tx) ||
-                      cci_mpf_c1TxIsValid(afu_fifo_c1Tx));
-
-    always_ff @(posedge clk)
-    begin
-        if (reset)
-        begin
-            c0Tx.valid <= 1'b0;
-            c1Tx.valid <= 1'b0;
-        end
-        else if (deqTx && same_req_rw_addr_conflict)
-        begin
-            // Only the read was forwarded this cycle due to read/write conflict.
-            c0Tx.valid <= 1'b0;
-        end
-        else if (move_to_regs)
-        begin
-            c0Tx <= afu_fifo_c0Tx;
-            c1Tx <= afu_fifo_c1Tx;
-        end
-    end
-
-    //
-    // One more registered stage, adding a final transformation.  If the
-    // two channels refer to the same address then send the read and then
-    // the write in separate cycles.
-    //
-    always_ff @(posedge clk)
-    begin
-        if (reset)
-        begin
-            c0Tx_q.valid <= 1'b0;
-            c1Tx_q.valid <= 1'b0;
-
-            c0_hash_valid[0] <= 1'b0;
-            c1_hash_valid[0] <= 1'b0;
-        end
-        else if (move_to_regs_q)
-        begin
-            c0Tx_q <= c0Tx;
-
-            c1Tx_q <= c1Tx;
-            c1Tx_q.valid <= c1Tx.valid && ! same_req_rw_addr_conflict;
-
-            c0_hash[0] <= c0_hash[1];
-            c1_hash[0] <= c1_hash[1];
-            c0_hash_valid[0] <= c0_hash_valid[1];
-            c1_hash_valid[0] <= c1_hash_valid[1];
-        end
-    end
-
-    assign afu_buf.c0Tx = c0Tx_q;
-    assign afu_buf.c1Tx = c1Tx_q;
-
 
     // ====================================================================
     //
-    // Calculate address hashes and register them in parallel with c0Tx
-    // and c1Tx registers.
+    //  Hash addresses as they arrive and store them in a FIFO so they
+    //  arrive along with afu_fifo above.
     //
     // ====================================================================
 
     typedef logic [ADDRESS_HASH_BITS-1 : 0] t_hash;
 
-    // Start by expanding the addresses to 64 bits.
-    logic [63:0] c0_req_addr;
-    assign c0_req_addr = 64'(cci_mpf_c0_getReqAddr(afu_fifo_c0Tx.hdr));
+    // Just hash the low 32 bits.  The high bits are unlikely to vary during
+    // a relevant region.
+    logic [31:0] c0_req_addr;
+    assign c0_req_addr = 32'(cci_mpf_c0_getReqAddr(afu_raw.c0Tx.hdr));
 
-    logic [63:0] c1_req_addr;
-    assign c1_req_addr = 64'(cci_mpf_c1_getReqAddr(afu_fifo_c1Tx.hdr));
+    logic [31:0] c1_req_addr;
+    assign c1_req_addr = 32'(cci_mpf_c1_getReqAddr(afu_raw.c1Tx.hdr));
 
     t_hash c0_hash_next;
-    assign c0_hash_next = t_hash'(hash32(c0_req_addr[63:32] ^ c0_req_addr[31:0]));
+    logic c0_hash_next_en;
     t_hash c1_hash_next;
-    assign c1_hash_next = t_hash'(hash32(c1_req_addr[63:32] ^ c1_req_addr[31:0]));
+    logic c1_hash_next_en;
 
     always_ff @(posedge clk)
     begin
+        c0_hash_next <= t_hash'(hash32(c0_req_addr));
+        c0_hash_next_en <= cci_mpf_c0TxIsValid(afu_raw.c0Tx);
+
+        c1_hash_next <= t_hash'(hash32(c1_req_addr));
+        c1_hash_next_en <= cci_mpf_c1TxIsValid(afu_raw.c1Tx);
+
         if (reset)
         begin
-            c0_hash_valid[1] <= 1'b0;
-            c1_hash_valid[1] <= 1'b0;
-            same_req_rw_addr_conflict <= 1'b0;
-        end
-        else if (deqTx && same_req_rw_addr_conflict)
-        begin
-            // Only the read was forwarded this cycle due to read/write conflict.
-            c0_hash_valid[1] <= 1'b0;
-            same_req_rw_addr_conflict <= 1'b0;
-        end
-        else if (move_to_regs)
-        begin
-            c0_hash[1] <= c0_hash_next;
-            c0_hash_valid[1] <= cci_mpf_c0TxIsReadReq(afu_fifo_c0Tx);
-
-            c1_hash[1] <= c1_hash_next;
-            c1_hash_valid[1] <= cci_mpf_c1TxIsWriteReq(afu_fifo_c1Tx);
-
-            // Does an incoming request have read and write to the same address?
-            // Special case: delay the write.
-            same_req_rw_addr_conflict <=
-                cci_mpf_c0TxIsReadReq(afu_fifo_c0Tx) &&
-                cci_mpf_c1TxIsWriteReq(afu_fifo_c1Tx) &&
-                (c0_hash_next == c1_hash_next);
+            c0_hash_next_en <= 1'b0;
+            c1_hash_next_en <= 1'b0;
         end
     end
 
+    t_hash c0_hash_fifo;
+    logic c0_hash_fifo_notEmpty;
+    t_hash c1_hash_fifo;
+    logic c1_hash_fifo_notEmpty;
+
+    cci_mpf_prim_fifo_lutram
+      #(
+        .N_DATA_BITS(ADDRESS_HASH_BITS),
+        .N_ENTRIES(AFU_BUF_THRESHOLD+2),
+        .REGISTER_OUTPUT(1)
+        )
+      c0_hash_buf
+       (.clk,
+        .reset,
+        .enq_data(c0_hash_next),
+        .enq_en(c0_hash_next_en),
+        .notFull(),
+        .almostFull(),
+        .first(c0_hash_fifo),
+        .deq_en(afu_deq && cci_mpf_c0TxIsValid(afu_fifo.c0Tx)),
+        .notEmpty(c0_hash_fifo_notEmpty)
+        );
+
+    cci_mpf_prim_fifo_lutram
+      #(
+        .N_DATA_BITS(ADDRESS_HASH_BITS),
+        .N_ENTRIES(AFU_BUF_THRESHOLD+2),
+        .REGISTER_OUTPUT(1)
+        )
+      c1_hash_buf
+       (.clk,
+        .reset,
+        .enq_data(c1_hash_next),
+        .enq_en(c1_hash_next_en),
+        .notFull(),
+        .almostFull(),
+        .first(c1_hash_fifo),
+        .deq_en(afu_deq && cci_mpf_c1TxIsValid(afu_fifo.c1Tx)),
+        .notEmpty(c1_hash_fifo_notEmpty)
+        );
+
+
+    // Pass the buffered hash to the main WRO pipeline to test it against
+    // current activity.
+    assign c0_hash[1] = c0_hash_fifo;
+    assign c1_hash[1] = c1_hash_fifo;
+
 
     // ====================================================================
     //
-    // Block the pipeline to let request traffic drain?  This is required
-    // to enforce proper ordering of WrFence relative to write requests
-    // still stuck in the WRO request pipeline.
+    //  Manage flow of requests out of the buffer and toward the main
+    //  WRO pipeline.
     //
     // ====================================================================
 
-    logic c1_pipe_has_active_reqs;
-
-    assign block_new_requests = cci_mpf_c1TxIsWriteFenceReq(afu_fifo.c1Tx) &&
-                                c1_pipe_has_active_reqs;
-
     //
-    // Are there any active c1 requests in the WRO pipeline?  The incoming
-    // c1_pipe_notEmpty_q is registered here for timing.  The only stage not
-    // factored in the registered value is the first c1_hash stage.
+    // Request data flowing through filtering pipeline
     //
-    logic c1_pipe_notEmpty_q;
-    assign c1_pipe_has_active_reqs = c1_pipe_notEmpty_q || c1_hash_valid[1];
+    t_if_cci_mpf_c0_Tx c0Tx;
+    t_if_cci_mpf_c1_Tx c1Tx;
 
+    // Delay writes when they conflict with a read in the same buffer position
+    logic tx_addr_conflict;
+
+    // New requests can't be forwarded out of this module if they conflict
+    // with other requests in main WRO pipeline.
+    logic c0_pipe_conflicts;
+    logic c1_pipe_conflicts;
+
+    logic block_for_wrfence;
+    assign block_for_wrfence = cci_mpf_c1TxIsWriteFenceReq_noCheckValid(c1Tx) &&
+                               c1_pipe_notEmpty;
+
+    assign afu_buf.c0Tx = cci_mpf_c0TxMaskValids(c0Tx, ! c0_pipe_conflicts);
+    assign afu_buf.c1Tx = cci_mpf_c1TxMaskValids(c1Tx, ! c1_pipe_conflicts);
+
+    // Forward new state to the request pipeline if space is available.
+    assign afu_deq = (c0_deqTx || ! cci_mpf_c0TxIsValid(c0Tx)) &&
+                     (c1_deqTx || ! cci_mpf_c1TxIsValid(c1Tx)) &&
+                     ((cci_mpf_c0TxIsValid(afu_fifo.c0Tx) && c0_hash_fifo_notEmpty) ||
+                      (cci_mpf_c1TxIsValid(afu_fifo.c1Tx) && c1_hash_fifo_notEmpty));
+
+    // Do the read and write address conflict in the new request?
+    logic afu_fifo_addr_conflict;
+    assign afu_fifo_addr_conflict = (c0_hash_fifo == c1_hash_fifo) &&
+                                    cci_mpf_c0TxIsReadReq(afu_fifo.c0Tx) &&
+                                    cci_mpf_c1TxIsWriteReq(afu_fifo.c1Tx);
+
+    // Update the output pipeline
     always_ff @(posedge clk)
     begin
-        c1_pipe_notEmpty_q <= c1_pipe_notEmpty;
+        // Channel 0 (read) consumed?
+        if (c0_deqTx)
+        begin
+            c0Tx <= cci_mpf_c0Tx_clearValids();
+            // Clear read/write conflict when read completes
+            tx_addr_conflict <= 1'b0;
+        end
+
+        // Channel 1 (write) consumed?
+        if (c1_deqTx)
+        begin
+            c1Tx <= cci_mpf_c1Tx_clearValids();
+        end
+
+        // Update pipe conflicts in case the oldest entry is waiting for
+        // existing requests to clear out of the pipeline.
+        c0_pipe_conflicts <= c0_hash_conflicts[0];
+        c1_pipe_conflicts <=
+            c1_hash_conflicts[0] ||
+            // Hold write for conflicting read in c0Tx?
+            tx_addr_conflict ||
+            // Hold write fence until all requests have exited WRO?
+            block_for_wrfence;
+
+        if (afu_deq)
+        begin
+            c0Tx <= afu_fifo.c0Tx;
+            c0_hash[0] <= c0_hash_fifo;
+
+            c1Tx <= afu_fifo.c1Tx;
+            c1_hash[0] <= c1_hash_fifo;
+
+            tx_addr_conflict <= afu_fifo_addr_conflict;
+
+            // Use the pipeline conflict for the new requests.  The request
+            // that may just have been released must also be considered.
+            c0_pipe_conflicts <=
+                c0_hash_conflicts[1] || (c1_hash[0] == c0_hash[1]);
+
+            c1_pipe_conflicts <=
+                c1_hash_conflicts[1] ||
+                (c0_hash[0] == c1_hash[1]) || (c1_hash[0] == c1_hash[1]) ||
+                afu_fifo_addr_conflict ||
+                cci_mpf_c1TxIsWriteFenceReq(afu_fifo.c1Tx);
+        end
+
+        if (reset)
+        begin
+            c0Tx <= cci_mpf_c0Tx_clearValids();
+            c1Tx <= cci_mpf_c1Tx_clearValids();
+            tx_addr_conflict <= 1'b0;
+            c0_hash[0] <= 0;
+            c1_hash[0] <= 0;
+        end
     end
 
 endmodule // cci_mpf_shim_wro_cam_group

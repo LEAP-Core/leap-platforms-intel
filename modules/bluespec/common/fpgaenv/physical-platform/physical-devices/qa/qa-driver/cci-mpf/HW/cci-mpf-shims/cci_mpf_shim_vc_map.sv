@@ -630,7 +630,20 @@ module cci_mpf_shim_vc_map
     // ====================================================================
 
     logic [MAX_SAMPLE_CYCLES_RADIX : 0] cycle_cnt;
-    assign sample_region_done = (cycle_cnt[sample_interval_idx] == 1'b1);
+    always_ff @(posedge clk)
+    begin
+        sample_region_done <= (cycle_cnt[sample_interval_idx] == 1'b1);
+
+        if (sample_region_done)
+        begin
+            sample_region_done <= 1'b0;
+        end
+
+        if (reset)
+        begin
+            sample_region_done <= 1'b0;
+        end
+    end
 
     logic rd_len1;
     logic rd_len2;

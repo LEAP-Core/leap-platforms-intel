@@ -37,8 +37,6 @@ module cci_mpf_prim_filter_cam
     parameter BITS_PER_BUCKET = 4,
     // Number of clients attempting to test an entry
     parameter N_TEST_CLIENTS = 1,
-    // Number of clients attempting to remove an entry
-    parameter N_REMOVE_CLIENTS = 1,
     // Include values inserted in the current cycle in the test this cycle?
     // Be careful here, since enabling the bypass can cause a dependence
     // loop. The bypass is useful if there is a pipeline stage between
@@ -51,26 +49,26 @@ module cci_mpf_prim_filter_cam
 
     // Test values against the set of values stored in the CAM.
     input  logic [0 : N_TEST_CLIENTS-1][BITS_PER_BUCKET-1 : 0] test_value,
-    input  logic [0 : N_TEST_CLIENTS-1]                 test_en,
-    output logic [0 : N_TEST_CLIENTS-1]                 test_notPresent,
+    input  logic [0 : N_TEST_CLIENTS-1] test_en,
+    output logic [0 : N_TEST_CLIENTS-1] T0_test_notPresent,
 
     // Mirrors test_notPresent but one or two cycles delayed. Internally
     // this gives the logic more time to implement the CAM and the
     // computation is split across the cycles.  The code instantiating the
     // CAM should pick a latency appropriate to the target frequency
     // and hardware.
-    output logic [0 : N_TEST_CLIENTS-1]                 test_notPresent_q,
-    output logic [0 : N_TEST_CLIENTS-1]                 test_notPresent_qq,
+    output logic [0 : N_TEST_CLIENTS-1] T1_test_notPresent,
+    output logic [0 : N_TEST_CLIENTS-1] T2_test_notPresent,
 
     // Insert one value into the CAM in a specific slot. Slots are managed
     // outside this module.
-    input  logic [$clog2(N_BUCKETS)-1 : 0]              insert_idx,
-    input  logic [BITS_PER_BUCKET-1 : 0]                insert_value,
-    input  logic                                        insert_en,
+    input  logic [$clog2(N_BUCKETS)-1 : 0] insert_idx,
+    input  logic [BITS_PER_BUCKET-1 : 0] insert_value,
+    input  logic insert_en,
 
     // Remove (invalidate) entries from the CAM.
-    input  logic [0 : N_REMOVE_CLIENTS-1][$clog2(N_BUCKETS)-1 : 0] remove_idx,
-    input  logic [0 : N_REMOVE_CLIENTS-1]                          remove_en
+    input  logic [$clog2(N_BUCKETS)-1 : 0] remove_idx,
+    input  logic remove_en
     );
      
     // Storage for the values
@@ -145,28 +143,28 @@ module cci_mpf_prim_filter_cam
             end
 
             // Is the value present in the CAM?
-            test_notPresent[c] = (! test_en[c] ||
-                                  // Does any valid entry match?
-                                  (! (|(valid & test_match[c])) &&
-                                   // Does an in-flight entry match?
-                                   ! (inflight_test_match[c])));
+            T0_test_notPresent[c] = (! test_en[c] ||
+                                     // Does any valid entry match?
+                                     (! (|(valid & test_match[c])) &&
+                                      // Does an in-flight entry match?
+                                      ! (inflight_test_match[c])));
         end
     end
 
 
     // Registered equivalent of the combinational logic, producing the
-    // test_notPresent registered result.
+    // T1_test_notPresent registered result.
     always_ff @(posedge clk)
     begin
         for (int c = 0; c < N_TEST_CLIENTS; c = c + 1)
         begin
-            test_notPresent_q[c] <= test_notPresent[c];
+            T1_test_notPresent[c] <= T0_test_notPresent[c];
         end
     end
 
       
     // Two cycle version of test_notPresent, with an intermediate comparison
-    // stage.  This should produce the same state as test_notPresent_q delayed
+    // stage.  This should produce the same state as T1_test_notPresent delayed
     // one cycle.
     logic [0 : N_TEST_CLIENTS-1] test_en_q;
     logic [0 : N_BUCKETS-1] valid_q;
@@ -177,7 +175,7 @@ module cci_mpf_prim_filter_cam
     begin
         for (int c = 0; c < N_TEST_CLIENTS; c = c + 1)
         begin
-            test_notPresent_qq[c] <= (! test_en_q[c] ||
+            T2_test_notPresent[c] <= (! test_en_q[c] ||
                                       // Does any valid entry match?
                                       (! (|(valid_q & test_match_q[c])) &&
                                        // Does an in-flight entry match?
@@ -203,27 +201,22 @@ module cci_mpf_prim_filter_cam
 
     always_ff @(posedge clk)
     begin
+        // Insert new entry
+        if (insert_en_q)
+        begin
+            values[insert_idx_q] <= insert_value_q;
+            valid[insert_idx_q] <= 1'b1;
+        end
+
+        // Remove old entries
+        if (remove_en)
+        begin
+            valid[remove_idx] <= 1'b0;
+        end
+
         if (reset)
         begin
             valid <= N_BUCKETS'(0);
-        end
-        else
-        begin
-            // Insert new entry
-            if (insert_en_q)
-            begin
-                values[insert_idx_q] <= insert_value_q;
-                valid[insert_idx_q] <= 1'b1;
-            end
-
-            // Remove old entries
-            for (int c = 0; c < N_REMOVE_CLIENTS; c = c + 1)
-            begin
-                if (remove_en[c])
-                begin
-                    valid[remove_idx[c]] <= 1'b0;
-                end
-            end
         end
     end
 

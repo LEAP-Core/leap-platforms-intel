@@ -322,12 +322,7 @@ module cci_mpf_shim_csr
 
     always_ff @(posedge clk)
     begin
-        if (reset)
-        begin
-            c2_rsp.mmioRdValid <= 1'b0;
-            mmio_read_active <= 1'b0;
-        end
-        else if (c2_rsp_en)
+        if (c2_rsp_en)
         begin
             // Read response forwarded to host
             c2_rsp.mmioRdValid <= 1'b0;
@@ -338,7 +333,18 @@ module cci_mpf_shim_csr
             if (mmio_read_start)
             begin
                 // New MMIO read request.  Request the value of the register.
-                mmio_read_active <= 1'b1;
+                case (mmio_req_addr)
+                 (CCI_MPF_VC_MAP_CSR_OFFSET + CCI_MPF_VC_MAP_CSR_STAT_HISTORY) >> 3:
+                    begin
+                        // VC MAP state history register
+                        c2_rsp.data <= csrs.vc_map_history;
+                        c2_rsp.mmioRdValid <= 1'b1;
+                    end
+                 default:
+                    // Most requests are to counters in block RAM.
+                    mmio_read_active <= 1'b1;
+                endcase
+
                 c2_rsp.hdr.tid <= mmio_req_tid;
             end
 
@@ -348,6 +354,12 @@ module cci_mpf_shim_csr
                 c2_rsp.mmioRdValid <= 1'b1;
                 c2_rsp.data <= csr_mem_rd_val;
             end
+        end
+
+        if (reset)
+        begin
+            c2_rsp.mmioRdValid <= 1'b0;
+            mmio_read_active <= 1'b0;
         end
     end
 

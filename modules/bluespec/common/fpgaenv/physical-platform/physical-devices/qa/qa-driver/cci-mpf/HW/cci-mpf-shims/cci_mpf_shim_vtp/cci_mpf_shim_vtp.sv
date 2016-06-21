@@ -556,7 +556,7 @@ module cci_mpf_shim_vtp_chan
 
     // Some of the notFull logic can be registered for timing
     logic notFull_reg;
-    assign notFull = heap_notFull && notFull_reg;
+    assign notFull = heap_notFull && notFull_reg && ! cTxAlmostFull;
 
     always_ff @(posedge clk)
     begin
@@ -567,8 +567,7 @@ module cci_mpf_shim_vtp_chan
         else
         begin
             notFull_reg <= vtp_svc.lookupRdy && cache_4kb_rdy && cache_2mb_rdy &&
-                           ! tlb_lookup_rsp_rdy &&
-                           ! cTxAlmostFull;
+                           ! tlb_lookup_rsp_rdy;
         end
     end
 

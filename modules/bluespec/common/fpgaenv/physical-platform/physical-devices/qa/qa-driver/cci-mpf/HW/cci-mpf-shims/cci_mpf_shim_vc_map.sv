@@ -132,6 +132,8 @@ module cci_mpf_shim_vc_map
     t_map_ratio ratio_vl0;
     logic always_use_vl0;
 
+    logic [MAX_SAMPLE_CYCLES_RADIX+2 : 0] always_use_vl0_threshold_mask;
+
 `ifdef MPF_PLATFORM_OME
     // Don't care (only one physical channel)
     localparam RATIO_VL0_DEFAULT = t_map_ratio'(16);
@@ -151,13 +153,68 @@ module cci_mpf_shim_vc_map
     // Set when dynamic logic below suggests a better ratio.
     logic new_ratio_vl0_en;
     t_map_ratio new_ratio_vl0;
+    logic new_always_use_vl0;
 
     logic [$clog2(MAX_SAMPLE_CYCLES_RADIX)-1 : 0] sample_interval_idx;
     // Default to sampling every 1K cycles
     localparam DEFAULT_SAMPLE_INTERVAL_IDX = 10;
 
+    // History of mappings, exported as a CSR
+    logic [63:0] vc_map_history;
+    assign csrs.vc_map_history = { vc_map_history[63:8], 1'b0,
+                                   // Bit 6, making 64/64ths if set
+                                   always_use_vl0,
+                                   always_use_vl0 ? 5'b0 : ratio_vl0 };
+
     always_ff @(posedge clk)
     begin
+        if (csrs.vc_map_ctrl_valid)
+        begin
+            // See cci_mpf_csrs.h for bit assignments in the control word.
+
+            // Group A
+            if (csrs.vc_map_ctrl[63])
+            begin
+                mapping_disabled <= ~ csrs.vc_map_ctrl[0];
+                dynamic_mapping_disabled <= ~ csrs.vc_map_ctrl[1];
+                sample_interval_idx <=
+                    (csrs.vc_map_ctrl[5:2] != 4'b0) ? csrs.vc_map_ctrl[5:2] :
+                                                      DEFAULT_SAMPLE_INTERVAL_IDX;
+                ratio_vl0 <= RATIO_VL0_DEFAULT;
+            end
+
+            // Group B
+            if (csrs.vc_map_ctrl[62])
+            begin
+                map_all <= csrs.vc_map_ctrl[6];
+            end
+
+            // Group C
+            if (csrs.vc_map_ctrl[61])
+            begin
+                dynamic_mapping_disabled <= 1'b1;
+                ratio_vl0 <= csrs.vc_map_ctrl[7] ? csrs.vc_map_ctrl[13:8] :
+                                                   RATIO_VL0_DEFAULT;
+                always_use_vl0 <= csrs.vc_map_ctrl[14];
+            end
+
+            // Group D
+            if (csrs.vc_map_ctrl[60])
+            begin
+                always_use_vl0_threshold_mask <=
+                    ~ $bits(always_use_vl0_threshold_mask)'(csrs.vc_map_ctrl[31:16]);
+            end
+        end
+        else if (new_ratio_vl0_en)
+        begin
+            // Dynamic logic has suggested a better ratio
+            ratio_vl0 <= new_ratio_vl0;
+            always_use_vl0 <= new_always_use_vl0;
+
+            // Shift history
+            vc_map_history[63:8] <= csrs.vc_map_history[55:0];
+        end
+
         if (reset)
         begin
             mapping_disabled <= 1'b0;
@@ -167,26 +224,9 @@ module cci_mpf_shim_vc_map
             map_all <= 1'b0;
             ratio_vl0 <= RATIO_VL0_DEFAULT;
             always_use_vl0 <= 1'b0;
-        end
-        else if (csrs.vc_map_ctrl_valid)
-        begin
-            // See cci_mpf_csrs.h for bit assignments in the control word.
-            mapping_disabled <= ~ csrs.vc_map_ctrl[0];
-            dynamic_mapping_disabled <= ~ csrs.vc_map_ctrl[1];
-            sample_interval_idx <=
-                (csrs.vc_map_ctrl[5:2] != 4'b0) ? csrs.vc_map_ctrl[5:2] :
-                                                  DEFAULT_SAMPLE_INTERVAL_IDX;
+            always_use_vl0_threshold_mask <= ~ $bits(always_use_vl0_threshold_mask)'(0);
 
-            map_all <= csrs.vc_map_ctrl[6];
-            ratio_vl0 <= csrs.vc_map_ctrl[7] ? csrs.vc_map_ctrl[13:8] :
-                                               RATIO_VL0_DEFAULT;
-            always_use_vl0 <= csrs.vc_map_ctrl[14];
-        end
-        else if (new_ratio_vl0_en)
-        begin
-            // Dynamic logic has suggested a better ratio
-            ratio_vl0 <= new_ratio_vl0;
-            always_use_vl0 <= 1'b0;
+            vc_map_history <= 64'b0;
         end
     end
 
@@ -398,6 +438,7 @@ module cci_mpf_shim_vc_map
 
     logic req_ratio_vl0_en;
     t_map_ratio req_ratio_vl0;
+    logic req_always_use_vl0;
 
     logic [$clog2(MAX_ACTIVE_REQS)-1 : 0] num_outstanding_reads;
 
@@ -414,9 +455,11 @@ module cci_mpf_shim_vc_map
                 if (req_ratio_vl0_en &&
                     ! mapping_disabled &&
                     ! dynamic_mapping_disabled &&
-                    (req_ratio_vl0 != ratio_vl0))
+                    ((req_ratio_vl0 != ratio_vl0) ||
+                     (req_always_use_vl0 != always_use_vl0)))
                 begin
                     new_ratio_vl0 <= req_ratio_vl0;
+                    new_always_use_vl0 <= req_always_use_vl0;
 
                     block_tx_traffic <= 1'b1;
                     state <= CCI_MPF_VC_MAP_EMIT_WRFENCE;
@@ -487,11 +530,14 @@ module cci_mpf_shim_vc_map
     logic [MAX_SAMPLE_CYCLES_RADIX : 0] n_sampled_len1;
     logic [MAX_SAMPLE_CYCLES_RADIX : 0] n_sampled_len2;
     logic [MAX_SAMPLE_CYCLES_RADIX : 0] n_sampled_len4;
+    // Counting lines of reads and writes, up to 8 lines per cycle
+    logic [MAX_SAMPLE_CYCLES_RADIX+2 : 0] n_sampled_all;
 
     // Was a request on VA present?  No point in change unless there are some.
     logic saw_va_req;
 
     logic sample_region_done;
+    logic sample_region_done_q;
     logic sample_ready;
 
     t_map_ratio sample_suggestions[0 : N_SAMPLE_REGIONS-1];
@@ -510,32 +556,49 @@ module cci_mpf_shim_vc_map
         end
     end
 
+    // Is the traffic so low that only the low latency channel should be used?
+    logic req_always_use_vl0_next;
+    assign req_always_use_vl0_next =
+               ((n_sampled_all & always_use_vl0_threshold_mask) == 0);
+
     //
     // Update ratio being used at sampling boundary.  The "damper" variable
     // limits the rate of change.
     //
     logic [5 : 0] damper;
 
-    always_comb
+    always_ff @(posedge clk)
     begin
-        req_ratio_vl0_en = 1'b0;
-        req_ratio_vl0 = 'x;
+        // The enable register gates used of all other state state here
+        req_ratio_vl0_en <= 1'b0;
 
+        req_ratio_vl0 <= ratio_vl0;
+        req_always_use_vl0 <= req_always_use_vl0_next;
+
+        // Sampling window just ended?
         if (sample_ready)
         begin
             if (all_regions_match)
             begin
                 // In a consistent recommended state.  Change to it if not
                 // there already.
-                req_ratio_vl0_en = 1'b1;
-                req_ratio_vl0 = sample_suggestions[0];
+                req_ratio_vl0_en <= 1'b1;
+                req_ratio_vl0 <= sample_suggestions[0];
             end
             else
             begin
                 // Not in a consistent state.  After waiting a while change
                 // to the default state.
-                req_ratio_vl0_en = damper[$bits(damper)-1];
-                req_ratio_vl0 = RATIO_VL0_DEFAULT;
+                req_ratio_vl0_en <= damper[$bits(damper)-1];
+                req_ratio_vl0 <= RATIO_VL0_DEFAULT;
+            end
+
+            // Low traffic?  Switch in and out of this state quickly, using
+            // only one sampling window.  With low traffic the impact of
+            // a write fence should be low.
+            if (always_use_vl0 != req_always_use_vl0_next)
+            begin
+                req_ratio_vl0_en <= 1'b1;
             end
         end
     end
@@ -632,7 +695,9 @@ module cci_mpf_shim_vc_map
     logic [MAX_SAMPLE_CYCLES_RADIX : 0] cycle_cnt;
     always_ff @(posedge clk)
     begin
-        sample_region_done <= (cycle_cnt[sample_interval_idx] == 1'b1);
+        sample_region_done <= (cycle_cnt[sample_interval_idx] == 1'b1) &&
+                              ! sample_region_done_q;
+        sample_region_done_q <= sample_region_done;
 
         if (sample_region_done)
         begin
@@ -642,6 +707,7 @@ module cci_mpf_shim_vc_map
         if (reset)
         begin
             sample_region_done <= 1'b0;
+            sample_region_done_q <= 1'b0;
         end
     end
 
@@ -681,17 +747,39 @@ module cci_mpf_shim_vc_map
         end
     end
 
+    // How many lines were requested this cycle?
+    logic [3:0] lines_this_cycle;
+    always_comb
+    begin
+        lines_this_cycle = 4'(0);
+
+        if (cci_mpf_c0TxIsReadReq(c0_tx))
+        begin
+            lines_this_cycle = lines_this_cycle +
+                               4'(c0_tx.hdr.base.cl_len) +
+                               4'd1;
+        end
+
+        if (cci_mpf_c1TxIsWriteReq(c1_tx))
+        begin
+            lines_this_cycle = lines_this_cycle +
+                               4'(c1_tx.hdr.base.cl_len) +
+                               4'd1;
+        end
+    end
+
     always_ff @(posedge clk)
     begin
         cycle_cnt <= cycle_cnt + 1;
 
-        if (sample_region_done)
+        if (sample_region_done_q)
         begin
             // End of sampling interval.  Reset all counters.
             cycle_cnt <= 1'b1;
 
             n_sampled_reads <= 0;
             n_sampled_writes <= 0;
+            n_sampled_all <= 0;
             n_sampled_len1 <= 0;
             n_sampled_len2 <= 0;
             n_sampled_len4 <= 0;
@@ -719,6 +807,8 @@ module cci_mpf_shim_vc_map
                 end
             end
 
+            n_sampled_all <= n_sampled_all + $bits(n_sampled_all)'(lines_this_cycle);
+
             n_sampled_len1 <= n_sampled_len1 + rd_len1 + wr_len1;
             n_sampled_len2 <= n_sampled_len2 + rd_len2 + wr_len2;
             n_sampled_len4 <= n_sampled_len4 + rd_len4 + wr_len4;
@@ -730,6 +820,7 @@ module cci_mpf_shim_vc_map
 
             n_sampled_reads <= 0;
             n_sampled_writes <= 0;
+            n_sampled_all <= 0;
             n_sampled_len1 <= 0;
             n_sampled_len2 <= 0;
             n_sampled_len4 <= 0;

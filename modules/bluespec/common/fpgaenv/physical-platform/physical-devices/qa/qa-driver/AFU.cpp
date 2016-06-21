@@ -722,6 +722,12 @@ AFU_CLIENT_CLASS::EmitStats(ofstream &statusFile)
                    << "\"VC MAP Number of Mapping Changes\","
                    << m_mpf_vc_map->vcmapGetStatCounter(CCI_MPF_VC_MAP_CSR_STAT_NUM_MAPPING_CHANGES)
                    << endl;
+        statusFile << "CCI_MPF_VC_MAP_CSR_STAT_HISTORY,"
+                   << "\"VC MAP History of Mappings (8 bits each)\",0x"
+                   << std::hex
+                   << m_mpf_vc_map->vcmapGetMappingHistory()
+                   << std::dec
+                   << endl;
     }
 
     statusFile << "CCI_MPF_VTP_CSR_STAT_FAILED_TRANSLATIONS,"

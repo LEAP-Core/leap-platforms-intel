@@ -60,9 +60,9 @@ module cci_mpf_shim_wro
     logic c1_notEmpty;
 
 `ifdef MPF_PLATFORM_BDX
-    localparam N_C0_CAM_IDX_ENTRIES = 160;
-    localparam N_C1_CAM_IDX_ENTRIES = 88;
-    localparam ADDRESS_HASH_BITS = 13;
+    localparam N_C0_CAM_IDX_ENTRIES = 80;
+    localparam N_C1_CAM_IDX_ENTRIES = 48;
+    localparam ADDRESS_HASH_BITS = 9;
 `elsif MPF_PLATFORM_OME
     localparam N_C0_CAM_IDX_ENTRIES = 80;
     localparam N_C1_CAM_IDX_ENTRIES = 48;

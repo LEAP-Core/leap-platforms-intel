@@ -127,7 +127,7 @@
         case (req)
             eREQ_RDLINE_S: return "RdLine_S  ";
             eREQ_RDLINE_I: return "RdLine_I  ";
-            default:       return "* ERROR * ";
+            default:       return "* c0 REQ ERROR * ";
         endcase
     endfunction
 
@@ -139,7 +139,7 @@
             eREQ_WRFENCE:  return "WrFence   ";
          // eREQ_ATOMIC:   return "Atomic    ";
             eREQ_INTR:     return "IntrReq   ";
-            default:       return "* ERROR * ";
+            default:       return "* c1 REQ ERROR * ";
         endcase
     endfunction
 
@@ -149,7 +149,7 @@
             eRSP_RDLINE:  return "RdRsp      ";
             eRSP_UMSG:    return "UmsgRsp    ";
          // eRSP_ATOMIC:  return "AtomicRsp  ";
-            default:      return "* ERROR *  ";
+            default:      return "* c0 RSP ERROR *  ";
         endcase
     endfunction
 
@@ -158,7 +158,7 @@
             eRSP_WRLINE:  return "WrRsp      ";
             eRSP_WRFENCE: return "WrFenceRsp ";
             eRSP_INTR:    return "IntrResp   ";
-            default:      return "* ERROR *  ";
+            default:      return "* c1 RSP ERROR *  ";
         endcase
     endfunction
 

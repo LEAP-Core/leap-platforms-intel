@@ -72,6 +72,7 @@ interface cci_mpf_csrs();
     logic [63:0] vc_map_ctrl;
     logic        vc_map_ctrl_valid;
 
+    logic [63:0] vc_map_history;
     logic vc_map_out_event_mapping_changed;
 
 
@@ -97,6 +98,7 @@ interface cci_mpf_csrs();
 
         output vc_map_ctrl,
         output vc_map_ctrl_valid,
+        input  vc_map_history,
 
         input  wro_out_num_writes,
         input  wro_out_num_reads,
@@ -133,7 +135,8 @@ interface cci_mpf_csrs();
     modport vc_map
        (
         input  vc_map_ctrl,
-        input  vc_map_ctrl_valid
+        input  vc_map_ctrl_valid,
+        output vc_map_history
         );
     modport vc_map_events
        (

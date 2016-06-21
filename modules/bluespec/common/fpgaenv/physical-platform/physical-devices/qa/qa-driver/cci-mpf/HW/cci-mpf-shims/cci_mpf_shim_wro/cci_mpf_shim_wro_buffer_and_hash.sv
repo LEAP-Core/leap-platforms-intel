@@ -260,10 +260,16 @@ module cci_mpf_shim_wro_buffer_and_hash
         if (afu_deq)
         begin
             c0Tx <= afu_fifo.c0Tx;
-            c0_hash[0] <= c0_hash_fifo;
+            if (c0_hash_fifo_notEmpty)
+            begin
+                c0_hash[0] <= c0_hash_fifo;
+            end
 
             c1Tx <= afu_fifo.c1Tx;
-            c1_hash[0] <= c1_hash_fifo;
+            if (c1_hash_fifo_notEmpty && cci_mpf_c1TxIsWriteReq(afu_fifo.c1Tx))
+            begin
+                c1_hash[0] <=  c1_hash_fifo;
+            end
 
             tx_addr_conflict <= afu_fifo_addr_conflict;
 
@@ -273,8 +279,8 @@ module cci_mpf_shim_wro_buffer_and_hash
                 c0_hash_conflicts[1] || (c1_hash[0] == c0_hash[1]);
 
             c1_pipe_conflicts <=
-                c1_hash_conflicts[1] ||
-                (c0_hash[0] == c1_hash[1]) || (c1_hash[0] == c1_hash[1]) ||
+                (c1_hash_conflicts[1] === 1'b1) ||
+                (c0_hash[0] === c1_hash[1]) || (c1_hash[0] === c1_hash[1]) ||
                 afu_fifo_addr_conflict ||
                 cci_mpf_c1TxIsWriteFenceReq(afu_fifo.c1Tx);
         end

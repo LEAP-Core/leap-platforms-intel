@@ -119,21 +119,19 @@ MPFVCMAP::MPFVCMAP( IALIMMIO   *pMMIOService,
 //
 btBool MPFVCMAP::vcmapSetMode( btBool enable_mapping,
                                btBool enable_dynamic_mapping,
-                               btUnsigned32bitInt sampling_window_radix,
-                               btBool map_all_requests )
+                               btUnsigned32bitInt sampling_window_radix )
 {
    ASSERT(sampling_window_radix < 16);
    if (sampling_window_radix >= 16) return false;
 
    btBool ret;
 
-   btUnsigned32bitInt map_all = (map_all_requests ? (1 << 6) : 0);
-
    ret = m_pALIMMIO->mmioWrite64(m_dfhOffset + CCI_MPF_VC_MAP_CSR_CTRL_REG,
                                  (enable_mapping ? 1 : 0) |
                                  (enable_dynamic_mapping ? 2 : 0) |
                                  (sampling_window_radix << 2) |
-                                 map_all);
+                                 // Group A
+                                 (btUnsigned64bitInt(1) << 63));
    ASSERT(ret);
 
    return ret;
@@ -144,25 +142,70 @@ btBool MPFVCMAP::vcmapDisable( void )
 {
    btBool ret;
 
-   ret = m_pALIMMIO->mmioWrite64(m_dfhOffset + CCI_MPF_VC_MAP_CSR_CTRL_REG, 0);
+   ret = m_pALIMMIO->mmioWrite64(m_dfhOffset + CCI_MPF_VC_MAP_CSR_CTRL_REG,
+                                 0 |
+                                 // Group A
+                                 (btUnsigned64bitInt(1) << 63));
    ASSERT(ret);
 
    return ret;
 }
 
 
-btBool MPFVCMAP::vcmapSetFixedMapping( btUnsigned32bitInt r,
-                                       btBool map_all_requests )
+btBool MPFVCMAP::vcmapSetMapAll( btBool map_all_requests )
+{
+   btBool ret;
+
+   btUnsigned32bitInt map_all = (map_all_requests ? (1 << 6) : 0);
+
+   ret = m_pALIMMIO->mmioWrite64(m_dfhOffset + CCI_MPF_VC_MAP_CSR_CTRL_REG,
+                                 map_all |
+                                 // Group B
+                                 (btUnsigned64bitInt(1) << 62));
+   ASSERT(ret);
+
+   return ret;
+}
+
+
+btBool MPFVCMAP::vcmapSetFixedMapping( btBool user_specified,
+                                       btUnsigned32bitInt r )
 {
    ASSERT(r <= 64);
    if (r > 64) return false;
 
    btBool ret;
 
-   btUnsigned32bitInt map_all = (map_all_requests ? (1 << 6) : 0);
+   btUnsigned32bitInt specified = (user_specified ? (1 << 7) : 0);
+   if (! specified)
+   {
+       r = 0;
+   }
 
    ret = m_pALIMMIO->mmioWrite64(m_dfhOffset + CCI_MPF_VC_MAP_CSR_CTRL_REG,
-                                 (1 | (1 << 7) | (r << 8) | map_all));
+                                 specified | (r << 8) |
+                                  // Group C
+                                 (btUnsigned64bitInt(1) << 61));
+   ASSERT(ret);
+
+   return ret;
+}
+
+
+btBool MPFVCMAP::vcmapSetLowTrafficThreshold( btUnsigned32bitInt t )
+{
+   // The threshold must fit in the size and must be some 2^n-1 so only
+   // a contiguous set of low bits are set.  This way it can be used as
+   // a mask in the hardware.
+   ASSERT((t <= 0xffff) && (((t + 1) & t) == 0));
+   if (! ((t <= 0xffff) && (((t + 1) & t) == 0))) return false;
+
+   btBool ret;
+
+   ret = m_pALIMMIO->mmioWrite64(m_dfhOffset + CCI_MPF_VC_MAP_CSR_CTRL_REG,
+                                 (t << 16) |
+                                  // Group D
+                                 (btUnsigned64bitInt(1) << 60));
    ASSERT(ret);
 
    return ret;
@@ -183,7 +226,6 @@ btBool MPFVCMAP::vcmapGetStats( t_cci_mpf_vc_map_stats *stats )
 //
 btUnsigned64bitInt MPFVCMAP::vcmapGetStatCounter( t_cci_mpf_vc_map_csr_offsets stat )
 {
-
    btUnsigned64bitInt cnt;
    btBool ret;
 
@@ -192,6 +234,22 @@ btUnsigned64bitInt MPFVCMAP::vcmapGetStatCounter( t_cci_mpf_vc_map_csr_offsets s
 
    return cnt;
 }
+
+
+//
+// Mapping history -- a vector of 8 bit entries.
+//
+btUnsigned64bitInt MPFVCMAP::vcmapGetMappingHistory( void )
+{
+   btUnsigned64bitInt hist;
+   btBool ret;
+
+   ret = m_pALIMMIO->mmioRead64(m_dfhOffset + CCI_MPF_VC_MAP_CSR_STAT_HISTORY, &hist);
+   ASSERT(ret);
+
+   return hist;
+}
+
 
 /// @} group VCMAPService
 

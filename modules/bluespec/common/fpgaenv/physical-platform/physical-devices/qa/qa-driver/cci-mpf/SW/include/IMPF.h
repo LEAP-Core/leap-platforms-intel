@@ -182,24 +182,39 @@ public:
    //    which dynamic changes may occur.  Dynamic changes are expensive
    //    since a write fence must be emitted to synchronize traffic.
    //    Passing 0 picks the default value.
-   //  - map_all_requests:  When false, only incoming eVC_VA requests are
-   //    mapped.  When true, all incoming requests are remapped.
    virtual btBool vcmapSetMode( btBool enable_mapping,
                                 btBool enable_dynamic_mapping,
-                                btUnsigned32bitInt sampling_window_radix = 0,
-                                btBool map_all_requests = false ) = 0;
+                                btUnsigned32bitInt sampling_window_radix = 0 ) = 0;
 
    // Disable mapping
    virtual btBool vcmapDisable( void ) = 0;
 
-   // Set fixed mapping where VL0 gets r 64ths of the traffic.
-   //  - map_all_requests:  When false, only incoming eVC_VA requests are
-   //    mapped.  When true, all incoming requests are remapped.
-   virtual btBool vcmapSetFixedMapping( btUnsigned32bitInt r,
-                                        btBool map_all_requests = false ) = 0;
+   // When false (default), only incoming eVC_VA requests are mapped.
+   // When true, all incoming requests are remapped.
+   virtual btBool vcmapSetMapAll( btBool map_all_requests ) = 0;
+
+   // Set fixed mapping where VL0 gets r 64ths of the traffic.  When
+   // "user_specified" is set, "r" is used as the new ratio.  When
+   // "user_specified" is false, a platform-specific fixed mapping is used.
+   virtual btBool vcmapSetFixedMapping( btBool user_specified,
+                                        btUnsigned32bitInt r = 16 ) = 0;
+
+   // Set a traffic threshold below which all traffic will be mapped to
+   // the low-latency VL0.  The treshold is the sum of read and write requests
+   // in a sampling window.  The sampling window can be set in vcmapSetMode()
+   // above as sampling_window_radix, defaulting to 10 (1K cycles).
+   // The threshold must be some 2^n-1 so it can be used as a mask.
+   virtual btBool vcmapSetLowTrafficThreshold( btUnsigned32bitInt t ) = 0;
 
    // Return all statistics counters
    virtual btBool vcmapGetStats( t_cci_mpf_vc_map_stats *stats ) = 0;
+
+   // Return mapping state history vector.  The vector is an array of 8
+   // bit entries with the lowest 8 bits corresponding to the most recent
+   // state.  The 8 bit values each are the fraction of references, in 64ths,
+   // to direct to VL0.  The remaining references are distributed evenly between
+   // the PCIe channels.
+   virtual btUnsigned64bitInt vcmapGetMappingHistory( void ) = 0;
 };
 
 /// @}

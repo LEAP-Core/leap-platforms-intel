@@ -106,6 +106,12 @@ typedef enum
     //
     // eVC_VA to physical channel mapping configuration.
     //
+    // Groups are controlled individually.  The bits are read in a given
+    // group only when the group enable bit is set in the high bits of
+    // the CSR.
+    //
+    //  GROUP A:
+    //
     //   Bit 0:
     //      Enable mapping when 1.  Default 1.
     //      Writing 0 will disable mapping and requests on eVC_VA will be
@@ -120,11 +126,17 @@ typedef enum
     //      Log2 of the dynamic sampling window size in cycles.  The
     //      dynamic mapper will consider changing only after 16
     //      consecutive windows suggest the same ratio.
+    //
+    //  GROUP B:
+    //
     //   Bit 6:
     //      When 0: Only change the mapping on incoming requests to eVC_VA.
     //      When 1: Treat all incoming requests as though they were on eVC_VA.
     //              All requests will then be mapped using whatever policy
     //              is set for eVC_VA.
+    //
+    //  GROUP C:
+    //
     //   Bit 7:
     //      When 0: Set mapping ratio to default for the platform.
     //      When 1: Use the ratio specifiers in bits 13-8.
@@ -134,13 +146,37 @@ typedef enum
     //      should be assigned VL0.  The remaining channel mappings are split
     //      evenly between VH0 and VH1.
     //
+    //  GROUP D:
+    //
+    //   Bit 31-16:
+    //      The traffic threshold in a sampling window below which all
+    //      requests should be directed to the low latency VL0 port.  Low
+    //      traffic does not need the bandwidth of multiple memory ports
+    //      and may depend on low latency.  (E.g. pointer chasing)
+    //
+    //      The value here is the sum of all read and write lines requested
+    //      in a sampling window.
+    //
+    //
+    //  GROUP CONTROL:
+    //
+    //   Bit 60: Group D enable
+    //   Bit 61: Group C enable
+    //   Bit 62: Group B enable
+    //   Bit 63: Group A enable
+    //
     CCI_MPF_VC_MAP_CSR_CTRL_REG = 24,
 
     // Statistics -- all 8 byte read-only CSRs
     CCI_MPF_VC_MAP_CSR_STAT_NUM_MAPPING_CHANGES = 32,
 
+    // Mapping history.  A vector of 8 bit values with the most recent state
+    // in the low bits.  Each 8 bit value is the ratio of VL0 requests in
+    // 64ths.
+    CCI_MPF_VC_MAP_CSR_STAT_HISTORY = 40,
+
     // Must be last
-    CCI_MPF_VC_MAP_CSR_SIZE = 40
+    CCI_MPF_VC_MAP_CSR_SIZE = 48
 }
 t_cci_mpf_vc_map_csr_offsets;
 

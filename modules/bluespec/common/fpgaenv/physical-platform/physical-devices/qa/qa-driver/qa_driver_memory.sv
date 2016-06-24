@@ -174,8 +174,9 @@ module qa_driver_memory
             afu_if.c1Tx.valid <= 1'b1;
             afu_if.c1Tx.hdr <= t_cci_mpf_c1_ReqMemHdr'(0);
             afu_if.c1Tx.hdr.base.sop <= 1'b1;
-            afu_if.c1Tx.hdr.base.cl_len <= 0;
+            afu_if.c1Tx.hdr.base.cl_len <= eCL_LEN_1;
             afu_if.c1Tx.hdr.base.req_type <= eREQ_WRFENCE;
+            afu_if.c1Tx.hdr.base.vc_sel <= eVC_VA;
         end
 
         maybeEmitWrFence <= (emitWrFence_cnt == 0);

@@ -59,13 +59,16 @@ module cci_mpf_shim_wro
 
     logic c1_notEmpty;
 
+    //
+    // Writes use a decode filter so are less expensive than read entries
+    //
 `ifdef MPF_PLATFORM_BDX
     localparam N_C0_CAM_IDX_ENTRIES = 80;
-    localparam N_C1_CAM_IDX_ENTRIES = 48;
+    localparam N_C1_CAM_IDX_ENTRIES = 128;
     localparam ADDRESS_HASH_BITS = 9;
 `elsif MPF_PLATFORM_OME
     localparam N_C0_CAM_IDX_ENTRIES = 80;
-    localparam N_C1_CAM_IDX_ENTRIES = 48;
+    localparam N_C1_CAM_IDX_ENTRIES = 128;
     localparam ADDRESS_HASH_BITS = 9;
 `else
     ** ERROR: Unknown platform
@@ -85,13 +88,5 @@ module cci_mpf_shim_wro
         .afu,
         .c1_notEmpty
         );
-
-    // ====================================================================
-    //
-    // Channel 2 Tx (MMIO read response) flows straight through.
-    //
-    // ====================================================================
-
-//    assign fiu_buf.c2Tx = afu_buf.c2Tx;
 
 endmodule // cci_mpf_shim_wro

@@ -49,6 +49,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_fifo_lutram.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_filter_cam.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_filter_counting.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_filter_decode.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_heap.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_lfsr.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/HW/cci-mpf-prims/cci_mpf_prim_lutram.sv

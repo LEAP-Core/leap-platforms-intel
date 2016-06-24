@@ -12,6 +12,7 @@
 %sources -t VERILOG    -v PRIVATE cci_mpf_prim_fifo_lutram.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_prim_filter_cam.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_prim_filter_counting.sv
+%sources -t VERILOG    -v PRIVATE cci_mpf_prim_filter_decode.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_prim_heap.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_prim_lfsr.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_prim_lutram.sv

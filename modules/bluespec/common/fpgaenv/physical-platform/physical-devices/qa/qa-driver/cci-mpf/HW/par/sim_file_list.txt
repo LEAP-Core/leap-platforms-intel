@@ -18,6 +18,7 @@ HW/cci-mpf-prims/cci_mpf_prim_fifo_bram.sv
 HW/cci-mpf-prims/cci_mpf_prim_fifo_lutram.sv
 HW/cci-mpf-prims/cci_mpf_prim_filter_cam.sv
 HW/cci-mpf-prims/cci_mpf_prim_filter_counting.sv
+HW/cci-mpf-prims/cci_mpf_prim_filter_decode.sv
 HW/cci-mpf-prims/cci_mpf_prim_heap.sv
 HW/cci-mpf-prims/cci_mpf_prim_lfsr.sv
 HW/cci-mpf-prims/cci_mpf_prim_lutram.sv

@@ -99,9 +99,18 @@ module ccip_std_afu
     generate
         if (PLAT_IFC_CLOCK_FREQ == 400)
         begin : nc
-            assign plIfc_reset = pck_cp2af_softReset;
             assign plIfc_cp2af_sRx = pck_cp2af_sRx_q;
             assign pck_af2cp_sTx = plIfc_af2cp_sTx;
+
+            (* preserve *) logic softreset_T1;
+            (* preserve *) logic softreset_T2;
+
+            always @(posedge plIfc_clk)
+            begin
+                softreset_T1 <= pck_cp2af_softReset;
+                softreset_T2 <= softreset_T1;
+                plIfc_reset  <= softreset_T2;
+            end
         end
         else
         begin : c

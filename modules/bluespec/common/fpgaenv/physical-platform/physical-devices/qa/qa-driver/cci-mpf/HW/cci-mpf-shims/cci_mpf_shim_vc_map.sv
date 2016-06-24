@@ -507,6 +507,7 @@ module cci_mpf_shim_vc_map
             state <= CCI_MPF_VC_MAP_SAMPLING;
             block_tx_traffic <= 1'b0;
             events.vc_map_out_event_mapping_changed <= 1'b0;
+            new_ratio_vl0_en <= 1'b0;
         end
     end
 

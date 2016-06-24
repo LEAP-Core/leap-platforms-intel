@@ -164,6 +164,7 @@ class Verilog():
         vexe_gen_command += ' -Xv +lint=all,noVCDE'
 
     vexe_gen_command += ' -Xv -assert -Xv svaext'
+    vexe_gen_command += ' -Xv -debug_access+pp -Xv -lca'
     vexe_gen_command += ' -Xv -full64'
     vexe_gen_command += ' -Xv -sverilog'
     vexe_gen_command += ' -Xv +librescan'

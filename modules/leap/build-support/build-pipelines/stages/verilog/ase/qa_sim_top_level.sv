@@ -112,17 +112,18 @@ module qa_sim_top_level(CLK,
 
     initial
     begin
-        $dumpfile("driver_dump.vcd");
-        if ({getenv("VCD_ENABLE_DUMP")} != "")
+        $dumpfile("driver_dump.vpd");
+        if ({getenv("VPD_ENABLE_DUMP")} != "")
         begin
-            $display("Enabling dump to driver_dump.vcd");
+            $display("Enabling dump to driver_dump.vpd");
+            $vcdpluson;
             $dumpvars(0, qa_sim_top_level);
             $dumpon;
         end
         else
         begin
-            $display("VCD disabled. To enable: \"setenv VCD_ENABLE_DUMP 1\".");
-            $system("rm -f driver_dump.vcd");
+            $display("VPD disabled. To enable: \"setenv VPD_ENABLE_DUMP 1\".");
+            $system("rm -f driver_dump.vpd");
         end
     end
 endmodule // qa_sim_top_level

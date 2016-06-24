@@ -42,6 +42,157 @@ module cci_mpf_shim_edge_afu
     parameter N_WRITE_HEAP_ENTRIES = 0,
 
     // Enforce write/write and write/read ordering with cache lines?
+    parameter ENFORCE_WR_ORDER = 0,
+
+    // Buffer the AFU to FIU request flow?
+    parameter BUFFER_REQUESTS = 0,
+
+    // Register the FIU to AFU response flow?
+    parameter REGISTER_RESPONSES = 0
+    )
+   (
+    input  logic clk,
+
+    // Connection toward the FIU (the end of the MPF pipeline nearest the AFU)
+    cci_mpf_if.to_fiu fiu,
+
+    // External connections to the AFU
+    cci_mpf_if.to_afu afu,
+
+    // Interface to the MPF FIU edge module
+    cci_mpf_shim_edge_if.edge_afu fiu_edge
+    );
+
+    logic reset;
+    assign reset = fiu.reset;
+
+    //
+    // Register responses from the host?
+    //
+    cci_mpf_if fiu_buf (.clk);
+
+    generate
+        if (REGISTER_RESPONSES)
+        begin : rsp_b
+            cci_mpf_shim_buffer_fiu
+             bf
+               (
+                .clk,
+                .fiu_raw(fiu),
+                .fiu_buf
+                );
+        end
+        else
+        begin : no_rsp_b
+            // No need for another buffer
+            cci_mpf_shim_null
+              nbf
+               (
+                .clk,
+                .fiu,
+                .afu(fiu_buf)
+                );
+        end
+    endgenerate
+
+
+    //
+    // Canonicalize AFU requests and forward write data to the FIU edge.
+    //
+    cci_mpf_if afu_wr (.clk);
+
+    cci_mpf_shim_edge_afu_wr_data
+      #(
+        .N_WRITE_HEAP_ENTRIES(N_WRITE_HEAP_ENTRIES),
+        .ENFORCE_WR_ORDER(ENFORCE_WR_ORDER)
+        )
+      afu_edge
+       (
+        .clk,
+        .fiu(afu_wr),
+        .afu,
+        .fiu_edge
+        );
+
+    //
+    // Buffer requests from the AFU and add flow control?  This is typically
+    // necessary only when no other module in MPF is providing flow control.
+    //
+    generate
+        if (BUFFER_REQUESTS)
+        begin : req_b
+            cci_mpf_if afu_buf (.clk);
+
+            // We can afford to delay the almost full signals one cycle
+            // to simplify potential combinational logic.
+            logic c0TxAlmFull_q;
+            logic c1TxAlmFull_q;
+
+            always_ff @(posedge clk)
+            begin
+                c0TxAlmFull_q <= fiu_buf.c0TxAlmFull;
+                c1TxAlmFull_q <= fiu_buf.c1TxAlmFull;
+            end
+
+            // Insert a buffer and flow control
+            cci_mpf_shim_buffer_afu
+              #(
+                .THRESHOLD(CCI_TX_ALMOST_FULL_THRESHOLD + 4),
+                .REGISTER_OUTPUT(1)
+                )
+              ba
+               (
+                .clk,
+                .afu_buf,
+                .afu_raw(afu_wr),
+                // Forward requests whenever transmission is allowed
+                .deqC0Tx(cci_mpf_c0TxIsValid(afu_buf.c0Tx) && ! c0TxAlmFull_q),
+                .deqC1Tx(cci_mpf_c0TxIsValid(afu_buf.c1Tx) && ! c1TxAlmFull_q)
+                );
+
+            // Connect afu_buf and fiu_buf.  The connection is trivial
+            // except for turning off the valid bits on requests when flow
+            // control prevents requests from being forwarded.
+            assign afu_buf.reset = fiu_buf.reset;
+
+            always_comb
+            begin
+                fiu_buf.c0Tx = cci_mpf_c0TxMaskValids(afu_buf.c0Tx, ! c0TxAlmFull_q);
+                fiu_buf.c1Tx = cci_mpf_c1TxMaskValids(afu_buf.c1Tx, ! c1TxAlmFull_q);
+                fiu_buf.c2Tx = afu_buf.c2Tx;
+
+                afu_buf.c0TxAlmFull = c0TxAlmFull_q;
+                afu_buf.c1TxAlmFull = c1TxAlmFull_q;
+
+                afu_buf.c0Rx = fiu_buf.c0Rx;
+                afu_buf.c1Rx = fiu_buf.c1Rx;
+            end
+        end
+        else
+        begin : no_req_b
+            // No need for flow control here
+            cci_mpf_shim_null
+              nba
+               (
+                .clk,
+                .fiu(fiu_buf),
+                .afu(afu_wr)
+                );
+        end
+    endgenerate
+
+endmodule
+
+
+//
+// MPF AFU edge transformations.  The most significant transformation breaks
+// write data from write requests so the data flows around MPF.
+//
+module cci_mpf_shim_edge_afu_wr_data
+  #(
+    parameter N_WRITE_HEAP_ENTRIES = 0,
+
+    // Enforce write/write and write/read ordering with cache lines?
     parameter ENFORCE_WR_ORDER = 0
     )
    (
@@ -184,7 +335,7 @@ module cci_mpf_shim_edge_afu
             // Never signal almost full in the middle of a packet. Deadlocks
             // can result since the control flit is already flowing through MPF.
             afu.c1TxAlmFull <= afu_wr_almost_full &&
-                                   (! afu_wr_packet_active || afu_wr_sticky_full);
+                               (! afu_wr_packet_active || afu_wr_sticky_full);
 
             // afu_wr_sticky_full goes high as soon as afu_wr_almost_full is
             // asserted and no packet is in flight.  It stays high until

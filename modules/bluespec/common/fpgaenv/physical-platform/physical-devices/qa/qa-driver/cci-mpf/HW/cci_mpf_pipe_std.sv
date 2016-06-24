@@ -287,23 +287,6 @@ module cci_mpf_pipe_std
 
     // ====================================================================
     //
-    //  Register responses to AFU. The stage is inserted for timing.
-    //
-    // ====================================================================
-
-    cci_mpf_if stgp6_mpf_afu (.clk);
-
-    cci_mpf_shim_buffer_fiu
-      regRsp
-       (
-        .clk,
-        .fiu_raw(stgp5_fiu_rsp_order),
-        .fiu_buf(stgp6_mpf_afu)
-        );
-
-
-    // ====================================================================
-    //
     //  Mandatory MPF edge connection to the external AFU.
     //
     // ====================================================================
@@ -311,12 +294,16 @@ module cci_mpf_pipe_std
     cci_mpf_shim_edge_afu
       #(
         .N_WRITE_HEAP_ENTRIES(N_WRITE_HEAP_ENTRIES),
-        .ENFORCE_WR_ORDER(ENFORCE_WR_ORDER)
+        .ENFORCE_WR_ORDER(ENFORCE_WR_ORDER),
+        .REGISTER_RESPONSES(1),
+        // Add buffering and flow control if no other MPF module with
+        // internal flow control is in use.
+        .BUFFER_REQUESTS(! (ENFORCE_WR_ORDER || ENABLE_VTP))
         )
       mpf_edge_afu
        (
         .clk,
-        .fiu(stgp6_mpf_afu),
+        .fiu(stgp5_fiu_rsp_order),
         .afu,
         .fiu_edge(edge_if)
         );

@@ -16,67 +16,20 @@ RootProvides=qa_cci_mpf_hw
 DefaultAttributes=
 model=Intel MPF HW
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 [Intel MPF Shims]
-File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/HW/cci-mpf-shims/cci-mpf-shims.awb
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/hw/rtl/cci-mpf-shims/cci-mpf-shims.awb
 Packagehint=leap-platforms-intel
 
 [Primitive Modules for MPF]
-File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/HW/cci-mpf-prims/cci-mpf-prims.awb
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/hw/rtl/cci-mpf-prims/cci-mpf-prims.awb
 Packagehint=leap-platforms-intel
 
-
 [Intel CCI Interface]
-File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/HW/cci-if/cci-if.awb
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/hw/rtl/cci-if/cci-if.awb
 Packagehint=leap-platforms-intel
 
 [Intel MPF CCI Abstract Interface]
-File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/HW/cci-mpf-if/cci-mpf-if.awb
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/hw/rtl/cci-mpf-if/cci-mpf-if.awb
 Packagehint=leap-platforms-intel
 
 [Intel MPF Shims/Requires]
@@ -85,12 +38,11 @@ qa_cci_mpf_hw_shims_edge=Intel MPF Edge Shim
 qa_cci_mpf_hw_shims_wro=Intel MPF WRO Shim
 
 [Intel MPF VTP Shim]
-File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/HW/cci-mpf-shims/cci_mpf_shim_vtp/cci-mpf-shims-vtp.awb
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/hw/rtl/cci-mpf-shims/cci_mpf_shim_vtp/cci-mpf-shims-vtp.awb
 Packagehint=leap-platforms-intel
 
-
 [Intel MPF HW]
-File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/HW/cci-mpf-hw.awb
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/hw/rtl/cci-mpf-hw.awb
 Packagehint=leap-platforms-intel
 
 [Intel MPF HW/Requires]
@@ -100,17 +52,14 @@ qa_cci_mpf_hw_prims=Primitive Modules for MPF
 qa_cci_mpf_hw_shims=Intel MPF Shims
 qa_cci_mpf_hw_par=Intel MPF HW PAR Files
 
-
-
 [Intel MPF HW PAR Files]
-File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/HW/par/cci-mpf-par.awb
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/hw/par/cci-mpf-par.awb
 Packagehint=leap-platforms-intel
 
 [Intel MPF Edge Shim]
-File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/HW/cci-mpf-shims/cci_mpf_shim_edge/cci-mpf-shims-edge.awb
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/hw/rtl/cci-mpf-shims/cci_mpf_shim_edge/cci-mpf-shims-edge.awb
 Packagehint=leap-platforms-intel
 
-
 [Intel MPF WRO Shim]
-File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/HW/cci-mpf-shims/cci_mpf_shim_wro/cci-mpf-shims-wro.awb
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/hw/rtl/cci-mpf-shims/cci_mpf_shim_wro/cci-mpf-shims-wro.awb
 Packagehint=leap-platforms-intel

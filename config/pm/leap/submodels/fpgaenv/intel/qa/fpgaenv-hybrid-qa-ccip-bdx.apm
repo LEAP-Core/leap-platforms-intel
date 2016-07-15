@@ -190,8 +190,6 @@ Packagehint=leap-platforms-intel
 qa_cci_mpf_sw=Intel MPF SW
 qa_cci_mpf_hw=Intel QuickAssist MPF HW Library
 
-
-
 [Intel QuickAssist CCI-P Platform Libraries]
 File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/qa-ccip-platform-libs.awb
 Packagehint=leap-platforms-intel
@@ -200,24 +198,16 @@ Packagehint=leap-platforms-intel
 File=config/pm/leap/submodels/pipelines/build-pipeline-qa-ccip-bdx.apm
 Packagehint=leap-platforms-intel
 
-
-
-
-
 [Intel MPF SW/Requires]
 qa_cci_mpf_sw_include=Intel MPF SW Include
 
 [Intel MPF SW]
-File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/SW/src/cci-mpf-sw-src.awb
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/sw/src/cci-mpf-sw-src.awb
 Packagehint=leap-platforms-intel
 
 [Intel MPF SW Include]
-File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/SW/include/cci-mpf-sw-include.awb
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/sw/include/cci-mpf-sw-include.awb
 Packagehint=leap-platforms-intel
-
-
-
-
 
 [Intel CCI-P Edge Clock Crossing FIFOs/Requires]
 qa_ccip_async_hw_par=Intel CCI-P Edge Clock Crossing FIFO PAR Files
@@ -246,7 +236,6 @@ MODEL_CLOCK_FREQ=100
 
 [Intel QuickAssist Platform/Params]
 FPGA_PLATFORM="Xeon+FPGA-BDX"
-
 
 [Intel QuickAssist MPF HW Library]
 File=config/pm/leap/submodels/fpgaenv/intel/qa/fpgaenv-hybrid-cci-mpf-hw.apm

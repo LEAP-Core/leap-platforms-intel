@@ -5,4 +5,4 @@
 %requires qa_cci_mpf_hw
 %requires qa_cci_mpf_sw
 
-%notes README
+%notes README_cci_mpf

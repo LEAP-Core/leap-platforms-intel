@@ -204,31 +204,20 @@ Packagehint=leap-platforms-intel
 qa_cci_mpf_sw=Intel MPF SW (CCI-S compatible)
 qa_cci_mpf_hw=Intel QuickAssist MPF HW Library
 
-
-
 [Intel QuickAssist CCI-S Platform Libraries]
 File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/qa-ccis-platform-libs.awb
 Packagehint=leap-platforms-intel
 
-
-
-
-
 [Intel MPF SW (CCI-S compatible)]
-File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/SW/src/cci-mpf-sw-src-ccis.awb
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/sw/src/cci-mpf-sw-src-ccis.awb
 Packagehint=leap-platforms-intel
-
-
 
 [Intel MPF SW (CCI-S compatible)/Requires]
 qa_cci_mpf_sw_include=Intel MPF SW Include
 
 [Intel MPF SW Include]
-File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/SW/include/cci-mpf-sw-include.awb
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/sw/include/cci-mpf-sw-include.awb
 Packagehint=leap-platforms-intel
-
-
-
 
 [Intel QuickAssist MPF HW Library]
 File=config/pm/leap/submodels/fpgaenv/intel/qa/fpgaenv-hybrid-cci-mpf-hw.apm

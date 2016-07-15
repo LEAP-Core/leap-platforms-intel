@@ -9,7 +9,7 @@
 
 
 ## Define the target platform.  The list of platforms is in
-## HW/cci-mpf-if/cci_mpf_platform.vh.
+## hw/rtl/cci-mpf-if/cci_mpf_platform.vh.
 ##
 set_global_assignment -name VERILOG_MACRO "MPF_PLATFORM_BDX=1"
 
@@ -21,4 +21,4 @@ set CCI_MPF_SRC "../samples/cci-mpf"
 
 ## Import sources
 ##
-source $CCI_MPF_SRC/HW/par/qsf_cci_mpf_PAR_files.qsf
+source $CCI_MPF_SRC/hw/par/qsf_cci_mpf_PAR_files.qsf

@@ -79,7 +79,7 @@ if [ -z "$ASE_DIR" ]; then
 fi
 
 # path to AAL sample application
-SAMPLE_DIR=$CCI_MPF/samples/Hello_ALI_VTP_NLB/SW
+SAMPLE_DIR=$CCI_MPF/sample/Hello_ALI_VTP_NLB/SW
 SAMPLE_BIN=helloALIVTPnlb
 
 # the HDL package files _in the order they need to be elaborated_ (for vcs)
@@ -112,10 +112,10 @@ fi
 # no need to edit below here
 # =============================================================================
 
-CCI_MPF_LIBS=$CCI_MPF/SW
-CCI_MPF_INCLUDE=$CCI_MPF/SW/include
+CCI_MPF_LIBS=$CCI_MPF/sw
+CCI_MPF_INCLUDE=$CCI_MPF/sw/include
 BUILDDIR=$CCI_MPF/build
-NLB_MPF=$BUILDDIR/HW/NLB
+NLB_MPF=$BUILDDIR/hw/NLB
 VLOG_FILES=$ASE_DIR/vlog_files.list
 VLOG_FILES_TEMP=/tmp/new_vlog_files.list
 SIM_READY=$ASE_DIR/work/.ase_ready.pid
@@ -140,7 +140,7 @@ find . -name "*_inst\.*" -exec rm "{}" \;
 find . -name "sim" -type d | xargs rm -rf
 find . -name "*_bb\.*" -exec rm "{}" \;
 # link in MPF RTL
-ln -s $CCI_MPF/HW cci_mpf_hw
+ln -s $CCI_MPF/hw/rtl
 # fix up CSRs for DFH list
 sed -i "s/^\s*localparam\s\+END_OF_LIST.*$/localparam END_OF_LIST = 1'h0;/" nlb_csr.sv
 sed -i "s/^\s*localparam\s\+NEXT_DFH_BYTE_OFFSET.*$/localparam NEXT_DFH_BYTE_OFFSET = { 8'h00 + 16'h1000 };/" nlb_csr.sv

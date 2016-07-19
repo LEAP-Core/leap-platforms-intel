@@ -83,6 +83,7 @@ module cci_mpf_shim_vtp
     cci_mpf_shim_buffer_afu
       #(
         .THRESHOLD(AFU_BUF_THRESHOLD),
+        .ENABLE_C0_BYPASS(1),
         .REGISTER_OUTPUT(1)
         )
       b

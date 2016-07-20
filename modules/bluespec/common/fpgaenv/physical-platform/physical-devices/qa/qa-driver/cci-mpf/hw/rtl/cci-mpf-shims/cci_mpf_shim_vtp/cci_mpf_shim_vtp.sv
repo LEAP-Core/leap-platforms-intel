@@ -572,7 +572,7 @@ module cci_mpf_shim_vtp_chan
         end
     end
 
-    // Head indices are allocated in cycle 0
+    // Heap indices are allocated in cycle 0
     cci_mpf_prim_heap_ctrl
       #(
         .N_ENTRIES(CCI_MPF_SHIM_VTP_MAX_SVC_REQS)

@@ -68,9 +68,36 @@ module cci_mpf_shim_edge_fiu
     cci_mpf_shim_vtp_pt_walk_if.mem_read pt_walk
     );
 
-    logic reset;
-    assign reset = fiu.reset;
-    assign afu.reset = fiu.reset;
+    logic reset = 1'b1;
+    always @(posedge clk)
+    begin
+        reset <= fiu.reset;
+    end
+
+    cci_mpf_if afu_buf (.clk);
+    assign afu_buf.reset = reset;
+
+    // Insert a buffer and flow control
+    logic deqC0Tx;
+    logic deqC1Tx;
+
+    cci_mpf_shim_buffer_afu
+      #(
+        .THRESHOLD(CCI_TX_ALMOST_FULL_THRESHOLD + 4),
+        .ENABLE_C0_BYPASS(1)
+        )
+      b
+       (
+        .clk,
+        .afu_raw(afu),
+        .afu_buf,
+        .deqC0Tx,
+        .deqC1Tx
+        );
+
+    // Almost full signals in the buffered input are ignored.
+    assign afu_buf.c0TxAlmFull = 1'b1;
+    assign afu_buf.c1TxAlmFull = 1'b1;
 
     //
     // The AFU edge forwards write data to this module, routing the data
@@ -167,12 +194,8 @@ module cci_mpf_shim_edge_fiu
         end
     end
 
-    // Stop traffic to make sure a slot for the walk request becomes available
-    assign afu.c0TxAlmFull = fiu.c0TxAlmFull && ! pt_walk_read_req;
-
-    // Emit the read for PT walk if a request is outstanding and there is
-    // no request from the AFU.
-    assign pt_walk_emit_req = pt_walk_read_req && ! cci_mpf_c0TxIsValid(afu.c0Tx);
+    // Emit the read for PT walk if a request is outstanding.
+    assign pt_walk_emit_req = pt_walk_read_req && ! fiu.c0TxAlmFull;
 
     // Request header for PT walk reads
     t_cci_mpf_c0_ReqMemHdr pt_walk_read_hdr;
@@ -190,7 +213,12 @@ module cci_mpf_shim_edge_fiu
     //
     always_comb
     begin
-        fiu.c0Tx = cci_mpf_updC0TxCanonical(afu.c0Tx);
+        fiu.c0Tx = cci_mpf_c0TxMaskValids(cci_mpf_updC0TxCanonical(afu_buf.c0Tx),
+                                          ! fiu.c0TxAlmFull);
+
+        deqC0Tx = cci_mpf_c0TxIsValid(afu_buf.c0Tx) &&
+                  ! fiu.c0TxAlmFull &&
+                  ! pt_walk_emit_req;
 
         if (pt_walk_emit_req)
         begin
@@ -202,56 +230,29 @@ module cci_mpf_shim_edge_fiu
     logic is_pt_rsp;
     always_comb
     begin
-        is_pt_rsp = afu.c0Rx.hdr[VTP_PT_RESERVED_MDATA_IDX];
+        is_pt_rsp = fiu.c0Rx.hdr[VTP_PT_RESERVED_MDATA_IDX];
         pt_walk.readDataEn = cci_c0Rx_isReadRsp(fiu.c0Rx) && is_pt_rsp;
         pt_walk.readData = fiu.c0Rx.data;
     end
 
     always_comb
     begin
-        afu.c0Rx = fiu.c0Rx;
+        afu_buf.c0Rx = fiu.c0Rx;
 
         // Only forward client-generated read responses
-        afu.c0Rx.rspValid = fiu.c0Rx.rspValid && ! is_pt_rsp;
+        afu_buf.c0Rx.rspValid = fiu.c0Rx.rspValid && ! is_pt_rsp;
     end
 
 
     //
     // Channel 1 (writes)
     //
+    //   Multi-beat writes complete by synthesizing new packets and reading
+    //   data from wr_heap.
+    //
 
     // Responses
-    assign afu.c1Rx = fiu.c1Rx;
-
-    // Multi-beat writes complete by synthesizing new packets and reading
-    // data from wr_heap.  c1 Tx flows through a buffering FIFO since
-    // traffic has to stop when completing a multi-beat write.
-    t_if_cci_mpf_c1_Tx fiu_c1Tx_first;
-    logic fiu_c1Tx_deq;
-    logic fiu_c1Tx_not_empty;
-
-    cci_mpf_prim_fifo_lutram
-      #(
-        .N_DATA_BITS($bits(t_if_cci_mpf_c1_Tx)),
-        .N_ENTRIES(CCI_TX_ALMOST_FULL_THRESHOLD + 2),
-        .THRESHOLD(CCI_TX_ALMOST_FULL_THRESHOLD)
-        )
-      fiu_c1Tx_fifo
-       (
-        .clk,
-        .reset(reset),
-
-        // The concatenated field order must match the use of c1_first above.
-        .enq_data(cci_mpf_updC1TxCanonical(afu.c1Tx)),
-        .enq_en(afu.c1Tx.valid),
-        .notFull(),
-        .almostFull(afu.c1TxAlmFull),
-
-        .first(fiu_c1Tx_first),
-        .deq_en(fiu_c1Tx_deq),
-        .notEmpty(fiu_c1Tx_not_empty)
-        );
-
+    assign afu_buf.c1Rx = fiu.c1Rx;
 
     //
     // Pick the next write request to forward.  Either the request is
@@ -287,29 +288,32 @@ module cci_mpf_shim_edge_fiu
 
         // Take the next request from the buffering FIFO when the current
         // packet is done or there is no packet being processed.
-        fiu_c1Tx_deq = fiu_c1Tx_not_empty &&
-                       (stg1_packet_done || ! cci_mpf_c1TxIsValid(stg1_fiu_c1Tx));
+        deqC1Tx = cci_mpf_c1TxIsValid(afu_buf.c1Tx) &&
+                  (stg1_packet_done || ! cci_mpf_c1TxIsValid(stg1_fiu_c1Tx));
     end
 
 
     // Pipeline c1 Tx requests, waiting for heap data.
+    t_if_cci_mpf_c1_Tx c1Tx;
+    assign c1Tx = cci_mpf_updC1TxCanonical(afu_buf.c1Tx);
+
     always_ff @(posedge clk)
     begin
-        stg1_packet_is_new <= fiu_c1Tx_deq;
+        stg1_packet_is_new <= deqC1Tx;
 
         // Head of the pipeline
-        if (fiu_c1Tx_deq)
+        if (deqC1Tx)
         begin
             // Pipeline is moving and a new request is available
-            stg1_fiu_c1Tx <= fiu_c1Tx_first;
+            stg1_fiu_c1Tx <= c1Tx;
 
             // The heap data for the SOP is definitely available
             // since it arrived with the header.
             stg1_fiu_c1Tx_sop <= 1'b1;
             stg1_fiu_wr_beat_idx <= 0;
-            stg1_fiu_wr_beats_rem <= fiu_c1Tx_first.hdr.base.cl_len;
+            stg1_fiu_wr_beats_rem <= c1Tx.hdr.base.cl_len;
 
-            wr_heap_deq_idx <= t_write_heap_idx'(fiu_c1Tx_first.data);
+            wr_heap_deq_idx <= t_write_heap_idx'(c1Tx.data);
         end
         else if (stg1_packet_done)
         begin
@@ -371,7 +375,7 @@ module cci_mpf_shim_edge_fiu
 
     always_ff @(posedge clk)
     begin
-        fiu.c2Tx <= afu.c2Tx;
+        fiu.c2Tx <= afu_buf.c2Tx;
     end
 
 

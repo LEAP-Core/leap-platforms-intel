@@ -69,7 +69,8 @@ INCLUDE = include
 OBJECTS = src/cci_mpf_service.o \
 	  src/cci_mpf_shim_vc_map.o \
 	  src/cci_mpf_shim_vtp.o \
-	  src/cci_mpf_shim_vtp_pt.o
+	  src/cci_mpf_shim_vtp_pt.o \
+	  src/cci_mpf_shim_wro.o \
 
 all: libMPF.so libMPF.so.0
 

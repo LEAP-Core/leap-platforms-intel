@@ -56,15 +56,15 @@ module ccip_async_shim
     // ---------------------------------- //
     input logic        bb_softreset,
     input logic        bb_clk,
-    output 	       t_if_ccip_Tx bb_tx,
-    input 	       t_if_ccip_Rx bb_rx,
+    output             t_if_ccip_Tx bb_tx,
+    input              t_if_ccip_Rx bb_rx,
     // ---------------------------------- //
     // Green Bitstream interface
     // ---------------------------------- //
     output logic       afu_softreset,
     input logic        afu_clk,
-    input 	       t_if_ccip_Tx afu_tx,
-    output 	       t_if_ccip_Rx afu_rx,
+    input              t_if_ccip_Tx afu_tx,
+    output             t_if_ccip_Rx afu_rx,
     // ---------------------------------- //
     // Error vector
     // ---------------------------------- //
@@ -112,11 +112,11 @@ module ccip_async_shim
     */
    logic [C0TX_DEPTH_RADIX-1:0] c0tx_cnt;
    logic [C0TX_TOTAL_WIDTH-1:0] c0tx_dout;
-   logic 			c0tx_rdreq;
-   logic 			c0tx_rdempty;
-   logic 			c0tx_rdempty_q;
-   logic 			c0tx_valid;
-   logic 			c0tx_fifo_wrfull;
+   logic                        c0tx_rdreq;
+   logic                        c0tx_rdempty;
+   logic                        c0tx_rdempty_q;
+   logic                        c0tx_valid;
+   logic                        c0tx_fifo_wrfull;
 
    ccip_afifo_channel
      #(
@@ -182,11 +182,11 @@ module ccip_async_shim
     */
    logic [C1TX_DEPTH_RADIX-1:0] c1tx_cnt;
    logic [C1TX_TOTAL_WIDTH-1:0] c1tx_dout;
-   logic 			c1tx_rdreq;
-   logic 			c1tx_rdempty;
-   logic 			c1tx_rdempty_q;
-   logic 			c1tx_valid;
-   logic 			c1tx_fifo_wrfull;
+   logic                        c1tx_rdreq;
+   logic                        c1tx_rdempty;
+   logic                        c1tx_rdempty_q;
+   logic                        c1tx_valid;
+   logic                        c1tx_fifo_wrfull;
 
    ccip_afifo_channel
      #(
@@ -250,10 +250,10 @@ module ccip_async_shim
     * C2Tx Channel
     */
    logic [C2TX_TOTAL_WIDTH-1:0] c2tx_dout;
-   logic 			c2tx_rdreq;
-   logic 			c2tx_rdempty;
-   logic 			c2tx_valid;
-   logic 			c2tx_fifo_wrfull;
+   logic                        c2tx_rdreq;
+   logic                        c2tx_rdempty;
+   logic                        c2tx_valid;
+   logic                        c2tx_fifo_wrfull;
 
    ccip_afifo_channel
      #(
@@ -299,10 +299,10 @@ module ccip_async_shim
     * C0Rx Channel
     */
    logic [C0RX_TOTAL_WIDTH-1:0] c0rx_dout;
-   logic 			c0rx_valid;
-   logic 			c0rx_rdreq;
-   logic 			c0rx_rdempty;
-   logic 			c0rx_fifo_wrfull;
+   logic                        c0rx_valid;
+   logic                        c0rx_rdreq;
+   logic                        c0rx_rdempty;
+   logic                        c0rx_fifo_wrfull;
 
    ccip_afifo_channel
      #(
@@ -348,10 +348,10 @@ module ccip_async_shim
     * C1Rx Channel
     */
    logic [C1RX_TOTAL_WIDTH-1:0] c1rx_dout;
-   logic 			c1rx_valid;
-   logic 			c1rx_rdreq;
-   logic 			c1rx_rdempty;
-   logic 			c1rx_fifo_wrfull;
+   logic                        c1rx_valid;
+   logic                        c1rx_rdreq;
+   logic                        c1rx_rdempty;
+   logic                        c1rx_fifo_wrfull;
 
    ccip_afifo_channel
      #(
@@ -405,32 +405,32 @@ module ccip_async_shim
     */
    always @(posedge afu_clk) begin
       if (bb_softreset) begin
-	 async_shim_error <= 5'b0;
+         async_shim_error <= 5'b0;
       end
       else begin
-	 async_shim_error[0] <= c0tx_fifo_wrfull && afu_tx_q.c0.valid;
-	 async_shim_error[1] <= c1tx_fifo_wrfull && afu_tx_q.c1.valid;
-	 async_shim_error[2] <= c2tx_fifo_wrfull && afu_tx_q.c2.mmioRdValid;
-	 async_shim_error[3] <= c0rx_fifo_wrfull && (bb_rx_q.c0.rspValid|bb_rx_q.c0.mmioRdValid|bb_rx_q.c0.mmioWrValid );
-	 async_shim_error[4] <= c1rx_fifo_wrfull && bb_rx_q.c1.rspValid;
+         async_shim_error[0] <= c0tx_fifo_wrfull && afu_tx_q.c0.valid;
+         async_shim_error[1] <= c1tx_fifo_wrfull && afu_tx_q.c1.valid;
+         async_shim_error[2] <= c2tx_fifo_wrfull && afu_tx_q.c2.mmioRdValid;
+         async_shim_error[3] <= c0rx_fifo_wrfull && (bb_rx_q.c0.rspValid|bb_rx_q.c0.mmioRdValid|bb_rx_q.c0.mmioWrValid );
+         async_shim_error[4] <= c1rx_fifo_wrfull && bb_rx_q.c1.rspValid;
       end
    end
 
    // synthesis translate_off
    always @(posedge afu_clk) begin
       if (async_shim_error[0])
-	$warning("** ERROR ** C0Tx may have dropped transaction");
+        $warning("** ERROR ** C0Tx may have dropped transaction");
       if (async_shim_error[1])
-	$warning("** ERROR ** C1Tx may have dropped transaction");
+        $warning("** ERROR ** C1Tx may have dropped transaction");
       if (async_shim_error[2])
-	$warning("** ERROR ** C2Tx may have dropped transaction");
+        $warning("** ERROR ** C2Tx may have dropped transaction");
    end
 
    always @(posedge bb_clk) begin
       if (async_shim_error[3])
-	$warning("** ERROR ** C0Rx may have dropped transaction");
+        $warning("** ERROR ** C0Rx may have dropped transaction");
       if (async_shim_error[4])
-	$warning("** ERROR ** C1Rx may have dropped transaction");
+        $warning("** ERROR ** C1Rx may have dropped transaction");
    end
    // synthesis translate_on
 

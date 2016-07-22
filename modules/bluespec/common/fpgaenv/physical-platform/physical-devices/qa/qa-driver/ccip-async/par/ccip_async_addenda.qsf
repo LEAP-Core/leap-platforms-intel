@@ -1,2 +1,0 @@
-set_global_assignment -name SYSTEMVERILOG_FILE $CCIP_ASYNC_SRC/HW/ccip_async_shim.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCIP_ASYNC_SRC/HW/ccip_afifo_channel.sv

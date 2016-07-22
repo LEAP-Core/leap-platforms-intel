@@ -185,11 +185,15 @@ module cci_mpf_pipe_std
         if (ENFORCE_WR_ORDER)
         begin : wro
             cci_mpf_shim_wro
+              #(
+                .MAX_ACTIVE_REQS(MAX_ACTIVE_REQS)
+                )
               order
                (
                 .clk,
                 .fiu(stgp2_fiu_virtual),
-                .afu(stgp3_fiu_wro)
+                .afu(stgp3_fiu_wro),
+                .events(mpf_csrs)
                 );
         end
         else

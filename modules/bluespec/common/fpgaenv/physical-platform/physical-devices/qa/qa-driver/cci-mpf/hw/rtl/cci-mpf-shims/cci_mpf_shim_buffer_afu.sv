@@ -71,7 +71,7 @@ module cci_mpf_shim_buffer_afu
     input logic deqC1Tx
     );
 
-    localparam N_ENTRIES = THRESHOLD + 2;
+    localparam N_ENTRIES = THRESHOLD + 4;
 
     assign afu_raw.reset = afu_buf.reset;
 

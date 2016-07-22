@@ -149,6 +149,7 @@ btBool MPF::init( IBase               *pclientBase,
 
    btBool hasVTP = false;
    btBool hasVCMAP = false;
+   btBool hasWRO = false;
 
    // If MPF_FEATURE_ID is specified, try to detect available features.
    MPF_FEATURE_ID_DATATYPE mpfFID;
@@ -210,6 +211,42 @@ btBool MPF::init( IBase               *pclientBase,
 
          // found VC MAP, expose interface to outside
          SetInterface(iidMPFVCMAPService, dynamic_cast<IMPFVCMAP *>(m_pVCMAP));
+      }
+
+
+      //
+      // WRO
+      //
+
+      // Ask ALI for a BBB with MPF's feature ID and the expected WRO GUID
+      NamedValueSet filter_wro;
+      filter_wro.Add( ALI_GETFEATURE_TYPE_KEY, static_cast<ALI_GETFEATURE_TYPE_DATATYPE>(ALI_DFH_TYPE_BBB) );
+      filter_wro.Add( ALI_GETFEATURE_ID_KEY, static_cast<ALI_GETFEATURE_ID_DATATYPE>(mpfFID) );
+      filter_wro.Add( ALI_GETFEATURE_GUID_KEY, (ALI_GETFEATURE_GUID_DATATYPE)MPF_WRO_BBB_GUID );
+
+      if ( false == m_pALIMMIO->mmioGetFeatureOffset( &m_wroDFHOffset, filter_wro ) ) {
+         // No VC MAP found - this could mean that VC MAP is not enabled in MPF
+         hasWRO = false;
+         AAL_INFO(LM_AFU, "No VC MAP feature." << std::endl);
+      } else {
+         hasWRO = true;
+         AAL_INFO(LM_All, "Using MMIO address 0x" << std::hex << m_wroDFHOffset <<
+                  " for VC MAP." << std::endl);
+
+         // Instantiate component class
+         m_pWRO = new MPFWRO( m_pALIMMIO, m_wroDFHOffset );
+
+         if ( ! m_pWRO->isOK() ) {
+            initFailed(new CExceptionTransactionEvent( NULL,
+                     rtid,
+                     errBadParameter,
+                     reasFeatureNotSupported,
+                     "VC MAP initialization failed."));
+            return true;
+         }
+
+         // found VC MAP, expose interface to outside
+         SetInterface(iidMPFWROService, dynamic_cast<IMPFWRO *>(m_pWRO));
       }
    }
 

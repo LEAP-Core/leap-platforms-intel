@@ -65,7 +65,7 @@ module cci_mpf_shim_buffer_lockstep_afu
     input logic deqTx
     );
 
-    localparam N_ENTRIES = THRESHOLD + 2;
+    localparam N_ENTRIES = THRESHOLD + 4;
 
     assign afu_raw.reset = afu_buf.reset;
 

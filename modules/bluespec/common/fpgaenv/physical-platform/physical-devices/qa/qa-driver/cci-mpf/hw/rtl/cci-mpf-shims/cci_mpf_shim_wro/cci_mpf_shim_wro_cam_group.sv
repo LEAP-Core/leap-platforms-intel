@@ -40,18 +40,18 @@
 //
 module cci_mpf_shim_wro_cam_group
   #(
-    // Number of reads or writes permitted in flight is a function of the
-    // index space.  C0 is the read request channel and C1 is the write
-    // request channel.  Often more reads must be in flight than writes
-    // for full throughput.
-    parameter N_C0_CAM_IDX_ENTRIES = 80,
-    parameter N_C1_CAM_IDX_ENTRIES = 80,
-
     // Size of an address hash entry. Smaller sizes take less space but
     // increase the probability of address collisions.
     parameter ADDRESS_HASH_BITS = 12,
 
-    parameter AFU_BUF_THRESHOLD = CCI_TX_ALMOST_FULL_THRESHOLD
+    parameter AFU_BUF_THRESHOLD = CCI_TX_ALMOST_FULL_THRESHOLD,
+
+    // MPF guarantees that the low mdata bits in read and write requests
+    // are unique in a space large enough to represent MAX_ACTIVE_REQS.
+    // This module uses the indices to store metadata for use in
+    // processing responses and thus avoids having to manage heap
+    // space allocation.
+    parameter MAX_ACTIVE_REQS = 128
     )
    (
     input  logic clk,
@@ -61,6 +61,8 @@ module cci_mpf_shim_wro_cam_group
 
     // Connections toward user code.
     cci_mpf_if.to_afu afu,
+
+    cci_mpf_csrs.wro_events events,
 
     // Indicate whether the c1 request channel is empty.  This is needed
     // to guarantee proper write fence ordering relative to other writes.
@@ -151,8 +153,7 @@ module cci_mpf_shim_wro_cam_group
     //
     // ====================================================================
 
-    cci_mpf_if
-      fiu_buf (.clk);
+    cci_mpf_if fiu_buf (.clk);
 
     cci_mpf_shim_buffer_fiu
       #(
@@ -174,19 +175,15 @@ module cci_mpf_shim_wro_cam_group
     //
     // ====================================================================
 
-    localparam FILTER_PIPE_DEPTH = 3;
+    localparam FILTER_PIPE_DEPTH = 4;
     localparam FILTER_PIPE_LAST = FILTER_PIPE_DEPTH-1;
 
-    typedef logic [$clog2(N_C0_CAM_IDX_ENTRIES)-1 : 0] t_C0_REQ_IDX;
-    typedef logic [$clog2(N_C1_CAM_IDX_ENTRIES)-1 : 0] t_C1_REQ_IDX;
+    typedef logic [$clog2(MAX_ACTIVE_REQS)-1 : 0] t_heap_idx;
 
     // There are two sets of filters: one for reads and one for writes.
-    // They are separate because multiple reads can be outstanding to
-    // a single address but only one write may be live. New read requests
-    // check only that there is no conflicting write.
-    logic         rd_filter_test_notPresent;
-    // New write requests check both that there is no conflicting write
-    // and no conflicting read.
+    logic [0 : 1] rd_filter_test_notPresent;
+    logic [0 : 1] rd_filter_test_insert_tag;
+
     logic [0 : 1] wr_filter_test_notPresent;
     logic [0 : 1] wr_filter_test_insert_tag;
 
@@ -194,16 +191,16 @@ module cci_mpf_shim_wro_cam_group
     t_hash [0 : 1] filter_test_req;
     logic  [0 : 1] filter_test_req_en;
 
-    // Insert lines for entering new active reads and writes in the filter.
-    // One for each channel.
-    t_C0_REQ_IDX rd_filter_insert_idx;
+    // Insert new active reads and writes in the filter.
     t_hash rd_filter_insert_hash;
+    logic rd_filter_insert_tag;
 
     t_hash wr_filter_insert_hash;
     logic wr_filter_insert_tag;
 
     // Read response handling on channel 0.
-    t_C0_REQ_IDX rd_filter_remove_idx;
+    t_hash rd_filter_remove_hash;
+    logic rd_filter_remove_tag;
     logic rd_filter_remove_en;
 
     // Write response handling on channel 1.
@@ -211,44 +208,49 @@ module cci_mpf_shim_wro_cam_group
     logic wr_filter_remove_tag;
     logic wr_filter_remove_en;
 
+    logic rd_filter_rdy;
     logic wr_filter_rdy;
+    logic filter_rdy;
+
+    always_ff @(posedge clk)
+    begin
+        filter_rdy <= rd_filter_rdy && wr_filter_rdy;
+    end
 
     //
-    // Generate the read and write filters.
+    // Generate the read and write filters.  Both use simple decode filters
+    // instead of CAMs since a one bit entry in a block RAM is far more
+    // efficient.  The disadvantage of using such a simple filter for
+    // reads is that two reads to the same address must conflict because
+    // the filter can't represent both being active.  For now we accept this
+    // as an FPGA area tradeoff.
     //
 
-    // Reads use a CAM because multiple reads to the same address may
-    // be in flight in parallel.
-    cci_mpf_prim_filter_cam
+    cci_mpf_prim_filter_decode
       #(
-        .N_BUCKETS(N_C0_CAM_IDX_ENTRIES),
-        .BITS_PER_BUCKET(ADDRESS_HASH_BITS),
-        .N_TEST_CLIENTS(1)
+        .N_ENTRIES(1 << ADDRESS_HASH_BITS),
+        .N_TEST_CLIENTS(2)
         )
       rdFilter
        (
         .clk,
         .reset,
-        // Only the write request channel checks against outstanding
-        // reads. Multiple reads to the same address may be in flight
-        // at the same time.
-        .test_value(filter_test_req[1]),
-        .test_en(filter_test_req_en[1]),
-        .T0_test_notPresent(),
-        .T1_test_notPresent(),
-        // Use the 2 cycle latency output since the CAM is large
-        .T2_test_notPresent(rd_filter_test_notPresent),
+        .rdy(rd_filter_rdy),
 
-        .insert_idx(rd_filter_insert_idx),
+        .test_value(filter_test_req),
+        .test_en(filter_test_req_en),
+        .T3_test_notPresent(rd_filter_test_notPresent),
+        .T3_test_insert_tag(rd_filter_test_insert_tag),
+
         .insert_value(rd_filter_insert_hash),
+        .insert_tag(rd_filter_insert_tag),
         .insert_en(cci_mpf_c0TxIsReadReq(fiu_buf.c0Tx)),
 
-        .remove_idx(rd_filter_remove_idx),
+        .remove_value(rd_filter_remove_hash),
+        .remove_tag(rd_filter_remove_tag),
         .remove_en(rd_filter_remove_en)
         );
 
-    // Writes use a simple decode filter.  Only one write is permitted
-    // to an address at a time.
     cci_mpf_prim_filter_decode
       #(
         .N_ENTRIES(1 << ADDRESS_HASH_BITS),
@@ -262,8 +264,8 @@ module cci_mpf_shim_wro_cam_group
 
         .test_value(filter_test_req),
         .test_en(filter_test_req_en),
-        .T2_test_notPresent(wr_filter_test_notPresent),
-        .T2_test_insert_tag(wr_filter_test_insert_tag),
+        .T3_test_notPresent(wr_filter_test_notPresent),
+        .T3_test_insert_tag(wr_filter_test_insert_tag),
 
         .insert_value(wr_filter_insert_hash),
         .insert_tag(wr_filter_insert_tag),
@@ -304,48 +306,46 @@ module cci_mpf_shim_wro_cam_group
 
     // ====================================================================
     //
-    //  Heaps to hold old Mdata
+    //  Heaps hold state to remove entries in the filters as responses
+    //  arrive.
     //
     // ====================================================================
 
     typedef struct packed
     {
-        // Save the part of the request's Mdata that is overwritten by the
-        // heap index.
-        t_C0_REQ_IDX mdata;
+        // Hash is the index in the decode filter
+        t_hash addrHash;
+
+        // Tag to pass to the filter to remove the entry
+        logic filterTag;
     }
-    t_C0_HEAP_ENTRY;
+    t_c0_heap_entry;
 
-    t_C0_HEAP_ENTRY c0_heap_enqData;
-    t_C0_REQ_IDX c0_heap_allocIdx;
+    t_c0_heap_entry c0_heap_enqData;
+    t_heap_idx c0_heap_reqIdx;
+    assign c0_heap_reqIdx = t_heap_idx'(fiu_buf.c0Tx.hdr.base.mdata);
 
-    logic c0_heap_notFull;
+    t_heap_idx c0_heap_readReq;
+    t_c0_heap_entry c0_heap_readRsp;
 
-    t_C0_REQ_IDX c0_heap_readReq;
-    t_C0_HEAP_ENTRY c0_heap_readRsp;
-
-    logic c0_heap_free;
-    t_C0_REQ_IDX c0_heap_freeIdx;
-
-    cci_mpf_prim_heap
+    cci_mpf_prim_ram_simple
       #(
-        .N_ENTRIES(N_C0_CAM_IDX_ENTRIES),
-        .N_DATA_BITS($bits(t_C0_HEAP_ENTRY)),
-        .REGISTER_INPUT(1),
-        .N_OUTPUT_REG_STAGES(1)
+        .N_ENTRIES(MAX_ACTIVE_REQS),
+        .N_DATA_BITS($bits(t_c0_heap_entry)),
+        .N_OUTPUT_REG_STAGES(1),
+        .REGISTER_WRITES(1),
+        .BYPASS_REGISTERED_WRITES(0)
         )
       c0_heap
        (
         .clk,
-        .reset,
-        .enq(cci_mpf_c0TxIsReadReq(fiu_buf.c0Tx)),
-        .enqData(c0_heap_enqData),
-        .notFull(c0_heap_notFull),
-        .allocIdx(c0_heap_allocIdx),
-        .readReq(c0_heap_readReq),
-        .readRsp(c0_heap_readRsp),
-        .free(c0_heap_free),
-        .freeIdx(c0_heap_freeIdx)
+
+        .wen(cci_mpf_c0TxIsReadReq(fiu_buf.c0Tx)),
+        .waddr(c0_heap_reqIdx),
+        .wdata(c0_heap_enqData),
+
+        .raddr(c0_heap_readReq),
+        .rdata(c0_heap_readRsp)
         );
 
 
@@ -355,56 +355,40 @@ module cci_mpf_shim_wro_cam_group
 
     typedef struct packed
     {
-        // Save the part of the request's Mdata that is overwritten by the
-        // heap index.
-        t_C1_REQ_IDX mdata;
-
         // Hash is the index in the decode filter
         t_hash addrHash;
 
         // Tag to pass to the filter to remove the entry
         logic filterTag;
     }
-    t_C1_HEAP_ENTRY;
+    t_c1_heap_entry;
 
-    t_C1_HEAP_ENTRY c1_heap_enqData;
-    t_C1_REQ_IDX c1_heap_allocIdx;
+    t_c1_heap_entry c1_heap_enqData;
+    t_heap_idx c1_heap_reqIdx;
+    assign c1_heap_reqIdx = t_heap_idx'(fiu_buf.c1Tx.hdr.base.mdata);
 
-    logic c1_heap_notFull;
+    t_heap_idx c1_heap_readReq;
+    t_c1_heap_entry c1_heap_readRsp;
 
-    t_C1_REQ_IDX c1_heap_readReq;
-    t_C1_HEAP_ENTRY c1_heap_readRsp;
-
-    logic c1_heap_free;
-    t_C1_REQ_IDX c1_heap_freeIdx;
-
-    cci_mpf_prim_heap
+    cci_mpf_prim_ram_simple
       #(
-        .N_ENTRIES(N_C1_CAM_IDX_ENTRIES),
-        .N_DATA_BITS($bits(t_C1_HEAP_ENTRY)),
-        .N_OUTPUT_REG_STAGES(1)
+        .N_ENTRIES(MAX_ACTIVE_REQS),
+        .N_DATA_BITS($bits(t_c1_heap_entry)),
+        .N_OUTPUT_REG_STAGES(1),
+        .REGISTER_WRITES(1),
+        .BYPASS_REGISTERED_WRITES(0)
         )
       c1_heap
        (
         .clk,
-        .reset,
-        .enq(cci_mpf_c1TxIsWriteReq(fiu_buf.c1Tx)),
-        .enqData(c1_heap_enqData),
-        .notFull(c1_heap_notFull),
-        .allocIdx(c1_heap_allocIdx),
-        .readReq(c1_heap_readReq),
-        .readRsp(c1_heap_readRsp),
-        .free(c1_heap_free),
-        .freeIdx(c1_heap_freeIdx)
+
+        .wen(cci_mpf_c1TxIsWriteReq(fiu_buf.c1Tx)),
+        .waddr(c1_heap_reqIdx),
+        .wdata(c1_heap_enqData),
+
+        .raddr(c1_heap_readReq),
+        .rdata(c1_heap_readRsp)
         );
-
-
-    //
-    // Update the read filters as responses are processed.  The write filter
-    // has to wait for data from the heap.
-    //
-    assign rd_filter_remove_idx = c0_heap_freeIdx;
-    assign rd_filter_remove_en  = c0_heap_free;
 
 
     // ====================================================================
@@ -458,27 +442,43 @@ module cci_mpf_shim_wro_cam_group
     // c0 is read requests, c1 is write requests.
     //
     logic c0_filter_may_insert;
-    assign c0_filter_may_insert = wr_filter_test_notPresent[0] ||
+    assign c0_filter_may_insert = (rd_filter_test_notPresent[0] &&
+                                   wr_filter_test_notPresent[0]) ||
                                   ! c0_enforce_order;
 
     logic c1_filter_may_insert;
-    assign c1_filter_may_insert = (rd_filter_test_notPresent &&
+    assign c1_filter_may_insert = (rd_filter_test_notPresent[1] &&
                                    wr_filter_test_notPresent[1]) ||
                                   ! c1_enforce_order;
+
+    // Events
+    always_ff @(posedge clk)
+    begin
+        events.wro_out_event_rr_conflict <= c0_request_rdy && c0_enforce_order &&
+                                            ! rd_filter_test_notPresent[0];
+        events.wro_out_event_rw_conflict <= c0_request_rdy && c0_enforce_order &&
+                                            ! wr_filter_test_notPresent[0];
+        events.wro_out_event_wr_conflict <= c1_request_rdy && c1_enforce_order &&
+                                            ! rd_filter_test_notPresent[1];
+        events.wro_out_event_ww_conflict <= c1_request_rdy && c1_enforce_order &&
+                                            ! wr_filter_test_notPresent[1];
+    end
 
     // Is a request blocked by inability to forward it to the FIU or a
     // conflict?
     logic c0_blocked;
-    assign c0_blocked = (fiu_buf.c0TxAlmFull ||
-                         ! wr_filter_rdy ||
-                         ! c0_heap_notFull ||
-                         ! c0_filter_may_insert);
+    logic c0_full_downstream;
+    assign c0_blocked = (c0_full_downstream || ! c0_filter_may_insert);
 
     logic c1_blocked;
-    assign c1_blocked = (fiu_buf.c1TxAlmFull ||
-                         ! wr_filter_rdy ||
-                         ! c1_heap_notFull ||
-                         ! c1_filter_may_insert);
+    logic c1_full_downstream;
+    assign c1_blocked = (c1_full_downstream || ! c1_filter_may_insert);
+
+    always_ff @(posedge clk)
+    begin
+        c0_full_downstream <= (fiu.c0TxAlmFull || ! filter_rdy);
+        c1_full_downstream <= (fiu.c1TxAlmFull || ! filter_rdy);
+    end
 
     // Process requests if one exists on either channel.  Requests are only
     // allowed to enter afu_pipe if they are independent of all other
@@ -492,7 +492,7 @@ module cci_mpf_shim_wro_cam_group
     // Set the hashed value to insert in the filter when requests are
     // processed.
     assign rd_filter_insert_hash = c0_afu_pipe[FILTER_PIPE_LAST].c0AddrHash;
-    assign rd_filter_insert_idx = c0_heap_allocIdx;
+    assign rd_filter_insert_tag = rd_filter_test_insert_tag[0];
     assign wr_filter_insert_hash = c1_afu_pipe[FILTER_PIPE_LAST].c1AddrHash;
     assign wr_filter_insert_tag = wr_filter_test_insert_tag[1];
 
@@ -721,48 +721,32 @@ module cci_mpf_shim_wro_cam_group
     //
     // ====================================================================
 
-    // Forward requests toward the FIU.  Replace part of the Mdata entry
-    // with the scoreboard index.  The original Mdata is saved in the
-    // heap and restored when the response is returned.
-    always_comb
-    begin
-        fiu_buf.c0Tx = c0_afu_pipe[FILTER_PIPE_LAST].c0Tx;
-        fiu_buf.c0Tx.hdr.base.mdata[$bits(c0_heap_allocIdx)-1 : 0] = c0_heap_allocIdx;
-        fiu_buf.c0Tx.valid = c0_process_requests && c0_request_rdy;
-    end
+    assign fiu_buf.c0Tx = cci_mpf_c0TxMaskValids(c0_afu_pipe[FILTER_PIPE_LAST].c0Tx,
+                                                 c0_process_requests);
 
     // Save state that will be used when the response is returned.
-    assign c0_heap_enqData.mdata = t_C0_REQ_IDX'(c0_afu_pipe[FILTER_PIPE_LAST].c0Tx.hdr.base.mdata);
+    always_comb
+    begin
+        c0_heap_enqData.addrHash = rd_filter_insert_hash;
+        c0_heap_enqData.filterTag = rd_filter_insert_tag;
+    end
 
     // Request heap read as fiu responses arrive.  The heap's value will be
     // available the cycle fiu_buf is read.
     always_comb
     begin
-        c0_heap_readReq = t_C0_REQ_IDX'(fiu.c0Rx.hdr);
-
-        // The RAM size is not necessary a power of 2. The simulation library
-        // complains about illegal addresses.
-        if (! cci_c0Rx_isReadRsp(fiu.c0Rx))
-        begin
-            c0_heap_readReq[$bits(c0_heap_readReq)-1] = 1'b0;
-        end
+        c0_heap_readReq = t_heap_idx'(fiu.c0Rx.hdr.mdata);
     end
 
-    // Free heap entries as read responses arrive.
-    assign c0_heap_freeIdx = t_C0_REQ_IDX'(fiu.c0Rx.hdr);
-    assign c0_heap_free = cci_c0Rx_isReadRsp(fiu.c0Rx) &&
-                          cci_mpf_c0Rx_isEOP(fiu.c0Rx);
+    // Responses
+    assign afu_buf.c0Rx = fiu.c0Rx;
 
-    // Either forward the header from the FIU for non-read responses or
-    // reconstruct the read response header.
-    always_ff @(posedge clk)
+    // Remove the entry from the filter
+    always_comb
     begin
-        afu_buf.c0Rx <= fiu_buf.c0Rx;
-
-        if (cci_c0Rx_isReadRsp(fiu_buf.c0Rx))
-        begin
-            afu_buf.c0Rx.hdr <= { fiu_buf.c0Rx.hdr[CCI_C0RX_HDR_WIDTH-1 : $bits(t_C0_REQ_IDX)], c0_heap_readRsp.mdata };
-        end
+        rd_filter_remove_hash = c0_heap_readRsp.addrHash;
+        rd_filter_remove_tag = c0_heap_readRsp.filterTag;
+        rd_filter_remove_en = cci_c0Rx_isReadRsp(fiu_buf.c0Rx);
     end
 
 
@@ -772,56 +756,25 @@ module cci_mpf_shim_wro_cam_group
     //
     // ====================================================================
 
-    // If request is a write update the Mdata with the index of the hash
-    // details.
-    always_comb
-    begin
-        fiu_buf.c1Tx = cci_mpf_c1TxMaskValids(c1_afu_pipe[FILTER_PIPE_LAST].c1Tx, c1_process_requests);
-
-        if (cci_mpf_c1TxIsWriteReq(c1_afu_pipe[FILTER_PIPE_LAST].c1Tx))
-        begin
-            fiu_buf.c1Tx.hdr.base.mdata[$bits(c1_heap_allocIdx)-1 : 0] = c1_heap_allocIdx;
-        end
-    end
+    assign fiu_buf.c1Tx = cci_mpf_c1TxMaskValids(c1_afu_pipe[FILTER_PIPE_LAST].c1Tx,
+                                                 c1_process_requests);
 
     // Save state that will be used when the response is returned.
     always_comb
     begin
-        c1_heap_enqData.mdata = t_C1_REQ_IDX'(c1_afu_pipe[FILTER_PIPE_LAST].c1Tx.hdr.base.mdata);
         c1_heap_enqData.addrHash = wr_filter_insert_hash;
         c1_heap_enqData.filterTag = wr_filter_insert_tag;
     end
 
     // Request heap read as fiu responses arrive. The heap's value will be
-    // available the cycle fiu_buf is read. Responses may arrive on either
-    // channel!
+    // available the cycle fiu_buf is read.
     always_comb
     begin
-        c1_heap_readReq = t_C1_REQ_IDX'(fiu.c1Rx.hdr);
-
-        // The RAM size is not necessary a power of 2. The simulation library
-        // complains about illegal addresses.
-        if (! cci_c1Rx_isWriteRsp(fiu.c1Rx))
-        begin
-            c1_heap_readReq[$bits(c1_heap_readReq)-1] = 1'b0;
-        end
+        c1_heap_readReq = t_heap_idx'(fiu.c1Rx.hdr.mdata);
     end
 
-    // Free heap entries as write responses arrive.
-    assign c1_heap_freeIdx = t_C1_REQ_IDX'(fiu.c1Rx.hdr);
-    assign c1_heap_free = cci_c1Rx_isWriteRsp(fiu.c1Rx);
-
-    // Either forward the header from the FIU for non-read responses or
-    // reconstruct the read response header.
-    always_ff @(posedge clk)
-    begin
-        afu_buf.c1Rx <= fiu_buf.c1Rx;
-
-        if (cci_c1Rx_isWriteRsp(fiu_buf.c1Rx))
-        begin
-            afu_buf.c1Rx.hdr <= { fiu_buf.c1Rx.hdr[CCI_C1RX_HDR_WIDTH-1 : $bits(t_C1_REQ_IDX)], c1_heap_readRsp.mdata };
-        end
-    end
+    // Responses
+    assign afu_buf.c1Rx = fiu.c1Rx;
 
     // Remove the entry from the filter
     always_comb
@@ -833,70 +786,59 @@ module cci_mpf_shim_wro_cam_group
 
 
 `ifdef DEBUG_MESSAGES
-    t_C0_REQ_IDX c0_prev_heap_allocIdx;
-    t_C1_REQ_IDX c1_prev_heap_allocIdx;
+    t_heap_idx c0_prev_heap_reqIdx;
+    t_heap_idx c1_prev_heap_reqIdx;
     logic [15:0] cycle;
 
     always_ff @(posedge clk)
     begin
         if (reset)
         begin
-            c0_prev_heap_allocIdx <= 0;
-            c1_prev_heap_allocIdx <= 0;
+            c0_prev_heap_reqIdx <= 0;
+            c1_prev_heap_reqIdx <= 0;
             cycle <= 0;
         end
         else
         begin
             cycle <= cycle + 1;
 
-            if (c0_request_rdy && c0_blocked && ! c0_filter_may_insert && (c0_heap_allocIdx != c0_prev_heap_allocIdx))
+            if (c0_request_rdy && c0_blocked && ! c0_filter_may_insert && (c0_heap_reqIdx != c0_prev_heap_reqIdx))
             begin
-                c0_prev_heap_allocIdx <= c0_heap_allocIdx;
-                $display("C0 blocked %d", c0_heap_allocIdx);
+                c0_prev_heap_reqIdx <= c0_heap_reqIdx;
+                $display("C0 blocked %d", c0_heap_reqIdx);
             end
-            if (c0_request_rdy && ! c0_heap_notFull && (c0_heap_allocIdx != c0_prev_heap_allocIdx))
+            if (c0_request_rdy && (c0_heap_reqIdx != c0_prev_heap_reqIdx))
             begin
-                c0_prev_heap_allocIdx <= c0_heap_allocIdx;
-                $display("C0 heap full %d", c0_heap_allocIdx);
+                c0_prev_heap_reqIdx <= c0_heap_reqIdx;
+                $display("C0 heap full %d", c0_heap_reqIdx);
             end
 
-            if (c1_request_rdy && c1_blocked && ! c1_filter_may_insert && (c1_heap_allocIdx != c1_prev_heap_allocIdx))
+            if (c1_request_rdy && c1_blocked && ! c1_filter_may_insert && (c1_heap_reqIdx != c1_prev_heap_reqIdx))
             begin
-                c1_prev_heap_allocIdx <= c1_heap_allocIdx;
-                $display("C1 blocked %d", c1_heap_allocIdx);
+                c1_prev_heap_reqIdx <= c1_heap_reqIdx;
+                $display("C1 blocked %d", c1_heap_reqIdx);
             end
-            if (c1_request_rdy && ! c1_heap_notFull && (c1_heap_allocIdx != c1_prev_heap_allocIdx))
+            if (c1_request_rdy && (c1_heap_reqIdx != c1_prev_heap_reqIdx))
             begin
-                c1_prev_heap_allocIdx <= c1_heap_allocIdx;
-                $display("C1 heap full %d", c1_heap_allocIdx);
+                c1_prev_heap_reqIdx <= c1_heap_reqIdx;
+                $display("C1 heap full %d", c1_heap_reqIdx);
             end
 
             if (cci_mpf_c0TxIsReadReq(fiu_buf.c0Tx))
             begin
                 $display("XX A 0 %d %x %d",
-                         c0_heap_allocIdx,
+                         c0_heap_reqIdx,
                          cci_mpf_c0_getReqAddr(fiu_buf.c0Tx.hdr),
                          cycle);
             end
             if (cci_mpf_c1TxIsWriteReq(fiu_buf.c1Tx))
             begin
                 $display("XX A 1 %d %x hash 0x%x tag %0d %d",
-                         c1_heap_allocIdx,
+                         c1_heap_reqIdx,
                          cci_mpf_c1_getReqAddr(fiu_buf.c1Tx.hdr),
                          wr_filter_insert_hash,
                          wr_filter_insert_tag,
                          cycle);
-            end
-
-            if (c0_heap_free)
-            begin
-                $display("XX R 0 %0d %d",
-                         c0_heap_freeIdx, cycle);
-            end
-            if (c1_heap_free)
-            begin
-                $display("XX W 1 %0d %d",
-                         c1_heap_freeIdx, cycle);
             end
 
             if (cci_c1Rx_isWriteRsp(fiu_buf.c1Rx))

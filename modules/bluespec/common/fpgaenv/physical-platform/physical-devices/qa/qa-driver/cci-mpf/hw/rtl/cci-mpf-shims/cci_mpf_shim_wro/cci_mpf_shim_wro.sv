@@ -39,7 +39,8 @@
 
 module cci_mpf_shim_wro
   #(
-    parameter AFU_BUF_THRESHOLD = CCI_TX_ALMOST_FULL_THRESHOLD
+    parameter AFU_BUF_THRESHOLD = CCI_TX_ALMOST_FULL_THRESHOLD + 4,
+    parameter MAX_ACTIVE_REQS = 128
     )
    (
     input  logic clk,
@@ -48,7 +49,9 @@ module cci_mpf_shim_wro
     cci_mpf_if.to_fiu fiu,
 
     // Connections toward user code.
-    cci_mpf_if.to_afu afu
+    cci_mpf_if.to_afu afu,
+
+    cci_mpf_csrs.wro_events events
     );
 
     logic reset = 1'b1;
@@ -60,32 +63,32 @@ module cci_mpf_shim_wro
     logic c1_notEmpty;
 
     //
-    // Writes use a decode filter so are less expensive than read entries
+    // The filters are implemented as single bits in a block RAM, indexed
+    // by a hash of line addresses.  One M20K is sufficient on all current
+    // platforms.
     //
-`ifdef MPF_PLATFORM_BDX
-    localparam N_C0_CAM_IDX_ENTRIES = 80;
-    localparam N_C1_CAM_IDX_ENTRIES = 128;
-    localparam ADDRESS_HASH_BITS = 9;
-`elsif MPF_PLATFORM_OME
-    localparam N_C0_CAM_IDX_ENTRIES = 80;
-    localparam N_C1_CAM_IDX_ENTRIES = 128;
-    localparam ADDRESS_HASH_BITS = 9;
+`ifndef CCI_SIMULATION
+    // Building for real hardware.  One M20K (16K entries) is sufficient.
+    localparam ADDRESS_HASH_BITS = 14;
 `else
-    ** ERROR: Unknown platform
+    // We make the filter/hash space smaller in simulation solely because
+    // the filters are initialized with a loop on reset and running through
+    // 16K entries is too slow in simulation.
+    localparam ADDRESS_HASH_BITS = 11;
 `endif
 
     cci_mpf_shim_wro_cam_group
       #(
-        .N_C0_CAM_IDX_ENTRIES(N_C0_CAM_IDX_ENTRIES),
-        .N_C1_CAM_IDX_ENTRIES(N_C1_CAM_IDX_ENTRIES),
         .ADDRESS_HASH_BITS(ADDRESS_HASH_BITS),
-        .AFU_BUF_THRESHOLD(AFU_BUF_THRESHOLD)
+        .AFU_BUF_THRESHOLD(AFU_BUF_THRESHOLD),
+        .MAX_ACTIVE_REQS(MAX_ACTIVE_REQS)
         )
       pipe
        (
         .clk,
         .fiu,
         .afu,
+        .events,
         .c1_notEmpty
         );
 

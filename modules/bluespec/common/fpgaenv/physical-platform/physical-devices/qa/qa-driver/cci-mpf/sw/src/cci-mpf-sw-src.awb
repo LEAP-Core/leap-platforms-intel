@@ -12,3 +12,6 @@
 
 %sources -t H          -v PUBLIC  cci_mpf_shim_vtp_pt.h
 %sources -t CPP        -v PRIVATE cci_mpf_shim_vtp_pt.cpp
+
+%sources -t H          -v PUBLIC  cci_mpf_shim_wro.h
+%sources -t CPP        -v PRIVATE cci_mpf_shim_wro.cpp

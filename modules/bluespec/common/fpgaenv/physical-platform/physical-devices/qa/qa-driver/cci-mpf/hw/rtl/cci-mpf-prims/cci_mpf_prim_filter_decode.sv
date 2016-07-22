@@ -49,7 +49,7 @@ module cci_mpf_prim_filter_decode
     // Test values against the set of values stored in the CAM.
     input  logic [0 : N_TEST_CLIENTS-1][$clog2(N_ENTRIES)-1 : 0] test_value,
     input  logic [0 : N_TEST_CLIENTS-1] test_en,
-    output logic [0 : N_TEST_CLIENTS-1] T2_test_notPresent,
+    output logic [0 : N_TEST_CLIENTS-1] T3_test_notPresent,
     // The tag is a value that must be passed to insert_tag and
     // remove_tag below in order to update test_value in the filter.
     // These arguments are needed to save block RAM resources.  The
@@ -57,18 +57,18 @@ module cci_mpf_prim_filter_decode
     // around the limited number of block RAM read and write ports.
     // Passing tags around reduces the number of RAMs required, using the
     // reads required for tests to look up the memory state as a side effect.
-    output logic [0 : N_TEST_CLIENTS-1] T2_test_insert_tag,
+    output logic [0 : N_TEST_CLIENTS-1] T3_test_insert_tag,
 
     // Insert one value into the filter in a specific slot. Slots are managed
     // outside this module.
     input  logic [$clog2(N_ENTRIES)-1 : 0] insert_value,
-    // Pass the corresponding lookup value from T2_test_insert_tag above
+    // Pass the corresponding lookup value from T3_test_insert_tag above
     input  logic insert_tag,
     input  logic insert_en,
 
     // Remove (invalidate) entries from the filter.
     input  logic [$clog2(N_ENTRIES)-1 : 0] remove_value,
-    // Pass the corresponding lookup value from T2_test_insert_tag above
+    // Pass the corresponding lookup value from T3_test_insert_tag above
     input  logic remove_tag,
     input  logic remove_en
     );
@@ -81,13 +81,27 @@ module cci_mpf_prim_filter_decode
     logic [0 : N_TEST_CLIENTS-1] init_done;
     assign rdy = init_done[0];
 
+    logic test_en_q[0 : N_TEST_CLIENTS-1];
+    logic test_en_qq[0 : N_TEST_CLIENTS-1];
+
     genvar p;
     generate
         for (p = 0; p < N_TEST_CLIENTS; p = p + 1)
         begin : r
             // An entry is not present if the values in memA and memB match
-            assign T2_test_notPresent[p] = (test_state_A[p] == test_state_B[p]);
-            assign T2_test_insert_tag[p] = ~ test_state_A[p];
+            always_ff @(posedge clk)
+            begin
+                T3_test_notPresent[p] <= 1'b0;
+                if (test_en_qq[p])
+                begin
+                    T3_test_notPresent[p] <= (test_state_A[p] == test_state_B[p]);
+                end
+
+                T3_test_insert_tag[p] <= ~ test_state_A[p];
+
+                test_en_q[p] <= test_en[p];
+                test_en_qq[p] <= test_en_q[p];
+            end
 
             // The write port in memA is used for insert
             cci_mpf_prim_ram_simple_init

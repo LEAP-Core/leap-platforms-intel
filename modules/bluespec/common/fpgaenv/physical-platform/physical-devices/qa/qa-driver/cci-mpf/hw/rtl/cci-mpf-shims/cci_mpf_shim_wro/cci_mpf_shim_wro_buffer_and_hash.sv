@@ -150,7 +150,7 @@ module cci_mpf_shim_wro_buffer_and_hash
     cci_mpf_prim_fifo_lutram
       #(
         .N_DATA_BITS(ADDRESS_HASH_BITS),
-        .N_ENTRIES(AFU_BUF_THRESHOLD+2),
+        .N_ENTRIES(AFU_BUF_THRESHOLD + 4),
         .REGISTER_OUTPUT(1)
         )
       c0_hash_buf
@@ -168,7 +168,7 @@ module cci_mpf_shim_wro_buffer_and_hash
     cci_mpf_prim_fifo_lutram
       #(
         .N_DATA_BITS(ADDRESS_HASH_BITS),
-        .N_ENTRIES(AFU_BUF_THRESHOLD+2),
+        .N_ENTRIES(AFU_BUF_THRESHOLD + 4),
         .REGISTER_OUTPUT(1)
         )
       c1_hash_buf

@@ -193,16 +193,14 @@ typedef enum
     // BBB feature ID high (read)
     CCI_MPF_WRO_CSR_ID_H = 16,
 
-    // Statistics -- all 8 byte read-only
-
-    //   Total writes observed
-    CCI_MPF_WRO_CSR_NUM_WR = 24,
-    //   Total reads observed
-    CCI_MPF_WRO_CSR_NUM_RD = 32,
-    //   Total conflicting (blocked) writes
-    CCI_MPF_WRO_CSR_NUM_WR_CONFLICTS = 40,
-    //   Total conflicting (blocked) reads
-    CCI_MPF_WRO_CSR_NUM_RD_CONFLICTS = 48,
+    // New read conflicts with old read
+    CCI_MPF_WRO_CSR_STAT_RR_CONFLICT = 24,
+    // New read conflicts with old write
+    CCI_MPF_WRO_CSR_STAT_RW_CONFLICT = 32,
+    // New write conflicts with old read
+    CCI_MPF_WRO_CSR_STAT_WR_CONFLICT = 40,
+    // New write conflicts with old write
+    CCI_MPF_WRO_CSR_STAT_WW_CONFLICT = 48,
 
     // Must be last
     CCI_MPF_WRO_CSR_SIZE = 56

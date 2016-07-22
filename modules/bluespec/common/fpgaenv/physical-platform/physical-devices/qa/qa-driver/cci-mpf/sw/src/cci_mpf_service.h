@@ -56,6 +56,7 @@
 
 #include "cci_mpf_shim_vc_map.h"
 #include "cci_mpf_shim_vtp.h"
+#include "cci_mpf_shim_wro.h"
 
 BEGIN_NAMESPACE(AAL)
 
@@ -82,7 +83,9 @@ public:
       m_vtpDFHOffset(-1),
       m_pVTP(NULL),
       m_vcmapDFHOffset(-1),
-      m_pVCMAP(NULL)
+      m_pVCMAP(NULL),
+      m_wroDFHOffset(-1),
+      m_pWRO(NULL)
    {
       // MPF exposes service interfaces of component classes (delegate
       // pattern). As such, the "SetInterface()" calls are deferred until the
@@ -127,6 +130,8 @@ protected:
    btCSROffset            m_vcmapDFHOffset;  //< Offset to VC MAP feature
    MPFVCMAP              *m_pVCMAP;          //< Pointer to VC MAP SW component
 
+   btCSROffset            m_wroDFHOffset;  //< Offset to WRO feature
+   MPFWRO                *m_pWRO;          //< Pointer to WRO SW component
 };
 
 /// @}

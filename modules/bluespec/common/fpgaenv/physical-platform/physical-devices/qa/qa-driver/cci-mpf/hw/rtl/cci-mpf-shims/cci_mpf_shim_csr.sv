@@ -66,7 +66,7 @@ parameter CCI_MPF_WRO_CSR_OFFSET =       CCI_MPF_VC_MAP_CSR_OFFSET +
 parameter CCI_MPF_STAT_CNT_WIDTH = 16;
 typedef logic [CCI_MPF_STAT_CNT_WIDTH-1:0] t_cci_mpf_stat_cnt;
 
-parameter CCI_MPF_CSR_NUM_STATS = 7;
+parameter CCI_MPF_CSR_NUM_STATS = 11;
 typedef t_mpf_csr_offset [0:CCI_MPF_CSR_NUM_STATS-1] t_stat_csr_offset_vec;
 typedef t_cci_mpf_stat_cnt [0:CCI_MPF_CSR_NUM_STATS-1] t_stat_upd_count_vec;
 
@@ -659,6 +659,11 @@ module cci_mpf_shim_csr_events
     `MPF_CSR_STAT_ACCUM(VTP, 5, FAILED_TRANSLATIONS, vtp_failed_translations, vtp_out_event_failed_translation)
 
     `MPF_CSR_STAT_ACCUM(VC_MAP, 6, NUM_MAPPING_CHANGES, vc_map_mapping_changes, vc_map_out_event_mapping_changed)
+
+    `MPF_CSR_STAT_ACCUM(WRO,  7, RR_CONFLICT, wro_rr_conflicts, wro_out_event_rr_conflict)
+    `MPF_CSR_STAT_ACCUM(WRO,  8, RW_CONFLICT, wro_rw_conflicts, wro_out_event_rw_conflict)
+    `MPF_CSR_STAT_ACCUM(WRO,  9, WR_CONFLICT, wro_wr_conflicts, wro_out_event_wr_conflict)
+    `MPF_CSR_STAT_ACCUM(WRO, 10, WW_CONFLICT, wro_ww_conflicts, wro_out_event_ww_conflict)
 
 endmodule // cci_mpf_shim_csr_events
 

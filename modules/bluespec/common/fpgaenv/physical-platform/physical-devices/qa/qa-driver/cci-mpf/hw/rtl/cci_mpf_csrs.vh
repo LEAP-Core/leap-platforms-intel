@@ -80,14 +80,12 @@ interface cci_mpf_csrs();
     // WRO -- write/read ordering
     //
 
-    // Output: total writes observed
-    logic [63:0] wro_out_num_writes;
-    // Output: total reads observed
-    logic [63:0] wro_out_num_reads;
-    // Output: total write conflicts (writes blocked)
-    logic [63:0] wro_out_num_write_conflicts;
-    // Output: total read conflicts (reads blocked by writes)
-    logic [63:0] wro_out_num_read_conflicts;
+    // Conflict events
+    logic wro_out_event_rr_conflict;  // New read conflicts with old read
+    logic wro_out_event_rw_conflict;  // New read conflicts with old write
+    logic wro_out_event_wr_conflict;  // New write conflicts with old read
+    logic wro_out_event_ww_conflict;  // New write conflicts with old write
+
 
     // CSR manager port
     modport csr
@@ -98,22 +96,23 @@ interface cci_mpf_csrs();
 
         output vc_map_ctrl,
         output vc_map_ctrl_valid,
-        input  vc_map_history,
-
-        input  wro_out_num_writes,
-        input  wro_out_num_reads,
-        input  wro_out_num_write_conflicts,
-        input  wro_out_num_read_conflicts
+        input  vc_map_history
         );
     modport csr_events
        (
-        input vtp_out_event_4kb_hit,
-        input vtp_out_event_4kb_miss,
-        input vtp_out_event_2mb_hit,
-        input vtp_out_event_2mb_miss,
-        input vtp_out_event_pt_walk_busy,
-        input vtp_out_event_failed_translation,
-        input vc_map_out_event_mapping_changed
+        input  vtp_out_event_4kb_hit,
+        input  vtp_out_event_4kb_miss,
+        input  vtp_out_event_2mb_hit,
+        input  vtp_out_event_2mb_miss,
+        input  vtp_out_event_pt_walk_busy,
+        input  vtp_out_event_failed_translation,
+
+        input  vc_map_out_event_mapping_changed,
+
+        input  wro_out_event_rr_conflict,
+        input  wro_out_event_rw_conflict,
+        input  wro_out_event_wr_conflict,
+        input  wro_out_event_ww_conflict
         );
 
     modport vtp
@@ -143,12 +142,12 @@ interface cci_mpf_csrs();
         output vc_map_out_event_mapping_changed
         );
 
-    modport wro
+    modport wro_events
        (
-        output wro_out_num_writes,
-        output wro_out_num_reads,
-        output wro_out_num_write_conflicts,
-        output wro_out_num_read_conflicts
+        output wro_out_event_rr_conflict,
+        output wro_out_event_rw_conflict,
+        output wro_out_event_wr_conflict,
+        output wro_out_event_ww_conflict
         );
 
 endinterface // cci_mpf_csrs

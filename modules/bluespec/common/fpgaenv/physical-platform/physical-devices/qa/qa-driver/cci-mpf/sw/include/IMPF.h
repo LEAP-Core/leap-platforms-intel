@@ -81,9 +81,6 @@ BEGIN_NAMESPACE(AAL)
 // Read responses ordering feature
 #define MPF_RSP_ORDER_BBB_GUID "4C9C96F4-65BA-4DD8-B383-C70ACE57BFE4"
 
-// Write ordering feature
-#define MPF_WRO_BBB_GUID "56B06B48-9DD7-4004-A47E-0681B4207A6D"
-
 /// MPF VTP Service IID
 #ifndef iidMPFVTPService
 #define iidMPFVTPService __INTC_IID(INTC_sysSampleAFU, 0x0010)
@@ -154,7 +151,7 @@ public:
 /// Memory virtual channel mapping feature
 #define MPF_VC_MAP_BBB_GUID "5046C86F-BA48-4856-B8F9-3B76E3DD4E74"
 
-/// MPF VTP Service IID
+/// MPF VC_MAP Service IID
 #ifndef iidMPFVCMAPService
 #define iidMPFVCMAPService __INTC_IID(INTC_sysSampleAFU, 0x0011)
 #endif
@@ -215,6 +212,49 @@ public:
    // to direct to VL0.  The remaining references are distributed evenly between
    // the PCIe channels.
    virtual btUnsigned64bitInt vcmapGetMappingHistory( void ) = 0;
+};
+
+/// @}
+
+
+/// @addtogroup WROService
+/// @{
+
+#define MPF_WRO_DFH_ADDRESS_KEY "MPFWRODFHAddress"
+#define MPF_WRO_DFH_ADDRESS_DATATYPE btObjectType
+#define MPF_WRO_DFH_OFFSET_KEY "MPFWRODFHOffset"
+#define MPF_WRO_DFH_OFFSET_DATATYPE btCSROffset
+
+/// Memory write/read ordering feature
+#define MPF_WRO_BBB_GUID "56B06B48-9DD7-4004-A47E-0681B4207A6D"
+
+/// MPF WRO Service IID
+#ifndef iidMPFWROService
+#define iidMPFWROService __INTC_IID(INTC_sysSampleAFU, 0x0012)
+#endif
+
+
+typedef struct
+{
+   // Cycles in which new read blocked due to conflict with old read
+   btUnsigned64bitInt numConflictCyclesRR;
+   // Cycles in which new read blocked due to conflict with old write
+   btUnsigned64bitInt numConflictCyclesRW;
+   // Cycles in which new write blocked due to conflict with old read
+   btUnsigned64bitInt numConflictCyclesWR;
+   // Cycles in which new write blocked due to conflict with old write
+   btUnsigned64bitInt numConflictCyclesWW;
+}
+t_cci_mpf_wro_stats;
+
+
+class IMPFWRO
+{
+public:
+   virtual ~IMPFWRO() {}
+
+   // Return all statistics counters
+   virtual btBool wroGetStats( t_cci_mpf_wro_stats *stats ) = 0;
 };
 
 /// @}

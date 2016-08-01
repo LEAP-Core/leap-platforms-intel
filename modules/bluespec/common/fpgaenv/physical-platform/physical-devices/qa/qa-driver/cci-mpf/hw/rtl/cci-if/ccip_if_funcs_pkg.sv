@@ -22,6 +22,7 @@ package ccip_if_funcs_pkg;
         );
 
         t_ccip_c1_ReqMemHdr h_out = h;
+        h_out.rsvd2 = 0;
         h_out.rsvd1 = 0;
         h_out.rsvd0 = 0;
 

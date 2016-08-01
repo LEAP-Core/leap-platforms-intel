@@ -15,6 +15,10 @@ cd ${MPF_DIR}/sw
 make clean
 cd -
 
+cd ${MPF_DIR}/sample/Hello_ALI_VTP_NLB/SW
+make clean
+cd -
+
 mkdir ${TARGET_DIR}
 
 cp -r ${RELEASE_DIRS} ${TARGET_DIR}

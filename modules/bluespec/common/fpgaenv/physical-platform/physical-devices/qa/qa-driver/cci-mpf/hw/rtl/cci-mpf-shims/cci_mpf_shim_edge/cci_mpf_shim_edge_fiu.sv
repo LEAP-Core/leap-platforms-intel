@@ -131,24 +131,54 @@ module cci_mpf_shim_edge_fiu
     assign afu_edge.wrdy = 1'b1;
 
     // Heap data, addressed using the indices handed out by wr_heap_ctrl.
-    cci_mpf_prim_ram_simple
+    typedef logic [(CCI_CLDATA_WIDTH / 8)-1 : 0] t_cldata_byteena;
+
+    // Store the full line coming from the AFU in the local buffer whether
+    // or not it is a partial write.  Partial writes will trigger a
+    // read-modify-write, with the read-modify ultimately resulting in
+    // a masked write to port 1 of wr_heap_data.
+    t_cldata_byteena afu_edge_wbyteena_q;
+    assign afu_edge_wbyteena_q = ~ t_cldata_byteena'(0);
+
+    // Buffer writes for timing
+    logic afu_edge_wen_q;
+    logic [$clog2(N_UNIQUE_WRITE_HEAP_ENTRIES)-1 : 0] afu_edge_addr_q;
+    t_cci_clData afu_edge_wdata_q;
+
+    always_ff @(posedge clk)
+    begin
+        afu_edge_wen_q <= afu_edge.wen;
+        afu_edge_addr_q <= { afu_edge.widx, afu_edge.wclnum };
+        afu_edge_wdata_q <= afu_edge.wdata;
+
+        if (reset)
+        begin
+            afu_edge_wen_q <= 1'b0;
+        end
+    end
+
+    cci_mpf_prim_ram_dualport_byteena
       #(
         .N_ENTRIES(N_UNIQUE_WRITE_HEAP_ENTRIES),
         .N_DATA_BITS(CCI_CLDATA_WIDTH),
-        .N_OUTPUT_REG_STAGES(1),
-        .REGISTER_WRITES(1),
-        .BYPASS_REGISTERED_WRITES(0)
+        .N_OUTPUT_REG_STAGES(1)
         )
       wr_heap_data
        (
-        .clk,
+        .clk0(clk),
+        .clk1(clk),
 
-        .wen(afu_edge.wen),
-        .waddr({ afu_edge.widx, afu_edge.wclnum }),
-        .wdata(afu_edge.wdata),
+        .wen0(afu_edge_wen_q),
+        .byteena0(afu_edge_wbyteena_q),
+        .addr0(afu_edge_addr_q),
+        .wdata0(afu_edge_wdata_q),
+        .rdata0(),
 
-        .raddr({ wr_heap_deq_idx, wr_heap_deq_clNum }),
-        .rdata(wr_data)
+        .wen1(1'b0),
+        .byteena1(),
+        .addr1({ wr_heap_deq_idx, wr_heap_deq_clNum }),
+        .wdata1(),
+        .rdata1(wr_data)
         );
 
 

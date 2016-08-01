@@ -17,6 +17,7 @@
 %sources -t VERILOG    -v PRIVATE cci_mpf_prim_lfsr.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_prim_lutram.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_prim_ram_dualport.sv
+%sources -t VERILOG    -v PRIVATE cci_mpf_prim_ram_dualport_byteena.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_prim_ram_simple.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_prim_repl_lru_pseudo.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_prim_repl_random.sv

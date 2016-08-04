@@ -88,8 +88,6 @@ module cci_mpf_prim_ram_dualport
         .width_b(N_DATA_BITS),
         .widthad_b($clog2(N_ENTRIES)),
         .numwords_b(N_ENTRIES),
-        .rdcontrol_reg_a("CLOCK0"),
-        .address_reg_a("CLOCK0"),
         .outdata_reg_a(OUTDATA_REGISTERED0),
         .rdcontrol_reg_b("CLOCK1"),
         .address_reg_b("CLOCK1"),

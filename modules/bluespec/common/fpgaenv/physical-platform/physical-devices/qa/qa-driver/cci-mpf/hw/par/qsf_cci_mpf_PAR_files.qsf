@@ -82,4 +82,4 @@ set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-shims
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-shims/cci_mpf_shim_wro/cci_mpf_shim_wro_cam_group.sv
 
 ## Constraints
-set_global_assignment -name SDC_FILE $CCI_MPF_SRC/hw/rtl/par/sdc_cci_mpf.sdc
+set_global_assignment -name SDC_FILE $CCI_MPF_SRC/hw/par/sdc_cci_mpf.sdc

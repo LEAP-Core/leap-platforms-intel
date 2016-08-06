@@ -619,14 +619,19 @@ module cci_mpf_shim_wro_cam_group
                      (c1_hash[h] == c0_afu_pipe[i].c0AddrHash));
             end
 
-            // Incoming read against all other writes
+            // Incoming read against all other writes and reads.  Read/
+            // read conflicts are an artificial hazard introduced by the
+            // simple decode filter.  There is no way to count reads in
+            // flight to the same bucket, so only one is allowed.
             c0_new_req_conflict[h] = 1'b0;
             for (int i = 0; i < FILTER_PIPE_DEPTH; i = i + 1)
             begin
                 c0_new_req_conflict[h] =
                     c0_new_req_conflict[h] ||
                     (cci_mpf_c1TxIsValid(c1_afu_pipe[i].c1Tx) &&
-                     (c0_hash[h] == c1_afu_pipe[i].c1AddrHash));
+                     (c0_hash[h] == c1_afu_pipe[i].c1AddrHash)) ||
+                    (cci_mpf_c0TxIsValid(c0_afu_pipe[i].c0Tx) &&
+                     (c0_hash[h] == c0_afu_pipe[i].c0AddrHash));
             end
         end
     end

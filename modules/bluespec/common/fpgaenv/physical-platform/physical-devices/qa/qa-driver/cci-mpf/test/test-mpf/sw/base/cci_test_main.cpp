@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
         ("vcmap-dynamic", po::value<bool>()->default_value(true), "VC MAP: Use dynamic channel mapping")
         ;
 
-    CCI_TEST::testConfigOptions(desc);
+    testConfigOptions(desc);
 
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -80,10 +80,10 @@ int main(int argc, char *argv[])
         svc.m_pVCMAPService->vcmapSetMode(vcmap_enable, vcmap_dynamic);
     }
 
-    CCI_TEST t(vm, svc);
+    CCI_TEST* t = allocTest(vm, svc);
     if (result == 0)
     {
-        result = t.test();
+        result = t->test();
     }
 
     if (0 == result)
@@ -95,10 +95,10 @@ int main(int argc, char *argv[])
     }
 
     cout << endl << "Statistics:" << endl;
-    cout << "  Cache read hits:    " << t.readCommonCSR(CCI_TEST::CSR_COMMON_CACHE_RD_HITS) << endl;
-    cout << "  Cache read misses:  " << t.readCommonCSR(CCI_TEST::CSR_COMMON_CACHE_RD_MISSES) << endl;
-    cout << "  Cache write hits:   " << t.readCommonCSR(CCI_TEST::CSR_COMMON_CACHE_WR_HITS) << endl;
-    cout << "  Cache write misses: " << t.readCommonCSR(CCI_TEST::CSR_COMMON_CACHE_WR_MISSES) << endl;
+    cout << "  Cache read hits:    " << t->readCommonCSR(CCI_TEST::CSR_COMMON_CACHE_RD_HITS) << endl;
+    cout << "  Cache read misses:  " << t->readCommonCSR(CCI_TEST::CSR_COMMON_CACHE_RD_MISSES) << endl;
+    cout << "  Cache write hits:   " << t->readCommonCSR(CCI_TEST::CSR_COMMON_CACHE_WR_HITS) << endl;
+    cout << "  Cache write misses: " << t->readCommonCSR(CCI_TEST::CSR_COMMON_CACHE_WR_MISSES) << endl;
 
     t_cci_mpf_vtp_stats vtp_stats;
     svc.m_pVTPService->vtpGetStats(&vtp_stats);
@@ -118,6 +118,17 @@ int main(int argc, char *argv[])
         cout << "  VC MAP map chngs:   " << vcmap_stats.numMappingChanges << endl;
         cout << "  VC MAP history:     0x" << hex
              << svc.m_pVCMAPService->vcmapGetMappingHistory() << dec << endl;
+    }
+
+    if (svc.m_pWROService)
+    {
+        t_cci_mpf_wro_stats wro_stats;
+        svc.m_pWROService->wroGetStats(&wro_stats);
+        cout << endl;
+        cout << "  WRO conflicts RR:   " << wro_stats.numConflictCyclesRR << endl
+             << "  WRO conflicts RW:   " << wro_stats.numConflictCyclesRW << endl
+             << "  WRO conflicts WR:   " << wro_stats.numConflictCyclesWR << endl
+             << "  WRO conflicts WW:   " << wro_stats.numConflictCyclesWW << endl;
     }
 
     return result;

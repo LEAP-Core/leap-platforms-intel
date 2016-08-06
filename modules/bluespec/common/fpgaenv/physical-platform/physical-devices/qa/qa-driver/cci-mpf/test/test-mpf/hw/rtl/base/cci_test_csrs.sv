@@ -220,8 +220,10 @@ module cci_test_csrs
     //
 
     logic rd_is_vl0;
+    logic rd_is_vl0_q;
     assign rd_is_vl0 = ccip_c0Rx_isReadRsp(c0Rx) && (c0Rx.hdr.vc_used == eVC_VL0);
     logic wr_is_vl0;
+    logic wr_is_vl0_q;
     assign wr_is_vl0 = ccip_c1Rx_isWriteRsp(c1Rx) && (c1Rx.hdr.vc_used == eVC_VL0);
 
     always_ff @(posedge clk)
@@ -250,8 +252,11 @@ module cci_test_csrs
             end
         end
 
-        ctr_chan_vl0 <= ctr_chan_vl0 + t_cci_test_counter'(2'(rd_is_vl0) +
-                                                           2'(wr_is_vl0));
+        rd_is_vl0_q <= rd_is_vl0;
+        wr_is_vl0_q <= wr_is_vl0;
+
+        ctr_chan_vl0 <= ctr_chan_vl0 + t_cci_test_counter'(2'(rd_is_vl0_q) +
+                                                           2'(wr_is_vl0_q));
 
         if (reset)
         begin
@@ -260,6 +265,9 @@ module cci_test_csrs
             ctr_wr_cache_hits <= t_cci_test_counter'(0);
             ctr_wr_cache_misses <= t_cci_test_counter'(0);
             ctr_chan_vl0 <= t_cci_test_counter'(0);
+
+            rd_is_vl0_q <= 1'b0;
+            wr_is_vl0_q <= 1'b0;
         end
     end
 

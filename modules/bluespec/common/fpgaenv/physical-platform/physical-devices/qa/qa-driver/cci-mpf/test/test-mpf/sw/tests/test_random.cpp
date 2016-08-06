@@ -24,21 +24,40 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,  EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-#include "base/cci_test.h"
+#include "test_random.h"
 
-void dbgRegDump(uint64_t r)
+
+// ========================================================================
+//
+// Each test must provide these functions used by main to find the
+// specific test instance.
+//
+// ========================================================================
+
+
+void testConfigOptions(po::options_description &desc)
 {
-    cout << "Test random state:" << endl
-         << "  State:           " << ((r >> 8) & 255) << endl
-         << "  FIU C0 Alm Full: " << (r & 1) << endl
-         << "  FIU C1 Alm Full: " << ((r >> 1) & 1) << endl
-         << "  Error:           " << ((r >> 2) & 1) << endl
-         << "  CHK FIFO Full:   " << ((r >> 3) & 1) << endl
-         << "  CHK RAM Ready:   " << ((r >> 4) & 1) << endl;
+    // Add test-specific options
+    desc.add_options()
+        ("tc", po::value<int>()->default_value(0), "Test length (cycles)")
+        ("ts", po::value<int>()->default_value(1), "Test length (seconds)")
+        ("repeat", po::value<int>()->default_value(1), "Number of repetitions")
+        ;
+}
+
+CCI_TEST* allocTest(const po::variables_map& vm, AAL_SVC_WRAPPER& svc)
+{
+    return new TEST_RANDOM(vm, svc);
 }
 
 
-btInt CCI_TEST::test()
+// ========================================================================
+//
+// Random traffic test.
+//
+// ========================================================================
+
+btInt TEST_RANDOM::test()
 {
     // Allocate memory for control
     volatile uint64_t* dsm = (uint64_t*) this->malloc(4096);
@@ -97,12 +116,15 @@ btInt CCI_TEST::test()
     return 0;
 }
 
-void CCI_TEST::testConfigOptions(po::options_description &desc)
+
+void
+TEST_RANDOM::dbgRegDump(uint64_t r)
 {
-    // Add test-specific options
-    desc.add_options()
-        ("tc", po::value<int>()->default_value(0), "Test length (cycles)")
-        ("ts", po::value<int>()->default_value(1), "Test length (seconds)")
-        ("repeat", po::value<int>()->default_value(1), "Number of repetitions")
-        ;
+    cout << "Test random state:" << endl
+         << "  State:           " << ((r >> 8) & 255) << endl
+         << "  FIU C0 Alm Full: " << (r & 1) << endl
+         << "  FIU C1 Alm Full: " << ((r >> 1) & 1) << endl
+         << "  Error:           " << ((r >> 2) & 1) << endl
+         << "  CHK FIFO Full:   " << ((r >> 3) & 1) << endl
+         << "  CHK RAM Ready:   " << ((r >> 4) & 1) << endl;
 }

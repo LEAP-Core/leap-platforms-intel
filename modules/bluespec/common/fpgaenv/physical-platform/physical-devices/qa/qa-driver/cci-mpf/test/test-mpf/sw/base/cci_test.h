@@ -43,7 +43,7 @@ namespace po = boost::program_options;
 
 class CCI_TEST
 {
-  private:
+  protected:
     enum
     {
         TEST_CSR_BASE = 32
@@ -58,11 +58,7 @@ class CCI_TEST
     ~CCI_TEST() {};
 
     // Returns 0 on success
-    btInt test();
-
-    // Set command line option definitions for test.  Must be static
-    // so it can be called before a class is constructed.
-    static void testConfigOptions(po::options_description &desc);
+    virtual btInt test() = 0;
 
     //
     // Wrappers for commonly used requests
@@ -114,9 +110,22 @@ class CCI_TEST
     }
 
 
-  private:
+  protected:
     const po::variables_map& vm;
     AAL_SVC_WRAPPER& svc;
 };
+
+
+//
+// A test module must provide the following functions:
+//
+
+// Set command line option definitions for test.  This is outside the
+// CCI_TEST class because it is needed to configure the base AAL service
+// before the test constructor is called.
+void testConfigOptions(po::options_description &desc);
+
+// Instantiate an instance of the specific test class
+CCI_TEST* allocTest(const po::variables_map& vm, AAL_SVC_WRAPPER& svc);
 
 #endif // __CCI_TEST_H__

@@ -210,7 +210,7 @@ module cci_mpf_shim_dbg_history
             (cci_csr_getAddress(c0Rx) < MMIO_ADDR_END))
         begin
             is_mmio_rd <= 1'b1;
-            mmio_rd_addr <= cci_csr_getAddress(c0Rx);
+            mmio_rd_addr <= cci_csr_getAddress(c0Rx) - t_cci_mmioAddr'(MMIO_ADDR_START);
             mmio_rd_tid <= cci_csr_getTid(c0Rx);
         end
 
@@ -228,7 +228,16 @@ module cci_mpf_shim_dbg_history
     end
 
     // Read history buffer
-    assign raddr = mmio_rd_addr[(N_MMIO_REG_BITS / 32)-1 +: $bits(raddr)];
+    always_comb
+    begin
+        raddr = mmio_rd_addr[(N_MMIO_REG_BITS / 32)-1 +: $bits(raddr)];
+
+        if (RING_MODE != 0)
+        begin
+            // Read address is relative to the oldest entry in ring mode
+            raddr = waddr_ring - 1 - raddr;
+        end
+    end
 
     // Respond when ready and no afu response is active
     assign c2_rsp_en = is_mmio_rd_qq && ! afu.c2Tx.mmioRdValid;

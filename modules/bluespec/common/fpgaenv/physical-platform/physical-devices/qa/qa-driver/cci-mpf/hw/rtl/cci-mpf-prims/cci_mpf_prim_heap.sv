@@ -179,12 +179,18 @@ module cci_mpf_prim_heap_ctrl
     //
     logic pop_free;
     logic free_idx_avail;
+    logic free_idx_above_min;
     logic [$clog2(N_ENTRIES)-1 : 0] next_free_idx;
 
     // Need a new entry in allocIdx?
     logic need_pop_free;
     // Is a free entry available?
     assign pop_free = need_pop_free && free_idx_avail;
+
+    // Heap isn't full as long as an index is available and the number of free
+    // slots is above the MIN_FREE_SLOTS threshold.
+    logic fifo_notEmpty;
+    assign notFull = fifo_notEmpty && free_idx_above_min;
 
     cci_mpf_prim_fifo2
       #(
@@ -199,7 +205,7 @@ module cci_mpf_prim_heap_ctrl
         .notFull(need_pop_free),
         .first(allocIdx),
         .deq_en(enq),
-        .notEmpty(notFull)
+        .notEmpty(fifo_notEmpty)
         );
 
 
@@ -359,6 +365,7 @@ module cci_mpf_prim_heap_ctrl
             // NULL, which would require managing a special case.
             num_free <= t_idx'(N_ENTRIES - 2);
             free_idx_avail <= 1'b0;
+            free_idx_above_min <= 1'b0;
         end
         else
         begin
@@ -371,6 +378,7 @@ module cci_mpf_prim_heap_ctrl
                     // Initialization complete
                     initialized <= 1'b1;
                     free_idx_avail <= 1'b1;
+                    free_idx_above_min <= 1'b1;
 
                     assert (N_ENTRIES > 2 + MIN_FREE_SLOTS) else
                        $fatal("cci_mpf_prim_heap: Heap too small");
@@ -381,7 +389,8 @@ module cci_mpf_prim_heap_ctrl
                 if (free_q)
                 begin
                     num_free <= num_free + t_idx'(1);
-                    free_idx_avail <= (num_free >= t_idx'(MIN_FREE_SLOTS));
+                    free_idx_avail <= 1'b1;
+                    free_idx_above_min <= (num_free >= t_idx'(MIN_FREE_SLOTS));
 
                     assert (num_free < N_ENTRIES - 2) else
                        $fatal("cci_mpf_prim_heap: Too many free items. Pushed one twice?");
@@ -389,7 +398,8 @@ module cci_mpf_prim_heap_ctrl
                 else
                 begin
                     num_free <= num_free - t_idx'(1);
-                    free_idx_avail <= (num_free > t_idx'(MIN_FREE_SLOTS+1));
+                    free_idx_avail <= (num_free > t_idx'(0));
+                    free_idx_above_min <= (num_free > t_idx'(MIN_FREE_SLOTS+1));
 
                     assert (num_free != 0) else
                        $fatal("cci_mpf_prim_heap: alloc from empty heap!");

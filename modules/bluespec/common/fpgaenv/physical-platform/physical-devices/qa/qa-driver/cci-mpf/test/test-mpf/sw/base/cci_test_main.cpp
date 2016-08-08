@@ -25,6 +25,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 #include "cci_test.h"
+#include <boost/format.hpp>
 
 int main(int argc, char *argv[])
 {
@@ -94,11 +95,24 @@ int main(int argc, char *argv[])
         MSG("!!!!!!! FAILURE (code " << result << ") !!!!!!!");
     }
 
+    uint64_t cycles = t->testNumCyclesExecuted();
+    if (cycles != 0)
+    {
+        cout << endl << "Test cycles executed: " << cycles << endl;
+    }
+
+    uint64_t rd_hits = t->readCommonCSR(CCI_TEST::CSR_COMMON_CACHE_RD_HITS);
+    uint64_t rd_misses = t->readCommonCSR(CCI_TEST::CSR_COMMON_CACHE_RD_MISSES);
+    uint64_t rd_total = rd_hits + rd_misses;
+    uint64_t wr_hits = t->readCommonCSR(CCI_TEST::CSR_COMMON_CACHE_WR_HITS);
+    uint64_t wr_misses = t->readCommonCSR(CCI_TEST::CSR_COMMON_CACHE_WR_MISSES);
+    uint64_t wr_total = wr_hits + wr_misses;
+
     cout << endl << "Statistics:" << endl;
-    cout << "  Cache read hits:    " << t->readCommonCSR(CCI_TEST::CSR_COMMON_CACHE_RD_HITS) << endl;
-    cout << "  Cache read misses:  " << t->readCommonCSR(CCI_TEST::CSR_COMMON_CACHE_RD_MISSES) << endl;
-    cout << "  Cache write hits:   " << t->readCommonCSR(CCI_TEST::CSR_COMMON_CACHE_WR_HITS) << endl;
-    cout << "  Cache write misses: " << t->readCommonCSR(CCI_TEST::CSR_COMMON_CACHE_WR_MISSES) << endl;
+    cout << "  Cache read hits:    " << rd_hits << endl;
+    cout << "  Cache read misses:  " << rd_misses << endl;
+    cout << "  Cache write hits:   " << wr_hits << endl;
+    cout << "  Cache write misses: " << wr_misses << endl;
 
     t_cci_mpf_vtp_stats vtp_stats;
     svc.m_pVTPService->vtpGetStats(&vtp_stats);
@@ -124,11 +138,33 @@ int main(int argc, char *argv[])
     {
         t_cci_mpf_wro_stats wro_stats;
         svc.m_pWROService->wroGetStats(&wro_stats);
+
         cout << endl;
-        cout << "  WRO conflicts RR:   " << wro_stats.numConflictCyclesRR << endl
-             << "  WRO conflicts RW:   " << wro_stats.numConflictCyclesRW << endl
-             << "  WRO conflicts WR:   " << wro_stats.numConflictCyclesWR << endl
-             << "  WRO conflicts WW:   " << wro_stats.numConflictCyclesWW << endl;
+        cout << "  WRO conflict cycles RR:   " << wro_stats.numConflictCyclesRR;
+        if (cycles != 0)
+        {
+            cout << "  (" << boost::format("%.1f") % (double(wro_stats.numConflictCyclesRR) * 100.0 / cycles) << "% of cycles)";
+        }
+
+        cout << endl << "  WRO conflict cycles RW:   " << wro_stats.numConflictCyclesRW;
+        if (cycles != 0)
+        {
+            cout << "  (" << boost::format("%.1f") % (double(wro_stats.numConflictCyclesRW) * 100.0 / cycles) << "% of cycles)";
+        }
+
+        cout << endl << "  WRO conflict cycles WR:   " << wro_stats.numConflictCyclesWR;
+        if (cycles != 0)
+        {
+            cout << "  (" << boost::format("%.1f") % (double(wro_stats.numConflictCyclesWR) * 100.0 / cycles) << "% of cycles)";
+        }
+
+        cout << endl << "  WRO conflict cycles WW:   " << wro_stats.numConflictCyclesWW;
+        if (cycles != 0)
+        {
+            cout << "  (" << boost::format("%.1f") % (double(wro_stats.numConflictCyclesWW) * 100.0 / cycles) << "% of cycles)";
+        }
+
+        cout << endl;
     }
 
     return result;

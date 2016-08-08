@@ -92,7 +92,7 @@ module cci_mpf_prim_ram_simple
         else
         begin : r
             logic [N_DATA_BITS-1 : 0] mem_rd[2 : N_OUTPUT_REG_STAGES];
-            assign rdata = c_rdata[N_OUTPUT_REG_STAGES];
+            assign rdata = mem_rd[N_OUTPUT_REG_STAGES];
 
             always_ff @(posedge clk)
             begin

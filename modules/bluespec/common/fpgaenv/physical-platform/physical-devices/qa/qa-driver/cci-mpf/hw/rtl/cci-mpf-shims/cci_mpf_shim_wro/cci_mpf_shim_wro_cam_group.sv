@@ -194,9 +194,11 @@ module cci_mpf_shim_wro_cam_group
     // Insert new active reads and writes in the filter.
     t_hash rd_filter_insert_hash;
     logic rd_filter_insert_tag;
+    logic rd_filter_insert_en;
 
     t_hash wr_filter_insert_hash;
     logic wr_filter_insert_tag;
+    logic wr_filter_insert_en;
 
     // Read response handling on channel 0.
     t_hash rd_filter_remove_hash;
@@ -244,7 +246,7 @@ module cci_mpf_shim_wro_cam_group
 
         .insert_value(rd_filter_insert_hash),
         .insert_tag(rd_filter_insert_tag),
-        .insert_en(cci_mpf_c0TxIsReadReq(fiu_buf.c0Tx)),
+        .insert_en(rd_filter_insert_en),
 
         .remove_value(rd_filter_remove_hash),
         .remove_tag(rd_filter_remove_tag),
@@ -269,7 +271,7 @@ module cci_mpf_shim_wro_cam_group
 
         .insert_value(wr_filter_insert_hash),
         .insert_tag(wr_filter_insert_tag),
-        .insert_en(cci_mpf_c1TxIsWriteReq(fiu_buf.c1Tx)),
+        .insert_en(wr_filter_insert_en),
 
         .remove_value(wr_filter_remove_hash),
         .remove_tag(wr_filter_remove_tag),
@@ -318,6 +320,9 @@ module cci_mpf_shim_wro_cam_group
 
         // Tag to pass to the filter to remove the entry
         logic filterTag;
+
+        // Enforce order?
+        logic enforceOrder;
     }
     t_c0_heap_entry;
 
@@ -360,6 +365,9 @@ module cci_mpf_shim_wro_cam_group
 
         // Tag to pass to the filter to remove the entry
         logic filterTag;
+
+        // Enforce order?
+        logic enforceOrder;
     }
     t_c1_heap_entry;
 
@@ -493,8 +501,13 @@ module cci_mpf_shim_wro_cam_group
     // processed.
     assign rd_filter_insert_hash = c0_afu_pipe[FILTER_PIPE_LAST].c0AddrHash;
     assign rd_filter_insert_tag = rd_filter_test_insert_tag[0];
+    assign rd_filter_insert_en = c0_process_requests &&
+                                 cci_mpf_c0_getReqCheckOrder(c0_afu_pipe[FILTER_PIPE_LAST].c0Tx.hdr);
+
     assign wr_filter_insert_hash = c1_afu_pipe[FILTER_PIPE_LAST].c1AddrHash;
     assign wr_filter_insert_tag = wr_filter_test_insert_tag[1];
+    assign wr_filter_insert_en = c1_process_requests &&
+                                 cci_mpf_c1_getReqCheckOrder(c1_afu_pipe[FILTER_PIPE_LAST].c1Tx.hdr);
 
     //
     // Now that we know whether the oldest request was processed we can
@@ -585,11 +598,13 @@ module cci_mpf_shim_wro_cam_group
     always_comb
     begin
         c0_afu_pipe_init.c0Tx = afu_buf.c0Tx;
-        c0_afu_pipe_init.c0Tx.valid = cci_mpf_c0TxIsValid(afu_buf.c0Tx);
+        c0_afu_pipe_init.c0Tx.hdr.ext.checkLoadStoreOrder =
+            afu_buf.c0Tx.valid && afu_buf.c0Tx.hdr.ext.checkLoadStoreOrder;
         c0_afu_pipe_init.c0AddrHash = c0_hash[0];
 
         c1_afu_pipe_init.c1Tx = afu_buf.c1Tx;
-        c1_afu_pipe_init.c1Tx.valid = cci_mpf_c1TxIsValid(afu_buf.c1Tx);
+        c1_afu_pipe_init.c1Tx.hdr.ext.checkLoadStoreOrder =
+            afu_buf.c1Tx.valid && afu_buf.c1Tx.hdr.ext.checkLoadStoreOrder;
         c1_afu_pipe_init.c1AddrHash = c1_hash[0];
     end
 
@@ -613,9 +628,9 @@ module cci_mpf_shim_wro_cam_group
             begin
                 c1_new_req_conflict[h] =
                     c1_new_req_conflict[h] ||
-                    (cci_mpf_c1TxIsValid(c1_afu_pipe[i].c1Tx) &&
+                    (cci_mpf_c1_getReqCheckOrder(c1_afu_pipe[i].c1Tx.hdr) &&
                      (c1_hash[h] == c1_afu_pipe[i].c1AddrHash)) ||
-                    (cci_mpf_c0TxIsValid(c0_afu_pipe[i].c0Tx) &&
+                    (cci_mpf_c0_getReqCheckOrder(c0_afu_pipe[i].c0Tx.hdr) &&
                      (c1_hash[h] == c0_afu_pipe[i].c0AddrHash));
             end
 
@@ -628,9 +643,9 @@ module cci_mpf_shim_wro_cam_group
             begin
                 c0_new_req_conflict[h] =
                     c0_new_req_conflict[h] ||
-                    (cci_mpf_c1TxIsValid(c1_afu_pipe[i].c1Tx) &&
+                    (cci_mpf_c1_getReqCheckOrder(c1_afu_pipe[i].c1Tx.hdr) &&
                      (c0_hash[h] == c1_afu_pipe[i].c1AddrHash)) ||
-                    (cci_mpf_c0TxIsValid(c0_afu_pipe[i].c0Tx) &&
+                    (cci_mpf_c0_getReqCheckOrder(c0_afu_pipe[i].c0Tx.hdr) &&
                      (c0_hash[h] == c0_afu_pipe[i].c0AddrHash));
             end
         end
@@ -734,6 +749,7 @@ module cci_mpf_shim_wro_cam_group
     begin
         c0_heap_enqData.addrHash = rd_filter_insert_hash;
         c0_heap_enqData.filterTag = rd_filter_insert_tag;
+        c0_heap_enqData.enforceOrder = cci_mpf_c0_getReqCheckOrder(c0_afu_pipe[FILTER_PIPE_LAST].c0Tx.hdr);
     end
 
     // Request heap read as fiu responses arrive.  The heap's value will be
@@ -751,7 +767,8 @@ module cci_mpf_shim_wro_cam_group
     begin
         rd_filter_remove_hash = c0_heap_readRsp.addrHash;
         rd_filter_remove_tag = c0_heap_readRsp.filterTag;
-        rd_filter_remove_en = cci_c0Rx_isReadRsp(fiu_buf.c0Rx);
+        rd_filter_remove_en = cci_c0Rx_isReadRsp(fiu_buf.c0Rx) &&
+                              c0_heap_readRsp.enforceOrder;
     end
 
 
@@ -769,6 +786,7 @@ module cci_mpf_shim_wro_cam_group
     begin
         c1_heap_enqData.addrHash = wr_filter_insert_hash;
         c1_heap_enqData.filterTag = wr_filter_insert_tag;
+        c1_heap_enqData.enforceOrder = cci_mpf_c1_getReqCheckOrder(c1_afu_pipe[FILTER_PIPE_LAST].c1Tx.hdr);
     end
 
     // Request heap read as fiu responses arrive. The heap's value will be
@@ -786,7 +804,8 @@ module cci_mpf_shim_wro_cam_group
     begin
         wr_filter_remove_hash = c1_heap_readRsp.addrHash;
         wr_filter_remove_tag = c1_heap_readRsp.filterTag;
-        wr_filter_remove_en = cci_c1Rx_isWriteRsp(fiu_buf.c1Rx);
+        wr_filter_remove_en = cci_c1Rx_isWriteRsp(fiu_buf.c1Rx) &&
+                              c1_heap_readRsp.enforceOrder;
     end
 
 

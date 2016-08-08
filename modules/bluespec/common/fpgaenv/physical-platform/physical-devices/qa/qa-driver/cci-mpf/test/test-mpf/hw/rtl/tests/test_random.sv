@@ -81,34 +81,53 @@ module test_afu
     //
     // ====================================================================
 
-    // Input address size
-    localparam N_RAND_ADDR_BITS = 13;
+    typedef logic [31:0] t_random;
 
-    // Output address size
-    localparam N_ADDR_BITS = 18;
+    // Size of the allocated memory address region
+    localparam N_MEM_REGION_BITS = 18;
 
-    // Number of input address bits mapped to low address bits
-    localparam N_LOW_ADDR_BITS = 7;
-    // Number of zero bits in the middle of an address
-    localparam N_MIDDLE_ADDR_BITS = N_ADDR_BITS - N_RAND_ADDR_BITS;
-    // Number of input address bits mapped to high address bits
-    localparam N_HIGH_ADDR_BITS = N_RAND_ADDR_BITS - N_LOW_ADDR_BITS;
+    // Size of the checker region.  If this is smaller than N_MEM_REGION_BITS
+    // then a subset of references are checked.
+    localparam N_CHECKED_ADDR_BITS = 15;
+    typedef logic [N_CHECKED_ADDR_BITS-1 : 0] t_checked_addr_idx;
 
-    typedef logic [N_RAND_ADDR_BITS-1 : 0] t_rand_addr_in;
+    // The checked address space is a mapping from the larger memory region,
+    // taking mostly low address bits from the memory region but including
+    // a few high bits so that multiple virtual pages are checked.  References
+    // are checked only when the unmapped middle address bits are zero.
+
+    localparam N_CHECKED_LOW_ADDR_BITS = 9;
+
+    typedef struct packed {
+        logic [N_CHECKED_ADDR_BITS-N_CHECKED_LOW_ADDR_BITS-1 : 0] checked_high;
+        logic [N_MEM_REGION_BITS-N_CHECKED_ADDR_BITS-1 : 0] unchecked_middle;
+        logic [N_CHECKED_LOW_ADDR_BITS-1 : 0] checked_low;
+    }
+    t_mapped_addr_bits;
+
 
     // Random address type from a 32 bit LFSR
-    function automatic t_rand_addr_in randAddrInFromLFSR(logic [31:0] r);
-        return t_rand_addr_in'(r);
+    function automatic t_mapped_addr_bits randAddrInFromLFSR(t_random r);
+        return t_mapped_addr_bits'(r);
     endfunction
 
-    // Cache line address from a random address type
-    function automatic t_cci_clAddr randAddr(t_cci_clAddr base, t_rand_addr_in r);
-        logic [N_HIGH_ADDR_BITS-1 : 0] r_high;
-        logic [N_LOW_ADDR_BITS-1 : 0] r_low;
+    // Random cache line address from a mapped address
+    function automatic t_cci_clAddr randAddr(t_cci_clAddr base,
+                                             t_mapped_addr_bits m);
+        return base + t_cci_clAddr'(m);
+    endfunction
 
-        { r_high, r_low } = r;
+    // Is an index checked?  Only a subset of references have a corresponding
+    // block RAM check value.
+    function automatic logic addrIsChecked(t_mapped_addr_bits m);
+        // Check only if the unchecked middle bits are all zero.  Any
+        // single state of the unchecked middle bits would work.
+        return (|(m.unchecked_middle) == 1'b0);
+    endfunction
 
-        return base + t_cci_clAddr'({ r_high, N_MIDDLE_ADDR_BITS'(0), r_low });
+    // Map full random address space to the checked space
+    function automatic t_checked_addr_idx checkedAddr(t_mapped_addr_bits m);
+        return {m.checked_high, m.checked_low};
     endfunction
 
 
@@ -118,6 +137,8 @@ module test_afu
     //
     // ====================================================================
 
+    typedef logic [39 : 0] t_counter;
+
     t_cci_clAddr dsm;
     t_cci_clAddr mem;
     t_cci_clAddr memMask;
@@ -125,7 +146,9 @@ module test_afu
     //
     // Read CSR from host
     //
-    logic [39 : 0] cnt_rd_rsp;
+    t_counter cnt_rd_rsp;
+    t_counter cnt_wr_rsp;
+    t_counter cnt_checked_rd;
 
     always_comb
     begin
@@ -137,10 +160,9 @@ module test_afu
 
         // CSR 0 returns random address mapping details so the host can
         // compute the memory size.
-        csrs.cpu_rd_csrs[0].data = { 16'(N_HIGH_ADDR_BITS),
-                                     16'(N_MIDDLE_ADDR_BITS),
-                                     16'(N_LOW_ADDR_BITS),
-                                     16'(N_ADDR_BITS) };
+        csrs.cpu_rd_csrs[0].data = { 32'(0),
+                                     16'(N_CHECKED_ADDR_BITS),
+                                     16'(N_MEM_REGION_BITS) };
 
         csrs.cpu_rd_csrs[1].data = 64'(dsm);
         csrs.cpu_rd_csrs[2].data = 64'(mem);
@@ -148,8 +170,14 @@ module test_afu
         // Number of checked read responses
         csrs.cpu_rd_csrs[4].data = 64'(cnt_rd_rsp);
 
+        // Number of completed writes
+        csrs.cpu_rd_csrs[5].data = 64'(cnt_wr_rsp);
+
+        // Number of checked reads
+        csrs.cpu_rd_csrs[6].data = 64'(cnt_checked_rd);
+
         // Various state
-        csrs.cpu_rd_csrs[5].data = { 48'(0),
+        csrs.cpu_rd_csrs[7].data = { 48'(0),
                                      8'(state),
                                      3'(0),
                                      chk_ram_rdy,
@@ -162,8 +190,13 @@ module test_afu
     //
     // Incoming configuration
     //
-    typedef logic [39 : 0] t_cycles;
-    t_cycles cycles_rem;
+    t_counter cycles_rem;
+    logic enable_writes;
+    logic enable_reads;
+
+    logic enable_wro;
+    logic enable_checker;
+    logic enable_rw_conflicts;
 
     //
     // Consume configuration CSR writes
@@ -195,20 +228,30 @@ module test_afu
     always_ff @(posedge clk)
     begin
         // Normal case: decrement cycle counter
-        if (cycles_rem != t_cycles'(0))
+        if (cycles_rem != t_counter'(0))
         begin
-            cycles_rem <= cycles_rem - t_cycles'(1);
+            cycles_rem <= cycles_rem - t_counter'(1);
         end
 
         // Execution cycle count update from the host?
         if (csrs.cpu_wr_csrs[0].en)
         begin
-            cycles_rem <= csrs.cpu_wr_csrs[0].data;
+            { cycles_rem,
+              enable_rw_conflicts,
+              enable_checker,
+              enable_wro,
+              enable_writes,
+              enable_reads } <= csrs.cpu_wr_csrs[0].data;
         end
 
         if (reset)
         begin
-            cycles_rem <= t_cycles'(0);
+            cycles_rem <= t_counter'(0);
+            enable_writes <= 1'b0;
+            enable_reads <= 1'b0;
+            enable_wro <= 1'b0;
+            enable_checker <= 1'b0;
+            enable_rw_conflicts <= 1'b0;
         end
     end
 
@@ -232,7 +275,7 @@ module test_afu
           STATE_RUN:
             begin
                 // Finished ?
-                if (cycles_rem == t_cycles'(0))
+                if (cycles_rem == t_counter'(0))
                 begin
                     state <= STATE_TERMINATE;
                     $display("Ending test...");
@@ -272,7 +315,7 @@ module test_afu
     always_comb
     begin
         rd_params = cci_mpf_defaultReqHdrParams();
-        rd_params.checkLoadStoreOrder = 1'b1;
+        rd_params.checkLoadStoreOrder = enable_wro;
         rd_params.vc_sel = eVC_VA;
         rd_params.mapVAtoPhysChannel = 1'b1;
     end
@@ -280,7 +323,7 @@ module test_afu
     //
     // Random address
     //
-    logic [31:0] rd_addr_lfsr;
+    t_random rd_lfsr_val;
     cci_mpf_prim_lfsr32
       #(
         .INITIAL_VALUE(32'h2721)
@@ -290,31 +333,47 @@ module test_afu
         .clk,
         .reset,
         .en(1'b1),
-        .value(rd_addr_lfsr)
+        .value(rd_lfsr_val)
         );
 
+    t_mapped_addr_bits rd_addr_rand_idx;
+    always_comb
+    begin
+        rd_addr_rand_idx = randAddrInFromLFSR(rd_lfsr_val);
+
+        // If read/write conflicts aren't allowed then force an address bit
+        // to zero.  The corresponding bit for writes will be forced to one.
+        if (! enable_rw_conflicts)
+        begin
+            rd_addr_rand_idx.checked_low[0] = 1'b0;
+        end
+    end
 
     t_cci_clAddr rd_rand_addr;
-    t_rand_addr_in rd_addr_idx;
-    t_rand_addr_in rd_addr_idx_q;
+    logic rd_addr_is_checked;
+    t_checked_addr_idx rd_addr_chk_idx;
+    t_checked_addr_idx rd_addr_chk_idx_q;
 
     // Map the random address index to the address space
     always_ff @(posedge clk)
     begin
-        rd_rand_addr <= randAddr(mem, randAddrInFromLFSR(rd_addr_lfsr));
+        rd_rand_addr <= randAddr(mem, rd_addr_rand_idx);
 
-        rd_addr_idx <= randAddrInFromLFSR(rd_addr_lfsr);
-        rd_addr_idx_q <= rd_addr_idx;
+        rd_addr_is_checked <= addrIsChecked(rd_addr_rand_idx);
+        rd_addr_chk_idx <= checkedAddr(rd_addr_rand_idx);
+        rd_addr_chk_idx_q <= rd_addr_chk_idx;
     end
 
 
     t_cci_mpf_c0_ReqMemHdr rd_hdr;
     always_comb
     begin
-        rd_hdr = cci_mpf_c0_genReqHdr(eREQ_RDLINE_S,
-                                      rd_rand_addr,
-                                      t_cci_mdata'(0),
-                                      rd_params);
+        rd_hdr = cci_mpf_c0_genReqHdr(
+                     eREQ_RDLINE_S,
+                     rd_rand_addr,
+                     // Indicate in mdata whether requested address is checked
+                     t_cci_mdata'(rd_addr_is_checked ? 1'b1 : 1'b0),
+                     rd_params);
     end
 
     always_ff @(posedge clk)
@@ -324,6 +383,7 @@ module test_afu
         fiu.c0Tx <=
             cci_mpf_genC0TxReadReq(rd_hdr,
                                    (state == STATE_RUN) &&
+                                   enable_reads &&
                                    chk_rdy &&
                                    ! fiu.c0TxAlmFull);
 
@@ -333,6 +393,18 @@ module test_afu
         end
     end
 
+    always_ff @(posedge clk)
+    begin
+        if (cci_c0Rx_isReadRsp(fiu.c0Rx))
+        begin
+            cnt_rd_rsp <= cnt_rd_rsp + t_counter'(1);
+        end
+
+        if (reset || start_new_run)
+        begin
+            cnt_rd_rsp <= t_counter'(0);
+        end
+    end
 
     assign fiu.c2Tx.mmioRdValid = 1'b0;
 
@@ -347,7 +419,7 @@ module test_afu
     always_comb
     begin
         wr_params = cci_mpf_defaultReqHdrParams();
-        wr_params.checkLoadStoreOrder = 1'b1;
+        wr_params.checkLoadStoreOrder = enable_wro;
         wr_params.vc_sel = eVC_VA;
         wr_params.mapVAtoPhysChannel = 1'b1;
     end
@@ -355,7 +427,7 @@ module test_afu
     //
     // Random address
     //
-    logic [31:0] wr_addr_lfsr;
+    t_random wr_lfsr_val;
     cci_mpf_prim_lfsr32
       #(
         .INITIAL_VALUE(32'h8520)
@@ -365,21 +437,35 @@ module test_afu
         .clk,
         .reset,
         .en(1'b1),
-        .value(wr_addr_lfsr)
+        .value(wr_lfsr_val)
         );
 
+    t_mapped_addr_bits wr_addr_rand_idx;
+    always_comb
+    begin
+        wr_addr_rand_idx = randAddrInFromLFSR(wr_lfsr_val);
+
+        // If read/write conflicts aren't allowed then force an address bit
+        // to one.  The corresponding bit for reads will be forced to zero.
+        if (! enable_rw_conflicts)
+        begin
+            wr_addr_rand_idx.checked_low[0] = 1'b1;
+        end
+    end
 
     t_cci_clAddr wr_rand_addr;
-    t_rand_addr_in wr_addr_idx;
-    t_rand_addr_in wr_addr_idx_q;
+    logic wr_addr_is_checked;
+    t_checked_addr_idx wr_addr_chk_idx;
+    t_checked_addr_idx wr_addr_chk_idx_q;
 
     // Map the random address index to the address space
     always_ff @(posedge clk)
     begin
-        wr_rand_addr <= randAddr(mem, randAddrInFromLFSR(wr_addr_lfsr));
+        wr_rand_addr <= randAddr(mem, wr_addr_rand_idx);
 
-        wr_addr_idx <= randAddrInFromLFSR(wr_addr_lfsr);
-        wr_addr_idx_q <= wr_addr_idx;
+        wr_addr_is_checked <= addrIsChecked(wr_addr_rand_idx);
+        wr_addr_chk_idx <= checkedAddr(wr_addr_rand_idx);
+        wr_addr_chk_idx_q <= wr_addr_chk_idx;
     end
 
 
@@ -414,11 +500,11 @@ module test_afu
         end
     endgenerate
 
-    logic wr_valid_q;
+    logic chk_wr_valid_q;
 
     always_ff @(posedge clk)
     begin
-        wr_valid_q <= 1'b0;
+        chk_wr_valid_q <= 1'b0;
         fiu.c1Tx <= cci_mpf_genC1TxWriteReq(wr_hdr,
                                             t_cci_clData'(wr_rand_data),
                                             1'b0);
@@ -428,8 +514,8 @@ module test_afu
             // Normal running state
             if (state == STATE_RUN)
             begin
-                fiu.c1Tx.valid <= chk_rdy;
-                wr_valid_q <= chk_rdy;
+                fiu.c1Tx.valid <= chk_rdy && enable_writes;
+                chk_wr_valid_q <= chk_rdy && enable_writes && wr_addr_is_checked;
             end
 
             // Normal termination: signal done by writing to status memory
@@ -452,6 +538,19 @@ module test_afu
         if (reset)
         begin
             fiu.c1Tx.valid <= 1'b0;
+        end
+    end
+
+    always_ff @(posedge clk)
+    begin
+        if (cci_c1Rx_isWriteRsp(fiu.c1Rx))
+        begin
+            cnt_wr_rsp <= cnt_wr_rsp + t_counter'(1);
+        end
+
+        if (reset || start_new_run)
+        begin
+            cnt_wr_rsp <= t_counter'(0);
         end
     end
 
@@ -489,9 +588,9 @@ module test_afu
 
     cci_mpf_prim_ram_simple_init
       #(
-        .N_ENTRIES(1 << N_RAND_ADDR_BITS),
+        .N_ENTRIES(1 << N_CHECKED_ADDR_BITS),
         .N_DATA_BITS($bits(t_mem_tag)),
-        .N_OUTPUT_REG_STAGES(1),
+        .N_OUTPUT_REG_STAGES(2),
         .REGISTER_WRITES(1),
         .BYPASS_REGISTERED_WRITES(1)
         )
@@ -502,12 +601,12 @@ module test_afu
         .rdy(chk_ram_rdy),
 
         // Update RAM with written data
-        .wen(wr_valid_q),
-        .waddr(wr_addr_idx_q),
+        .wen(chk_wr_valid_q),
+        .waddr(wr_addr_chk_idx_q),
         .wdata(lineToTag(fiu.c1Tx.data)),
 
         // Reads match CCI read requests
-        .raddr(rd_addr_idx_q),
+        .raddr(rd_addr_chk_idx_q),
         .rdata(rd_chk_data)
         );
 
@@ -515,22 +614,28 @@ module test_afu
     // with CCI read responses.
     logic chk_rd_q;
     logic chk_rd_qq;
+    logic chk_rd_qqq;
 
     t_cci_clAddr chk_rd_addr_q;
     t_cci_clAddr chk_rd_addr_qq;
+    t_cci_clAddr chk_rd_addr_qqq;
 
     always_ff @(posedge clk)
     begin
-        chk_rd_q <= fiu.c0Tx.valid;
+        // mdata[0] indicates whether the read is checked
+        chk_rd_q <= fiu.c0Tx.valid && fiu.c0Tx.hdr.base.mdata[0];
         chk_rd_qq <= chk_rd_q;
+        chk_rd_qqq <= chk_rd_qq;
 
         chk_rd_addr_q <= fiu.c0Tx.hdr.base.address;
         chk_rd_addr_qq <= chk_rd_addr_q;
+        chk_rd_addr_qqq <= chk_rd_addr_qq;
 
         if (reset)
         begin
             chk_rd_q <= 1'b0;
             chk_rd_qq <= 1'b0;
+            chk_rd_qqq <= 1'b0;
         end
     end
 
@@ -559,8 +664,8 @@ module test_afu
         .clk,
         .reset,
 
-        .enq_data({rd_chk_data, chk_rd_addr_qq}),
-        .enq_en(chk_rd_qq),
+        .enq_data({rd_chk_data, chk_rd_addr_qqq}),
+        .enq_en(chk_rd_qqq),
         .notFull(),
         .almostFull(chk_fifo_full),
 
@@ -584,7 +689,8 @@ module test_afu
         .reset,
 
         .enq_data({lineToTag(fiu.c0Rx.data), fiu.c0Rx.data}),
-        .enq_en(cci_c0Rx_isReadRsp(fiu.c0Rx)),
+        // mdata[0] indicates whether the read is checked
+        .enq_en(cci_c0Rx_isReadRsp(fiu.c0Rx) && fiu.c0Rx.hdr.mdata[0]),
         .notFull(),
         .almostFull(),
 
@@ -602,11 +708,11 @@ module test_afu
         begin
             if (fifo_deq)
             begin
-                cnt_rd_rsp <= cnt_rd_rsp + 1;
+                cnt_checked_rd <= cnt_checked_rd + t_counter'(1);
 
                 if (c0Rx_tag != chk_first)
                 begin
-                    raise_error <= 1'b1;
+                    raise_error <= enable_checker;
 
                     if (! reset)
                     begin
@@ -622,7 +728,7 @@ module test_afu
         if (reset || start_new_run)
         begin
             raise_error <= 1'b0;
-            cnt_rd_rsp <= 0;
+            cnt_checked_rd <= t_counter'(0);
         end
     end
 

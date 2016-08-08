@@ -25,7 +25,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 #include "test_random.h"
-
+#include <boost/format.hpp>
 
 // ========================================================================
 //
@@ -39,9 +39,14 @@ void testConfigOptions(po::options_description &desc)
 {
     // Add test-specific options
     desc.add_options()
+        ("enable-checker", po::value<bool>()->default_value(true), "Enable read value checker")
+        ("enable-reads", po::value<bool>()->default_value(true), "Enable reads")
+        ("enable-rw-conflicts", po::value<bool>()->default_value(true), "Enable address conflicts between reads and writes")
+        ("enable-writes", po::value<bool>()->default_value(true), "Enable writes")
+        ("enable-wro", po::value<bool>()->default_value(true), "Enable write/read hazard detection")
+        ("repeat", po::value<int>()->default_value(1), "Number of repetitions")
         ("tc", po::value<int>()->default_value(0), "Test length (cycles)")
         ("ts", po::value<int>()->default_value(1), "Test length (seconds)")
-        ("repeat", po::value<int>()->default_value(1), "Number of repetitions")
         ;
 }
 
@@ -81,14 +86,36 @@ btInt TEST_RANDOM::test()
     writeTestCSR(2, uint64_t(mem) / CL(1));
     writeTestCSR(3, (n_bytes / CL(1)) - 1);
 
+    // What's the AFU frequency (MHz)?
+    uint64_t afu_mhz = readCommonCSR(CSR_COMMON_FREQ);
+
     uint64_t cycles = uint64_t(vm["tc"].as<int>());
     if (cycles == 0)
     {
         // Didn't specify --tc.  Use seconds instead.
-
-        // What's the AFU frequency (MHz)?
-        uint64_t afu_mhz = readCommonCSR(CSR_COMMON_FREQ);
         cycles = uint64_t(vm["ts"].as<int>()) * afu_mhz * 1000 * 1000;
+    }
+
+    // Run length in seconds
+    double run_sec = double(cycles) / (double(afu_mhz) * 1000.0 * 1000.0);
+
+    const uint64_t counter_bits = 40;
+    if (cycles & (int64_t(-1) << counter_bits))
+    {
+        cerr << "Run length overflows " << counter_bits << " bit counter" << endl;
+        exit(1);
+    }
+
+    uint64_t enable_checker = (vm["enable-checker"].as<bool>() ? 1 : 0);
+    uint64_t enable_reads = (vm["enable-reads"].as<bool>() ? 1 : 0);
+    uint64_t enable_rw_conflicts = (vm["enable-rw-conflicts"].as<bool>() ? 1 : 0);
+    uint64_t enable_writes = (vm["enable-writes"].as<bool>() ? 1 : 0);
+    uint64_t enable_wro = (vm["enable-wro"].as<bool>() ? 1 : 0);
+
+    // Wait for the HW to be ready
+    while (((readTestCSR(7) >> 4) & 1) == 0)
+    {
+        sleep(1);
     }
 
     uint64_t trips = uint64_t(vm["repeat"].as<int>());
@@ -96,17 +123,35 @@ btInt TEST_RANDOM::test()
     while (trips--)
     {
         // Start the test
-        writeTestCSR(0, cycles);
+        writeTestCSR(0,
+                     (cycles << 5) |
+                     (enable_rw_conflicts << 4) |
+                     (enable_checker << 3) |
+                     (enable_wro << 2) |
+                     (enable_writes << 1) |
+                     enable_reads);
 
         // Wait for test to signal it is complete
         while (*dsm == 0) ;
 
-        cout << "[" << ++iter << "] Checked " << readTestCSR(4) << " reads" << endl;
+        totalCycles += cycles;
+
+        uint64_t read_cnt = readTestCSR(4);
+        uint64_t write_cnt = readTestCSR(5);
+        uint64_t checked_read_cnt = readTestCSR(6);
+
+        cout << "[" << ++iter << "] "
+             << read_cnt << " reads ("
+             << boost::format("%.1f") % ((double(read_cnt) * CL(1) / 0x40000000) / run_sec) << " GB/s), "
+             << write_cnt << " writes ("
+             << boost::format("%.1f") % ((double(write_cnt) * CL(1) / 0x40000000) / run_sec) << " GB/s) "
+             << " [" << checked_read_cnt << " reads checked]"
+             << endl;
 
         if (*dsm != 1)
         {
             // Error!
-            dbgRegDump(readTestCSR(5));
+            dbgRegDump(readTestCSR(7));
             return (*dsm == 1) ? 1 : 2;
         }
 
@@ -114,6 +159,13 @@ btInt TEST_RANDOM::test()
     }
 
     return 0;
+}
+
+
+uint64_t
+TEST_RANDOM::testNumCyclesExecuted()
+{
+    return totalCycles;
 }
 
 

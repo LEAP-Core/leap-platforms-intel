@@ -127,12 +127,16 @@ module cci_mpf_shim_wro_buffer_and_hash
     t_hash c1_hash_next;
     logic c1_hash_next_en;
 
+    function automatic t_hash hashAddr(t_cci_clAddr addr);
+        return t_hash'(hash32(addr));
+    endfunction
+
     always_ff @(posedge clk)
     begin
-        c0_hash_next <= t_hash'(hash32(c0_req_addr));
+        c0_hash_next <= hashAddr(c0_req_addr);
         c0_hash_next_en <= cci_mpf_c0TxIsValid(afu_raw.c0Tx);
 
-        c1_hash_next <= t_hash'(hash32(c1_req_addr));
+        c1_hash_next <= hashAddr(c1_req_addr);
         c1_hash_next_en <= cci_mpf_c1TxIsValid(afu_raw.c1Tx);
 
         if (reset)

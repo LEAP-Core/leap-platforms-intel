@@ -39,7 +39,8 @@ class TEST_RANDOM : public CCI_TEST
 
   public:
     TEST_RANDOM(const po::variables_map& vm, AAL_SVC_WRAPPER& svc) :
-        CCI_TEST(vm, svc)
+        CCI_TEST(vm, svc),
+        totalCycles(0)
     {};
 
     ~TEST_RANDOM() {};
@@ -47,8 +48,12 @@ class TEST_RANDOM : public CCI_TEST
     // Returns 0 on success
     btInt test();
 
+    uint64_t testNumCyclesExecuted();
+
   private:
     void dbgRegDump(uint64_t r);
+
+    uint64_t totalCycles;
 };
 
 #endif // _TEST_RANDOM_H_

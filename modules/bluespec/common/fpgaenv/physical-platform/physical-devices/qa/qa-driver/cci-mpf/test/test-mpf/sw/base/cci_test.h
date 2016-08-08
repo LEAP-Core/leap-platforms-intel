@@ -60,6 +60,13 @@ class CCI_TEST
     // Returns 0 on success
     virtual btInt test() = 0;
 
+    // Number of cycles executed in test.  Optional virtual method.  The
+    // base class returns 0.
+    virtual uint64_t testNumCyclesExecuted()
+    {
+        return 0;
+    }
+
     //
     // Wrappers for commonly used requests
     //

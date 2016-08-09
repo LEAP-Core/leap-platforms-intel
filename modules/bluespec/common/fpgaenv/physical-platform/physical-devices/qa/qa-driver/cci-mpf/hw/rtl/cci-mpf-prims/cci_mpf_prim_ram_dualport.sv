@@ -42,6 +42,9 @@ module cci_mpf_prim_ram_dualport
     // Number of extra stages of output register buffering to add
     parameter N_OUTPUT_REG_STAGES = 0,
 
+    // Other options are "OLD_DATA" and "NEW_DATA"
+    parameter READ_DURING_WRITE_MODE_MIXED_PORTS = "DONT_CARE",
+
     // Default returns new data for reads on same port as a write.
     // (No NBE read means return X in masked bytes, which we don't support
     // in this interface.)  Set to OLD_DATA to return the current value.
@@ -92,7 +95,7 @@ module cci_mpf_prim_ram_dualport
         .rdcontrol_reg_b("CLOCK1"),
         .address_reg_b("CLOCK1"),
         .outdata_reg_b(OUTDATA_REGISTERED1),
-        .read_during_write_mode_mixed_ports("DONT_CARE"),
+        .read_during_write_mode_mixed_ports(READ_DURING_WRITE_MODE_MIXED_PORTS),
         .read_during_write_mode_port_a(READ_DURING_WRITE_MODE_PORT_A),
         .read_during_write_mode_port_b(READ_DURING_WRITE_MODE_PORT_B)
         )
@@ -157,6 +160,15 @@ module cci_mpf_prim_ram_dualport_init
     // Number of extra stages of output register buffering to add
     parameter N_OUTPUT_REG_STAGES = 0,
 
+    // Other options are "OLD_DATA" and "NEW_DATA"
+    parameter READ_DURING_WRITE_MODE_MIXED_PORTS = "DONT_CARE",
+
+    // Default returns new data for reads on same port as a write.
+    // (No NBE read means return X in masked bytes.)
+    // Set to OLD_DATA to return the current value.
+    parameter READ_DURING_WRITE_MODE_PORT_A = "NEW_DATA_NO_NBE_READ",
+    parameter READ_DURING_WRITE_MODE_PORT_B = "NEW_DATA_NO_NBE_READ",
+
     parameter INIT_VALUE = N_DATA_BITS'(0)
     )
    (
@@ -185,7 +197,10 @@ module cci_mpf_prim_ram_dualport_init
       #(
         .N_ENTRIES(N_ENTRIES),
         .N_DATA_BITS(N_DATA_BITS),
-        .N_OUTPUT_REG_STAGES(N_OUTPUT_REG_STAGES)
+        .N_OUTPUT_REG_STAGES(N_OUTPUT_REG_STAGES),
+        .READ_DURING_WRITE_MODE_MIXED_PORTS(READ_DURING_WRITE_MODE_MIXED_PORTS),
+        .READ_DURING_WRITE_MODE_PORT_A(READ_DURING_WRITE_MODE_PORT_A),
+        .READ_DURING_WRITE_MODE_PORT_B(READ_DURING_WRITE_MODE_PORT_B)
         )
       ram
        (

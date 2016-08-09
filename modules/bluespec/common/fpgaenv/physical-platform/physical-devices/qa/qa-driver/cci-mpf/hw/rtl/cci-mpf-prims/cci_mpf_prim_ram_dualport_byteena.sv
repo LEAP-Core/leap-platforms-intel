@@ -44,6 +44,9 @@ module cci_mpf_prim_ram_dualport_byteena
     // Size of a byte
     parameter N_BYTE_BITS = 8,
 
+    // Other options are "OLD_DATA" and "NEW_DATA"
+    parameter READ_DURING_WRITE_MODE_MIXED_PORTS = "DONT_CARE",
+
     // Default returns new data for reads on same port as a write.
     // (No NBE read means return X in masked bytes.)
     // Set to OLD_DATA to return the current value.
@@ -66,6 +69,8 @@ module cci_mpf_prim_ram_dualport_byteena
     output logic [N_DATA_BITS-1 : 0] rdata1
     );
 
+    tri1 byteena0;
+    tri1 byteena1;
 
     logic [N_DATA_BITS-1 : 0] mem_rd0[0 : N_OUTPUT_REG_STAGES];
     assign rdata0 = mem_rd0[N_OUTPUT_REG_STAGES];
@@ -99,7 +104,7 @@ module cci_mpf_prim_ram_dualport_byteena
         .rdcontrol_reg_b("CLOCK1"),
         .address_reg_b("CLOCK1"),
         .outdata_reg_b(OUTDATA_REGISTERED1),
-        .read_during_write_mode_mixed_ports("DONT_CARE"),
+        .read_during_write_mode_mixed_ports(READ_DURING_WRITE_MODE_MIXED_PORTS),
         .read_during_write_mode_port_a(READ_DURING_WRITE_MODE_PORT_A),
         .read_during_write_mode_port_b(READ_DURING_WRITE_MODE_PORT_B)
         )
@@ -152,3 +157,113 @@ module cci_mpf_prim_ram_dualport_byteena
     endgenerate
 
 endmodule // cci_mpf_prim_ram_dualport_byteena
+
+
+//
+// Dual port byte masked RAM initialized with a constant on reset.
+//
+module cci_mpf_prim_ram_dualport_byteena_init
+  #(
+    parameter N_ENTRIES = 32,
+    parameter N_DATA_BITS = 64,
+    // Number of extra stages of output register buffering to add
+    parameter N_OUTPUT_REG_STAGES = 0,
+
+    // Size of a byte
+    parameter N_BYTE_BITS = 8,
+
+    // Other options are "OLD_DATA" and "NEW_DATA"
+    parameter READ_DURING_WRITE_MODE_MIXED_PORTS = "DONT_CARE",
+
+    // Default returns new data for reads on same port as a write.
+    // (No NBE read means return X in masked bytes.)
+    // Set to OLD_DATA to return the current value.
+    parameter READ_DURING_WRITE_MODE_PORT_A = "NEW_DATA_NO_NBE_READ",
+    parameter READ_DURING_WRITE_MODE_PORT_B = "NEW_DATA_NO_NBE_READ",
+
+    parameter INIT_VALUE = N_DATA_BITS'(0)
+    )
+   (
+    input  logic reset,
+    // Goes high after initialization complete and stays high.
+    output logic rdy,
+
+    input  logic clk0,
+    input  logic [$clog2(N_ENTRIES)-1 : 0] addr0,
+    input  logic wen0,
+    input  logic [(N_DATA_BITS / N_BYTE_BITS)-1 : 0] byteena0,
+    input  logic [N_DATA_BITS-1 : 0] wdata0,
+    output logic [N_DATA_BITS-1 : 0] rdata0,
+
+    input  logic clk1,
+    input  logic [$clog2(N_ENTRIES)-1 : 0] addr1,
+    input  logic wen1,
+    input  logic [(N_DATA_BITS / N_BYTE_BITS)-1 : 0] byteena1,
+    input  logic [N_DATA_BITS-1 : 0] wdata1,
+    output logic [N_DATA_BITS-1 : 0] rdata1
+    );
+
+    logic wen0_local;
+
+    logic [$clog2(N_ENTRIES)-1 : 0] addr1_local;
+    logic wen1_local;
+    logic [N_DATA_BITS-1 : 0] wdata1_local;
+    logic [(N_DATA_BITS / N_BYTE_BITS)-1 : 0] byteena1_local;
+
+    tri1 byteena0;
+    tri1 byteena1;
+
+    cci_mpf_prim_ram_dualport_byteena
+      #(
+        .N_ENTRIES(N_ENTRIES),
+        .N_DATA_BITS(N_DATA_BITS),
+        .N_OUTPUT_REG_STAGES(N_OUTPUT_REG_STAGES),
+        .N_BYTE_BITS(N_BYTE_BITS),
+        .READ_DURING_WRITE_MODE_MIXED_PORTS(READ_DURING_WRITE_MODE_MIXED_PORTS),
+        .READ_DURING_WRITE_MODE_PORT_A(READ_DURING_WRITE_MODE_PORT_A),
+        .READ_DURING_WRITE_MODE_PORT_B(READ_DURING_WRITE_MODE_PORT_B)
+        )
+      ram
+       (
+        .clk0,
+        .addr0,
+        .byteena0,
+        .wen0,
+        .wdata0,
+        .rdata0,
+
+        .clk1,
+        .addr1(addr1_local),
+        .byteena1(byteena1_local),
+        .wen1(wen1_local),
+        .wdata1(wdata1_local),
+        .rdata1
+        );
+
+
+    //
+    // Initialization loop
+    //
+
+    logic [$clog2(N_ENTRIES)-1 : 0] addr1_init;
+
+    assign addr1_local = rdy ? addr1 : addr1_init;
+    assign byteena1_local = rdy ? byteena1 : ~ $bits(byteena1)'(0);
+    assign wen1_local = rdy ? wen1 : 1'b1;
+    assign wdata1_local = rdy ? wdata1 : INIT_VALUE;
+
+    always_ff @(posedge clk1)
+    begin
+        if (reset)
+        begin
+            rdy <= 1'b0;
+            addr1_init <= 0;
+        end
+        else if (! rdy)
+        begin
+            addr1_init <= addr1_init + 1;
+            rdy <= (addr1_init == (N_ENTRIES-1));
+        end
+    end
+
+endmodule // cci_mpf_prim_ram_dualport_byteena_init

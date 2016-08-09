@@ -88,7 +88,7 @@ module test_afu
 
     // Size of the checker region.  If this is smaller than N_MEM_REGION_BITS
     // then a subset of references are checked.
-    localparam N_CHECKED_ADDR_BITS = 15;
+    localparam N_CHECKED_ADDR_BITS = 14;
     typedef logic [N_CHECKED_ADDR_BITS-1 : 0] t_checked_addr_idx;
 
     // The checked address space is a mapping from the larger memory region,
@@ -562,14 +562,14 @@ module test_afu
     // ====================================================================
 
     // Map one line to a tag
-    typedef logic [15:0] t_mem_tag;
+    typedef logic [31:0] t_mem_tag;
+    typedef logic [($bits(t_mem_tag) / 8) - 1 : 0] t_mem_tag_mask;
 
-    // Pick some bits that will be compared.  The rest will be thrown away.
-    // This lets us store a small fraction of the data in the local
-    // validation block RAM.
+    // Pick some bytes that will be compared.  The rest will be thrown away.
+    // Entire bytes are chosen so we can test byte-masked writes.
     function automatic t_mem_tag lineToTag(t_cci_clData v);
-        return { v[500:499], v[427:426], v[381:380], v[310:309],
-                 v[242:241], v[189:188], v[99:98], v[1:0] };
+        return { v[(8 * 59) +: 8], v[(8 * 35) +: 8], 
+                 v[(8 * 13) +: 8], v[(8 * 0) +: 8] };
     endfunction
 
     //
@@ -586,28 +586,33 @@ module test_afu
         end
     end
 
-    cci_mpf_prim_ram_simple_init
+    cci_mpf_prim_ram_dualport_byteena_init
       #(
         .N_ENTRIES(1 << N_CHECKED_ADDR_BITS),
         .N_DATA_BITS($bits(t_mem_tag)),
         .N_OUTPUT_REG_STAGES(2),
-        .REGISTER_WRITES(1),
-        .BYPASS_REGISTERED_WRITES(1)
+        .READ_DURING_WRITE_MODE_MIXED_PORTS("OLD_DATA")
         )
       chk_ram
        (
-        .clk,
         .reset,
         .rdy(chk_ram_rdy),
 
         // Update RAM with written data
-        .wen(chk_wr_valid_q),
-        .waddr(wr_addr_chk_idx_q),
-        .wdata(lineToTag(fiu.c1Tx.data)),
+        .clk0(clk),
+        .addr0(wr_addr_chk_idx_q),
+        .wen0(chk_wr_valid_q),
+        .byteena0(~ t_mem_tag_mask'(0)),
+        .wdata0(lineToTag(fiu.c1Tx.data)),
+        .rdata0(),
 
         // Reads match CCI read requests
-        .raddr(rd_addr_chk_idx_q),
-        .rdata(rd_chk_data)
+        .clk1(clk),
+        .addr1(rd_addr_chk_idx_q),
+        .wen1(1'b0),
+        .byteena1(),
+        .wdata1(),
+        .rdata1(rd_chk_data)
         );
 
     // Forward block RAM reads to a FIFO.  The block RAM reads will be matched

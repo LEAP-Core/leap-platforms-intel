@@ -7,6 +7,7 @@ hw/rtl/cci-if/cci_csr_if_pkg.sv
 hw/rtl/cci-if/ccip_feature_list_pkg.sv
 hw/rtl/cci_mpf_csrs.h
 hw/rtl/cci_mpf_csrs_pkg.sv
+hw/rtl/cci-mpf-shims/cci_mpf_shim_pkg.sv
 hw/rtl/cci_mpf.sv
 hw/rtl/cci_mpf_pipe_std.sv
 hw/rtl/cci-mpf-if/ccip_wires_to_mpf.sv
@@ -38,6 +39,7 @@ hw/rtl/cci-mpf-shims/cci_mpf_shim_edge/cci_mpf_shim_edge_afu.sv
 hw/rtl/cci-mpf-shims/cci_mpf_shim_edge/cci_mpf_shim_edge_fiu.sv
 hw/rtl/cci-mpf-shims/cci_mpf_shim_mux.sv
 hw/rtl/cci-mpf-shims/cci_mpf_shim_null.sv
+hw/rtl/cci-mpf-shims/cci_mpf_shim_pwrite/cci_mpf_shim_pwrite.sv
 hw/rtl/cci-mpf-shims/cci_mpf_shim_rsp_order.sv
 hw/rtl/cci-mpf-shims/cci_mpf_shim_vc_map.sv
 hw/rtl/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_shim_vtp.sv

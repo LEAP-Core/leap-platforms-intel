@@ -57,20 +57,17 @@ module cci_mpf_prim_ram_dualport_byteena
     input  logic clk0,
     input  logic [$clog2(N_ENTRIES)-1 : 0] addr0,
     input  logic wen0,
-    input  logic [(N_DATA_BITS / N_BYTE_BITS)-1 : 0] byteena0,
+    input  tri1  [(N_DATA_BITS / N_BYTE_BITS)-1 : 0] byteena0,
     input  logic [N_DATA_BITS-1 : 0] wdata0,
     output logic [N_DATA_BITS-1 : 0] rdata0,
 
     input  logic clk1,
     input  logic [$clog2(N_ENTRIES)-1 : 0] addr1,
     input  logic wen1,
-    input  logic [(N_DATA_BITS / N_BYTE_BITS)-1 : 0] byteena1,
+    input  tri1  [(N_DATA_BITS / N_BYTE_BITS)-1 : 0] byteena1,
     input  logic [N_DATA_BITS-1 : 0] wdata1,
     output logic [N_DATA_BITS-1 : 0] rdata1
     );
-
-    tri1 byteena0;
-    tri1 byteena1;
 
     logic [N_DATA_BITS-1 : 0] mem_rd0[0 : N_OUTPUT_REG_STAGES];
     assign rdata0 = mem_rd0[N_OUTPUT_REG_STAGES];
@@ -191,14 +188,14 @@ module cci_mpf_prim_ram_dualport_byteena_init
     input  logic clk0,
     input  logic [$clog2(N_ENTRIES)-1 : 0] addr0,
     input  logic wen0,
-    input  logic [(N_DATA_BITS / N_BYTE_BITS)-1 : 0] byteena0,
+    input  tri1  [(N_DATA_BITS / N_BYTE_BITS)-1 : 0] byteena0,
     input  logic [N_DATA_BITS-1 : 0] wdata0,
     output logic [N_DATA_BITS-1 : 0] rdata0,
 
     input  logic clk1,
     input  logic [$clog2(N_ENTRIES)-1 : 0] addr1,
     input  logic wen1,
-    input  logic [(N_DATA_BITS / N_BYTE_BITS)-1 : 0] byteena1,
+    input  tri1  [(N_DATA_BITS / N_BYTE_BITS)-1 : 0] byteena1,
     input  logic [N_DATA_BITS-1 : 0] wdata1,
     output logic [N_DATA_BITS-1 : 0] rdata1
     );
@@ -209,9 +206,6 @@ module cci_mpf_prim_ram_dualport_byteena_init
     logic wen1_local;
     logic [N_DATA_BITS-1 : 0] wdata1_local;
     logic [(N_DATA_BITS / N_BYTE_BITS)-1 : 0] byteena1_local;
-
-    tri1 byteena0;
-    tri1 byteena1;
 
     cci_mpf_prim_ram_dualport_byteena
       #(

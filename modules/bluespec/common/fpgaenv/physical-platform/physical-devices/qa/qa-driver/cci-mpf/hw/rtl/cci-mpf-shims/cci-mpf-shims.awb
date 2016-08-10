@@ -3,10 +3,14 @@
 
 %provides qa_cci_mpf_hw_shims
 %requires qa_cci_mpf_hw_shims_edge
+%requires qa_cci_mpf_hw_shims_pwrite
 %requires qa_cci_mpf_hw_shims_vtp
 %requires qa_cci_mpf_hw_shims_wro
 
 %notes README
+
+%sources -t VERILOG_H   -v PRIVATE cci_mpf_shim.vh
+%sources -t VERILOG_PKG -v PRIVATE cci_mpf_shim_pkg.sv
 
 %sources -t VERILOG    -v PRIVATE cci_mpf_shim_buffer_afu.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_shim_buffer_lockstep_afu.sv

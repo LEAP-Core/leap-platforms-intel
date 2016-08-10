@@ -29,7 +29,9 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 `include "cci_mpf_if.vh"
+`include "cci_mpf_shim.vh"
 `include "cci_mpf_shim_edge.vh"
+`include "cci_mpf_shim_pwrite.vh"
 
 //
 // This is a mandatory connection at the tail of an MPF pipeline.
@@ -39,6 +41,7 @@
 
 module cci_mpf_shim_edge_fiu
   #(
+    parameter ENABLE_PARTIAL_WRITES = 0,
     parameter N_WRITE_HEAP_ENTRIES = 0,
 
     // The VTP page table walker needs to generate loads in order to read
@@ -49,7 +52,7 @@ module cci_mpf_shim_edge_fiu
     //
     // Some shims (e.g. cci_mpf_shim_sort_responses) already manage Mdata and
     // guarantee that some high bits will be zero.
-    parameter VTP_PT_RESERVED_MDATA_IDX = -1
+    parameter RESERVED_MDATA_IDX = -1
     )
    (
     input  logic clk,
@@ -65,7 +68,10 @@ module cci_mpf_shim_edge_fiu
 
     // Interface to the VTP page table walker.  The page table requests
     // host memory page table reads through this connection.
-    cci_mpf_shim_vtp_pt_walk_if.mem_read pt_walk
+    cci_mpf_shim_vtp_pt_walk_if.mem_read pt_walk,
+
+    // Interface to the partial write emulator
+    cci_mpf_shim_pwrite_if.pwrite_edge_fiu pwrite
     );
 
     logic reset = 1'b1;
@@ -127,8 +133,6 @@ module cci_mpf_shim_edge_fiu
     //
     localparam N_UNIQUE_WRITE_HEAP_ENTRIES =
         N_WRITE_HEAP_ENTRIES * CCI_MAX_MULTI_LINE_BEATS;
-
-    assign afu_edge.wrdy = 1'b1;
 
     // Heap data, addressed using the indices handed out by wr_heap_ctrl.
     typedef logic [(CCI_CLDATA_WIDTH / 8)-1 : 0] t_cldata_byteena;
@@ -231,11 +235,13 @@ module cci_mpf_shim_edge_fiu
     t_cci_mpf_c0_ReqMemHdr pt_walk_read_hdr;
     always_comb
     begin
+        t_cci_mdata m = cci_mpf_setShimMdataTag(RESERVED_MDATA_IDX,
+                                                CCI_MPF_SHIM_TAG_VTP);
+
         pt_walk_read_hdr = cci_mpf_c0_genReqHdr(eREQ_RDLINE_S,
                                                 pt_walk_read_addr,
-                                                t_cci_mdata'(0),
+                                                m,
                                                 cci_mpf_defaultReqHdrParams(0));
-        pt_walk_read_hdr[VTP_PT_RESERVED_MDATA_IDX] = 1'b1;
     end
 
     //
@@ -260,7 +266,10 @@ module cci_mpf_shim_edge_fiu
     logic is_pt_rsp;
     always_comb
     begin
-        is_pt_rsp = fiu.c0Rx.hdr[VTP_PT_RESERVED_MDATA_IDX];
+        is_pt_rsp = cci_mpf_testShimMdataTag(RESERVED_MDATA_IDX,
+                                             CCI_MPF_SHIM_TAG_VTP,
+                                             fiu.c0Rx.hdr.mdata);
+
         pt_walk.readDataEn = cci_c0Rx_isReadRsp(fiu.c0Rx) && is_pt_rsp;
         pt_walk.readData = fiu.c0Rx.data;
     end
@@ -410,19 +419,23 @@ module cci_mpf_shim_edge_fiu
 
 
     //
-    // Validate parameter settings and that the Mdata reserved bit is 0
+    // Validate parameter settings and that the Mdata VTP reservation is free
     // on all incoming read requests.
     //
     always_ff @(posedge clk)
     begin
-        assert ((VTP_PT_RESERVED_MDATA_IDX > 0) && (VTP_PT_RESERVED_MDATA_IDX < CCI_MDATA_WIDTH)) else
-            $fatal("cci_mpf_shim_edge_fiu.sv: Illegal VTP_PT_RESERVED_MDATA_IDX value: %d", VTP_PT_RESERVED_MDATA_IDX);
+        assert ((RESERVED_MDATA_IDX >= $bits(t_cci_mpf_shim_tag)) &&
+                (RESERVED_MDATA_IDX < CCI_MDATA_WIDTH)) else
+            $fatal("cci_mpf_shim_edge_fiu.sv: Illegal RESERVED_MDATA_IDX value: %d", RESERVED_MDATA_IDX);
 
         if (! reset)
         begin
-            assert((afu.c0Tx.hdr[VTP_PT_RESERVED_MDATA_IDX] == 0) ||
-                   ! afu.c0Tx.valid) else
-                $fatal("cci_mpf_shim_edge_fiu.sv: AFU C0 Mdata[%d] must be zero", VTP_PT_RESERVED_MDATA_IDX);
+            assert(! cci_mpf_c0TxIsValid(afu.c0Tx) ||
+                   ! cci_mpf_testShimMdataTag(RESERVED_MDATA_IDX,
+                                              CCI_MPF_SHIM_TAG_VTP,
+                                              afu.c0Tx.hdr.base.mdata))
+            else
+                $fatal("cci_mpf_shim_edge_fiu.sv: AFU C0 VTP tag already used!");
         end
     end
 

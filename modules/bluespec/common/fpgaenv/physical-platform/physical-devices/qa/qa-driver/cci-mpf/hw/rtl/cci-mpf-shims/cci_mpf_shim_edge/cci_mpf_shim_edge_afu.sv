@@ -30,6 +30,7 @@
 
 `include "cci_mpf_if.vh"
 `include "cci_mpf_shim_edge.vh"
+`include "cci_mpf_shim_pwrite.vh"
 
 //
 // This is a mandatory connection at the head of an MPF pipeline.
@@ -43,6 +44,9 @@ module cci_mpf_shim_edge_afu
 
     // Enforce write/write and write/read ordering with cache lines?
     parameter ENFORCE_WR_ORDER = 0,
+
+    // Enable partial write emulation?
+    parameter ENABLE_PARTIAL_WRITES = 0,
 
     // Buffer the AFU to FIU request flow?
     parameter BUFFER_REQUESTS = 0,
@@ -60,7 +64,10 @@ module cci_mpf_shim_edge_afu
     cci_mpf_if.to_afu afu,
 
     // Interface to the MPF FIU edge module
-    cci_mpf_shim_edge_if.edge_afu fiu_edge
+    cci_mpf_shim_edge_if.edge_afu fiu_edge,
+
+    // Interface to the partial write emulator
+    cci_mpf_shim_pwrite_if.pwrite_edge_afu pwrite
     );
 
     logic reset;
@@ -104,14 +111,16 @@ module cci_mpf_shim_edge_afu
     cci_mpf_shim_edge_afu_wr_data
       #(
         .N_WRITE_HEAP_ENTRIES(N_WRITE_HEAP_ENTRIES),
-        .ENFORCE_WR_ORDER(ENFORCE_WR_ORDER)
+        .ENFORCE_WR_ORDER(ENFORCE_WR_ORDER),
+        .ENABLE_PARTIAL_WRITES(ENABLE_PARTIAL_WRITES)
         )
       afu_edge
        (
         .clk,
         .fiu(afu_wr),
         .afu,
-        .fiu_edge
+        .fiu_edge,
+        .pwrite(pwrite)
         );
 
     //
@@ -193,7 +202,10 @@ module cci_mpf_shim_edge_afu_wr_data
     parameter N_WRITE_HEAP_ENTRIES = 0,
 
     // Enforce write/write and write/read ordering with cache lines?
-    parameter ENFORCE_WR_ORDER = 0
+    parameter ENFORCE_WR_ORDER = 0,
+
+    // Enable partial write emulation?
+    parameter ENABLE_PARTIAL_WRITES = 0
     )
    (
     input  logic clk,
@@ -205,7 +217,10 @@ module cci_mpf_shim_edge_afu_wr_data
     cci_mpf_if.to_afu afu,
 
     // Interface to the MPF FIU edge module
-    cci_mpf_shim_edge_if.edge_afu fiu_edge
+    cci_mpf_shim_edge_if.edge_afu fiu_edge,
+
+    // Interface to the partial write emulator
+    cci_mpf_shim_pwrite_if.pwrite_edge_afu pwrite
     );
 
     logic reset;
@@ -278,6 +293,13 @@ module cci_mpf_shim_edge_afu_wr_data
     assign fiu_edge.widx = wr_heap_enq_idx;
     assign fiu_edge.wclnum = wr_heap_enq_clNum;
     assign fiu_edge.wdata = afu.c1Tx.data;
+
+    //
+    // Forward partial write requests to the partial write emulator.
+    //
+    assign pwrite.wen = cci_mpf_c1TxIsWriteReq(afu.c1Tx);
+    assign pwrite.widx = wr_heap_enq_idx;
+    assign pwrite.wpartial = afu.c1Tx.hdr.pwrite;
 
 
     // ====================================================================
@@ -383,6 +405,11 @@ module cci_mpf_shim_edge_afu_wr_data
             afu_canon_c1Tx.hdr.base.cl_len = c1tx_sop_clLen;
             afu_canon_c1Tx.hdr.base.address = c1tx_sop_clAddr;
         end
+
+        if (ENABLE_PARTIAL_WRITES == 0)
+        begin
+            afu_canon_c1Tx.hdr.pwrite.isPartialWrite = 1'b0;
+        end
     end
 
 
@@ -395,6 +422,10 @@ module cci_mpf_shim_edge_afu_wr_data
         // local heap index.
         fiu.c1Tx.data <= 'x;
         fiu.c1Tx.data[$clog2(N_WRITE_HEAP_ENTRIES) - 1 : 0] <= wr_heap_enq_idx;
+
+        // The partial write mask was forwarded to the FIU edge module along
+        // with the write data.
+        fiu.c1Tx.hdr.pwrite.mask <= 'x;
 
         // Multi-beat write request?  Only the start of packet beat goes
         // through MPF.  The rest are buffered in wr_heap here and the
@@ -473,4 +504,3 @@ module cci_mpf_shim_edge_afu_wr_data
     end
 
 endmodule // cci_mpf_shim_edge_afu
-

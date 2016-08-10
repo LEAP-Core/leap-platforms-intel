@@ -28,54 +28,60 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-`ifndef __CCI_MPF_SHIM_EDGE_VH__
-`define __CCI_MPF_SHIM_EDGE_VH__
+`ifndef __CCI_MPF_SHIM_PWRITE_VH__
+`define __CCI_MPF_SHIM_PWRITE_VH__
 
 //
-// Interface between an AFU edge and the FIU edge.
+// Interface between edge modules and the partial write shim.
 //
-interface cci_mpf_shim_edge_if
+interface cci_mpf_shim_pwrite_if
   #(
     parameter N_WRITE_HEAP_ENTRIES = 0
     );
 
     //
-    // Forward write data from AFU to FIU, bypassing the MPF pipeline.
+    // Forward write masks from AFU to the partial write shim, bypassing
+    // the MPF pipeline.
     //
     logic wen;
     logic [$clog2(N_WRITE_HEAP_ENTRIES)-1 : 0] widx;
-    t_cci_clNum wclnum;
-    t_cci_clData wdata;
+    t_cci_mpf_c1_PartialWriteHdr wpartial;
 
     //
-    // Free write data heap entries.
+    // Update write data with existing state for the unmodified portion.
     //
-    logic free;
-    logic [$clog2(N_WRITE_HEAP_ENTRIES)-1 : 0] freeidx;
+    logic upd_en;
+    logic [$clog2(N_WRITE_HEAP_ENTRIES)-1 : 0] upd_idx;
+    t_cci_clData upd_data;
+    t_cci_mpf_c1_PartialWriteHdr upd_partial;
 
-
-    modport edge_afu
-       (
-        output wen,
-        output widx,
-        output wclnum,
-        output wdata,
-
-        input  free,
-        input  freeidx
-        );
-
-    modport edge_fiu
+    modport pwrite
        (
         input  wen,
         input  widx,
-        input  wclnum,
-        input  wdata,
+        input  wpartial,
 
-        output free,
-        output freeidx
+        output upd_en,
+        output upd_idx,
+        output upd_data,
+        output upd_partial
+        );
+        
+    modport pwrite_edge_afu
+       (
+        output wen,
+        output widx,
+        output wpartial
+        );
+
+    modport pwrite_edge_fiu
+       (
+        input  upd_en,
+        input  upd_idx,
+        input  upd_data,
+        input  upd_partial
         );
 
 endinterface
 
-`endif // __CCI_MPF_SHIM_EDGE_VH__
+`endif // __CCI_MPF_SHIM_PWRITE_VH__

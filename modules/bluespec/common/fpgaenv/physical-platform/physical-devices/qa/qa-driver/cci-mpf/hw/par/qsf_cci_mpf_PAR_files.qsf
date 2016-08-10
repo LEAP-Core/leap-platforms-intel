@@ -20,6 +20,7 @@ set_global_assignment -name SEARCH_PATH $CCI_MPF_SRC/hw/rtl/cci-mpf-if
 set_global_assignment -name SEARCH_PATH $CCI_MPF_SRC/hw/rtl/cci-mpf-prims
 set_global_assignment -name SEARCH_PATH $CCI_MPF_SRC/hw/rtl/cci-mpf-shims
 set_global_assignment -name SEARCH_PATH $CCI_MPF_SRC/hw/rtl/cci-mpf-shims/cci_mpf_shim_edge
+set_global_assignment -name SEARCH_PATH $CCI_MPF_SRC/hw/rtl/cci-mpf-shims/cci_mpf_shim_pwrite
 set_global_assignment -name SEARCH_PATH $CCI_MPF_SRC/hw/rtl/cci-mpf-shims/cci_mpf_shim_vtp
 
 ## Type and interface Packages and header files
@@ -32,6 +33,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-if/cci_cs
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-if/ccip_feature_list_pkg.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci_mpf_csrs.h
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci_mpf_csrs_pkg.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-shims/cci_mpf_shim_pkg.sv
 
 ## Primary MPF module that instantiates the desired shims
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci_mpf.sv
@@ -70,6 +72,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-shims
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-shims/cci_mpf_shim_edge/cci_mpf_shim_edge_fiu.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-shims/cci_mpf_shim_mux.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-shims/cci_mpf_shim_null.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-shims/cci_mpf_shim_pwrite/cci_mpf_shim_pwrite.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-shims/cci_mpf_shim_rsp_order.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-shims/cci_mpf_shim_vc_map.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_shim_vtp.sv

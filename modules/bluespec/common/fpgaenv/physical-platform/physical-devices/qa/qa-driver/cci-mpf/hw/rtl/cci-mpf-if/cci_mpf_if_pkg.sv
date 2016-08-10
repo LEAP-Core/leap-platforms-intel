@@ -217,6 +217,19 @@ package cci_mpf_if_pkg;
         logic addrIsVirtual;
     } t_cci_mpf_ReqMemHdrExt;
 
+
+    //
+    // Header for partial (masked) write emulation.
+    //
+    parameter CCI_CLDATA_NUM_BYTES = CCI_CLDATA_WIDTH / 8;
+    typedef logic [CCI_CLDATA_NUM_BYTES-1 : 0] t_cci_mpf_clDataByteMask;
+
+    typedef struct packed {
+        t_cci_mpf_clDataByteMask mask;
+        logic isPartialWrite;
+    } t_cci_mpf_c1_PartialWriteHdr;
+
+
     //
     // A full header
     //
@@ -232,6 +245,8 @@ package cci_mpf_if_pkg;
     parameter CCI_MPF_C0TX_MEMHDR_WIDTH = $bits(t_cci_mpf_c0_ReqMemHdr);
 
     typedef struct packed {
+        t_cci_mpf_c1_PartialWriteHdr pwrite;
+
         t_cci_mpf_ReqMemHdrExt ext;
         t_cci_c1_ReqMemHdr     base;
     } t_cci_mpf_c1_ReqMemHdr;
@@ -419,6 +434,9 @@ package cci_mpf_if_pkg;
         h.base = t_cci_c1_ReqMemHdr'(0);
         h = cci_mpf_c1_updReqVAddr(h, address);
 
+        h.pwrite.isPartialWrite = 1'b0;
+        h.pwrite.mask = 'x;
+
         h.ext.checkLoadStoreOrder = params.checkLoadStoreOrder;
         h.ext.mapVAtoPhysChannel = params.mapVAtoPhysChannel;
         h.ext.addrIsVirtual = params.addrIsVirtual;
@@ -495,6 +513,9 @@ package cci_mpf_if_pkg;
         h.ext.checkLoadStoreOrder = 0;
         h.ext.mapVAtoPhysChannel = 0;
         h.ext.addrIsVirtual = 0;
+
+        h.pwrite.isPartialWrite = 1'b0;
+        h.pwrite.mask = 'x;
 
         return h;
     endfunction

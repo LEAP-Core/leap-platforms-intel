@@ -1,0 +1,10 @@
+Partial write emulation shim.
+
+CCI does not provide an interface for updating a part of a line by merging new
+data with existing data.  The partial write shim generates a read-modify-write
+sequence using a mask to update specific bytes within a line.  When coupled
+with the WRO shim, the state of the line is protected on the FPGA side during
+the operation.  However, the line is not locked and writes from the CPU to
+a location in the middle of a partial write sequence may be corrupted.
+
+Partial writes are controlled by the MPF pwrite c1 extension header.

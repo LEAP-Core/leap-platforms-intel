@@ -28,54 +28,35 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-`ifndef __CCI_MPF_SHIM_EDGE_VH__
-`define __CCI_MPF_SHIM_EDGE_VH__
-
-//
-// Interface between an AFU edge and the FIU edge.
-//
-interface cci_mpf_shim_edge_if
-  #(
-    parameter N_WRITE_HEAP_ENTRIES = 0
-    );
+package cci_mpf_shim_pkg;
+    import cci_mpf_if_pkg::*;
 
     //
-    // Forward write data from AFU to FIU, bypassing the MPF pipeline.
+    // Shims that generate their own internal read and write traffic
+    // need to tag the mdata field to track responses.  They set a
+    // reserved mdata bit and may also set other mdata bits with
+    // values from this enumeration in order to share the reserved
+    // tag bit.
     //
-    logic wen;
-    logic [$clog2(N_WRITE_HEAP_ENTRIES)-1 : 0] widx;
-    t_cci_clNum wclnum;
-    t_cci_clData wdata;
+    typedef enum logic [0:0] {
+        CCI_MPF_SHIM_TAG_VTP,       // Page table walker
+        CCI_MPF_SHIM_TAG_PWRITE     // Reads for partial line writes
+    }
+    t_cci_mpf_shim_tag;
 
-    //
-    // Free write data heap entries.
-    //
-    logic free;
-    logic [$clog2(N_WRITE_HEAP_ENTRIES)-1 : 0] freeidx;
+    function automatic t_cci_mdata cci_mpf_setShimMdataTag(int reservedIdx,
+                                                           t_cci_mpf_shim_tag tag);
+        t_cci_mdata m = t_cci_mdata'(0);
+        m[reservedIdx] = 1'b1;
+        m[0 +: $bits(tag)] = tag;
 
+        return m;
+    endfunction
 
-    modport edge_afu
-       (
-        output wen,
-        output widx,
-        output wclnum,
-        output wdata,
+    function automatic logic cci_mpf_testShimMdataTag(int reservedIdx,
+                                                      t_cci_mpf_shim_tag tag,
+                                                      t_cci_mdata m);
+        return m[reservedIdx] && (m[0 +: $bits(tag)] == tag);
+    endfunction
 
-        input  free,
-        input  freeidx
-        );
-
-    modport edge_fiu
-       (
-        input  wen,
-        input  widx,
-        input  wclnum,
-        input  wdata,
-
-        output free,
-        output freeidx
-        );
-
-endinterface
-
-`endif // __CCI_MPF_SHIM_EDGE_VH__
+endpackage // cci_mpf_shim_pkg

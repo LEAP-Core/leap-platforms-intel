@@ -226,6 +226,15 @@ module ccip_std_afu
         //
         .ENFORCE_WR_ORDER(1),
 
+        // Enable partial write emulation.  CCI has no support for masked
+        // writes that merge new data with existing data in a line.  MPF
+        // adds byte-level masks to the write request header and emulates
+        // partial writes as a read-modify-write operation.  When coupled
+        // with ENFORCE_WR_ORDER, partial writes are free of races on the
+        // FPGA side.  There are no guarantees of atomicity and there is
+        // no protection against races with CPU-generates writes.
+        .ENABLE_PARTIAL_WRITES(1),
+
         // Address of the MPF feature header.  See comment above.
         .DFH_MMIO_BASE_ADDR(MPF_DFH_MMIO_ADDR)
         )

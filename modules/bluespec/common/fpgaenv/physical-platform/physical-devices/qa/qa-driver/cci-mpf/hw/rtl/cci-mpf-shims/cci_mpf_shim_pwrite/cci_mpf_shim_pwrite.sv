@@ -28,54 +28,45 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-`ifndef __CCI_MPF_SHIM_EDGE_VH__
-`define __CCI_MPF_SHIM_EDGE_VH__
+`include "cci_mpf_if.vh"
+`include "cci_mpf_shim_pwrite.vh"
 
 //
-// Interface between an AFU edge and the FIU edge.
+// Partial write emulation using read-modify-write.  This module does not
+// guarantee atomic access to the updated line.  On the FPGA side it relies
+// on the WRO shim for managing read/write access to a line during an update.
+// Conflicting CPU updates are not detected.
 //
-interface cci_mpf_shim_edge_if
+
+module cci_mpf_shim_pwrite
   #(
     parameter N_WRITE_HEAP_ENTRIES = 0
+    )
+   (
+    input  logic clk,
+
+    // Connection toward the FIU (the end of the MPF pipeline nearest the AFU)
+    cci_mpf_if.to_fiu fiu,
+
+    // External connections to the AFU
+    cci_mpf_if.to_afu afu,
+
+    // Interface to the MPF FIU edge module
+    cci_mpf_shim_pwrite_if.pwrite pwrite
     );
 
-    //
-    // Forward write data from AFU to FIU, bypassing the MPF pipeline.
-    //
-    logic wen;
-    logic [$clog2(N_WRITE_HEAP_ENTRIES)-1 : 0] widx;
-    t_cci_clNum wclnum;
-    t_cci_clData wdata;
+    logic reset;
+    assign reset = fiu.reset;
+    assign afu.reset = fiu.reset;
 
-    //
-    // Free write data heap entries.
-    //
-    logic free;
-    logic [$clog2(N_WRITE_HEAP_ENTRIES)-1 : 0] freeidx;
+    assign afu.c0TxAlmFull = fiu.c0TxAlmFull;
+    assign afu.c1TxAlmFull = fiu.c1TxAlmFull;
 
+    assign fiu.c0Tx = afu.c0Tx;
+    assign fiu.c1Tx = afu.c1Tx;
+    assign fiu.c2Tx = afu.c2Tx;
 
-    modport edge_afu
-       (
-        output wen,
-        output widx,
-        output wclnum,
-        output wdata,
+    assign afu.c0Rx = fiu.c0Rx;
+    assign afu.c1Rx = fiu.c1Rx;
 
-        input  free,
-        input  freeidx
-        );
-
-    modport edge_fiu
-       (
-        input  wen,
-        input  widx,
-        input  wclnum,
-        input  wdata,
-
-        output free,
-        output freeidx
-        );
-
-endinterface
-
-`endif // __CCI_MPF_SHIM_EDGE_VH__
+endmodule // cci_mpf_shim_pwrite

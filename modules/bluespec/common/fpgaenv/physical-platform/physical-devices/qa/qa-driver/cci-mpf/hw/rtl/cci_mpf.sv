@@ -37,6 +37,7 @@
 `include "cci_mpf_if.vh"
 `include "cci_mpf_csrs.vh"
 `include "cci_mpf_shim_edge.vh"
+`include "cci_mpf_shim_pwrite.vh"
 
 
 //
@@ -94,7 +95,16 @@ module cci_mpf
 
     // Preserve Mdata field in write requests?  Turn this off if the AFU
     // merely counts write responses instead of checking Mdata.
-    parameter PRESERVE_WRITE_MDATA = 0
+    parameter PRESERVE_WRITE_MDATA = 0,
+
+    // Enable partial write emulation.  CCI has no support for masked
+    // writes that merge new data with existing data in a line.  MPF
+    // adds byte-level masks to the write request header and emulates
+    // partial writes as a read-modify-write operation.  When coupled
+    // with ENFORCE_WR_ORDER, partial writes are free of races on the
+    // FPGA side.  There are no guarantees of atomicity and there is
+    // no protection against races with CPU-generates writes.
+    parameter ENABLE_PARTIAL_WRITES = 0
     )
    (
     input  logic      clk,
@@ -147,10 +157,17 @@ module cci_mpf
         )
       edge_if();
 
+    cci_mpf_shim_pwrite_if
+      #(
+        .N_WRITE_HEAP_ENTRIES(N_WRITE_HEAP_ENTRIES)
+        )
+      pwrite();
+
     cci_mpf_shim_vtp_pt_walk_if pt_walk();
 
     cci_mpf_shim_edge_fiu
       #(
+        .ENABLE_PARTIAL_WRITES(ENABLE_PARTIAL_WRITES),
         .N_WRITE_HEAP_ENTRIES(N_WRITE_HEAP_ENTRIES),
 
         // VTP needs to generate loads internally in order to walk the
@@ -158,7 +175,7 @@ module cci_mpf
         // to the page table walker to tag internal loads.  The Mdata
         // location is guaranteed to be zero on all requests flowing
         // in to VTP from the AFU.
-        .VTP_PT_RESERVED_MDATA_IDX(CCI_PLATFORM_MDATA_WIDTH-2)
+        .RESERVED_MDATA_IDX(CCI_PLATFORM_MDATA_WIDTH-2)
         )
       mpf_edge_fiu
        (
@@ -166,7 +183,8 @@ module cci_mpf
         .fiu,
         .afu(stgm1_mpf_fiu),
         .afu_edge(edge_if),
-        .pt_walk
+        .pt_walk,
+        .pwrite
         );
 
 
@@ -256,6 +274,7 @@ module cci_mpf
         .ENFORCE_WR_ORDER(ENFORCE_WR_ORDER),
         .SORT_READ_RESPONSES(SORT_READ_RESPONSES),
         .PRESERVE_WRITE_MDATA(PRESERVE_WRITE_MDATA),
+        .ENABLE_PARTIAL_WRITES(ENABLE_PARTIAL_WRITES),
         .N_WRITE_HEAP_ENTRIES(N_WRITE_HEAP_ENTRIES),
         .RESERVED_MDATA_IDX(CCI_PLATFORM_MDATA_WIDTH-2)
         )
@@ -266,6 +285,7 @@ module cci_mpf
         .afu,
         .mpf_csrs,
         .edge_if,
+        .pwrite,
         .vtp_svc(vtp_svc_ports[0:1])
         );
 

@@ -1,0 +1,10 @@
+%name Intel MPF Partial Write Shim
+%desc Intel MPF Partial Write Shim
+
+%provides qa_cci_mpf_hw_shims_pwrite
+
+%notes README
+
+%sources -t VERILOG_H  -v PRIVATE cci_mpf_shim_pwrite.vh
+
+%sources -t VERILOG    -v PRIVATE cci_mpf_shim_pwrite.sv

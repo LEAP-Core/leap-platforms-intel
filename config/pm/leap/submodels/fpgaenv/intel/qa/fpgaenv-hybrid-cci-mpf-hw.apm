@@ -36,6 +36,7 @@ Packagehint=leap-platforms-intel
 qa_cci_mpf_hw_shims_vtp=Intel MPF VTP Shim
 qa_cci_mpf_hw_shims_edge=Intel MPF Edge Shim
 qa_cci_mpf_hw_shims_wro=Intel MPF WRO Shim
+qa_cci_mpf_hw_shims_pwrite=Intel MPF Partial Write Shim
 
 [Intel MPF VTP Shim]
 File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/hw/rtl/cci-mpf-shims/cci_mpf_shim_vtp/cci-mpf-shims-vtp.awb
@@ -62,4 +63,8 @@ Packagehint=leap-platforms-intel
 
 [Intel MPF WRO Shim]
 File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/hw/rtl/cci-mpf-shims/cci_mpf_shim_wro/cci-mpf-shims-wro.awb
+Packagehint=leap-platforms-intel
+
+[Intel MPF Partial Write Shim]
+File=modules/bluespec/common/fpgaenv/physical-platform/physical-devices/qa/qa-driver/cci-mpf/hw/rtl/cci-mpf-shims/cci_mpf_shim_pwrite/cci-mpf-shims-pwrite.awb
 Packagehint=leap-platforms-intel

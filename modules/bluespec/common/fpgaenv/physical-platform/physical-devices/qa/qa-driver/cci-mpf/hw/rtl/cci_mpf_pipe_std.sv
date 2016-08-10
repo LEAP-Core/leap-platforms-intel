@@ -48,7 +48,9 @@
 `include "cci_mpf_if.vh"
 `include "cci_mpf_csrs.vh"
 `include "cci_mpf_shim_edge.vh"
+`include "cci_mpf_shim_pwrite.vh"
 `include "cci_mpf_shim_vtp.vh"
+
 
 module cci_mpf_pipe_std
   #(
@@ -68,6 +70,7 @@ module cci_mpf_pipe_std
     parameter SORT_READ_RESPONSES = 1,
     parameter PRESERVE_WRITE_MDATA = 0,
     parameter N_WRITE_HEAP_ENTRIES = 0,
+    parameter ENABLE_PARTIAL_WRITES = 0,
 
     // Computed in cci_mpf module
     parameter RESERVED_MDATA_IDX = CCI_PLATFORM_MDATA_WIDTH - 1
@@ -86,6 +89,9 @@ module cci_mpf_pipe_std
 
     // Connect MPF's AFU edge module to its FIU edge module
     cci_mpf_shim_edge_if.edge_afu edge_if,
+
+    // Connect MPF's AFU edge module to its partial write emulation module
+    cci_mpf_shim_pwrite_if pwrite,
 
     // VTP translation service ports.  One port for each request channel.
     cci_mpf_shim_vtp_svc_if.client vtp_svc[0 : 1]
@@ -108,12 +114,50 @@ module cci_mpf_pipe_std
 
     // ====================================================================
     //
+    //  Partial write emulation
+    //
+    // ====================================================================
+
+    cci_mpf_if stgp1_pwrite (.clk);
+
+    generate
+        if (ENABLE_PARTIAL_WRITES)
+        begin : pwm
+            cci_mpf_shim_pwrite
+              #(
+                .N_WRITE_HEAP_ENTRIES(N_WRITE_HEAP_ENTRIES)
+                )
+              pw
+               (
+                .clk,
+                .fiu,
+                .afu(stgp1_pwrite),
+                .pwrite
+                );
+        end
+        else
+        begin : no_pwm
+            cci_mpf_shim_null
+              no_pwrite
+               (
+                .clk,
+                .fiu,
+                .afu(stgp1_pwrite)
+                );
+
+            assign pwrite.upd_en = 1'b0;
+        end
+    endgenerate
+
+
+    // ====================================================================
+    //
     //  Detect the end of responses for a multi-beat packet (EOP).
     //  Single-beat responses will also be tagged EOP.
     //
     // ====================================================================
 
-    cci_mpf_if stgp1_fiu_eop (.clk);
+    cci_mpf_if stgp2_fiu_eop (.clk);
 
     cci_mpf_shim_detect_eop
       #(
@@ -123,8 +167,8 @@ module cci_mpf_pipe_std
       eop
        (
         .clk,
-        .fiu,
-        .afu(stgp1_fiu_eop)
+        .fiu(stgp1_pwrite),
+        .afu(stgp2_fiu_eop)
         );
 
 
@@ -143,7 +187,7 @@ module cci_mpf_pipe_std
     //
     // ====================================================================
 
-    cci_mpf_if stgp2_fiu_virtual (.clk);
+    cci_mpf_if stgp3_fiu_virtual (.clk);
 
     generate
         if (ENABLE_VTP)
@@ -152,8 +196,8 @@ module cci_mpf_pipe_std
               v_to_p
                (
                 .clk,
-                .fiu(stgp1_fiu_eop),
-                .afu(stgp2_fiu_virtual),
+                .fiu(stgp2_fiu_eop),
+                .afu(stgp3_fiu_virtual),
                 .vtp_svc,
                 .csrs(mpf_csrs)
                 );
@@ -164,8 +208,8 @@ module cci_mpf_pipe_std
               physical
                (
                 .clk,
-                .fiu(stgp1_fiu_eop),
-                .afu(stgp2_fiu_virtual)
+                .fiu(stgp2_fiu_eop),
+                .afu(stgp3_fiu_virtual)
                 );
         end
     endgenerate
@@ -179,7 +223,7 @@ module cci_mpf_pipe_std
     //
     // ====================================================================
 
-    cci_mpf_if stgp3_fiu_wro (.clk);
+    cci_mpf_if stgp4_fiu_wro (.clk);
 
     generate
         if (ENFORCE_WR_ORDER)
@@ -191,8 +235,8 @@ module cci_mpf_pipe_std
               order
                (
                 .clk,
-                .fiu(stgp2_fiu_virtual),
-                .afu(stgp3_fiu_wro),
+                .fiu(stgp3_fiu_virtual),
+                .afu(stgp4_fiu_wro),
                 .events(mpf_csrs)
                 );
         end
@@ -202,8 +246,8 @@ module cci_mpf_pipe_std
               unordered
                (
                 .clk,
-                .fiu(stgp2_fiu_virtual),
-                .afu(stgp3_fiu_wro)
+                .fiu(stgp3_fiu_virtual),
+                .afu(stgp4_fiu_wro)
                 );
         end
     endgenerate
@@ -224,7 +268,7 @@ module cci_mpf_pipe_std
     //
     // ====================================================================
 
-    cci_mpf_if stgp4_fiu_vc_map (.clk);
+    cci_mpf_if stgp5_fiu_vc_map (.clk);
 
     generate
         if (ENABLE_VC_MAP)
@@ -238,8 +282,8 @@ module cci_mpf_pipe_std
               vc_map
                (
                 .clk,
-                .fiu(stgp3_fiu_wro),
-                .afu(stgp4_fiu_vc_map),
+                .fiu(stgp4_fiu_wro),
+                .afu(stgp5_fiu_vc_map),
                 .csrs(mpf_csrs),
                 .events(mpf_csrs)
                 );
@@ -250,8 +294,8 @@ module cci_mpf_pipe_std
               no_vc_map
                (
                 .clk,
-                .fiu(stgp3_fiu_wro),
-                .afu(stgp4_fiu_vc_map)
+                .fiu(stgp4_fiu_wro),
+                .afu(stgp5_fiu_vc_map)
                 );
         end
     endgenerate
@@ -273,7 +317,7 @@ module cci_mpf_pipe_std
     //
     // ====================================================================
 
-    cci_mpf_if stgp5_fiu_rsp_order (.clk);
+    cci_mpf_if stgp6_fiu_rsp_order (.clk);
 
     cci_mpf_shim_rsp_order
       #(
@@ -284,8 +328,8 @@ module cci_mpf_pipe_std
       rspOrder
        (
         .clk,
-        .fiu(stgp4_fiu_vc_map),
-        .afu(stgp5_fiu_rsp_order)
+        .fiu(stgp5_fiu_vc_map),
+        .afu(stgp6_fiu_rsp_order)
         );
 
 
@@ -299,6 +343,7 @@ module cci_mpf_pipe_std
       #(
         .N_WRITE_HEAP_ENTRIES(N_WRITE_HEAP_ENTRIES),
         .ENFORCE_WR_ORDER(ENFORCE_WR_ORDER),
+        .ENABLE_PARTIAL_WRITES(ENABLE_PARTIAL_WRITES),
         .REGISTER_RESPONSES(1),
         // Add buffering and flow control if no other MPF module with
         // internal flow control is in use.
@@ -307,9 +352,10 @@ module cci_mpf_pipe_std
       mpf_edge_afu
        (
         .clk,
-        .fiu(stgp5_fiu_rsp_order),
+        .fiu(stgp6_fiu_rsp_order),
         .afu,
-        .fiu_edge(edge_if)
+        .fiu_edge(edge_if),
+        .pwrite
         );
 
 endmodule // cci_mpf_pipe_std

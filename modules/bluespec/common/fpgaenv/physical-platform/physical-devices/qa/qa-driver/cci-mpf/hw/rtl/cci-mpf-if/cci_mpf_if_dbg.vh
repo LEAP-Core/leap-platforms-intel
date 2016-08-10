@@ -14,104 +14,6 @@
 //
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-    //
-    // Export some struct fields as names so they fields can be seen in
-    // waveform viewers.
-    //
-    // This generates a lot of data so it is enabled only when debug
-    // logging is enabled for the interface instance.
-    //
-    generate
-        if (ENABLE_LOG != 0)
-        begin : dbg
-            logic c0Tx_almFull;
-            assign c0Tx_almFull = c0TxAlmFull;
-
-            logic c0Tx_hdr_addrIsVirtual;
-            assign c0Tx_hdr_addrIsVirtual = c0Tx.hdr.ext.addrIsVirtual;
-            logic c0Tx_hdr_checkLoadStoreOrder;
-            assign c0Tx_hdr_checkLoadStoreOrder = c0Tx.hdr.ext.checkLoadStoreOrder;
-            t_cci_vc c0Tx_hdr_vc_sel;
-            assign c0Tx_hdr_vc_sel = c0Tx.hdr.base.vc_sel;
-            t_cci_clLen c0Tx_hdr_cl_len;
-            assign c0Tx_hdr_cl_len = c0Tx.hdr.base.cl_len;
-            t_cci_c0_req c0Tx_hdr_req_type;
-            assign c0Tx_hdr_req_type = c0Tx.hdr.base.req_type;
-            t_cci_clAddr c0Tx_hdr_address;
-            assign c0Tx_hdr_address = c0Tx.hdr.base.address;
-            t_cci_mdata c0Tx_hdr_mdata;
-            assign c0Tx_hdr_mdata = c0Tx.hdr.base.mdata;
-            logic c0Tx_valid;
-            assign c0Tx_valid = c0Tx.valid;
-
-            logic c1Tx_almFull;
-            assign c1Tx_almFull = c1TxAlmFull;
-
-            logic c1Tx_hdr_addrIsVirtual;
-            assign c1Tx_hdr_addrIsVirtual = c1Tx.hdr.ext.addrIsVirtual;
-            logic c1Tx_hdr_checkLoadStoreOrder;
-            assign c1Tx_hdr_checkLoadStoreOrder = c1Tx.hdr.ext.checkLoadStoreOrder;
-            t_cci_vc c1Tx_hdr_vc_sel;
-            assign c1Tx_hdr_vc_sel = c1Tx.hdr.base.vc_sel;
-            logic c1Tx_hdr_sop;
-            assign c1Tx_hdr_sop = c1Tx.hdr.base.sop;
-            t_cci_clLen c1Tx_hdr_cl_len;
-            assign c1Tx_hdr_cl_len = c1Tx.hdr.base.cl_len;
-            t_cci_c1_req c1Tx_hdr_req_type;
-            assign c1Tx_hdr_req_type = c1Tx.hdr.base.req_type;
-            t_cci_clAddr c1Tx_hdr_address;
-            assign c1Tx_hdr_address = c1Tx.hdr.base.address;
-            t_cci_mdata c1Tx_hdr_mdata;
-            assign c1Tx_hdr_mdata = c1Tx.hdr.base.mdata;
-            t_cci_clData c1Tx_data;
-            assign c1Tx_data = c1Tx.data;
-            logic c1Tx_valid;
-            assign c1Tx_valid = c1Tx.valid;
-
-            t_cci_tid c2Tx_tid;
-            assign c2Tx_tid = c2Tx.hdr.tid;
-            logic c2Tx_mmioRdValid;
-            assign c2Tx_mmioRdValid = c2Tx.mmioRdValid;
-            t_cci_mmioData c2Tx_data;
-            assign c2Tx_data = c2Tx.data;
-
-            t_cci_vc c0Rx_hdr_vc_used;
-            assign c0Rx_hdr_vc_used = c0Rx.hdr.vc_used;
-            logic c0Rx_hdr_hit_miss;
-            assign c0Rx_hdr_hit_miss = c0Rx.hdr.hit_miss;
-            t_ccip_clNum c0Rx_hdr_cl_num;
-            assign c0Rx_hdr_cl_num = c0Rx.hdr.cl_num;
-            t_ccip_c0_rsp c0Rx_hdr_resp_type;
-            assign c0Rx_hdr_resp_type = c0Rx.hdr.resp_type;
-            t_ccip_mdata c0Rx_hdr_mdata;
-            assign c0Rx_hdr_mdata = c0Rx.hdr.mdata;
-            t_ccip_clData c0Rx_data;
-            assign c0Rx_data = c0Rx.data;
-            logic c0Rx_rspValid;
-            assign c0Rx_rspValid = c0Rx.rspValid;
-            logic c0Rx_mmioRdValid;
-            assign c0Rx_mmioRdValid = c0Rx.mmioRdValid;
-            logic c0Rx_mmioWrValid;
-            assign c0Rx_mmioWrValid = c0Rx.mmioWrValid;
-
-            t_cci_vc c1Rx_hdr_vc_used;
-            assign c1Rx_hdr_vc_used = c1Rx.hdr.vc_used;
-            logic c1Rx_hdr_hit_miss;
-            assign c1Rx_hdr_hit_miss = c1Rx.hdr.hit_miss;
-            logic c1Rx_hdr_format;
-            assign c1Rx_hdr_format = c1Rx.hdr.format;
-            t_ccip_clNum c1Rx_hdr_cl_num;
-            assign c1Rx_hdr_cl_num = c1Rx.hdr.cl_num;
-            t_ccip_c1_rsp c1Rx_hdr_resp_type;
-            assign c1Rx_hdr_resp_type = c1Rx.hdr.resp_type;
-            t_ccip_mdata c1Rx_hdr_mdata;
-            assign c1Rx_hdr_mdata = c1Rx.hdr.mdata;
-            logic c1Rx_rspValid;
-            assign c1Rx_rspValid = c1Rx.rspValid;
-        end
-    endgenerate
-
-
     // Print Channel function
     function string print_channel (logic [1:0] vc_sel);
         case (vc_sel)
@@ -210,7 +112,7 @@
                 /******************* AFU -> MEM Write Request *****************/
                 if (! reset && c1Tx.valid)
                 begin
-                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%s\t%x\t%s%s %x\t%x\n",
+                    $fwrite(cci_mpf_if_log_fd, "%m:\t%t\t%s\t%0d\t%s\t%s\t%x\t%s%s %x\t%x",
                             $time,
                             print_channel(c1Tx.hdr.base.vc_sel),
                             c1Tx.hdr.base.cl_len,
@@ -221,6 +123,14 @@
                             (c1Tx.hdr.ext.addrIsVirtual ? "V" : "P"),
                             c1Tx.hdr.base.address,
                             c1Tx.data);
+
+                    if (c1Tx.hdr.pwrite.isPartialWrite)
+                    begin
+                        $fwrite(cci_mpf_if_log_fd, " PW [%x]",
+                                c1Tx.hdr.pwrite.mask);
+                    end
+
+                    $fwrite(cci_mpf_if_log_fd, "\n");
                 end
 
                 //////////////////////// C2 TX CHANNEL TRANSACTIONS //////////////////////////

@@ -42,6 +42,7 @@ void testConfigOptions(po::options_description &desc)
         ("enable-checker", po::value<bool>()->default_value(true), "Enable read value checker")
         ("enable-reads", po::value<bool>()->default_value(true), "Enable reads")
         ("enable-rw-conflicts", po::value<bool>()->default_value(true), "Enable address conflicts between reads and writes")
+        ("enable-pw", po::value<bool>()->default_value(true), "Enable partial writes")
         ("enable-writes", po::value<bool>()->default_value(true), "Enable writes")
         ("enable-wro", po::value<bool>()->default_value(true), "Enable write/read hazard detection")
         ("repeat", po::value<int>()->default_value(1), "Number of repetitions")
@@ -109,6 +110,7 @@ btInt TEST_RANDOM::test()
     uint64_t enable_checker = (vm["enable-checker"].as<bool>() ? 1 : 0);
     uint64_t enable_reads = (vm["enable-reads"].as<bool>() ? 1 : 0);
     uint64_t enable_rw_conflicts = (vm["enable-rw-conflicts"].as<bool>() ? 1 : 0);
+    uint64_t enable_pw = (vm["enable-pw"].as<bool>() ? 1 : 0);
     uint64_t enable_writes = (vm["enable-writes"].as<bool>() ? 1 : 0);
     uint64_t enable_wro = (vm["enable-wro"].as<bool>() ? 1 : 0);
 
@@ -124,7 +126,8 @@ btInt TEST_RANDOM::test()
     {
         // Start the test
         writeTestCSR(0,
-                     (cycles << 5) |
+                     (cycles << 6) |
+                     (enable_pw << 5) |
                      (enable_rw_conflicts << 4) |
                      (enable_checker << 3) |
                      (enable_wro << 2) |

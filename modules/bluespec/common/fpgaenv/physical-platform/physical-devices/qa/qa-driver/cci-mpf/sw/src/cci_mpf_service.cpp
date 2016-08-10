@@ -150,6 +150,7 @@ btBool MPF::init( IBase               *pclientBase,
    btBool hasVTP = false;
    btBool hasVCMAP = false;
    btBool hasWRO = false;
+   btBool hasPWRITE = false;
 
    // If MPF_FEATURE_ID is specified, try to detect available features.
    MPF_FEATURE_ID_DATATYPE mpfFID;
@@ -247,6 +248,42 @@ btBool MPF::init( IBase               *pclientBase,
 
          // found VC MAP, expose interface to outside
          SetInterface(iidMPFWROService, dynamic_cast<IMPFWRO *>(m_pWRO));
+      }
+
+
+      //
+      // PWRITE
+      //
+
+      // Ask ALI for a BBB with MPF's feature ID and the expected PWRITE GUID
+      NamedValueSet filter_pwrite;
+      filter_pwrite.Add( ALI_GETFEATURE_TYPE_KEY, static_cast<ALI_GETFEATURE_TYPE_DATATYPE>(ALI_DFH_TYPE_BBB) );
+      filter_pwrite.Add( ALI_GETFEATURE_ID_KEY, static_cast<ALI_GETFEATURE_ID_DATATYPE>(mpfFID) );
+      filter_pwrite.Add( ALI_GETFEATURE_GUID_KEY, (ALI_GETFEATURE_GUID_DATATYPE)MPF_PWRITE_BBB_GUID );
+
+      if ( false == m_pALIMMIO->mmioGetFeatureOffset( &m_pwriteDFHOffset, filter_pwrite ) ) {
+         // No VC MAP found - this could mean that VC MAP is not enabled in MPF
+         hasPWRITE = false;
+         AAL_INFO(LM_AFU, "No VC MAP feature." << std::endl);
+      } else {
+         hasPWRITE = true;
+         AAL_INFO(LM_All, "Using MMIO address 0x" << std::hex << m_pwriteDFHOffset <<
+                  " for VC MAP." << std::endl);
+
+         // Instantiate component class
+         m_pPWRITE = new MPFPWRITE( m_pALIMMIO, m_pwriteDFHOffset );
+
+         if ( ! m_pPWRITE->isOK() ) {
+            initFailed(new CExceptionTransactionEvent( NULL,
+                     rtid,
+                     errBadParameter,
+                     reasFeatureNotSupported,
+                     "VC MAP initialization failed."));
+            return true;
+         }
+
+         // found VC MAP, expose interface to outside
+         SetInterface(iidMPFPWRITEService, dynamic_cast<IMPFPWRITE *>(m_pPWRITE));
       }
    }
 

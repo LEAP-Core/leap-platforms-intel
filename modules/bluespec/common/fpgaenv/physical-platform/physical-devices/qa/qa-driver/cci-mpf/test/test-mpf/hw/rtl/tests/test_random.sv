@@ -198,6 +198,8 @@ module test_afu
     logic enable_checker;
     logic enable_rw_conflicts;
 
+    logic enable_partial_writes;
+
     //
     // Consume configuration CSR writes
     //
@@ -237,6 +239,7 @@ module test_afu
         if (csrs.cpu_wr_csrs[0].en)
         begin
             { cycles_rem,
+              enable_partial_writes,
               enable_rw_conflicts,
               enable_checker,
               enable_wro,
@@ -252,6 +255,7 @@ module test_afu
             enable_wro <= 1'b0;
             enable_checker <= 1'b0;
             enable_rw_conflicts <= 1'b0;
+            enable_partial_writes <= 1'b0;
         end
     end
 
@@ -468,7 +472,21 @@ module test_afu
         wr_addr_chk_idx_q <= wr_addr_chk_idx;
     end
 
+    // Random partial write control
+    t_cci_mpf_c1_PartialWriteHdr pwh;
+    test_gen_pwrite_hdr
+      gen_pwrite_hdr
+       (
+        .clk,
+        .reset,
+        .enable_partial_writes,
+        .pwh
+        );
 
+
+    //
+    // Write request header
+    //
     t_cci_mpf_c1_ReqMemHdr wr_hdr;
     always_comb
     begin
@@ -476,30 +494,26 @@ module test_afu
                                       wr_rand_addr,
                                       t_cci_mdata'(0),
                                       wr_params);
+        wr_hdr.pwrite = pwh;
     end
 
     //
     // Random data
     //
-    logic [(CCI_CLDATA_WIDTH / 32)-1 : 0][31:0] wr_rand_data;
-    genvar r;
-    generate
-        for (r = 0; r < CCI_CLDATA_WIDTH / 32; r = r + 1)
-        begin : d
-            cci_mpf_prim_lfsr32
-              #(
-                .INITIAL_VALUE(32'(r+1))
-                )
-              wr_lfsr
-               (
-                .clk,
-                .reset,
-                .en(1'b1),
-                .value(wr_rand_data[r])
-                );
-        end
-    endgenerate
+    t_cci_clData wr_rand_data;
 
+    test_gen_write_data
+      gen_write_data
+       (
+        .clk,
+        .reset,
+        .wr_rand_data
+        );
+
+
+    //
+    // Generate write requests
+    //
     logic chk_wr_valid_q;
 
     always_ff @(posedge clk)
@@ -572,6 +586,17 @@ module test_afu
                  v[(8 * 13) +: 8], v[(8 * 0) +: 8] };
     endfunction
 
+    // Generate the write mask.  Partial writes don't update all bytes.
+    // The tag's mask bits must correspond to the bytes checked in lineToTag().
+    function automatic t_mem_tag_mask lineToTagMask(t_cci_mpf_c1_PartialWriteHdr h);
+        t_mem_tag_mask m;
+        m[3] = h.mask[59] || ! h.isPartialWrite;
+        m[2] = h.mask[35] || ! h.isPartialWrite;
+        m[1] = h.mask[13] || ! h.isPartialWrite;
+        m[0] = h.mask[0]  || ! h.isPartialWrite;
+        return m;
+    endfunction
+
     //
     // Block RAM holding tags representing memory state
     //
@@ -602,7 +627,7 @@ module test_afu
         .clk0(clk),
         .addr0(wr_addr_chk_idx_q),
         .wen0(chk_wr_valid_q),
-        .byteena0(~ t_mem_tag_mask'(0)),
+        .byteena0(lineToTagMask(fiu.c1Tx.hdr.pwrite)),
         .wdata0(lineToTag(fiu.c1Tx.data)),
         .rdata0(),
 
@@ -739,3 +764,102 @@ module test_afu
 
 
 endmodule // test_afu
+
+
+//
+// Generate random write data.
+//
+module test_gen_write_data
+   (
+    input  logic clk,
+    input  logic reset,
+
+    output t_cci_clData wr_rand_data
+    );
+
+    logic [(CCI_CLDATA_WIDTH / 32)-1 : 0][31:0] wr_data;
+    assign wr_rand_data = wr_data;
+
+    genvar r;
+    generate
+        for (r = 0; r < CCI_CLDATA_WIDTH / 32; r = r + 1)
+        begin : d
+            cci_mpf_prim_lfsr32
+              #(
+                .INITIAL_VALUE(32'(r+1))
+                )
+              wr_lfsr
+               (
+                .clk,
+                .reset,
+                .en(1'b1),
+                .value(wr_data[r])
+                );
+        end
+    endgenerate
+
+endmodule // test_gen_write_data
+
+
+//
+// Generate partial write headers, including the decision of whether a
+// write should be full or partial.
+//
+module test_gen_pwrite_hdr
+   (
+    input  logic clk,
+    input  logic reset,
+    input  logic enable_partial_writes,
+
+    output t_cci_mpf_c1_PartialWriteHdr pwh
+    );
+
+    //
+    // Random partial write mask
+    //
+    logic [($bits(t_cci_mpf_clDataByteMask) / 32)-1 : 0][31:0] pw_rand_mask;
+    genvar r;
+    generate
+        for (r = 0; r < $bits(t_cci_mpf_clDataByteMask) / 32; r = r + 1)
+        begin : pwm
+            cci_mpf_prim_lfsr32
+              #(
+                .INITIAL_VALUE(32'(r+1001))
+                )
+              pwm_lfsr
+               (
+                .clk,
+                .reset,
+                .en(1'b1),
+                .value(pw_rand_mask[r])
+                );
+        end
+    endgenerate
+
+    // Decide whether write is full or partial using an LFSR
+    logic [11:0] pw_lfsr;
+
+    cci_mpf_prim_lfsr12
+      #(
+        .INITIAL_VALUE(12'(15))
+        )
+      pwm_lfsr
+       (
+        .clk,
+        .reset,
+        .en(1'b1),
+        .value(pw_lfsr)
+        );
+
+    //
+    // Generate the header
+    //
+    always_ff @(posedge clk)
+    begin
+        pwh.mask <= pw_rand_mask;
+
+        // Most writes are not partial
+        pwh.isPartialWrite <= (7'(pw_lfsr) == 7'(0)) && enable_partial_writes;
+    end
+
+endmodule // test_gen_pwrite_hdr

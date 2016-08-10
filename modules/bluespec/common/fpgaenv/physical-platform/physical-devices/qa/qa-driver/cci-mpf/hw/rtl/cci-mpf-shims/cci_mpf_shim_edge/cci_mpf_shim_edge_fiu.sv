@@ -235,8 +235,8 @@ module cci_mpf_shim_edge_fiu
     t_cci_mpf_c0_ReqMemHdr pt_walk_read_hdr;
     always_comb
     begin
-        t_cci_mdata m = cci_mpf_setShimMdataTag(RESERVED_MDATA_IDX,
-                                                CCI_MPF_SHIM_TAG_VTP);
+        t_cci_mdata m;
+        m = cci_mpf_setShimMdataTag(RESERVED_MDATA_IDX, CCI_MPF_SHIM_TAG_VTP);
 
         pt_walk_read_hdr = cci_mpf_c0_genReqHdr(eREQ_RDLINE_S,
                                                 pt_walk_read_addr,

@@ -47,6 +47,7 @@ AAL_SVC_WRAPPER::AAL_SVC_WRAPPER(btBool use_hw) :
     m_pVTPService(NULL),
     m_pVCMAPService(NULL),
     m_pWROService(NULL),
+    m_pPWRITEService(NULL),
     m_Result(0),
     m_ALIAFUTranID(),
     m_MPFTranID()
@@ -280,9 +281,10 @@ void AAL_SVC_WRAPPER::serviceAllocated(IBase *pServiceBase,
             return;
         }
 
-        // Services be NULL if not found
+        // Services will be NULL if not found
         m_pVCMAPService = dynamic_ptr<IMPFVCMAP>(iidMPFVCMAPService, pServiceBase);
         m_pWROService = dynamic_ptr<IMPFWRO>(iidMPFWROService, pServiceBase);
+        m_pPWRITEService = dynamic_ptr<IMPFPWRITE>(iidMPFPWRITEService, pServiceBase);
     }
     else
     {

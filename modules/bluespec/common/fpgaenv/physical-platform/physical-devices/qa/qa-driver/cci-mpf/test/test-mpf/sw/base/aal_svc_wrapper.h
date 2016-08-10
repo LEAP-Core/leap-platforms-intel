@@ -126,6 +126,7 @@ class AAL_SVC_WRAPPER: public CAASBase,
     IMPFVTP       *m_pVTPService;            ///< Pointer to VTP buffer service
     IMPFVCMAP     *m_pVCMAPService;          ///< Pointer to VC MAP service
     IMPFWRO       *m_pWROService;            ///< Pointer to WRO service
+    IMPFPWRITE    *m_pPWRITEService;         ///< Pointer to PWRITE service
 };
 
 #endif //  __AAL_SVC_WRAPPER_H__

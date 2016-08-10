@@ -167,6 +167,16 @@ int main(int argc, char *argv[])
         cout << endl;
     }
 
+    if (svc.m_pPWRITEService)
+    {
+        t_cci_mpf_pwrite_stats pwrite_stats;
+        svc.m_pPWRITEService->pwriteGetStats(&pwrite_stats);
+
+        cout << endl
+             << "  PWRITE partial writes:    " << pwrite_stats.numPartialWrites
+             << endl;
+    }
+
     return result;
 }
 

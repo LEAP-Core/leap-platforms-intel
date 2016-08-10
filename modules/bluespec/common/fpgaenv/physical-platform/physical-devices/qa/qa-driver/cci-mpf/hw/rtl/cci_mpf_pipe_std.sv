@@ -132,7 +132,8 @@ module cci_mpf_pipe_std
                 .clk,
                 .fiu,
                 .afu(stgp1_pwrite),
-                .pwrite
+                .pwrite,
+                .events(mpf_csrs)
                 );
         end
         else

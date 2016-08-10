@@ -206,3 +206,24 @@ typedef enum
     CCI_MPF_WRO_CSR_SIZE = 56
 }
 t_cci_mpf_wro_csr_offsets;
+
+
+//
+// Partial write feature -- {9bdbbcaf-2c5a-4d17-a636-75b19a0b4f5c}
+//
+typedef enum
+{
+    // MPF write/read order BBB feature header (read)
+    CCI_MPF_PWRITE_CSR_DFH = 0,
+    // BBB feature ID low (read)
+    CCI_MPF_PWRITE_CSR_ID_L = 8,
+    // BBB feature ID high (read)
+    CCI_MPF_PWRITE_CSR_ID_H = 16,
+
+    // New read conflicts with old read
+    CCI_MPF_PWRITE_CSR_STAT_NUM_PWRITES = 24,
+
+    // Must be last
+    CCI_MPF_PWRITE_CSR_SIZE = 32
+}
+t_cci_mpf_pwrite_csr_offsets;

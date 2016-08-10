@@ -52,7 +52,9 @@ module cci_mpf_shim_pwrite
     cci_mpf_if.to_afu afu,
 
     // Interface to the MPF FIU edge module
-    cci_mpf_shim_pwrite_if.pwrite pwrite
+    cci_mpf_shim_pwrite_if.pwrite pwrite,
+
+    cci_mpf_csrs.pwrite_events events
     );
 
     logic reset;
@@ -68,5 +70,8 @@ module cci_mpf_shim_pwrite
 
     assign afu.c0Rx = fiu.c0Rx;
     assign afu.c1Rx = fiu.c1Rx;
+
+    assign events.pwrite_out_event_pwrite = fiu.c1Tx.hdr.pwrite.isPartialWrite &&
+                                            cci_mpf_c1TxIsValid(fiu.c1Tx);
 
 endmodule // cci_mpf_shim_pwrite

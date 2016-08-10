@@ -87,6 +87,13 @@ interface cci_mpf_csrs();
     logic wro_out_event_ww_conflict;  // New write conflicts with old write
 
 
+    //
+    // PWRITE -- Partial writes
+    //
+
+    logic pwrite_out_event_pwrite;    // Partial write processed
+
+
     // CSR manager port
     modport csr
        (
@@ -112,7 +119,9 @@ interface cci_mpf_csrs();
         input  wro_out_event_rr_conflict,
         input  wro_out_event_rw_conflict,
         input  wro_out_event_wr_conflict,
-        input  wro_out_event_ww_conflict
+        input  wro_out_event_ww_conflict,
+
+        input  pwrite_out_event_pwrite
         );
 
     modport vtp
@@ -148,6 +157,11 @@ interface cci_mpf_csrs();
         output wro_out_event_rw_conflict,
         output wro_out_event_wr_conflict,
         output wro_out_event_ww_conflict
+        );
+
+    modport pwrite_events
+       (
+        output pwrite_out_event_pwrite
         );
 
 endinterface // cci_mpf_csrs

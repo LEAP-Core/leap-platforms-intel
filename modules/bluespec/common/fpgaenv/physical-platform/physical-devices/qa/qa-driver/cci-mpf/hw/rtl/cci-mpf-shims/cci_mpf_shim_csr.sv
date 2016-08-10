@@ -39,10 +39,7 @@
 //
 
 // MMIO address range of MPF CSRs
-parameter CCI_MPF_CSR_SIZE = CCI_MPF_VTP_CSR_SIZE +
-                             CCI_MPF_RSP_ORDER_CSR_SIZE +
-                             CCI_MPF_VC_MAP_CSR_SIZE +
-                             CCI_MPF_WRO_CSR_SIZE;
+parameter CCI_MPF_CSR_SIZE = CCI_MPF_MMIO_SIZE;
 
 // Size in 64 bit words
 parameter CCI_MPF_CSR_SIZE64 = (CCI_MPF_CSR_SIZE >> 3);
@@ -60,13 +57,15 @@ parameter CCI_MPF_VC_MAP_CSR_OFFSET =    CCI_MPF_RSP_ORDER_CSR_OFFSET +
                                          CCI_MPF_RSP_ORDER_CSR_SIZE;
 parameter CCI_MPF_WRO_CSR_OFFSET =       CCI_MPF_VC_MAP_CSR_OFFSET +
                                          CCI_MPF_VC_MAP_CSR_SIZE;
+parameter CCI_MPF_PWRITE_CSR_OFFSET =    CCI_MPF_WRO_CSR_OFFSET +
+                                         CCI_MPF_WRO_CSR_SIZE;
 
 // Size of the intermediate statistics counter bucket. These buckets
 // are added periodically to the CSR memory by cci_mpf_shim_csr.
 parameter CCI_MPF_STAT_CNT_WIDTH = 16;
 typedef logic [CCI_MPF_STAT_CNT_WIDTH-1:0] t_cci_mpf_stat_cnt;
 
-parameter CCI_MPF_CSR_NUM_STATS = 11;
+parameter CCI_MPF_CSR_NUM_STATS = 12;
 typedef t_mpf_csr_offset [0:CCI_MPF_CSR_NUM_STATS-1] t_stat_csr_offset_vec;
 typedef t_cci_mpf_stat_cnt [0:CCI_MPF_CSR_NUM_STATS-1] t_stat_upd_count_vec;
 
@@ -96,7 +95,8 @@ module cci_mpf_shim_csr
     parameter MPF_ENABLE_VTP = 0,
     parameter MPF_ENABLE_RSP_ORDER = 0,
     parameter MPF_ENABLE_VC_MAP = 0,
-    parameter MPF_ENABLE_WRO = 0
+    parameter MPF_ENABLE_WRO = 0,
+    parameter MPF_ENABLE_PWRITE
     )
    (
     input  logic clk,
@@ -139,6 +139,8 @@ module cci_mpf_shim_csr
                                             CCI_MPF_RSP_ORDER_CSR_SIZE;
     localparam CCI_MPF_WRO_CSR_BASE =       CCI_MPF_VC_MAP_CSR_BASE +
                                             CCI_MPF_VC_MAP_CSR_SIZE;
+    localparam CCI_MPF_PWRITE_CSR_BASE =    CCI_MPF_WRO_CSR_BASE +
+                                            CCI_MPF_WRO_CSR_SIZE;
 
 
     // Register incoming requests
@@ -249,10 +251,12 @@ module cci_mpf_shim_csr
         .CCI_MPF_RSP_ORDER_CSR_BASE(CCI_MPF_RSP_ORDER_CSR_BASE),
         .CCI_MPF_VC_MAP_CSR_BASE(CCI_MPF_VC_MAP_CSR_BASE),
         .CCI_MPF_WRO_CSR_BASE(CCI_MPF_WRO_CSR_BASE),
+        .CCI_MPF_PWRITE_CSR_BASE(CCI_MPF_PWRITE_CSR_BASE),
         .MPF_ENABLE_VTP(MPF_ENABLE_VTP),
         .MPF_ENABLE_RSP_ORDER(MPF_ENABLE_RSP_ORDER),
         .MPF_ENABLE_VC_MAP(MPF_ENABLE_VC_MAP),
-        .MPF_ENABLE_WRO(MPF_ENABLE_WRO)
+        .MPF_ENABLE_WRO(MPF_ENABLE_WRO),
+        .MPF_ENABLE_PWRITE(MPF_ENABLE_PWRITE)
         )
       rd_mem
        (
@@ -665,6 +669,8 @@ module cci_mpf_shim_csr_events
     `MPF_CSR_STAT_ACCUM(WRO,  9, WR_CONFLICT, wro_wr_conflicts, wro_out_event_wr_conflict)
     `MPF_CSR_STAT_ACCUM(WRO, 10, WW_CONFLICT, wro_ww_conflicts, wro_out_event_ww_conflict)
 
+    `MPF_CSR_STAT_ACCUM(PWRITE, 11, NUM_PWRITES, pwrite_num_pwrites, pwrite_out_event_pwrite)
+
 endmodule // cci_mpf_shim_csr_events
 
 
@@ -682,10 +688,12 @@ module cci_mpf_shim_csr_rd_memory
     parameter CCI_MPF_RSP_ORDER_CSR_BASE = 0,
     parameter CCI_MPF_VC_MAP_CSR_BASE = 0,
     parameter CCI_MPF_WRO_CSR_BASE = 0,
+    parameter CCI_MPF_PWRITE_CSR_BASE = 0,
     parameter MPF_ENABLE_VTP = 0,
     parameter MPF_ENABLE_RSP_ORDER = 0,
     parameter MPF_ENABLE_VC_MAP = 0,
-    parameter MPF_ENABLE_WRO = 0
+    parameter MPF_ENABLE_WRO = 0,
+    parameter MPF_ENABLE_PWRITE = 0
     )
    (
     input  logic clk,
@@ -756,7 +764,7 @@ module cci_mpf_shim_csr_rd_memory
 
     // Initialization state.
     logic initialized;
-    localparam NUM_INIT_ENTRIES = 12;   // Count of 64 bit entries
+    localparam NUM_INIT_ENTRIES = 15;   // Count of 64 bit entries
     logic [(NUM_INIT_ENTRIES*2)-1 : 0][31:0] init_val;
     t_mpf_csr_offset [NUM_INIT_ENTRIES-1 : 0] init_idx;
 
@@ -961,6 +969,8 @@ module cci_mpf_shim_csr_rd_memory
         logic [127:0] vc_map_uid;
         t_ccip_dfh wro_dfh;
         logic [127:0] wro_uid;
+        t_ccip_dfh pwrite_dfh;
+        logic [127:0] pwrite_uid;
 
         // Construct the feature headers for each feature
         vtp_dfh = genDFH(CCI_MPF_VTP_CSR_SIZE);
@@ -987,22 +997,29 @@ module cci_mpf_shim_csr_rd_memory
                       128'h56b06b48_9dd7_4004_a47e_0681b4207a6d :
                       128'h0;
 
+        pwrite_dfh = genDFH(CCI_MPF_PWRITE_CSR_SIZE);
+        pwrite_uid = (MPF_ENABLE_PWRITE != 0) ?
+                      // UID of PWRITE feature (from cci_mpf_csrs.h)
+                      128'h9bdbbcaf_2c5a_4d17_a636_75b19a0b4f5c :
+                      128'h0;
+
         if (DFH_MMIO_NEXT_ADDR == 0)
         begin
-            // WRO is the last feature in the AFU's list
-            wro_dfh.eol = 1'b1;
+            // PWRITE is the last feature in the AFU's list
+            pwrite_dfh.eol = 1'b1;
         end
         else
         begin
             // Point to the next feature (outside of MPF)
-            wro_dfh.nextFeature = DFH_MMIO_NEXT_ADDR - CCI_MPF_WRO_CSR_BASE;
+            pwrite_dfh.nextFeature = DFH_MMIO_NEXT_ADDR - CCI_MPF_PWRITE_CSR_BASE;
         end
 
         // Each DFH entry is 64 bits.  Each UID entry is 128 bits.
         init_val_start = { vtp_dfh, vtp_uid,
                            rsp_order_dfh, rsp_order_uid,
                            vc_map_dfh, vc_map_uid,
-                           wro_dfh, wro_uid };
+                           wro_dfh, wro_uid,
+                           pwrite_dfh, pwrite_uid };
 
         init_idx_start = {
             // VTP DFH (device feature header)
@@ -1031,7 +1048,14 @@ module cci_mpf_shim_csr_rd_memory
             // WRO UID high
             t_mpf_csr_offset'((CCI_MPF_WRO_CSR_OFFSET + CCI_MPF_WRO_CSR_ID_H) >> 3),
             // WRO UID low
-            t_mpf_csr_offset'((CCI_MPF_WRO_CSR_OFFSET + CCI_MPF_WRO_CSR_ID_L) >> 3)
+            t_mpf_csr_offset'((CCI_MPF_WRO_CSR_OFFSET + CCI_MPF_WRO_CSR_ID_L) >> 3),
+
+            // PWRITE DFH (device feature header)
+            t_mpf_csr_offset'((CCI_MPF_PWRITE_CSR_OFFSET + CCI_MPF_PWRITE_CSR_DFH) >> 3),
+            // PWRITE UID high
+            t_mpf_csr_offset'((CCI_MPF_PWRITE_CSR_OFFSET + CCI_MPF_PWRITE_CSR_ID_H) >> 3),
+            // PWRITE UID low
+            t_mpf_csr_offset'((CCI_MPF_PWRITE_CSR_OFFSET + CCI_MPF_PWRITE_CSR_ID_L) >> 3)
             };
     end
 

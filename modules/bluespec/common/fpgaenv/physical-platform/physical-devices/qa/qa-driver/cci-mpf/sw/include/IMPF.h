@@ -259,6 +259,43 @@ public:
 
 /// @}
 
+
+/// @addtogroup PWRITEService
+/// @{
+
+#define MPF_PWRITE_DFH_ADDRESS_KEY "MPFPWRITEDFHAddress"
+#define MPF_PWRITE_DFH_ADDRESS_DATATYPE btObjectType
+#define MPF_PWRITE_DFH_OFFSET_KEY "MPFPWRITEDFHOffset"
+#define MPF_PWRITE_DFH_OFFSET_DATATYPE btCSROffset
+
+/// Memory write/read ordering feature
+#define MPF_PWRITE_BBB_GUID "9BDBBCAF-2C5A-4D17-A636-75B19A0B4F5C"
+
+/// MPF PWRITE Service IID
+#ifndef iidMPFPWRITEService
+#define iidMPFPWRITEService __INTC_IID(INTC_sysSampleAFU, 0x0013)
+#endif
+
+
+typedef struct
+{
+   // Number of partial writes
+   btUnsigned64bitInt numPartialWrites;
+}
+t_cci_mpf_pwrite_stats;
+
+
+class IMPFPWRITE
+{
+public:
+   virtual ~IMPFPWRITE() {}
+
+   // Return all statistics counters
+   virtual btBool pwriteGetStats( t_cci_mpf_pwrite_stats *stats ) = 0;
+};
+
+/// @}
+
 END_NAMESPACE(AAL)
 
 #endif // __IMPF_H__

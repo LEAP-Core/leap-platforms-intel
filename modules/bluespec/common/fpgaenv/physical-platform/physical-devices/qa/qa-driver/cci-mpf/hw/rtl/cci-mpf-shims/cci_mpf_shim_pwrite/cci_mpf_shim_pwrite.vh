@@ -52,8 +52,9 @@ interface cci_mpf_shim_pwrite_if
     //
     logic upd_en;
     logic [$clog2(N_WRITE_HEAP_ENTRIES)-1 : 0] upd_idx;
+    t_cci_clNum upd_clNum;
     t_cci_clData upd_data;
-    t_cci_mpf_c1_PartialWriteHdr upd_partial;
+    t_cci_mpf_clDataByteMask upd_mask;
 
     modport pwrite
        (
@@ -63,8 +64,9 @@ interface cci_mpf_shim_pwrite_if
 
         output upd_en,
         output upd_idx,
+        output upd_clNum,
         output upd_data,
-        output upd_partial
+        output upd_mask
         );
         
     modport pwrite_edge_afu
@@ -78,8 +80,9 @@ interface cci_mpf_shim_pwrite_if
        (
         input  upd_en,
         input  upd_idx,
+        input  upd_clNum,
         input  upd_data,
-        input  upd_partial
+        input  upd_mask
         );
 
 endinterface

@@ -161,6 +161,8 @@ module cci_mpf_shim_edge_fiu
         end
     end
 
+    logic [$clog2(N_UNIQUE_WRITE_HEAP_ENTRIES)-1 : 0] wr_heap_data_addr1;
+
     cci_mpf_prim_ram_dualport_byteena
       #(
         .N_ENTRIES(N_UNIQUE_WRITE_HEAP_ENTRIES),
@@ -178,12 +180,27 @@ module cci_mpf_shim_edge_fiu
         .wdata0(afu_edge_wdata_q),
         .rdata0(),
 
-        .wen1(1'b0),
-        .byteena1(),
-        .addr1({ wr_heap_deq_idx, wr_heap_deq_clNum }),
-        .wdata1(),
+        // Port 1 is used mostly for reading write data but is shared with
+        // partial write updates.  wr_req_may_fire below handles the case
+        // that a write fired.
+        .wen1(pwrite.upd_en),
+        .byteena1(pwrite.upd_mask),
+        .addr1(wr_heap_data_addr1),
+        .wdata1(pwrite.upd_data),
         .rdata1(wr_data)
         );
+
+
+    // Address in port 1, shared for partial writes and normal reads.
+    always_comb
+    begin
+        wr_heap_data_addr1 = {wr_heap_deq_idx, wr_heap_deq_clNum};
+
+        if (pwrite.upd_en)
+        begin
+            wr_heap_data_addr1 = {pwrite.upd_idx, pwrite.upd_clNum};
+        end
+    end
 
 
     // ====================================================================
@@ -313,7 +330,11 @@ module cci_mpf_shim_edge_fiu
 
     always_comb
     begin
-        wr_req_may_fire = ! fiu.c1TxAlmFull;
+        // Write request may fire if the downstream pipeline isn't full and
+        // if the wr_heap_data read port is available to retrieve the store
+        // data.  The wr_heap_data read port is used as a write port for
+        // updates to partial write data, which are given priority.
+        wr_req_may_fire = ! fiu.c1TxAlmFull && ! pwrite.upd_en;
 
         // Processing is complete when all beats have been emitted.
         stg1_packet_done = wr_req_may_fire && (stg1_fiu_wr_beats_rem == 0);

@@ -537,6 +537,7 @@ module test_afu
             begin
                 fiu.c1Tx.valid <= 1'b1;
                 fiu.c1Tx.hdr.base.address <= dsm;
+                fiu.c1Tx.hdr.pwrite.isPartialWrite <= 1'b0;
                 fiu.c1Tx.data <= t_cci_clData'(1);
             end
 
@@ -545,6 +546,7 @@ module test_afu
             begin
                 fiu.c1Tx.valid <= 1'b1;
                 fiu.c1Tx.hdr.base.address <= dsm;
+                fiu.c1Tx.hdr.pwrite.isPartialWrite <= 1'b0;
                 fiu.c1Tx.data <= t_cci_clData'(2);
             end
         end
@@ -859,7 +861,7 @@ module test_gen_pwrite_hdr
         pwh.mask <= pw_rand_mask;
 
         // Most writes are not partial
-        pwh.isPartialWrite <= (7'(pw_lfsr) == 7'(0)) && enable_partial_writes;
+        pwh.isPartialWrite <= (5'(pw_lfsr) == 5'(0)) && enable_partial_writes;
     end
 
 endmodule // test_gen_pwrite_hdr

@@ -409,3 +409,82 @@ module cci_mpf_prim_heap_ctrl
     end
 
 endmodule // cci_mpf_prim_heap_ctrl
+
+
+//
+// A simple round-robin control module for heaps.  It doesn't support
+// almost full logic in order to reduce timing complexity.
+//
+module cci_mpf_prim_heap_ctrl_rr
+  #(
+    parameter N_ENTRIES = 32
+    )
+   (
+    input  logic clk,
+    input  logic reset,
+
+    // Allocate an entry
+    input  logic enq,
+    output logic notFull,
+    // Index of new entry
+    output logic [$clog2(N_ENTRIES)-1 : 0] allocIdx,
+
+    input  logic free,
+    input  logic [$clog2(N_ENTRIES)-1 : 0] freeIdx
+    );
+
+    typedef logic [$clog2(N_ENTRIES)-1 : 0] t_idx;
+
+    logic [N_ENTRIES-1 : 0] busy;
+
+    t_idx next_idx;
+    always_comb
+    begin
+        next_idx = allocIdx;
+
+        if (enq)
+        begin
+            // Increment next_idx on alloc or wrap back to 0.
+            next_idx = (allocIdx == t_idx'(N_ENTRIES-1)) ? t_idx'(0) :
+                                                           allocIdx + t_idx'(1);
+        end
+    end
+
+    always_ff @(posedge clk)
+    begin
+        if (enq)
+        begin
+            busy[allocIdx] <= 1'b1;
+
+            if (! reset)
+            begin
+                assert (busy[allocIdx] == 1'b0) else
+                    $fatal("cci_mpf_prim_heap.sv: Alloc while full");
+            end
+        end
+
+        if (free)
+        begin
+            busy[freeIdx] <= 1'b0;
+        end
+
+        allocIdx <= next_idx;
+
+        if (reset)
+        begin
+            busy <= N_ENTRIES'(0);
+            allocIdx <= t_idx'(0);
+        end
+    end
+
+    always_ff @(posedge clk)
+    begin
+        notFull <= ! busy[next_idx];
+
+        if (reset)
+        begin
+            notFull <= 1'b1;
+        end
+    end
+
+endmodule // cci_mpf_prim_heap_ctrl_rr

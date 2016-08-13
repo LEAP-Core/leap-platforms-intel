@@ -114,24 +114,47 @@ module cci_mpf_pipe_std
 
     // ====================================================================
     //
+    //  Detect the end of responses for a multi-beat packet (EOP).
+    //  Single-beat responses will also be tagged EOP.
+    //
+    // ====================================================================
+
+    cci_mpf_if stgp1_fiu_eop (.clk);
+
+    cci_mpf_shim_detect_eop
+      #(
+        .MAX_ACTIVE_REQS(MAX_ACTIVE_REQS),
+        .RESERVED_MDATA_IDX(RESERVED_MDATA_IDX)
+        )
+      eop
+       (
+        .clk,
+        .fiu,
+        .afu(stgp1_fiu_eop)
+        );
+
+
+    // ====================================================================
+    //
     //  Partial write emulation
     //
     // ====================================================================
 
-    cci_mpf_if stgp1_pwrite (.clk);
+    cci_mpf_if stgp2_pwrite (.clk);
 
     generate
         if (ENABLE_PARTIAL_WRITES)
         begin : pwm
             cci_mpf_shim_pwrite
               #(
-                .N_WRITE_HEAP_ENTRIES(N_WRITE_HEAP_ENTRIES)
+                .N_WRITE_HEAP_ENTRIES(N_WRITE_HEAP_ENTRIES),
+                .RESERVED_MDATA_IDX(RESERVED_MDATA_IDX)
                 )
               pw
                (
                 .clk,
-                .fiu,
-                .afu(stgp1_pwrite),
+                .fiu(stgp1_fiu_eop),
+                .afu(stgp2_pwrite),
                 .pwrite,
                 .events(mpf_csrs)
                 );
@@ -142,35 +165,13 @@ module cci_mpf_pipe_std
               no_pwrite
                (
                 .clk,
-                .fiu,
-                .afu(stgp1_pwrite)
+                .fiu(stgp1_fiu_eop),
+                .afu(stgp2_pwrite)
                 );
 
             assign pwrite.upd_en = 1'b0;
         end
     endgenerate
-
-
-    // ====================================================================
-    //
-    //  Detect the end of responses for a multi-beat packet (EOP).
-    //  Single-beat responses will also be tagged EOP.
-    //
-    // ====================================================================
-
-    cci_mpf_if stgp2_fiu_eop (.clk);
-
-    cci_mpf_shim_detect_eop
-      #(
-        .MAX_ACTIVE_REQS(MAX_ACTIVE_REQS),
-        .RESERVED_MDATA_IDX(RESERVED_MDATA_IDX)
-        )
-      eop
-       (
-        .clk,
-        .fiu(stgp1_pwrite),
-        .afu(stgp2_fiu_eop)
-        );
 
 
     // ====================================================================
@@ -197,7 +198,7 @@ module cci_mpf_pipe_std
               v_to_p
                (
                 .clk,
-                .fiu(stgp2_fiu_eop),
+                .fiu(stgp2_pwrite),
                 .afu(stgp3_fiu_virtual),
                 .vtp_svc,
                 .csrs(mpf_csrs)
@@ -209,7 +210,7 @@ module cci_mpf_pipe_std
               physical
                (
                 .clk,
-                .fiu(stgp2_fiu_eop),
+                .fiu(stgp2_pwrite),
                 .afu(stgp3_fiu_virtual)
                 );
         end

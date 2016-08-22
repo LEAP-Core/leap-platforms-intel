@@ -48,13 +48,13 @@ module cci_mpf_prim_fifo_lutram
     input  logic reset,
 
     input  logic [N_DATA_BITS-1 : 0] enq_data,
-    input  logic                     enq_en,
-    output logic                     notFull,
-    output logic                     almostFull,
+    input  logic enq_en,
+    output logic notFull,
+    output logic almostFull,
 
     output logic [N_DATA_BITS-1 : 0] first,
-    input  logic                     deq_en,
-    output logic                     notEmpty
+    input  logic deq_en,
+    output logic notEmpty
     );
 
     logic fifo_enq;
@@ -136,30 +136,25 @@ module cci_mpf_prim_fifo_lutram_base
     input  logic reset,
 
     input  logic [N_DATA_BITS-1 : 0] enq_data,
-    input  logic                     enq_en,
-    output logic                     notFull,
-    output logic                     almostFull,
+    input  logic enq_en,
+    output logic notFull,
+    output logic almostFull,
 
     output logic [N_DATA_BITS-1 : 0] first,
-    input  logic                     deq_en,
-    output logic                     notEmpty
+    input  logic deq_en,
+    output logic notEmpty
     );
      
     // Pointer to head/tail in storage
-    typedef logic [$clog2(N_ENTRIES)-1 : 0] t_IDX;
-    // Counter of active entries, leaving room to represent both 0 and N_ENTRIES.
-    typedef logic [$clog2(N_ENTRIES+1)-1 : 0] t_COUNTER;
+    typedef logic [$clog2(N_ENTRIES)-1 : 0] t_idx;
+
+    t_idx enq_idx;
+    t_idx first_idx;
 
     // synthesis attribute ram_style of data is distributed
     reg [N_DATA_BITS-1 : 0] data[0 : N_ENTRIES-1] /* synthesis ramstyle = "MLAB, no_rw_check" */;
 
-    t_IDX wr_idx;
-    t_IDX rd_idx;
-
-    t_COUNTER valid_cnt;
-    t_COUNTER valid_cnt_next;
-
-    assign first = data[rd_idx];
+    assign first = data[first_idx];
     always_ff @(posedge clk)
     begin
         // Write the data as long as the FIFO isn't full.  This leaves the
@@ -167,20 +162,71 @@ module cci_mpf_prim_fifo_lutram_base
         // the control messages.
         if (notFull)
         begin
-            data[wr_idx] <= enq_data;
+            data[enq_idx] <= enq_data;
         end
     end
+
+    cci_mpf_prim_fifo_lutram_ctrl
+      #(
+        .N_ENTRIES(N_ENTRIES),
+        .THRESHOLD(THRESHOLD)
+        )
+      ctrl
+       (
+        .clk,
+        .reset,
+        .enq_idx,
+        .enq_en,
+        .notFull,
+        .almostFull,
+        .first_idx,
+        .deq_en,
+        .notEmpty
+        );
+
+endmodule // cci_mpf_prim_fifo_lutram_base
+
+
+//
+// Control logic for FIFOs
+//
+module cci_mpf_prim_fifo_lutram_ctrl
+  #(
+    parameter N_ENTRIES = 2,
+    parameter THRESHOLD = 1
+    )
+   (
+    input  logic clk,
+    input  logic reset,
+
+    output logic [$clog2(N_ENTRIES)-1 : 0] enq_idx,
+    input  logic enq_en,
+    output logic notFull,
+    output logic almostFull,
+
+    output logic [$clog2(N_ENTRIES)-1 : 0] first_idx,
+    input  logic deq_en,
+    output logic notEmpty
+    );
+
+    // Pointer to head/tail in storage
+    typedef logic [$clog2(N_ENTRIES)-1 : 0] t_idx;
+    // Counter of active entries, leaving room to represent both 0 and N_ENTRIES.
+    typedef logic [$clog2(N_ENTRIES+1)-1 : 0] t_counter;
+
+    t_counter valid_cnt;
+    t_counter valid_cnt_next;
 
     // Write pointer advances on ENQ
     always_ff @(posedge clk)
     begin
         if (reset)
         begin
-            wr_idx <= 1'b0;
+            enq_idx <= 1'b0;
         end
         else if (enq_en)
         begin
-            wr_idx <= (wr_idx == t_IDX'(N_ENTRIES-1)) ? 0 : wr_idx + 1;
+            enq_idx <= (enq_idx == t_idx'(N_ENTRIES-1)) ? 0 : enq_idx + 1;
 
             assert (notFull) else
                 $fatal("cci_mpf_prim_fifo_lutram: ENQ to full FIFO!");
@@ -192,11 +238,11 @@ module cci_mpf_prim_fifo_lutram_base
     begin
         if (reset)
         begin
-            rd_idx <= 1'b0;
+            first_idx <= 1'b0;
         end
         else if (deq_en)
         begin
-            rd_idx <= (rd_idx == t_IDX'(N_ENTRIES-1)) ? 0 : rd_idx + 1;
+            first_idx <= (first_idx == t_idx'(N_ENTRIES-1)) ? 0 : first_idx + 1;
 
             assert (notEmpty) else
                 $fatal("cci_mpf_prim_fifo_lutram: DEQ from empty FIFO!");
@@ -207,13 +253,13 @@ module cci_mpf_prim_fifo_lutram_base
     always_ff @(posedge clk)
     begin
         valid_cnt <= valid_cnt_next;
-        notFull <= (valid_cnt_next != t_COUNTER'(N_ENTRIES));
-        almostFull <= (valid_cnt_next >= t_COUNTER'(N_ENTRIES - THRESHOLD));
-        notEmpty <= (valid_cnt_next != t_COUNTER'(0));
+        notFull <= (valid_cnt_next != t_counter'(N_ENTRIES));
+        almostFull <= (valid_cnt_next >= t_counter'(N_ENTRIES - THRESHOLD));
+        notEmpty <= (valid_cnt_next != t_counter'(0));
 
         if (reset)
         begin
-            valid_cnt <= t_COUNTER'(0);
+            valid_cnt <= t_counter'(0);
             notEmpty <= 1'b0;
         end
     end
@@ -224,12 +270,12 @@ module cci_mpf_prim_fifo_lutram_base
 
         if (deq_en && ! enq_en)
         begin
-            valid_cnt_next = valid_cnt_next - t_COUNTER'(1);
+            valid_cnt_next = valid_cnt_next - t_counter'(1);
         end
         else if (enq_en && ! deq_en)
         begin
-            valid_cnt_next = valid_cnt_next + t_COUNTER'(1);
+            valid_cnt_next = valid_cnt_next + t_counter'(1);
         end
     end
 
-endmodule // cci_mpf_prim_fifo_lutram_base
+endmodule // cci_mpf_prim_fifo_lutram_ctrl

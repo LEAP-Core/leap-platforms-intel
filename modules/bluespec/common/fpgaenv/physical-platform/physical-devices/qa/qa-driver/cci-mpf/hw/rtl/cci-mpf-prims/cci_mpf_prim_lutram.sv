@@ -164,3 +164,129 @@ module cci_mpf_prim_lutram_init
 
 endmodule // cci_mpf_prim_lutram_init
 
+
+
+// ========================================================================
+//
+//   LUTRAM with multiple read ports using simple replication.
+//
+// ========================================================================
+
+
+module cci_mpf_prim_lutram_multiread
+  #(
+    parameter N_ENTRIES = 32,
+    parameter N_DATA_BITS = 64,
+    parameter N_READERS = 1
+    )
+   (
+    input  logic clk,
+    input  logic reset,
+
+    input  logic [$clog2(N_ENTRIES)-1 : 0] raddr[0 : N_READERS-1],
+    output logic [N_DATA_BITS-1 : 0] rdata[0 : N_READERS-1],
+
+    input  logic [$clog2(N_ENTRIES)-1 : 0] waddr,
+    input  logic wen,
+    input  logic [N_DATA_BITS-1 : 0] wdata
+    );
+    genvar p;
+    generate
+        for (p = 0; p < N_READERS; p = p + 1)
+        begin : rp
+            cci_mpf_prim_lutram
+              #(
+                .N_ENTRIES(N_ENTRIES),
+                .N_DATA_BITS(N_DATA_BITS)
+                )
+              b
+               (
+                .clk,
+                .reset,
+                .raddr(raddr[p]),
+                .rdata(rdata[p]),
+                .waddr,
+                .wen,
+                .wdata
+                );
+        end
+    endgenerate
+
+endmodule // cci_mpf_prim_lutram_multiread
+
+
+//
+// LUT RAM initialized with a constant on reset.
+//
+module cci_mpf_prim_lutram_multiread_init
+  #(
+    parameter N_ENTRIES = 32,
+    parameter N_DATA_BITS = 64,
+    parameter N_READERS = 1,
+
+    parameter INIT_VALUE = N_DATA_BITS'(0)
+    )
+   (
+    input  logic clk,
+    input  logic reset,
+    // Goes high after initialization complete and stays high.
+    output logic rdy,
+
+
+    input  logic [$clog2(N_ENTRIES)-1 : 0] raddr[0 : N_READERS-1],
+    output logic [N_DATA_BITS-1 : 0] rdata[0 : N_READERS-1],
+
+    input  logic [$clog2(N_ENTRIES)-1 : 0] waddr,
+    input  logic wen,
+    input  logic [N_DATA_BITS-1 : 0] wdata
+    );
+
+    logic [$clog2(N_ENTRIES)-1 : 0] waddr_local;
+    logic wen_local;
+    logic [N_DATA_BITS-1 : 0] wdata_local;
+
+    cci_mpf_prim_lutram_multiread
+      #(
+        .N_ENTRIES(N_ENTRIES),
+        .N_DATA_BITS(N_DATA_BITS),
+        .N_READERS(N_READERS)
+        )
+      ram
+       (
+        .clk,
+        .reset,
+
+        .raddr,
+        .rdata,
+
+        .waddr(waddr_local),
+        .wen(wen_local),
+        .wdata(wdata_local)
+        );
+
+
+    //
+    // Initialization loop
+    //
+
+    logic [$clog2(N_ENTRIES)-1 : 0] waddr_init;
+
+    assign waddr_local = rdy ? waddr : waddr_init;
+    assign wen_local = rdy ? wen : 1'b1;
+    assign wdata_local = rdy ? wdata : INIT_VALUE;
+
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            rdy <= 1'b0;
+            waddr_init <= 0;
+        end
+        else if (! rdy)
+        begin
+            waddr_init <= waddr_init + 1;
+            rdy <= &(waddr_init);
+        end
+    end
+
+endmodule // cci_mpf_prim_lutram_multiread_init

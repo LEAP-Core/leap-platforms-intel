@@ -22,6 +22,7 @@ set_global_assignment -name SEARCH_PATH $CCI_MPF_SRC/hw/rtl/cci-mpf-shims
 set_global_assignment -name SEARCH_PATH $CCI_MPF_SRC/hw/rtl/cci-mpf-shims/cci_mpf_shim_edge
 set_global_assignment -name SEARCH_PATH $CCI_MPF_SRC/hw/rtl/cci-mpf-shims/cci_mpf_shim_pwrite
 set_global_assignment -name SEARCH_PATH $CCI_MPF_SRC/hw/rtl/cci-mpf-shims/cci_mpf_shim_vtp
+set_global_assignment -name SEARCH_PATH $CCI_MPF_SRC/hw/rtl/cci-mpf-shims/cci_mpf_shim_wro
 
 ## Type and interface Packages and header files
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-if/ccis_if_pkg.sv
@@ -55,6 +56,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-prims
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-prims/cci_mpf_prim_heap.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-prims/cci_mpf_prim_lfsr.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-prims/cci_mpf_prim_lutram.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-prims/cci_mpf_prim_onehot_to_bin.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-prims/cci_mpf_prim_ram_dualport.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-prims/cci_mpf_prim_ram_simple.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-prims/cci_mpf_prim_repl_lru_pseudo.sv

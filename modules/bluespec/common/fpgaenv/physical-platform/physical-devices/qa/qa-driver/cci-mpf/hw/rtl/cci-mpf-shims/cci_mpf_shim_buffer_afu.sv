@@ -41,7 +41,12 @@
 
 module cci_mpf_shim_buffer_afu
   #(
+    // Assert almost full when the number of free entries falls below threshold.
     parameter THRESHOLD = CCI_TX_ALMOST_FULL_THRESHOLD,
+
+    // Total entries in the buffer.
+    parameter N_ENTRIES = THRESHOLD + 4,
+
     // If nonzero, incoming requests from afu_raw on channel 0 may bypass
     // the FIFO and be received in the same cycle through afu_buf.  This
     // is offered only on channel 0.  Bypassing is not offered on channel
@@ -70,8 +75,6 @@ module cci_mpf_shim_buffer_afu
     input logic deqC0Tx,
     input logic deqC1Tx
     );
-
-    localparam N_ENTRIES = THRESHOLD + 4;
 
     assign afu_raw.reset = afu_buf.reset;
 

@@ -80,11 +80,15 @@ module ccis_wires_to_mpf
     cci_mpf_if fiu_ext(.clk);
     cci_mpf_if fiu_int(.clk);
 
-    logic reset;
-    assign reset = ! (ffs_vl_LP32ui_lp2sy_SoftReset_n &&
-                      ffs_vl_LP32ui_lp2sy_InitDnForSys);
+    logic reset = 1'b1;
     assign fiu_ext.reset = reset;
     assign fiu_int.reset = fiu_ext.reset;
+
+    always @(posedge clk)
+    begin
+        reset <= ! (ffs_vl_LP32ui_lp2sy_SoftReset_n &&
+                    ffs_vl_LP32ui_lp2sy_InitDnForSys);
+    end
 
     assign fiu_ext.c0Tx = fiu_int.c0Tx;
     assign fiu_int.c0TxAlmFull = fiu_ext.c0TxAlmFull;

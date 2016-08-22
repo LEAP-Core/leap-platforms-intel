@@ -412,12 +412,13 @@ endmodule // cci_mpf_prim_heap_ctrl
 
 
 //
-// A simple round-robin control module for heaps.  It doesn't support
-// almost full logic in order to reduce timing complexity.
+// A simple control module for heaps using a bit vector to tag free indices.
 //
-module cci_mpf_prim_heap_ctrl_rr
+module cci_mpf_prim_heap_ctrl_simple
   #(
-    parameter N_ENTRIES = 32
+    parameter N_ENTRIES = 32,
+    // Threshold below which heap asserts "full"
+    parameter MIN_FREE_SLOTS = 1
     )
    (
     input  logic clk,
@@ -435,56 +436,78 @@ module cci_mpf_prim_heap_ctrl_rr
 
     typedef logic [$clog2(N_ENTRIES)-1 : 0] t_idx;
 
-    logic [N_ENTRIES-1 : 0] busy;
-
-    t_idx next_idx;
-    always_comb
-    begin
-        next_idx = allocIdx;
-
-        if (enq)
-        begin
-            // Increment next_idx on alloc or wrap back to 0.
-            next_idx = (allocIdx == t_idx'(N_ENTRIES-1)) ? t_idx'(0) :
-                                                           allocIdx + t_idx'(1);
-        end
-    end
+    // Head of the free list is prefetched to the allocIdx register.  The rest
+    // of the list is flagged in a bit vector.
+    logic [N_ENTRIES-1 : 0] free_vec;
 
     always_ff @(posedge clk)
     begin
+        // Find the next free entry when an entry is allocated
         if (enq)
         begin
-            busy[allocIdx] <= 1'b1;
-
-            if (! reset)
+            // Find first free index
+            for (int i = 0; i < N_ENTRIES; i = i + 1)
             begin
-                assert (busy[allocIdx] == 1'b0) else
-                    $fatal("cci_mpf_prim_heap.sv: Alloc while full");
+                if (free_vec[i])
+                begin
+                    allocIdx <= t_idx'(i);
+                    free_vec[i] <= 1'b0;
+                    break;
+                end
             end
         end
 
+        // Set the "free" bit for released entries
         if (free)
         begin
-            busy[freeIdx] <= 1'b0;
-        end
+            free_vec[freeIdx] <= 1'b1;
 
-        allocIdx <= next_idx;
+            assert (free_vec[freeIdx] == 1'b0) else
+                $fatal("cci_mpf_prim_heap.sv: Free unallocated entry!");
+        end
 
         if (reset)
         begin
-            busy <= N_ENTRIES'(0);
             allocIdx <= t_idx'(0);
+
+            free_vec <= ~ N_ENTRIES'(0);
+            free_vec[0] <= 1'b0;
         end
     end
+
+
+    // Track the number of free entries
+    typedef logic [$clog2(N_ENTRIES) : 0] t_free_cnt;
+
+    t_free_cnt num_free;
+    assign notFull = (num_free >= t_free_cnt'(MIN_FREE_SLOTS));
+
+    // Give credit for free one cycle late because it takes a cycle for a
+    // released index to get to allocIdx when no other entries are free.
+    logic free_q;
 
     always_ff @(posedge clk)
     begin
-        notFull <= ! busy[next_idx];
+        free_q <= free;
+
+        if (enq && ! free_q)
+        begin
+            num_free <= num_free - t_free_cnt'(1);
+
+            assert (num_free != 0) else
+                $fatal("cci_mpf_prim_heap.sv: Alloc from empty heap!");
+        end
+
+        if (! enq && free_q)
+        begin
+            num_free <= num_free + t_free_cnt'(1);
+        end
 
         if (reset)
         begin
-            notFull <= 1'b1;
+            num_free <= t_free_cnt'(N_ENTRIES);
+            free_q <= 1'b0;
         end
     end
 
-endmodule // cci_mpf_prim_heap_ctrl_rr
+endmodule // cci_mpf_prim_heap_ctrl_simple

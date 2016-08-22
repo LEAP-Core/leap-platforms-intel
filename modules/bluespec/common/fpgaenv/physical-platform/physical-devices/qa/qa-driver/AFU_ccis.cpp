@@ -95,6 +95,9 @@ AFU_CCIS_CLASS::Initialize()
     // Was the VTP CSR region found?
     assert(m_csr_base != 0);
 
+    // Invalidate current translations
+    m_afu->WriteCSR64(m_csr_base + CCI_MPF_VTP_CSR_MODE, 2);
+
     // Tell the hardware the address of the table
     m_afu->WriteCSR64(m_csr_base + CCI_MPF_VTP_CSR_PAGE_TABLE_PADDR,
                       ptGetPageTableRootPA() / CL(1));

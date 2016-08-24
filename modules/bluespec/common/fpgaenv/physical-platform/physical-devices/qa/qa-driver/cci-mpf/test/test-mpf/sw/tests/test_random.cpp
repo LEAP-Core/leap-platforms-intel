@@ -136,14 +136,30 @@ btInt TEST_RANDOM::test()
                      (enable_writes << 1) |
                      enable_reads);
 
-        // Wait for test to signal it is complete
+        // Wait time for something to happen
         struct timespec ms;
-        ms.tv_sec = 1;
-        ms.tv_nsec = 1000000;
+        // Longer when simulating
+        ms.tv_sec = (hwIsSimulated() ? 2 : 0);
+        ms.tv_nsec = 2500000;
 
+        uint64_t iter_state_end = 0;
+
+        // Wait for test to signal it is complete
         while (*dsm == 0)
         {
             nanosleep(&ms, NULL);
+
+            // Is the test done but not writing to DSM?  Could be a bug.
+            uint8_t state = (readTestCSR(7) >> 8) & 255;
+            if (state > 1)
+            {
+                iter_state_end += 1;
+                if (iter_state_end++ == 5)
+                {
+                    // Give up and signal an error
+                    break;
+                }
+            }
         }
 
         totalCycles += cycles;

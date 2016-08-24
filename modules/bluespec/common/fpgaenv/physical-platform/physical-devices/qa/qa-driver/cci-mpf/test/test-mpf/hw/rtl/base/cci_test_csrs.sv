@@ -125,10 +125,25 @@ module cci_test_csrs
     //
     // CSR reads
     //
+    //   In order to be simple this code may fail when a CSR read outside
+    //   the space managed here and a CSR read inside the space managed here
+    //   are both outstanding.
+    //
+    t_if_cci_c2_Tx c2Tx;
     always_ff @(posedge clk)
     begin
-        fiu.c2Tx.mmioRdValid <= is_csr_read;
-        fiu.c2Tx.hdr.tid <= mmio_req_tid;
+        fiu.c2Tx <= afu.c2Tx;
+
+        if (c2Tx.mmioRdValid)
+        begin
+            fiu.c2Tx <= c2Tx;
+        end
+    end
+
+    always_ff @(posedge clk)
+    begin
+        c2Tx.mmioRdValid <= is_csr_read;
+        c2Tx.hdr.tid <= mmio_req_tid;
 
         case (csr_addr) inside
           0: // AFU DFH (device feature header)
@@ -139,54 +154,64 @@ module cci_test_csrs
                 afu_dfh.f_type = eFTYP_AFU;
                 afu_dfh.nextFeature = NEXT_DFH_BYTE_OFFSET;
 
-                fiu.c2Tx.data <= afu_dfh;
+                c2Tx.data <= afu_dfh;
             end
 
           // AFU_ID_L
-          1: fiu.c2Tx.data <= afu_id[63:0];
+          1: c2Tx.data <= afu_id[63:0];
 
           // AFU_ID_H
-          2: fiu.c2Tx.data <= afu_id[127:64];
+          2: c2Tx.data <= afu_id[127:64];
 
           // DFH_RSVD0
-          3: fiu.c2Tx.data <= t_ccip_mmioData'(0);
+          3: c2Tx.data <= t_ccip_mmioData'(0);
 
           // DFH_RSVD1
-          4: fiu.c2Tx.data <= t_ccip_mmioData'(0);
+          4: c2Tx.data <= t_ccip_mmioData'(0);
 
           //
           // Standard CSRs available in all tests.
           //
 
           // AFU frequency (MHz)
-          8: fiu.c2Tx.data <= `AFU_CLOCK_FREQ;
+          8: c2Tx.data <= `AFU_CLOCK_FREQ;
 
           // Cache read hits
-          9: fiu.c2Tx.data <= ctr_rd_cache_hits;
+          9: c2Tx.data <= ctr_rd_cache_hits;
 
           // Cache read misses
-          10: fiu.c2Tx.data <= ctr_rd_cache_misses;
+          10: c2Tx.data <= ctr_rd_cache_misses;
 
           // Cache write hits
-          11: fiu.c2Tx.data <= ctr_wr_cache_hits;
+          11: c2Tx.data <= ctr_wr_cache_hits;
 
           // Cache write misses
-          12: fiu.c2Tx.data <= ctr_wr_cache_misses;
+          12: c2Tx.data <= ctr_wr_cache_misses;
 
           // Responses on VL0
-          13: fiu.c2Tx.data <= ctr_chan_vl0;
+          13: c2Tx.data <= ctr_chan_vl0;
+
+          // FIU state
+          14: c2Tx.data <= { 62'(0),
+                             fiu.c1TxAlmFull,
+                             fiu.c0TxAlmFull };
 
           // Test CSRs start at 32
           [32 : (32 + NUM_TEST_CSRS - 1)]:
             begin
-                fiu.c2Tx.data <= csrs.cpu_rd_csrs[csr_addr - 32].data;
+                c2Tx.data <= csrs.cpu_rd_csrs[csr_addr - 32].data;
             end
 
            default:
              begin
-                fiu.c2Tx.data <= t_ccip_mmioData'('x);
+                c2Tx.data <= t_ccip_mmioData'('x);
              end
         endcase
+
+        if (reset)
+        begin
+            c2Tx.mmioRdValid <= 1'b0;
+        end
     end
 
 

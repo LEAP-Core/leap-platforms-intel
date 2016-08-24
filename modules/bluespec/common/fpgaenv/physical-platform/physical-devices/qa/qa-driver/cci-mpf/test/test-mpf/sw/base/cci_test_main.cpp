@@ -113,10 +113,24 @@ int main(int argc, char *argv[])
     cout << "  Cache read misses:  " << rd_misses << endl;
     cout << "  Cache write hits:   " << wr_hits << endl;
     cout << "  Cache write misses: " << wr_misses << endl;
+    cout << endl;
+
+    uint64_t fiu_state = t->readCommonCSR(CCI_TEST::CSR_COMMON_FIU_STATE);
+    if (fiu_state & 3)
+    {
+        if (fiu_state & 1)
+        {
+            cout << "FIU C0 Tx is almost full!" << endl;
+        }
+        if (fiu_state & 2)
+        {
+            cout << "FIU C1 Tx is almost full!" << endl;
+        }
+        cout << endl;
+    }
 
     t_cci_mpf_vtp_stats vtp_stats;
     svc.m_pVTPService->vtpGetStats(&vtp_stats);
-    cout << endl;
     cout << "  VTP failed:         " << vtp_stats.numFailedTranslations << endl;
     cout << "  VTP PT walk cycles: " << vtp_stats.numPTWalkBusyCycles << endl;
     cout << "  VTP 4KB hit / miss: " << vtp_stats.numTLBHits4KB << " / "
@@ -179,4 +193,3 @@ int main(int argc, char *argv[])
 
     return result;
 }
-

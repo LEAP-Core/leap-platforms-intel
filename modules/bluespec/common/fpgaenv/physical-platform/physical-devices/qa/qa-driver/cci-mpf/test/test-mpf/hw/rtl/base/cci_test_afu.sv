@@ -115,9 +115,7 @@ module ccip_std_afu
 
     // ====================================================================
     //
-    //  Instantiate a memory properties factory (MPF) between the external
-    //  interface and the AFU, adding support for virtual memory and
-    //  control over memory ordering.
+    //  Convert the external wires to an MPF interface.
     //
     // ====================================================================
 
@@ -141,7 +139,7 @@ module ccip_std_afu
     //
     // Expose FIU as an MPF interface
     //
-    cci_mpf_if fiu(.clk(afu_clk));
+    cci_mpf_if#(.ENABLE_LOG(1)) fiu(.clk(afu_clk));
 
     // The CCI wires to MPF mapping connections have identical naming to
     // the standard AFU.  The module exports an interface named "fiu".
@@ -161,10 +159,38 @@ module ccip_std_afu
         );
 
 
+    // ====================================================================
     //
-    // Instantiate MPF with the desired properties.
+    //  Manage CSRs at the lowest level so they can observe the edge state
+    //  and to keep them available even when other code fails.
     //
+    // ====================================================================
+
     cci_mpf_if afu_csrs(.clk(afu_clk));
+    test_csrs csrs();
+
+    cci_test_csrs
+      #(
+        .NEXT_DFH_BYTE_OFFSET(MPF_DFH_MMIO_ADDR)
+        )
+      csr_io
+       (
+        .clk(afu_clk),
+        .fiu,
+        .afu(afu_csrs),
+        .csrs
+        );
+
+
+    // ====================================================================
+    //
+    //  Instantiate a memory properties factory (MPF) between the external
+    //  interface and the AFU, adding support for virtual memory and
+    //  control over memory ordering.
+    //
+    // ====================================================================
+
+    cci_mpf_if#(.ENABLE_LOG(1)) afu(.clk(afu_clk));
 
     cci_mpf
       #(
@@ -241,30 +267,8 @@ module ccip_std_afu
       mpf
        (
         .clk(afu_clk),
-        .fiu,
-        .afu(afu_csrs)
-        );
-
-
-    // ====================================================================
-    //
-    //  Manage CSRs using a shim injected between MPF and the test.
-    //
-    // ====================================================================
-
-    cci_mpf_if#(.ENABLE_LOG(1)) afu(.clk(afu_clk));
-    test_csrs csrs();
-
-    cci_test_csrs
-      #(
-        .NEXT_DFH_BYTE_OFFSET(MPF_DFH_MMIO_ADDR)
-        )
-      csr_io
-       (
-        .clk(afu_clk),
         .fiu(afu_csrs),
-        .afu,
-        .csrs
+        .afu
         );
 
 

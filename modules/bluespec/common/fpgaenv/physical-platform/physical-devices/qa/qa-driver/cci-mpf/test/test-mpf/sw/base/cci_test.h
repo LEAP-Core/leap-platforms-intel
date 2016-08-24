@@ -71,6 +71,8 @@ class CCI_TEST
     // Wrappers for commonly used requests
     //
 
+    btBool hwIsSimulated(void) const { return svc.hwIsSimulated(); }
+
     btVirtAddr malloc(btWSSize nBytes)
     {
         btVirtAddr va;
@@ -104,7 +106,8 @@ class CCI_TEST
         CSR_COMMON_CACHE_RD_MISSES = 10,
         CSR_COMMON_CACHE_WR_HITS = 11,
         CSR_COMMON_CACHE_WR_MISSES = 12,
-        CSR_COMMON_VL0_RESPS = 13
+        CSR_COMMON_VL0_RESPS = 13,
+        CSR_COMMON_FIU_STATE = 14
     }
     t_csr_common;
 

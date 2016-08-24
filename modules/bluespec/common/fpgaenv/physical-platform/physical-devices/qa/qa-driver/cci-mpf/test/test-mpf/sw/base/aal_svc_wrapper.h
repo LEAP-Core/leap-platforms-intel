@@ -70,6 +70,8 @@ class AAL_SVC_WRAPPER: public CAASBase,
     btInt initialize();    ///< Return 0 if success
     btInt terminate();    ///< Return 0 if success
 
+    btBool hwIsSimulated(void) const { return ! use_hw; }
+
     // <begin IServiceClient interface>
     void serviceAllocated(IBase *pServiceBase,
                           TransactionID const &rTranID);

@@ -51,6 +51,7 @@ module cci_mpf_shim_wro
     // Connections toward user code.
     cci_mpf_if.to_afu afu,
 
+    cci_mpf_csrs.wro csrs,
     cci_mpf_csrs.wro_events events
     );
 
@@ -88,6 +89,7 @@ module cci_mpf_shim_wro
         .clk,
         .fiu,
         .afu,
+        .csrs,
         .events,
         .c1_notEmpty
         );

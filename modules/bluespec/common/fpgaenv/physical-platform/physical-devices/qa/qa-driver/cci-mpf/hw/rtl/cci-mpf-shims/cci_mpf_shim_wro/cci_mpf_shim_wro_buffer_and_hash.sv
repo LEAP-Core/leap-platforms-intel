@@ -71,7 +71,9 @@ module cci_mpf_shim_wro_buffer_and_hash
     output logic c1_buf_notEmpty,
 
     // Is the downstream WRO c1 (write request) pipeline empty?
-    input  logic c1_pipe_notEmpty
+    input  logic c1_pipe_notEmpty,
+
+    cci_mpf_csrs.wro csrs
     );
 
     cci_mpf_if afu_fifo (.clk);
@@ -79,17 +81,29 @@ module cci_mpf_shim_wro_buffer_and_hash
     logic same_req_rw_addr_conflict;
     logic block_new_requests;
 
+    // The lockstep AFU manages QoS for each channel by throttling traffic
+    // using the almost full wires.  Making N_ENTRIES larger than normal
+    // gives the algorithm some space for throughput management.
+    localparam AFU_BUF_ENTRIES = AFU_BUF_THRESHOLD + (AFU_BUF_THRESHOLD / 2);
+
     cci_mpf_shim_buffer_lockstep_afu
       #(
         .THRESHOLD(AFU_BUF_THRESHOLD),
-        .REGISTER_OUTPUTS(1)
+        .N_ENTRIES(AFU_BUF_ENTRIES),
+        .REGISTER_OUTPUT(1)
         )
       bufafu
        (
         .clk,
         .afu_raw,
         .afu_buf(afu_fifo),
-        .deqTx(afu_deq)
+        .deqTx(afu_deq),
+
+        // QoS settings
+        .setqos(csrs.wro_ctrl_valid),
+        .setqos_enable(csrs.wro_ctrl[0]),
+        .setqos_beat_delta_threshold(csrs.wro_ctrl[15:8]),
+        .setqos_min_beat_threshold(csrs.wro_ctrl[23:16])
         );
 
     logic reset;
@@ -154,7 +168,7 @@ module cci_mpf_shim_wro_buffer_and_hash
     cci_mpf_prim_fifo_lutram
       #(
         .N_DATA_BITS(ADDRESS_HASH_BITS),
-        .N_ENTRIES(AFU_BUF_THRESHOLD + 4),
+        .N_ENTRIES(AFU_BUF_ENTRIES),
         .REGISTER_OUTPUT(1)
         )
       c0_hash_buf
@@ -172,7 +186,7 @@ module cci_mpf_shim_wro_buffer_and_hash
     cci_mpf_prim_fifo_lutram
       #(
         .N_DATA_BITS(ADDRESS_HASH_BITS),
-        .N_ENTRIES(AFU_BUF_THRESHOLD + 4),
+        .N_ENTRIES(AFU_BUF_ENTRIES),
         .REGISTER_OUTPUT(1)
         )
       c1_hash_buf

@@ -179,37 +179,35 @@ module cci_mpf_shim_csr
 
     always_ff @(posedge clk)
     begin
-        if (cci_csr_isWrite(c0_rx))
+        // Momentary data set unconditionally to avoid control logic.
+        csrs.vc_map_ctrl <= c0_rx.data[63:0];
+        csrs.wro_ctrl <= c0_rx.data[63:0];
+
+        csrs.vc_map_ctrl_valid <=
+            csrAddrMatches(c0_rx, CCI_MPF_VC_MAP_CSR_BASE +
+                                  CCI_MPF_VC_MAP_CSR_CTRL_REG);
+
+        csrs.wro_ctrl_valid <=
+            csrAddrMatches(c0_rx, CCI_MPF_WRO_CSR_BASE +
+                                  CCI_MPF_WRO_CSR_CTRL_REG);
+
+
+        if (csrAddrMatches(c0_rx, CCI_MPF_VTP_CSR_BASE +
+                                  CCI_MPF_VTP_CSR_MODE))
         begin
-            if (csrAddrMatches(c0_rx, CCI_MPF_VTP_CSR_BASE +
-                                      CCI_MPF_VTP_CSR_MODE))
-            begin
-                csrs.vtp_in_mode <= t_cci_mpf_vtp_csr_mode'(c0_rx.data);
-            end
-            else
-            begin
-                // Invalidate page table held only one cycle
-                csrs.vtp_in_mode.inval_translation_cache <= 1'b0;
-            end
+            csrs.vtp_in_mode <= t_cci_mpf_vtp_csr_mode'(c0_rx.data);
+        end
+        else
+        begin
+            // Invalidate page table held only one cycle
+            csrs.vtp_in_mode.inval_translation_cache <= 1'b0;
+        end
 
-            if (csrAddrMatches(c0_rx, CCI_MPF_VTP_CSR_BASE +
-                                      CCI_MPF_VTP_CSR_PAGE_TABLE_PADDR))
-            begin
-                csrs.vtp_in_page_table_base <= t_cci_clAddr'(c0_rx.data);
-                csrs.vtp_in_page_table_base_valid <= 1'b1;
-            end
-
-            if (csrAddrMatches(c0_rx, CCI_MPF_VC_MAP_CSR_BASE +
-                                      CCI_MPF_VC_MAP_CSR_CTRL_REG))
-            begin
-                csrs.vc_map_ctrl <= c0_rx.data[63:0];
-                csrs.vc_map_ctrl_valid <= 1'b1;
-            end
-            else
-            begin
-                // VC map update held only one cycle
-                csrs.vc_map_ctrl_valid <= 1'b0;
-            end
+        if (csrAddrMatches(c0_rx, CCI_MPF_VTP_CSR_BASE +
+                                  CCI_MPF_VTP_CSR_PAGE_TABLE_PADDR))
+        begin
+            csrs.vtp_in_page_table_base <= t_cci_clAddr'(c0_rx.data);
+            csrs.vtp_in_page_table_base_valid <= 1'b1;
         end
 
         if (reset)
@@ -217,6 +215,7 @@ module cci_mpf_shim_csr
             csrs.vtp_in_mode <= t_cci_mpf_vtp_csr_mode'(0);
             csrs.vtp_in_page_table_base_valid <= 1'b0;
             csrs.vc_map_ctrl_valid <= 1'b0;
+            csrs.wro_ctrl_valid <= 1'b0;
         end
     end
 

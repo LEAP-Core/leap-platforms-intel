@@ -115,6 +115,35 @@ MPFWRO::MPFWRO( IALIMMIO   *pMMIOService,
    m_isOK = true;
 }
 
+btBool
+MPFWRO::wroSetQoSParams( btBool enabled,
+                         btUnsigned32bitInt beatCountDiff,
+                         btUnsigned32bitInt minBeats )
+{
+   btBool ret;
+   btUnsigned64bitInt c;
+
+   if (beatCountDiff == 0) beatCountDiff = 6;
+
+   // Enable QoS throttling?
+   c = (enabled ? 1 : 0);
+
+   // Difference in beat count between channels that triggers throttling
+   c |= ((beatCountDiff & 0xff) << 8);
+
+   // Minimum number of beats in the non-throttled channel at or below
+   // which no throttling is triggered.
+   //
+   // This doesn't affect throughput much but is left as a control for testing.
+   c |= ((minBeats & 0xff) << 16);
+
+   ret = m_pALIMMIO->mmioWrite64(m_dfhOffset + CCI_MPF_WRO_CSR_CTRL_REG, c);
+   ASSERT(ret);
+
+   return ret;
+}
+
+
 //
 // Return all statistics counters
 //

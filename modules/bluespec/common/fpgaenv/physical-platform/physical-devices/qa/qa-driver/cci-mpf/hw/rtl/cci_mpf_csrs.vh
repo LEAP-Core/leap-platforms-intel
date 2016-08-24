@@ -80,6 +80,10 @@ interface cci_mpf_csrs();
     // WRO -- write/read ordering
     //
 
+    // Configuration
+    logic [63:0] wro_ctrl;
+    logic wro_ctrl_valid;
+
     // Conflict events
     logic wro_out_event_rr_conflict;  // New read conflicts with old read
     logic wro_out_event_rw_conflict;  // New read conflicts with old write
@@ -103,7 +107,10 @@ interface cci_mpf_csrs();
 
         output vc_map_ctrl,
         output vc_map_ctrl_valid,
-        input  vc_map_history
+        input  vc_map_history,
+
+        output wro_ctrl,
+        output wro_ctrl_valid
         );
     modport csr_events
        (
@@ -151,6 +158,11 @@ interface cci_mpf_csrs();
         output vc_map_out_event_mapping_changed
         );
 
+    modport wro
+       (
+        input  wro_ctrl,
+        input  wro_ctrl_valid
+        );
     modport wro_events
        (
         output wro_out_event_rr_conflict,

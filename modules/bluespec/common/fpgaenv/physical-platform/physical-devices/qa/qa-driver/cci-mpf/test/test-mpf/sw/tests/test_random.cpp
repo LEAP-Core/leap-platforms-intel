@@ -25,7 +25,9 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 #include "test_random.h"
+#include <time.h>
 #include <boost/format.hpp>
+
 
 // ========================================================================
 //
@@ -135,7 +137,14 @@ btInt TEST_RANDOM::test()
                      enable_reads);
 
         // Wait for test to signal it is complete
-        while (*dsm == 0) ;
+        struct timespec ms;
+        ms.tv_sec = 1;
+        ms.tv_nsec = 1000000;
+
+        while (*dsm == 0)
+        {
+            nanosleep(&ms, NULL);
+        }
 
         totalCycles += cycles;
 

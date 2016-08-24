@@ -62,6 +62,7 @@ module cci_mpf_shim_wro_cam_group
     // Connections toward user code.
     cci_mpf_if.to_afu afu,
 
+    cci_mpf_csrs.wro csrs,
     cci_mpf_csrs.wro_events events,
 
     // Indicate whether the c1 request channel is empty.  This is needed
@@ -122,7 +123,9 @@ module cci_mpf_shim_wro_cam_group
         .c0_deqTx(c0_afu_deq),
         .c1_deqTx(c1_afu_deq),
         .c1_buf_notEmpty,
-        .c1_pipe_notEmpty
+        .c1_pipe_notEmpty,
+
+        .csrs
         );
 
     assign afu_buf.reset = fiu.reset;

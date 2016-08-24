@@ -239,6 +239,7 @@ module cci_mpf_pipe_std
                 .clk,
                 .fiu(stgp3_fiu_virtual),
                 .afu(stgp4_fiu_wro),
+                .csrs(mpf_csrs),
                 .events(mpf_csrs)
                 );
         end

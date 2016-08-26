@@ -703,7 +703,8 @@ module cci_mpf_shim_vtp_chan
     // A bubble is guaranteed to happen eventually since tlb_lookup_rsp_rdy
     // causes almostFull to be asserted on the channel.
     //
-    assign tlb_lookup_deq = tlb_lookup_rsp_rdy && ! state[2].cTxValid;
+    assign tlb_lookup_deq = tlb_lookup_rsp_rdy && ! state[2].cTxValid &&
+                            ! cTxAlmostFull;
 
     always_ff @(posedge clk)
     begin

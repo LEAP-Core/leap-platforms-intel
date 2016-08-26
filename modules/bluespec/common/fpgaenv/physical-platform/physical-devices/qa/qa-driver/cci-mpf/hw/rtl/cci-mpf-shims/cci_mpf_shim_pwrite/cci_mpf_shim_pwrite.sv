@@ -87,8 +87,14 @@ module cci_mpf_shim_pwrite
 
     // Is new write request a partial write?
     logic c1Tx_is_pwrite;
+    logic c1Tx_is_pwrite_q;
     assign c1Tx_is_pwrite = cci_mpf_c1TxIsWriteReq(c1Tx) &&
                             c1Tx.hdr.pwrite.isPartialWrite;
+
+    always_ff @(posedge clk)
+    begin
+        c1Tx_is_pwrite_q <= c1Tx_is_pwrite;
+    end
 
 
     // Is the read response the read data for a partial write?
@@ -177,7 +183,7 @@ module cci_mpf_shim_pwrite
 
     // Block reads if a read for modify is pending in order to get
     // a read slot.
-    assign afu.c0TxAlmFull = fiu.c0TxAlmFull || c1Tx_is_pwrite;
+    assign afu.c0TxAlmFull = fiu.c0TxAlmFull || c1Tx_is_pwrite_q;
 
     logic may_inject_read;
     assign may_inject_read = ! cci_mpf_c0TxIsValid(afu.c0Tx) &&

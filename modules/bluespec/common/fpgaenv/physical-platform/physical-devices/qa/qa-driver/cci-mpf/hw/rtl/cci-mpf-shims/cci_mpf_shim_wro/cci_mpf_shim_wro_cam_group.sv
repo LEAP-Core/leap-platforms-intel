@@ -771,6 +771,7 @@ module cci_mpf_shim_wro_cam_group
         rd_filter_remove_hash = c0_heap_readRsp.addrHash;
         rd_filter_remove_tag = c0_heap_readRsp.filterTag;
         rd_filter_remove_en = cci_c0Rx_isReadRsp(fiu_buf.c0Rx) &&
+                              cci_mpf_c0Rx_isEOP(fiu_buf.c0Rx) &&
                               c0_heap_readRsp.enforceOrder;
     end
 

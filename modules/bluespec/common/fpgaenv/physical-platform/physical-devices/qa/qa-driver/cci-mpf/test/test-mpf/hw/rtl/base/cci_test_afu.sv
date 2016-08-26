@@ -70,7 +70,7 @@ module ccip_std_afu
         else if (AFU_CLOCK_FREQ == 100)
             assign afu_clk = pClkDiv4;
         else
-        begin
+        begin : ferr
             always_ff @(posedge pClk)
             begin
                 $fatal("Unsupported platform clock frequency: %d", AFU_CLOCK_FREQ);

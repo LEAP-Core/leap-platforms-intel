@@ -55,7 +55,7 @@ module test_afu
     //
     // State machine
     //
-    typedef enum
+    typedef enum [1:0]
     {
         STATE_IDLE,
         STATE_RUN,
@@ -191,6 +191,10 @@ module test_afu
     // Incoming configuration
     //
     t_counter cycles_rem;
+
+    logic cl_beats_random;
+    t_cci_clNum cl_beats;
+
     logic enable_writes;
     logic enable_reads;
 
@@ -239,6 +243,8 @@ module test_afu
         if (csrs.cpu_wr_csrs[0].en)
         begin
             { cycles_rem,
+              cl_beats_random,
+              cl_beats,
               enable_partial_writes,
               enable_rw_conflicts,
               enable_checker,
@@ -250,6 +256,8 @@ module test_afu
         if (reset)
         begin
             cycles_rem <= t_counter'(0);
+            cl_beats_random <= 1'b0;
+            cl_beats <= t_cci_clLen'(0);
             enable_writes <= 1'b0;
             enable_reads <= 1'b0;
             enable_wro <= 1'b0;
@@ -261,10 +269,12 @@ module test_afu
 
 
     logic start_new_run;
-    assign start_new_run = csrs.cpu_wr_csrs[0].en;
+    t_cci_clNum wr_beat_num;
 
     always_ff @(posedge clk)
     begin
+        start_new_run <= csrs.cpu_wr_csrs[0].en;
+
         case (state)
           STATE_IDLE:
             begin
@@ -294,7 +304,7 @@ module test_afu
           default:
             begin
                 // Various signalling states terminate when a write is allowed
-                if (! fiu.c1TxAlmFull)
+                if (! fiu.c1TxAlmFull && (wr_beat_num == t_cci_clNum'(0)))
                 begin
                     state <= STATE_IDLE;
                     $display("Test done.");
@@ -304,6 +314,7 @@ module test_afu
 
         if (reset)
         begin
+            start_new_run <= 1'b0;
             state <= STATE_IDLE;
         end
     end
@@ -354,14 +365,34 @@ module test_afu
     end
 
     t_cci_clAddr rd_rand_addr;
+
+    t_cci_clLen rd_addr_num_beats;
+    t_cci_clNum rd_addr_chk_beat;
+
     logic rd_addr_is_checked;
     t_checked_addr_idx rd_addr_chk_idx;
     t_checked_addr_idx rd_addr_chk_idx_q;
+
+    t_cci_clLen rd_beats;
+    assign rd_beats = t_cci_clLen'(cl_beats);
+
+    // Generate a mask of low bits that must be zero in order to align
+    // the address to the number of beats requested.
+    t_cci_clNum rd_beats_mask;
+    assign rd_beats_mask = ~rd_beats;
 
     // Map the random address index to the address space
     always_ff @(posedge clk)
     begin
         rd_rand_addr <= randAddr(mem, rd_addr_rand_idx);
+        // Align address to number of beats
+        rd_rand_addr[0 +: $bits(t_cci_clNum)] <=
+            t_cci_clLen'(rd_addr_rand_idx) & rd_beats_mask;
+
+        rd_addr_num_beats <= rd_beats;
+        // Only one random beat will be checked.  Pick it based on the
+        // low bits of the chosen random address.
+        rd_addr_chk_beat <= t_cci_clLen'(rd_addr_rand_idx) & rd_beats;
 
         rd_addr_is_checked <= addrIsChecked(rd_addr_rand_idx);
         rd_addr_chk_idx <= checkedAddr(rd_addr_rand_idx);
@@ -376,8 +407,11 @@ module test_afu
                      eREQ_RDLINE_S,
                      rd_rand_addr,
                      // Indicate in mdata whether requested address is checked
-                     t_cci_mdata'(rd_addr_is_checked ? 1'b1 : 1'b0),
+                     t_cci_mdata'({ rd_addr_chk_beat,
+                                    rd_addr_is_checked ? 1'b1 : 1'b0 }),
                      rd_params);
+
+        rd_hdr.base.cl_len = rd_addr_num_beats;
     end
 
     always_ff @(posedge clk)
@@ -462,14 +496,41 @@ module test_afu
     t_checked_addr_idx wr_addr_chk_idx;
     t_checked_addr_idx wr_addr_chk_idx_q;
 
+    t_cci_clLen wr_beats;
+    logic wr_beat_last;
+
+    t_cci_clLen wr_beats_next;
+    assign wr_beats_next = t_cci_clLen'(cl_beats);
+    t_cci_clNum wr_beats_mask;
+    assign wr_beats_mask = ~wr_beats_next;
+
     // Map the random address index to the address space
     always_ff @(posedge clk)
     begin
-        wr_rand_addr <= randAddr(mem, wr_addr_rand_idx);
+        if (wr_beat_last || start_new_run)
+        begin
+            // Pick a new random address
+            wr_rand_addr <= randAddr(mem, wr_addr_rand_idx);
+            // Align address to number of beats
+            wr_rand_addr[0 +: $bits(t_cci_clNum)] <=
+                t_cci_clLen'(wr_addr_rand_idx) & wr_beats_mask;
 
-        wr_addr_is_checked <= addrIsChecked(wr_addr_rand_idx);
-        wr_addr_chk_idx <= checkedAddr(wr_addr_rand_idx);
+            wr_addr_is_checked <= addrIsChecked(wr_addr_rand_idx);
+            wr_addr_chk_idx <= checkedAddr(wr_addr_rand_idx);
+            wr_addr_chk_idx[0 +: $bits(t_cci_clNum)] <=
+                t_cci_clLen'(wr_addr_rand_idx) & wr_beats_mask;
+
+            wr_beats <= wr_beats_next;
+        end
+
         wr_addr_chk_idx_q <= wr_addr_chk_idx;
+        wr_addr_chk_idx_q[0 +: $bits(t_cci_clNum)] <=
+            wr_addr_chk_idx | wr_beat_num;
+
+        if (reset)
+        begin
+            wr_beats <= eCL_LEN_1;
+        end
     end
 
     // Random partial write control
@@ -488,13 +549,26 @@ module test_afu
     // Write request header
     //
     t_cci_mpf_c1_ReqMemHdr wr_hdr;
+
     always_comb
     begin
         wr_hdr = cci_mpf_c1_genReqHdr(eREQ_WRLINE_M,
                                       wr_rand_addr,
                                       t_cci_mdata'(0),
                                       wr_params);
+
+        // Get the low bits of the address right
+        wr_hdr.base.sop = (wr_beat_num == t_cci_clNum'(0));
+        wr_hdr.base.cl_len = wr_beats;
+        wr_hdr.base.address[0 +: $bits(t_cci_clNum)] =
+            wr_hdr.base.address[0 +: $bits(t_cci_clNum)] | wr_beat_num;
+
         wr_hdr.pwrite = pwh;
+        // Partial writes only allowed in single line requests
+        if (wr_hdr.base.cl_len != eCL_LEN_1)
+        begin
+            wr_hdr.pwrite.isPartialWrite = 1'b0;
+        end
     end
 
     //
@@ -516,6 +590,21 @@ module test_afu
     //
     logic chk_wr_valid_q;
 
+    t_cci_clNum wr_beat_num_next;
+    always_comb
+    begin
+        wr_beat_last = (t_cci_clLen'(wr_beat_num) == wr_beats);
+
+        if (wr_beat_last)
+        begin
+            wr_beat_num_next = t_cci_clNum'(0);
+        end
+        else
+        begin
+            wr_beat_num_next = wr_beat_num + t_cci_clNum'(1);
+        end
+    end
+
     always_ff @(posedge clk)
     begin
         chk_wr_valid_q <= 1'b0;
@@ -523,13 +612,26 @@ module test_afu
                                             t_cci_clData'(wr_rand_data),
                                             1'b0);
 
-        if (! fiu.c1TxAlmFull)
+        if (wr_beat_num != t_cci_clNum'(0))
+        begin
+            // Don't stop in the middle of a multi-beat write
+            fiu.c1Tx.valid <= 1'b1;
+            chk_wr_valid_q <= wr_addr_is_checked;
+            wr_beat_num <= wr_beat_num_next;
+        end
+        else if (! fiu.c1TxAlmFull)
         begin
             // Normal running state
             if (state == STATE_RUN)
             begin
                 fiu.c1Tx.valid <= chk_rdy && enable_writes;
                 chk_wr_valid_q <= chk_rdy && enable_writes && wr_addr_is_checked;
+
+                // Update beat number
+                if (chk_rdy && enable_writes)
+                begin
+                    wr_beat_num <= wr_beat_num_next;
+                end
             end
 
             // Normal termination: signal done by writing to status memory
@@ -537,6 +639,8 @@ module test_afu
             begin
                 fiu.c1Tx.valid <= 1'b1;
                 fiu.c1Tx.hdr.base.address <= dsm;
+                fiu.c1Tx.hdr.base.sop <= 1'b1;
+                fiu.c1Tx.hdr.base.cl_len <= eCL_LEN_1;
                 fiu.c1Tx.hdr.pwrite.isPartialWrite <= 1'b0;
                 fiu.c1Tx.data <= t_cci_clData'(1);
             end
@@ -546,6 +650,8 @@ module test_afu
             begin
                 fiu.c1Tx.valid <= 1'b1;
                 fiu.c1Tx.hdr.base.address <= dsm;
+                fiu.c1Tx.hdr.base.sop <= 1'b1;
+                fiu.c1Tx.hdr.base.cl_len <= eCL_LEN_1;
                 fiu.c1Tx.hdr.pwrite.isPartialWrite <= 1'b0;
                 fiu.c1Tx.data <= t_cci_clData'(2);
             end
@@ -554,14 +660,22 @@ module test_afu
         if (reset)
         begin
             fiu.c1Tx.valid <= 1'b0;
+            wr_beat_num <= t_cci_clNum'(0);
         end
     end
 
+    logic c1Rx_is_write_rsp;
+    t_cci_clNum c1Rx_cl_num;
+
     always_ff @(posedge clk)
     begin
-        if (cci_c1Rx_isWriteRsp(fiu.c1Rx))
+        c1Rx_is_write_rsp <= cci_c1Rx_isWriteRsp(fiu.c1Rx);
+        c1Rx_cl_num <= fiu.c1Rx.hdr.cl_num;
+
+        if (c1Rx_is_write_rsp)
         begin
-            cnt_wr_rsp <= cnt_wr_rsp + t_counter'(1);
+            // Count beats so multi-line writes get credit for all data
+            cnt_wr_rsp <= cnt_wr_rsp + t_counter'(1) + t_counter'(c1Rx_cl_num);
         end
 
         if (reset || start_new_run)
@@ -722,7 +836,9 @@ module test_afu
 
         .enq_data({lineToTag(fiu.c0Rx.data), fiu.c0Rx.data}),
         // mdata[0] indicates whether the read is checked
-        .enq_en(cci_c0Rx_isReadRsp(fiu.c0Rx) && fiu.c0Rx.hdr.mdata[0]),
+        .enq_en(cci_c0Rx_isReadRsp(fiu.c0Rx) &&
+                fiu.c0Rx.hdr.mdata[0] &&
+                (fiu.c0Rx.hdr.cl_num == fiu.c0Rx.hdr.mdata[1 +: $bits(t_cci_clNum)])),
         .notFull(),
         .almostFull(),
 
@@ -740,7 +856,7 @@ module test_afu
         begin
             if (fifo_deq)
             begin
-                cnt_checked_rd <= cnt_checked_rd + t_counter'(1);
+                cnt_checked_rd <= cnt_checked_rd + t_counter'(enable_checker);
 
                 if (c0Rx_tag != chk_first)
                 begin

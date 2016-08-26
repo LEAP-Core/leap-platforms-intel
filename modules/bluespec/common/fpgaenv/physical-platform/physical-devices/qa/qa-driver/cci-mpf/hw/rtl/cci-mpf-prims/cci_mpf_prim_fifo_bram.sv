@@ -38,10 +38,7 @@ module cci_mpf_prim_fifo_bram
   #(
     parameter N_DATA_BITS = 32,
     parameter N_ENTRIES = 2,
-    parameter THRESHOLD = 1,
-
-    // Register output if non-zero
-    parameter REGISTER_OUTPUT = 0
+    parameter THRESHOLD = 1
     )
    (
     input  logic clk,

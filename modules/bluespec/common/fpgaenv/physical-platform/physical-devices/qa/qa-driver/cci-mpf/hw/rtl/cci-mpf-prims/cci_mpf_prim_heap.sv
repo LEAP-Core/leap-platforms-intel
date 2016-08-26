@@ -236,7 +236,8 @@ module cci_mpf_prim_heap_ctrl
         .N_DATA_BITS($bits(t_idx)),
         .N_OUTPUT_REG_STAGES(1)
         )
-      freeList(
+      freeList
+       (
         .clk,
 
         .wen(free_wen),
@@ -407,6 +408,64 @@ module cci_mpf_prim_heap_ctrl
             end
         end
     end
+
+
+    // ====================================================================
+    //
+    // Error checker: detect duplicate allocation and deallocation.
+    //
+    // ====================================================================
+
+    // synthesis translate_off
+
+    logic chk_alloc;
+    t_idx chk_alloc_idx;
+    logic chk_free;
+    t_idx chk_free_idx;
+
+    always_ff @(posedge clk)
+    begin
+        chk_alloc <= enq;
+        chk_alloc_idx <= allocIdx;
+
+        chk_free <= free;
+        chk_free_idx <= freeIdx;
+
+        if (reset)
+        begin
+            chk_alloc <= 1'b0;
+            chk_free <= 1'b0;
+        end
+    end
+
+
+    logic [N_ENTRIES-1 : 0] chk_state;
+
+    always_ff @(posedge clk)
+    begin
+        if (chk_alloc)
+        begin
+            assert (chk_state[chk_alloc_idx] == 1'b0) else
+                $fatal("cci_mpf_prim_heap.sv: HEAP double allocation!");
+
+            chk_state[chk_alloc_idx] <= 1'b1;
+        end
+
+        if (chk_free)
+        begin
+            assert (chk_state[chk_free_idx] == 1'b1) else
+                $fatal("cci_mpf_prim_heap.sv: HEAP double free!");
+
+            chk_state[chk_free_idx] <= 1'b0;
+        end
+
+        if (reset)
+        begin
+            chk_state <= N_ENTRIES'(0);
+        end
+    end
+
+    // synthesis translate_on
 
 endmodule // cci_mpf_prim_heap_ctrl
 

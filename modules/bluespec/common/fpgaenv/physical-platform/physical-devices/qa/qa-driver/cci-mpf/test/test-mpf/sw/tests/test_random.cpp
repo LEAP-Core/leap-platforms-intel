@@ -47,6 +47,7 @@ void testConfigOptions(po::options_description &desc)
         ("enable-pw", po::value<bool>()->default_value(true), "Enable partial writes")
         ("enable-writes", po::value<bool>()->default_value(true), "Enable writes")
         ("enable-wro", po::value<bool>()->default_value(true), "Enable write/read hazard detection")
+        ("mcl", po::value<int>()->default_value(1), "Multi-line requests (0 for random sizes)")
         ("repeat", po::value<int>()->default_value(1), "Number of repetitions")
         ("tc", po::value<int>()->default_value(0), "Test length (cycles)")
         ("ts", po::value<int>()->default_value(1), "Test length (seconds)")
@@ -116,6 +117,16 @@ btInt TEST_RANDOM::test()
     uint64_t enable_writes = (vm["enable-writes"].as<bool>() ? 1 : 0);
     uint64_t enable_wro = (vm["enable-wro"].as<bool>() ? 1 : 0);
 
+    uint64_t mcl = uint64_t(vm["mcl"].as<int>());
+    if ((mcl > 4) || (mcl == 3))
+    {
+        cerr << "Illegal multi-line (mcl) parameter:  " << mcl << endl;
+        exit(1);
+    }
+    // Encode mcl as 3 bits.  The low 2 are the Verilog t_ccip_clLen and the
+    // high bit indicates random sizes.
+    mcl = (mcl - 1) & 7;
+
     // Wait for the HW to be ready
     while (((readTestCSR(7) >> 4) & 1) == 0)
     {
@@ -128,7 +139,8 @@ btInt TEST_RANDOM::test()
     {
         // Start the test
         writeTestCSR(0,
-                     (cycles << 6) |
+                     (cycles << 9) |
+                     (mcl << 6) |
                      (enable_pw << 5) |
                      (enable_rw_conflicts << 4) |
                      (enable_checker << 3) |
@@ -153,7 +165,6 @@ btInt TEST_RANDOM::test()
             uint8_t state = (readTestCSR(7) >> 8) & 255;
             if (state > 1)
             {
-                iter_state_end += 1;
                 if (iter_state_end++ == 5)
                 {
                     // Give up and signal an error

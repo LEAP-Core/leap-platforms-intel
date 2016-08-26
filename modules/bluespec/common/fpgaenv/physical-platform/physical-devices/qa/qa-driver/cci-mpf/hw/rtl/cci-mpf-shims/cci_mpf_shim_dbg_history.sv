@@ -68,7 +68,11 @@ module cci_mpf_shim_dbg_history
     parameter RING_MODE = 1,
 
     // In ring mode write the ring once to collect the first N_ENTRIES.
-    parameter WRITE_ONCE = 0
+    parameter WRITE_ONCE = 0,
+
+    // Lock out writes after first read?  This keeps the ring from advancing
+    // when readout starts.
+    parameter LOCK_WRITES_AFTER_READ = 1
     )
    (
     input  logic clk,
@@ -125,16 +129,19 @@ module cci_mpf_shim_dbg_history
     logic [$clog2(N_ENTRIES)-1 : 0] waddr;
     logic [$clog2(N_ENTRIES)-1 : 0] waddr_ring;
     logic wr_wrapped;
+    logic wr_locked;
 
     // Write when new data arrives unless in ring mode and all entries
     // were already written.
-    assign wen = wr_en && (! wr_wrapped || (WRITE_ONCE == 0) || (RING_MODE == 0));
+    assign wen = wr_en && ! wr_locked && (! wr_wrapped ||
+                                          (WRITE_ONCE == 0) ||
+                                          (RING_MODE == 0));
     // Address is either next index in ring mode or wr_idx if user specified.
     assign waddr = ((RING_MODE == 0) ? wr_idx : waddr_ring);
 
     always_ff @(posedge clk)
     begin
-        if (wr_en)
+        if (wen)
         begin
             wr_wrapped <= wr_wrapped || (&(waddr_ring) == 1'b1);
             waddr_ring <= waddr_ring + 1;
@@ -212,6 +219,9 @@ module cci_mpf_shim_dbg_history
             is_mmio_rd <= 1'b1;
             mmio_rd_addr <= cci_csr_getAddress(c0Rx) - t_cci_mmioAddr'(MMIO_ADDR_START);
             mmio_rd_tid <= cci_csr_getTid(c0Rx);
+
+            // Lock writes after first read?
+            wr_locked <= (LOCK_WRITES_AFTER_READ ? 1'b1 : 1'b0);
         end
 
         // Read data available after 2 cycles.  The read will remain active
@@ -224,6 +234,11 @@ module cci_mpf_shim_dbg_history
             is_mmio_rd <= 1'b0;
             is_mmio_rd_q <= 1'b0;
             is_mmio_rd_qq <= 1'b0;
+        end
+
+        if (reset)
+        begin
+            wr_locked <= 1'b0;
         end
     end
 

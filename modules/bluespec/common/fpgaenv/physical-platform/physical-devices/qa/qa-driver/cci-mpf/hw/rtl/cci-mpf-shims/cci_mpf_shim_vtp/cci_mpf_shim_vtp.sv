@@ -378,17 +378,43 @@ module cci_mpf_shim_vtp_chan
 
         // Heap state
         t_cci_mpf_shim_vtp_req_tag allocIdx;
-
-        // These are derived from splitting up cTxAddr
-        t_vtp_tlb_cache_idx cache_4kb_idx;
-        t_vtp_tlb_4kb_cache_tag cache_4kb_tag_tgt;
-        t_vtp_tlb_cache_idx cache_2mb_idx;
-        t_vtp_tlb_2mb_cache_tag cache_2mb_tag_tgt;
     }
     t_vtp_shim_chan_state;
 
     localparam MAX_STAGE = 3;
     t_vtp_shim_chan_state state[0 : MAX_STAGE];
+
+    //
+    // Functions to extract cache index and tag from state
+    //
+    function automatic t_vtp_tlb_cache_idx cacheIdx4KB(t_vtp_shim_chan_state s);
+        t_vtp_tlb_4kb_cache_tag tag;
+        t_vtp_tlb_cache_idx idx;
+        {tag, idx} = s.cTxAddr;
+        return idx;
+    endfunction
+
+    function automatic t_vtp_tlb_4kb_cache_tag cacheTag4KB(t_vtp_shim_chan_state s);
+        t_vtp_tlb_4kb_cache_tag tag;
+        t_vtp_tlb_cache_idx idx;
+        {tag, idx} = s.cTxAddr;
+        return tag;
+    endfunction
+
+    function automatic t_vtp_tlb_cache_idx cacheIdx2MB(t_vtp_shim_chan_state s);
+        t_vtp_tlb_2mb_cache_tag tag;
+        t_vtp_tlb_cache_idx idx;
+        {tag, idx} = vtp4kbTo2mbVA(s.cTxAddr);
+        return idx;
+    endfunction
+
+    function automatic t_vtp_tlb_2mb_cache_tag cacheTag2MB(t_vtp_shim_chan_state s);
+        t_vtp_tlb_2mb_cache_tag tag;
+        t_vtp_tlb_cache_idx idx;
+        {tag, idx} = vtp4kbTo2mbVA(s.cTxAddr);
+        return tag;
+    endfunction
+
 
     logic tlb_lookup_rsp_rdy;
 
@@ -399,15 +425,6 @@ module cci_mpf_shim_vtp_chan
         state[0].cTxValid = cTxValid;
         state[0].cTxAddr = cTxAddr;
         state[0].cTxAddrIsVirtual = cTxAddrIsVirtual;
-
-        for (int s = 0; s <= MAX_STAGE; s = s + 1)
-        begin
-            { state[s].cache_4kb_tag_tgt, state[s].cache_4kb_idx } =
-                state[s].cTxAddr;
-
-            { state[s].cache_2mb_tag_tgt, state[s].cache_2mb_idx } =
-                vtp4kbTo2mbVA(state[s].cTxAddr);
-        end
     end
 
     always_ff @(posedge clk)
@@ -486,7 +503,7 @@ module cci_mpf_shim_vtp_chan
         .wdata({ cache_4kb_upd_pa, cache_4kb_upd_tag }),
 
         // Cache read is initiated in pipeline cycle 0
-        .raddr(state[0].cache_4kb_idx),
+        .raddr(cacheIdx4KB(state[0])),
         .rdata({ cache_4kb_pa, cache_4kb_tag })
         );
 
@@ -494,7 +511,7 @@ module cci_mpf_shim_vtp_chan
     logic cache_4kb_hit;
     always_ff @(posedge clk)
     begin
-        cache_4kb_hit <= (state[2].cache_4kb_tag_tgt == cache_4kb_tag);
+        cache_4kb_hit <= (cacheTag4KB(state[2]) == cache_4kb_tag);
         cache_4kb_pa_q <= cache_4kb_pa;
     end
 
@@ -532,7 +549,7 @@ module cci_mpf_shim_vtp_chan
         .wdata({ cache_2mb_upd_pa, cache_2mb_upd_tag }),
 
         // Cache read is initiated in pipeline cycle 0
-        .raddr(state[0].cache_2mb_idx),
+        .raddr(cacheIdx2MB(state[0])),
         .rdata({ cache_2mb_pa, cache_2mb_tag })
         );
 
@@ -540,7 +557,7 @@ module cci_mpf_shim_vtp_chan
     logic cache_2mb_hit;
     always_ff @(posedge clk)
     begin
-        cache_2mb_hit <= (state[2].cache_2mb_tag_tgt == cache_2mb_tag);
+        cache_2mb_hit <= (cacheTag2MB(state[2]) == cache_2mb_tag);
         cache_2mb_pa_q <= cache_2mb_pa;
     end
 

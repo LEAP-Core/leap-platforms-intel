@@ -373,6 +373,9 @@ module test_afu
     t_checked_addr_idx rd_addr_chk_idx;
     t_checked_addr_idx rd_addr_chk_idx_q;
 
+    // Read needs to know a little about writes
+    t_checked_addr_idx wr_addr_chk_idx;
+
     t_cci_clLen rd_beats;
     assign rd_beats = t_cci_clLen'(cl_beats);
 
@@ -403,12 +406,22 @@ module test_afu
     t_cci_mpf_c0_ReqMemHdr rd_hdr;
     always_comb
     begin
+        // Avoid a race in multi-beat writes.  In MPF the write is treated
+        // atomically and fires with its last beat.  In the test here the
+        // check BRAM is updated with each beat, making the early beats appear
+        // to be updated in the checker BRAM but not yet updated in MPF.
+        // We "solve" this by avoiding conflicting addresses in this window.
+        logic chk_rd;
+        chk_rd = rd_addr_is_checked &&
+                 ((rd_addr_chk_beat >= wr_beat_num) ||
+                  (rd_addr_chk_idx[N_CHECKED_ADDR_BITS-1 : $bits(t_cci_clNum)] !=
+                   wr_addr_chk_idx[N_CHECKED_ADDR_BITS-1 : $bits(t_cci_clNum)]));
+
         rd_hdr = cci_mpf_c0_genReqHdr(
                      eREQ_RDLINE_S,
                      rd_rand_addr,
                      // Indicate in mdata whether requested address is checked
-                     t_cci_mdata'({ rd_addr_chk_beat,
-                                    rd_addr_is_checked ? 1'b1 : 1'b0 }),
+                     t_cci_mdata'({ rd_addr_chk_beat, chk_rd }),
                      rd_params);
 
         rd_hdr.base.cl_len = rd_addr_num_beats;
@@ -493,12 +506,11 @@ module test_afu
 
     t_cci_clAddr wr_rand_addr;
     logic wr_addr_is_checked;
-    t_checked_addr_idx wr_addr_chk_idx;
     t_checked_addr_idx wr_addr_chk_idx_q;
 
     t_cci_clLen wr_beats;
-    logic wr_beat_last;
 
+    logic wr_beat_last;
     t_cci_clLen wr_beats_next;
     assign wr_beats_next = t_cci_clLen'(cl_beats);
     t_cci_clNum wr_beats_mask;
@@ -774,6 +786,11 @@ module test_afu
         chk_rd_qqq <= chk_rd_qq;
 
         chk_rd_addr_q <= fiu.c0Tx.hdr.base.address;
+        // mdata indicates which beat is checked
+        chk_rd_addr_q[0 +: $bits(t_cci_clNum)] <=
+            fiu.c0Tx.hdr.base.address[0 +: $bits(t_cci_clNum)] |
+            fiu.c0Tx.hdr.base.mdata[1 +: $bits(t_cci_clNum)];
+
         chk_rd_addr_qq <= chk_rd_addr_q;
         chk_rd_addr_qqq <= chk_rd_addr_qq;
 

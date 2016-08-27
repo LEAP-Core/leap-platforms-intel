@@ -199,6 +199,7 @@ module cci_mpf_shim_pwrite
         begin
             // Generate the read for modify
             t_cci_mpf_c0_ReqMemHdr h;
+            h = t_cci_mpf_c0_ReqMemHdr'(0);
             h.base.vc_sel = c1Tx.hdr.base.vc_sel;
 
             h.base.cl_len = c1Tx.hdr.base.cl_len;

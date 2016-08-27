@@ -150,6 +150,19 @@ module test_afu
     t_counter cnt_wr_rsp;
     t_counter cnt_checked_rd;
 
+    logic [63:0] csr_state;
+    always_ff @(posedge clk)
+    begin
+        csr_state <= { 48'(0),
+                       8'(state),
+                       3'(0),
+                       chk_ram_rdy,
+                       chk_fifo_full,
+                       raise_error,
+                       fiu.c1TxAlmFull,
+                       fiu.c0TxAlmFull };
+    end
+
     always_comb
     begin
         // Default
@@ -177,14 +190,7 @@ module test_afu
         csrs.cpu_rd_csrs[6].data = 64'(cnt_checked_rd);
 
         // Various state
-        csrs.cpu_rd_csrs[7].data = { 48'(0),
-                                     8'(state),
-                                     3'(0),
-                                     chk_ram_rdy,
-                                     chk_fifo_full,
-                                     raise_error,
-                                     fiu.c1TxAlmFull,
-                                     fiu.c0TxAlmFull };
+        csrs.cpu_rd_csrs[7].data = csr_state;
     end
 
     //

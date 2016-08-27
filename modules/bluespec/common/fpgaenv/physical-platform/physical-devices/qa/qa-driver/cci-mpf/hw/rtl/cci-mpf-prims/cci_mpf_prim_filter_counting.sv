@@ -29,6 +29,11 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 
+//
+// Register-based counting filter.  Use this only for small filters!
+// For larger filters, see the block-RAM-based banked counting filter
+// below.
+//
 module cci_mpf_prim_filter_counting
   #(
     // Number of individual buckets in the filter
@@ -148,3 +153,669 @@ module cci_mpf_prim_filter_counting
         end
     endgenerate
 endmodule // cci_mpf_prim_filter_counting
+
+
+//
+// Banked counting filter using block RAM.  The filter is fully bypassed
+// so that values inserted are recorded the cycle after insertion.
+//
+// Banking is available because the block RAM's read port for updates
+// is oversubscribed by the required read-modify-write for both insertion
+// and removal.  Insertion is always given priority.  While a single
+// bank may work in many cases, removal requests may back up and cause
+// false filter conflicts.
+//
+// It is the client's responsibility either to honor remove_notFull or
+// to set N_REMOVE_FIFO_ENTRIES large enough that the FIFO can never fill.
+//
+module cci_mpf_prim_filter_banked_counting
+  #(
+    // Log2 of the number of parallel banks, specified this way because the
+    // number of banks must be a power of 2.
+    parameter N_BANKS_RADIX = 1,
+
+    // Number of individual buckets in the filter
+    parameter N_BUCKETS = 16,
+
+    // Size of each bucket in the counting filter
+    parameter BITS_PER_BUCKET = 4,
+
+    // There are two classes of clients:  those requesting a bucket's
+    // value and those testing that the bucket is zero.  Each client gets
+    // its own block RAM and testing for zero requires only one bit.
+    parameter N_TEST_VALUE_CLIENTS = 1,
+    parameter N_TEST_IS_ZERO_CLIENTS = 1,
+
+    // Number of entries in the remove port's FIFO.  The remove port
+    // shares a block RAM port with insertion.  Remove requests are
+    // buffered until they can be processed.
+    parameter N_REMOVE_FIFO_ENTRIES = 128
+    )
+   (
+    input  logic clk,
+    input  logic reset,
+    output logic rdy,
+
+    input  logic [N_TEST_VALUE_CLIENTS-1 : 0][$clog2(N_BUCKETS)-1 : 0] test_value_req,
+    input  logic [N_TEST_VALUE_CLIENTS-1 : 0] test_value_en,
+    output logic [N_TEST_VALUE_CLIENTS-1 : 0][BITS_PER_BUCKET-1 : 0] T3_test_value,
+
+    input  logic [N_TEST_IS_ZERO_CLIENTS-1 : 0][$clog2(N_BUCKETS)-1 : 0] test_isZero_req,
+    input  logic [N_TEST_IS_ZERO_CLIENTS-1 : 0] test_isZero_en,
+    output logic [N_TEST_IS_ZERO_CLIENTS-1 : 0] T3_test_isZero,
+
+    input  logic [$clog2(N_BUCKETS)-1 : 0] insert,
+    input  logic insert_en,
+
+    input  logic [$clog2(N_BUCKETS)-1 : 0] remove,
+    input  logic remove_en,
+    // Remove shares a port with insert.  Insertion has priority, so
+    // the remove port may become full.
+    output logic remove_notFull
+    );
+
+    typedef logic [$clog2(N_BUCKETS)-1 : 0] t_bucket_idx;
+    typedef logic [BITS_PER_BUCKET-1 : 0] t_bucket_value;
+
+    localparam N_BANKS = 1 << N_BANKS_RADIX;
+    typedef logic [N_BANKS_RADIX-1 : 0] t_bank_idx;
+    // Bucket idx within a bank
+    typedef logic [$clog2(N_BUCKETS)-N_BANKS_RADIX-1 : 0] t_bank_bucket_idx;
+
+    // Pick a bank given a bucket
+    function automatic t_bank_idx bankFromBucket(t_bucket_idx bucket_idx);
+        if (N_BANKS_RADIX == 0)
+        begin
+            // Special case for 1 bank
+            return t_bank_idx'(0);
+        end
+        else
+        begin
+            t_bank_idx bank_idx;
+            t_bank_bucket_idx bank_bucket_idx;
+            {bank_bucket_idx, bank_idx} = bucket_idx;
+            return bank_idx;
+        end
+    endfunction
+
+    // Pick a bucket within a bank
+    function automatic t_bank_bucket_idx bankBucket(t_bucket_idx bucket_idx);
+        if (N_BANKS_RADIX == 0)
+        begin
+            // Special case for 1 bank
+            return t_bank_bucket_idx'(bucket_idx);
+        end
+        else
+        begin
+            t_bank_idx bank_idx;
+            t_bank_bucket_idx bank_bucket_idx;
+            {bank_bucket_idx, bank_idx} = bucket_idx;
+            return bank_bucket_idx;
+        end
+    endfunction
+
+    //
+    // Insertion has priority.  Removal requests flow through a FIFO and are
+    // processed when possible.
+    //
+    t_bucket_idx remove_idx;
+    logic process_remove;
+    logic remove_notEmpty;
+
+    generate
+        //
+        // Pick a FIFO implementation based on required size.
+        //
+        if (N_REMOVE_FIFO_ENTRIES >= 64)
+        begin : brf
+            cci_mpf_prim_fifo_bram
+              #(
+                .N_DATA_BITS($bits(t_bucket_idx)),
+                .N_ENTRIES(N_REMOVE_FIFO_ENTRIES)
+                )
+              remove_fifo_br
+               (
+                .clk,
+                .reset,
+                .enq_data(remove),
+                .enq_en(remove_en),
+                .notFull(remove_notFull),
+                .almostFull(),
+                .first(remove_idx),
+                .deq_en(process_remove),
+                .notEmpty(remove_notEmpty)
+                );
+        end
+        else
+        begin : lrf
+            cci_mpf_prim_fifo_lutram
+              #(
+                .N_DATA_BITS($bits(t_bucket_idx)),
+                .N_ENTRIES(N_REMOVE_FIFO_ENTRIES),
+                .REGISTER_OUTPUT(1)
+                )
+              remove_fifo_lr
+               (
+                .clk,
+                .reset,
+                .enq_data(remove),
+                .enq_en(remove_en),
+                .notFull(remove_notFull),
+                .almostFull(),
+                .first(remove_idx),
+                .deq_en(process_remove),
+                .notEmpty(remove_notEmpty)
+                );
+        end
+    endgenerate
+
+
+    //
+    // Banks of filters
+    //
+    t_bucket_value [N_TEST_VALUE_CLIENTS-1 : 0] bank_test_value[0 : N_BANKS-1];
+    logic [N_TEST_IS_ZERO_CLIENTS-1 : 0] bank_test_isZero[0 : N_BANKS-1];
+    logic bank_remove_notFull[0 : N_BANKS-1];
+    logic bank_rdy[0 : N_BANKS-1];
+
+    genvar b;
+    generate
+        for (b = 0; b < N_BANKS; b = b + 1)
+        begin : fb
+            cci_mpf_prim_filter_counting_bank
+              #(
+                // Buckets are spread evenly across banks
+                .N_BUCKETS(N_BUCKETS >> N_BANKS_RADIX),
+                .BITS_PER_BUCKET(BITS_PER_BUCKET),
+                .N_TEST_VALUE_CLIENTS(N_TEST_VALUE_CLIENTS),
+                .N_TEST_IS_ZERO_CLIENTS(N_TEST_IS_ZERO_CLIENTS)
+                )
+              filter_bank
+               (
+                .clk,
+                .reset,
+                .rdy(bank_rdy[b]),
+
+                .test_value_req(bankBucket(test_value_req)),
+                .T2_test_value(bank_test_value[b]),
+
+                .test_isZero_req(bankBucket(test_isZero_req)),
+                .T2_test_isZero(bank_test_isZero[b]),
+
+                .insert(bankBucket(insert)),
+                .insert_en(insert_en &&
+                           (bankFromBucket(insert) == t_bank_idx'(b))),
+
+                .remove(bankBucket(remove_idx)),
+                .remove_en(process_remove &&
+                           (bankFromBucket(remove_idx) == t_bank_idx'(b))),
+                .remove_notFull(bank_remove_notFull[b])
+                );
+        end
+    endgenerate
+
+    assign rdy = bank_rdy[0];
+
+    // Handle a removal request if the target bank is available
+    assign process_remove = bank_remove_notFull[bankFromBucket(remove_idx)] &&
+                            remove_notEmpty;
+
+    // Record the bank used for tests and cascade down the pipeline
+    t_bank_idx test_value_which_bank[0 : 2];
+    t_bank_idx test_isZero_which_bank[0 : 2];
+
+    assign test_value_which_bank[0] = bankFromBucket(test_value_req);
+    assign test_isZero_which_bank[0] = bankFromBucket(test_isZero_req);
+
+    always_ff @(posedge clk)
+    begin
+        for (int c = 1; c <= 2; c = c + 1)
+        begin
+            test_value_which_bank[c] <= test_value_which_bank[c-1];
+            test_isZero_which_bank[c] <= test_isZero_which_bank[c-1];
+        end
+    end
+
+    // Return result from the bank handling the request
+    always_ff @(posedge clk)
+    begin
+        T3_test_value <= bank_test_value[test_value_which_bank[2]];
+        T3_test_isZero <= bank_test_isZero[test_isZero_which_bank[2]];
+    end
+
+endmodule // cci_mpf_prim_filter_banked_counting
+
+
+//
+// One bank of a banked counting filter.  This should be treated as a module
+// internal to the counting filter.  To allocate a single bank clients should
+// use cci_mpf_prim_filter_banked_counting and specify N_BANKS_RADIX 0.
+//
+module cci_mpf_prim_filter_counting_bank
+  #(
+    // Number of individual buckets in the filter
+    parameter N_BUCKETS = 16,
+
+    // Size of each bucket in the counting filter
+    parameter BITS_PER_BUCKET = 4,
+
+    // There are two classes of clients:  those request a bucket's value
+    // and those testing that the bucket is zero.  Each client gets
+    // its own block RAM and testing for zero requires only one bit.
+    parameter N_TEST_VALUE_CLIENTS = 1,
+    parameter N_TEST_IS_ZERO_CLIENTS = 1,
+
+    // Number of entries in the remove port's FIFO.  The remove port
+    // shares a block RAM port with insertion.  Remove requests are
+    // buffered until they can be processed.
+    parameter N_REMOVE_FIFO_ENTRIES = 4
+    )
+   (
+    input  logic clk,
+    input  logic reset,
+    output logic rdy,
+
+    input  logic [N_TEST_VALUE_CLIENTS-1 : 0][$clog2(N_BUCKETS)-1 : 0] test_value_req,
+    output logic [N_TEST_VALUE_CLIENTS-1 : 0][BITS_PER_BUCKET-1 : 0] T2_test_value,
+
+    input  logic [N_TEST_IS_ZERO_CLIENTS-1 : 0][$clog2(N_BUCKETS)-1 : 0] test_isZero_req,
+    output logic [N_TEST_IS_ZERO_CLIENTS-1 : 0] T2_test_isZero,
+
+    input  logic [$clog2(N_BUCKETS)-1 : 0] insert,
+    input  logic insert_en,
+
+    input  logic [$clog2(N_BUCKETS)-1 : 0] remove,
+    input  logic remove_en,
+    // Remove shares a port with insert.  Insertion has priority, so
+    // the remove port may become full.
+    output logic remove_notFull
+    );
+
+    typedef logic [$clog2(N_BUCKETS)-1 : 0] t_bucket_idx;
+    typedef logic [BITS_PER_BUCKET-1 : 0] t_bucket_value;
+
+
+    //
+    // Global memory update lines consumed by all categories of
+    // memory here.
+    //
+    logic mem_upd_wr_en;
+    t_bucket_idx mem_upd_wr_idx;
+    t_bucket_value mem_upd_wr_val;
+    logic mem_upd_wr_notZero;
+
+
+    // ====================================================================
+    //
+    //   "Not full" memory client read port.  In addition to holding the
+    //   current counters, these ports track recent lookups and consider
+    //   them when reporting whether a bucket is full.  This allows
+    //   multiple requests to target the same bucket safely without fear
+    //   of overflowing a counter.
+    //
+    // ====================================================================
+
+    // Bypass tracking state.  The 0:2 index on the right is the stage
+    // in the read pipeline.
+    t_bucket_idx [N_TEST_VALUE_CLIENTS-1 : 0] mem_port_val_rd_idx[0:2];
+    logic [N_TEST_VALUE_CLIENTS-1 : 0] mem_port_val_rd_bypass_en[0:2];
+    t_bucket_value [N_TEST_VALUE_CLIENTS-1 : 0] mem_port_val_rd_bypass_val[0:2];
+
+    t_bucket_value [N_TEST_VALUE_CLIENTS-1 : 0] mem_port_val_rd_val;
+
+    // Client port index
+    genvar c;
+    // Read pipeline stage index
+    genvar p;
+
+    generate
+        for (c = 0; c < N_TEST_VALUE_CLIENTS; c = c + 1)
+        begin : vm
+            cci_mpf_prim_ram_simple_init
+              #(
+                .N_ENTRIES(N_BUCKETS),
+                .N_DATA_BITS(BITS_PER_BUCKET),
+                .N_OUTPUT_REG_STAGES(1)
+                )
+              mem_port_value
+               (
+                .clk,
+                .reset,
+                // rdy from mem_upd goes high at the same time
+                .rdy(),
+
+                .raddr(mem_port_val_rd_idx[0][c]),
+                .rdata(mem_port_val_rd_val[c]),
+
+                .waddr(mem_upd_wr_idx),
+                .wen(mem_upd_wr_en),
+                .wdata(mem_upd_wr_val)
+                );
+
+            assign mem_port_val_rd_idx[0][c] = test_value_req[c];
+
+            // Detect the need for bypass.
+            assign mem_port_val_rd_bypass_en[0][c] =
+                     mem_upd_wr_en && (mem_port_val_rd_idx[0][c] == mem_upd_wr_idx);
+            assign mem_port_val_rd_bypass_val[0][c] = mem_upd_wr_val;
+
+            // Continue checking for the need to bypass.  The lookup pipeline
+            // here is the same length as the update pipeline generating the
+            // writes.  By checking in every stage of lookup we eventually
+            // see all updates requested before the cycle the lookup began.
+            for (p = 1; p <= 2; p = p + 1)
+            begin : vm_p
+                always_ff @(posedge clk)
+                begin
+                    mem_port_val_rd_bypass_en[p][c] <= mem_port_val_rd_bypass_en[p-1][c];
+                    mem_port_val_rd_bypass_val[p][c] <= mem_port_val_rd_bypass_val[p-1][c];
+                    mem_port_val_rd_idx[p][c] <= mem_port_val_rd_idx[p-1][c];
+
+                    if (mem_upd_wr_en &&
+                        (mem_port_val_rd_idx[p-1][c] == mem_upd_wr_idx))
+                    begin
+                        // Same bucket was updated this cycle!
+                        mem_port_val_rd_bypass_en[p][c] <= 1'b1;
+                        mem_port_val_rd_bypass_val[p][c] <= mem_upd_wr_val;
+                    end
+                end
+            end
+
+            // Return either the bypassed value or the value from memory
+            assign T2_test_value[c] =
+                (mem_port_val_rd_bypass_en[2][c] ?
+                    mem_port_val_rd_bypass_val[2][c] :
+                    mem_port_val_rd_val[c]);
+        end
+    endgenerate
+
+
+    // ====================================================================
+    //
+    //   "Is zero" ports are for clients that simply need to know whether
+    //   or not a bucket is empty.  E.g. stores seeking to avoid conflicts
+    //   with any read.
+    //
+    // ====================================================================
+
+    // Bypass tracking state.  The 0:2 index on the right is the stage
+    // in the read pipeline.
+    t_bucket_idx [N_TEST_IS_ZERO_CLIENTS-1 : 0] mem_port_iz_rd_idx[0:2];
+    logic [N_TEST_IS_ZERO_CLIENTS-1 : 0] mem_port_iz_rd_bypass_en[0:2];
+    logic [N_TEST_IS_ZERO_CLIENTS-1 : 0] mem_port_iz_rd_bypass_val[0:2];
+
+    logic [N_TEST_IS_ZERO_CLIENTS-1 : 0] mem_port_iz_rd_val;
+
+    generate
+        // For each client
+        for (c = 0; c < N_TEST_IS_ZERO_CLIENTS; c = c + 1)
+        begin : izm
+            cci_mpf_prim_ram_simple_init
+              #(
+                .N_ENTRIES(N_BUCKETS),
+                .N_DATA_BITS(1),
+                .N_OUTPUT_REG_STAGES(1)
+                )
+              mem_port_is_zero
+               (
+                .clk,
+                .reset,
+                // rdy from mem_upd goes high at the same time
+                .rdy(),
+
+                .raddr(mem_port_iz_rd_idx[0][c]),
+                .rdata(mem_port_iz_rd_val[c]),
+
+                .waddr(mem_upd_wr_idx),
+                .wen(mem_upd_wr_en),
+                .wdata(mem_upd_wr_notZero)
+                );
+
+            assign mem_port_iz_rd_idx[0][c] = test_isZero_req[c];
+
+            // Detect the need for bypass.
+            assign mem_port_iz_rd_bypass_en[0][c] =
+                     mem_upd_wr_en && (mem_port_iz_rd_idx[0][c] == mem_upd_wr_idx);
+            assign mem_port_iz_rd_bypass_val[0][c] = mem_upd_wr_notZero;
+
+            // Continue checking for the need to bypass.  The lookup pipeline
+            // here is the same length as the update pipeline generating the
+            // writes.  By checking in every stage of lookup we eventually
+            // see all updates requested before the cycle the lookup began.
+            for (p = 1; p <= 2; p = p + 1)
+            begin : izm_p
+                always_ff @(posedge clk)
+                begin
+                    mem_port_iz_rd_bypass_en[p][c] <= mem_port_iz_rd_bypass_en[p-1][c];
+                    mem_port_iz_rd_bypass_val[p][c] <= mem_port_iz_rd_bypass_val[p-1][c];
+                    mem_port_iz_rd_idx[p][c] <= mem_port_iz_rd_idx[p-1][c];
+
+                    if (mem_upd_wr_en &&
+                        (mem_port_iz_rd_idx[p-1][c] == mem_upd_wr_idx))
+                    begin
+                        // Same bucket was updated this cycle!
+                        mem_port_iz_rd_bypass_en[p][c] <= 1'b1;
+                        mem_port_iz_rd_bypass_val[p][c] <= mem_upd_wr_notZero;
+                    end
+                end
+            end
+
+            // Return either the bypassed value or the value from memory
+            assign T2_test_isZero[c] =
+                (mem_port_iz_rd_bypass_en[2][c] ?
+                    ~mem_port_iz_rd_bypass_val[2][c] :
+                    ~mem_port_iz_rd_val[c]);
+        end
+    endgenerate
+
+
+    // ====================================================================
+    //
+    //   FIFO buffer of incoming remove requests.  These will be processed
+    //   whenever the update port isn't already used by insertion.
+    //
+    // ====================================================================
+
+    t_bucket_idx remove_idx;
+    logic process_remove;
+    logic remove_notEmpty;
+
+    cci_mpf_prim_fifo_lutram
+      #(
+        .N_DATA_BITS($bits(t_bucket_idx)),
+        .N_ENTRIES(N_REMOVE_FIFO_ENTRIES),
+        .REGISTER_OUTPUT(1)
+        )
+      remove_fifo
+       (
+        .clk,
+        .reset,
+        .enq_data(remove),
+        .enq_en(remove_en),
+        .notFull(remove_notFull),
+        .almostFull(),
+        .first(remove_idx),
+        .deq_en(process_remove),
+        .notEmpty(remove_notEmpty)
+        );
+
+
+    // ====================================================================
+    //
+    //   Update management.
+    //
+    //   Updates require a read-modify-write of a bucket.  The pipeline
+    //   includes a bypass in order to support multiple updates in flight.
+    //
+    // ====================================================================
+
+    logic mem_upd_rdy;
+
+    t_bucket_idx mem_upd_rd_idx;
+    t_bucket_value mem_upd_rd_val;
+
+    cci_mpf_prim_ram_simple_init
+      #(
+        .N_ENTRIES(N_BUCKETS),
+        .N_DATA_BITS(BITS_PER_BUCKET),
+        .N_OUTPUT_REG_STAGES(1)
+        )
+      mem_upd
+       (
+        .clk,
+        .reset,
+        // Have this memory represent all memories.  They are the same size so
+        // initialize at the same rate.
+        .rdy,
+
+        .raddr(mem_upd_rd_idx),
+        .rdata(mem_upd_rd_val),
+
+        .waddr(mem_upd_wr_idx),
+        .wen(mem_upd_wr_en),
+        .wdata(mem_upd_wr_val)
+        );
+
+
+    // The pipeline is 3 cycles starting with read request and ending with
+    // the write of mem_upd.  Entry 0 is used during the read request and
+    // is set combinationally.  The others are registered downstream copies.
+    logic upd_en[0:2];
+    t_bucket_idx upd_idx[0:2];
+    logic upd_is_insert[0:2];
+    // Bypassed update delta
+    int delta;
+    t_bucket_value upd_delta[0:2];
+
+    always_comb
+    begin
+        // There is only one update port and insert has priority over remove.
+        process_remove = ! insert_en && remove_notEmpty;
+
+        // Read from where?
+        mem_upd_rd_idx = (insert_en ? insert : remove_idx);
+
+        upd_en[0] = insert_en || remove_notEmpty;
+        upd_idx[0] = mem_upd_rd_idx;
+        upd_is_insert[0] = insert_en;
+
+        //
+        // Bypass from existing requests that won't be reflected in the
+        // read for update started this cycle.  This LUT computes the
+        // total delta for all in-flight pipelined updates relative to
+        // the memory read result.
+        //
+        casex ({ upd_en[0], upd_is_insert[0],
+                 upd_en[1] && (mem_upd_rd_idx == upd_idx[1]), upd_is_insert[1],
+                 upd_en[2] && (mem_upd_rd_idx == upd_idx[2]), upd_is_insert[2] })
+
+            6'b0x0x0x: delta = 0;
+            6'b0x0x10: delta = -1;
+            6'b0x0x11: delta = 1;
+
+            6'b0x100x: delta = -1;
+            6'b0x1010: delta = -2;
+            6'b0x1011: delta = 0;
+            6'b0x110x: delta = 1;
+            6'b0x1110: delta = 0;
+            6'b0x1111: delta = 2;
+
+            6'b100x0x: delta = -1;
+            6'b100x10: delta = -2;
+            6'b100x11: delta = 0;
+
+            6'b10100x: delta = -2;
+            6'b101010: delta = -3;
+            6'b101011: delta = -1;
+            6'b10110x: delta = 0;
+            6'b101110: delta = -1;
+            6'b101111: delta = 1;
+
+            6'b110x0x: delta = 1;
+            6'b110x10: delta = 0;
+            6'b110x11: delta = 2;
+
+            6'b11100x: delta = 0;
+            6'b111010: delta = -1;
+            6'b111011: delta = 1;
+            6'b11110x: delta = 2;
+            6'b111110: delta = 1;
+            6'b111111: delta = 3;
+
+            default:   delta = 0;
+        endcase
+
+        upd_delta[0] = t_bucket_value'(delta);
+    end
+
+    //
+    // Data flowing through the update pipeline
+    //
+    generate
+        for (p = 1; p <= 2; p = p + 1)
+        begin : upipe
+            always_ff @(posedge clk)
+            begin
+                upd_en[p] <= upd_en[p-1];
+                upd_idx[p] <= upd_idx[p-1];
+                upd_is_insert[p] <= upd_is_insert[p-1];
+                upd_delta[p] <= upd_delta[p-1];
+
+                if (reset)
+                begin
+                    upd_en[p] <= 1'b0;
+                end
+            end
+        end
+    endgenerate
+
+    //
+    // Update memory
+    //
+    assign mem_upd_wr_idx = upd_idx[2];
+    assign mem_upd_wr_en = upd_en[2];
+    assign mem_upd_wr_val = mem_upd_rd_val + upd_delta[2];
+    assign mem_upd_wr_notZero = (|(mem_upd_wr_val));
+
+
+    // synthesis translate_off
+
+    //
+    // Check updates to the counters without the need for bypasses, etc.
+    //
+    t_bucket_value bucket_checker[0 : N_BUCKETS];
+
+    t_bucket_value bucket_check_upd;
+    assign bucket_check_upd = bucket_checker[upd_idx[2]] +
+                              (upd_is_insert[2] ? t_bucket_value'(1) :
+                                                  t_bucket_value'(-1));
+
+    always_ff @(posedge clk)
+    begin
+        if (! reset && upd_en[2])
+        begin
+            assert ((&(bucket_checker[upd_idx[2]]) == 1'b0) || ! upd_is_insert[2]) else
+                $fatal("cci_mpf_prim_filter_counting.sv: Bucket 0x%0x overflow", upd_idx[2]);
+
+            assert ((|(bucket_checker[upd_idx[2]]) != 1'b0) || upd_is_insert[2]) else
+                $fatal("cci_mpf_prim_filter_counting.sv: Bucket 0x%0x underflow", upd_idx[2]);
+
+            assert (mem_upd_wr_val == bucket_check_upd) else
+                $fatal("cci_mpf_prim_filter_counting.sv: Bucket 0x%0x wrote %0d expected %0d",
+                       upd_idx[2], mem_upd_wr_val, bucket_check_upd);
+
+            bucket_checker[upd_idx[2]] <= bucket_check_upd;
+        end
+
+        if (reset)
+        begin
+            for (int b = 0; b < N_BUCKETS; b = b + 1)
+            begin
+                bucket_checker[b] = t_bucket_value'(0);
+            end
+        end
+    end
+
+    // synthesis translate_on
+
+endmodule // cci_mpf_prim_filter_counting_bank

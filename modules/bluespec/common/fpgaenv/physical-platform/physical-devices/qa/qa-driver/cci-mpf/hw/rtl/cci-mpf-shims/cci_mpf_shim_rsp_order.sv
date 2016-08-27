@@ -334,6 +334,8 @@ module cci_mpf_shim_rsp_order
                     rd_sop_packet_len <= rd_beat_packet_len;
                 end
             end
+
+            assign rd_heap_readMdata = 'x;
         end
         else
         begin

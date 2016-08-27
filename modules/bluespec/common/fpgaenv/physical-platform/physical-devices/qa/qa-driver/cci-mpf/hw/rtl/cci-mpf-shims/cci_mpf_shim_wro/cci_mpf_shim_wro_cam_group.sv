@@ -185,7 +185,6 @@ module cci_mpf_shim_wro_cam_group
 
     // There are two sets of filters: one for reads and one for writes.
     logic [0 : 1] rd_filter_test_notPresent;
-    logic [0 : 1] rd_filter_test_insert_tag;
 
     logic [0 : 1] wr_filter_test_notPresent;
     logic [0 : 1] wr_filter_test_insert_tag;
@@ -196,7 +195,6 @@ module cci_mpf_shim_wro_cam_group
 
     // Insert new active reads and writes in the filter.
     t_hash rd_filter_insert_hash;
-    logic rd_filter_insert_tag;
     logic rd_filter_insert_en;
 
     t_hash wr_filter_insert_hash;
@@ -205,7 +203,6 @@ module cci_mpf_shim_wro_cam_group
 
     // Read response handling on channel 0.
     t_hash rd_filter_remove_hash;
-    logic rd_filter_remove_tag;
     logic rd_filter_remove_en;
 
     // Write response handling on channel 1.
@@ -231,10 +228,18 @@ module cci_mpf_shim_wro_cam_group
     // as an FPGA area tradeoff.
     //
 
-    cci_mpf_prim_filter_decode
+    localparam RD_FILTER_BUCKET_BITS = 2;
+    logic [RD_FILTER_BUCKET_BITS-1 : 0] rd_filter_test_cnt;
+    assign rd_filter_test_notPresent[0] = (&(rd_filter_test_cnt) == 1'b0);
+
+    cci_mpf_prim_filter_banked_counting
       #(
-        .N_ENTRIES(1 << ADDRESS_HASH_BITS),
-        .N_TEST_CLIENTS(2)
+        .N_BANKS_RADIX(1),
+        .N_BUCKETS(1 << ADDRESS_HASH_BITS),
+        .BITS_PER_BUCKET(RD_FILTER_BUCKET_BITS),
+        .N_TEST_VALUE_CLIENTS(1),
+        .N_TEST_IS_ZERO_CLIENTS(1),
+        .N_REMOVE_FIFO_ENTRIES(MAX_ACTIVE_REQS)
         )
       rdFilter
        (
@@ -242,18 +247,20 @@ module cci_mpf_shim_wro_cam_group
         .reset,
         .rdy(rd_filter_rdy),
 
-        .test_value(filter_test_req),
-        .test_en(filter_test_req_en),
-        .T3_test_notPresent(rd_filter_test_notPresent),
-        .T3_test_insert_tag(rd_filter_test_insert_tag),
+        .test_value_req(filter_test_req[0]),
+        .test_value_en(filter_test_req_en[0]),
+        .T3_test_value(rd_filter_test_cnt),
+        .test_isZero_req(filter_test_req[1]),
+        .test_isZero_en(filter_test_req_en[1]),
+        .T3_test_isZero(rd_filter_test_notPresent[1]),
 
-        .insert_value(rd_filter_insert_hash),
-        .insert_tag(rd_filter_insert_tag),
+        .insert(rd_filter_insert_hash),
         .insert_en(rd_filter_insert_en),
 
-        .remove_value(rd_filter_remove_hash),
-        .remove_tag(rd_filter_remove_tag),
-        .remove_en(rd_filter_remove_en)
+        .remove(rd_filter_remove_hash),
+        .remove_en(rd_filter_remove_en),
+
+        .remove_notFull()
         );
 
     cci_mpf_prim_filter_decode
@@ -301,7 +308,7 @@ module cci_mpf_shim_wro_cam_group
 
         if (reset)
         begin
-            for (int i = 0; i < FILTER_PIPE_DEPTH; i = i + 1)
+            for (int i = 1; i < FILTER_PIPE_DEPTH; i = i + 1)
             begin
                 filter_verify_req_en[i] <= 2'b0;
             end
@@ -320,9 +327,6 @@ module cci_mpf_shim_wro_cam_group
     {
         // Hash is the index in the decode filter
         t_hash addrHash;
-
-        // Tag to pass to the filter to remove the entry
-        logic filterTag;
 
         // Enforce order?
         logic enforceOrder;
@@ -503,7 +507,6 @@ module cci_mpf_shim_wro_cam_group
     // Set the hashed value to insert in the filter when requests are
     // processed.
     assign rd_filter_insert_hash = c0_afu_pipe[FILTER_PIPE_LAST].c0AddrHash;
-    assign rd_filter_insert_tag = rd_filter_test_insert_tag[0];
     assign rd_filter_insert_en = c0_process_requests &&
                                  cci_mpf_c0_getReqCheckOrder(c0_afu_pipe[FILTER_PIPE_LAST].c0Tx.hdr);
 
@@ -751,7 +754,6 @@ module cci_mpf_shim_wro_cam_group
     always_comb
     begin
         c0_heap_enqData.addrHash = rd_filter_insert_hash;
-        c0_heap_enqData.filterTag = rd_filter_insert_tag;
         c0_heap_enqData.enforceOrder = cci_mpf_c0_getReqCheckOrder(c0_afu_pipe[FILTER_PIPE_LAST].c0Tx.hdr);
     end
 
@@ -769,7 +771,6 @@ module cci_mpf_shim_wro_cam_group
     always_comb
     begin
         rd_filter_remove_hash = c0_heap_readRsp.addrHash;
-        rd_filter_remove_tag = c0_heap_readRsp.filterTag;
         rd_filter_remove_en = cci_c0Rx_isReadRsp(fiu_buf.c0Rx) &&
                               cci_mpf_c0Rx_isEOP(fiu_buf.c0Rx) &&
                               c0_heap_readRsp.enforceOrder;

@@ -242,7 +242,7 @@ module cci_mpf_prim_ram_dualport_byteena_init
     logic [$clog2(N_ENTRIES)-1 : 0] addr1_init;
 
     assign addr1_local = rdy ? addr1 : addr1_init;
-    assign byteena1_local = rdy ? byteena1 : ~ $bits(byteena1)'(0);
+    assign byteena1_local = rdy ? byteena1 : ~(($bits(byteena1))'(0));
     assign wen1_local = rdy ? wen1 : 1'b1;
     assign wdata1_local = rdy ? wdata1 : INIT_VALUE;
 

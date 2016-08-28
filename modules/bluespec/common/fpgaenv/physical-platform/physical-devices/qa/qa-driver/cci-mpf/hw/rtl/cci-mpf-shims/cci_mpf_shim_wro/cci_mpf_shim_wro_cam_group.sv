@@ -228,9 +228,23 @@ module cci_mpf_shim_wro_cam_group
     // as an FPGA area tradeoff.
     //
 
-    localparam RD_FILTER_BUCKET_BITS = 2;
+    // Selecting the number of filter bits is a tension between block RAM
+    // usage and false positives due to the counters being too small.
+    //
+    // The filter must be at least 3 bits in order to avoid the risk
+    // of overflowing!  This is because multiple reads may be in the pipeline
+    // and all checking whether they can be added to the filter.  If all
+    // reads are to the same address then the counter may be incremented up
+    // to FILTER_PIPE_DEPTH-1 above the current state.  Using the counter
+    // this way is far easier than address matching and detecting multipel
+    // references to the same address in the pipeline.
+    localparam RD_FILTER_BUCKET_BITS = 4;
     logic [RD_FILTER_BUCKET_BITS-1 : 0] rd_filter_test_cnt;
-    assign rd_filter_test_notPresent[0] = (&(rd_filter_test_cnt) == 1'b0);
+    // Consider the filter full if less than FILTER_PIPE_DEPTH slots are
+    // available.  See the comment a few lines up.  For >= 3 bit buckets we
+    // can just test the high bit of the counter.
+    assign rd_filter_test_notPresent[0] =
+        (rd_filter_test_cnt[RD_FILTER_BUCKET_BITS-1] == 1'b0);
 
     cci_mpf_prim_filter_banked_counting
       #(
@@ -640,19 +654,16 @@ module cci_mpf_shim_wro_cam_group
                      (c1_hash[h] == c0_afu_pipe[i].c0AddrHash));
             end
 
-            // Incoming read against all other writes and reads.  Read/
-            // read conflicts are an artificial hazard introduced by the
-            // simple decode filter.  There is no way to count reads in
-            // flight to the same bucket, so only one is allowed.
+            // Incoming read against all other writes.  We allow multiple
+            // reads to the same address since a counting filter is used
+            // for reads, so c0_hash is not compared against reads.
             c0_new_req_conflict[h] = 1'b0;
             for (int i = 0; i < FILTER_PIPE_DEPTH; i = i + 1)
             begin
                 c0_new_req_conflict[h] =
                     c0_new_req_conflict[h] ||
                     (cci_mpf_c1_getReqCheckOrder(c1_afu_pipe[i].c1Tx.hdr) &&
-                     (c0_hash[h] == c1_afu_pipe[i].c1AddrHash)) ||
-                    (cci_mpf_c0_getReqCheckOrder(c0_afu_pipe[i].c0Tx.hdr) &&
-                     (c0_hash[h] == c0_afu_pipe[i].c0AddrHash));
+                     (c0_hash[h] == c1_afu_pipe[i].c1AddrHash));
             end
         end
     end

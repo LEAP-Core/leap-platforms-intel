@@ -202,7 +202,7 @@ module cci_mpf_shim_vc_map
             if (csrs.vc_map_ctrl[60])
             begin
                 always_use_vl0_threshold_mask <=
-                    ~ $bits(always_use_vl0_threshold_mask)'(csrs.vc_map_ctrl[31:16]);
+                    ~(($bits(always_use_vl0_threshold_mask))'(csrs.vc_map_ctrl[31:16]));
             end
         end
         else if (new_ratio_vl0_en)
@@ -224,7 +224,7 @@ module cci_mpf_shim_vc_map
             map_all <= 1'b0;
             ratio_vl0 <= RATIO_VL0_DEFAULT;
             always_use_vl0 <= 1'b0;
-            always_use_vl0_threshold_mask <= ~ $bits(always_use_vl0_threshold_mask)'(0);
+            always_use_vl0_threshold_mask <= ~(($bits(always_use_vl0_threshold_mask))'(0));
 
             vc_map_history <= 64'b0;
         end
@@ -808,7 +808,7 @@ module cci_mpf_shim_vc_map
                 end
             end
 
-            n_sampled_all <= n_sampled_all + $bits(n_sampled_all)'(lines_this_cycle);
+            n_sampled_all <= n_sampled_all + ($bits(n_sampled_all))'(lines_this_cycle);
 
             n_sampled_len1 <= n_sampled_len1 + rd_len1 + wr_len1;
             n_sampled_len2 <= n_sampled_len2 + rd_len2 + wr_len2;

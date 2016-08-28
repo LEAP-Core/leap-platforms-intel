@@ -115,7 +115,7 @@ module cci_mpf_prim_filter_counting
                 // Increment if insert port index matches and is enabled
                 delta_up[c] =
                      delta_up[c] +
-                     $bits(delta_up[c])'((insert[i] == c) && insert_en[i]);
+                     ($bits(delta_up[c]))'((insert[i] == c) && insert_en[i]);
             end
 
             // For each insert port
@@ -124,7 +124,7 @@ module cci_mpf_prim_filter_counting
                 // Decrement for remove ports
                 delta_down[c] =
                      delta_down[c] +
-                     $bits(delta_up[c])'((remove[i] == c) && remove_en[i]);
+                     ($bits(delta_up[c]))'((remove[i] == c) && remove_en[i]);
             end
         end
     end
@@ -475,7 +475,8 @@ module cci_mpf_prim_filter_counting_bank
               #(
                 .N_ENTRIES(N_BUCKETS),
                 .N_DATA_BITS(BITS_PER_BUCKET),
-                .N_OUTPUT_REG_STAGES(1)
+                .N_OUTPUT_REG_STAGES(1),
+                .REGISTER_WRITES(1)
                 )
               mem_port_value
                (
@@ -658,7 +659,8 @@ module cci_mpf_prim_filter_counting_bank
       #(
         .N_ENTRIES(N_BUCKETS),
         .N_DATA_BITS(BITS_PER_BUCKET),
-        .N_OUTPUT_REG_STAGES(1)
+        .N_OUTPUT_REG_STAGES(1),
+        .REGISTER_WRITES(1)
         )
       mem_upd
        (
@@ -680,12 +682,13 @@ module cci_mpf_prim_filter_counting_bank
     // The pipeline is 3 cycles starting with read request and ending with
     // the write of mem_upd.  Entry 0 is used during the read request and
     // is set combinationally.  The others are registered downstream copies.
-    logic upd_en[0:2];
-    t_bucket_idx upd_idx[0:2];
-    logic upd_is_insert[0:2];
-    // Bypassed update delta
-    int delta;
-    t_bucket_value upd_delta[0:2];
+    // An extra pipeline stage is recorded because the upd_delta computation
+    // is performed in stage 1 for timing when it naturally should happen in
+    // stage 0.  By the time upd_delta is computed the required state has
+    // reached the extra stage 3.
+    logic upd_en[0:3];
+    t_bucket_idx upd_idx[0:3];
+    logic upd_is_insert[0:3];
 
     always_comb
     begin
@@ -698,16 +701,46 @@ module cci_mpf_prim_filter_counting_bank
         upd_en[0] = insert_en || remove_notEmpty;
         upd_idx[0] = mem_upd_rd_idx;
         upd_is_insert[0] = insert_en;
+    end
 
+    //
+    // Data flowing through the update pipeline
+    //
+    generate
+        for (p = 1; p <= 3; p = p + 1)
+        begin : upipe
+            always_ff @(posedge clk)
+            begin
+                upd_en[p] <= upd_en[p-1];
+                upd_idx[p] <= upd_idx[p-1];
+                upd_is_insert[p] <= upd_is_insert[p-1];
+
+                if (reset)
+                begin
+                    upd_en[p] <= 1'b0;
+                end
+            end
+        end
+    endgenerate
+
+
+    // Bypassed update delta
+    int delta;
+    t_bucket_value upd_delta[1:2];
+
+    always_comb
+    begin
         //
         // Bypass from existing requests that won't be reflected in the
         // read for update started this cycle.  This LUT computes the
         // total delta for all in-flight pipelined updates relative to
         // the memory read result.
         //
-        casex ({ upd_en[0], upd_is_insert[0],
-                 upd_en[1] && (mem_upd_rd_idx == upd_idx[1]), upd_is_insert[1],
-                 upd_en[2] && (mem_upd_rd_idx == upd_idx[2]), upd_is_insert[2] })
+        // The delta computation runs the cycle after the read is requested.
+        //
+        casex ({ upd_en[1], upd_is_insert[1],
+                 upd_en[2] && (upd_idx[1] == upd_idx[2]), upd_is_insert[2],
+                 upd_en[3] && (upd_idx[1] == upd_idx[3]), upd_is_insert[3] })
 
             6'b0x0x0x: delta = 0;
             6'b0x0x10: delta = -1;
@@ -745,29 +778,14 @@ module cci_mpf_prim_filter_counting_bank
             default:   delta = 0;
         endcase
 
-        upd_delta[0] = t_bucket_value'(delta);
+        upd_delta[1] = t_bucket_value'(delta);
     end
 
-    //
-    // Data flowing through the update pipeline
-    //
-    generate
-        for (p = 1; p <= 2; p = p + 1)
-        begin : upipe
-            always_ff @(posedge clk)
-            begin
-                upd_en[p] <= upd_en[p-1];
-                upd_idx[p] <= upd_idx[p-1];
-                upd_is_insert[p] <= upd_is_insert[p-1];
-                upd_delta[p] <= upd_delta[p-1];
+    always_ff @(posedge clk)
+    begin
+        upd_delta[2] <= upd_delta[1];
+    end
 
-                if (reset)
-                begin
-                    upd_en[p] <= 1'b0;
-                end
-            end
-        end
-    endgenerate
 
     //
     // Update memory

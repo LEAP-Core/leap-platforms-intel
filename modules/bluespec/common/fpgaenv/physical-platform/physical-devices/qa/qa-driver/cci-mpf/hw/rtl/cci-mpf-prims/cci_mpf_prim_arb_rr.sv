@@ -73,7 +73,7 @@ module cci_mpf_prim_arb_rr
 
             if (grant_reduce[i])
             begin
-                grantIdx = $clog2(NUM_CLIENTS)'(i);
+                grantIdx = ($clog2(NUM_CLIENTS))'(i);
             end
         end
     end

@@ -295,7 +295,7 @@ module cci_mpf_shim_wro_buffer_and_hash
             // that may just have been released must also be considered.
             c0_pipe_conflicts <=
                 (c0_hash_conflicts[1] === 1'b1) ||
-                (c1_hash[0] === c0_hash[1]) || (c0_hash[0] === c0_hash[1]);
+                (c1_hash[0] === c0_hash[1]);
 
             c1_pipe_conflicts <=
                 (c1_hash_conflicts[1] === 1'b1) ||

@@ -96,7 +96,7 @@ module cci_mpf_shim_csr
     parameter MPF_ENABLE_RSP_ORDER = 0,
     parameter MPF_ENABLE_VC_MAP = 0,
     parameter MPF_ENABLE_WRO = 0,
-    parameter MPF_ENABLE_PWRITE
+    parameter MPF_ENABLE_PWRITE = 0
     )
    (
     input  logic clk,
@@ -599,7 +599,7 @@ module cci_mpf_shim_csr_events
     begin
         if (reset)
         begin
-            consume_counters = 1'b0;
+            consume_counters <= 1'b0;
         end
         else
         begin

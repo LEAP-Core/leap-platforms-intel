@@ -204,11 +204,11 @@ module cci_mpf_prim_filter_banked_counting
     input  logic [N_TEST_IS_ZERO_CLIENTS-1 : 0] test_isZero_en,
     output logic [N_TEST_IS_ZERO_CLIENTS-1 : 0] T3_test_isZero,
 
-    input  logic [$clog2(N_BUCKETS)-1 : 0] insert,
     input  logic insert_en,
+    input  logic [$clog2(N_BUCKETS)-1 : 0] insert,
 
-    input  logic [$clog2(N_BUCKETS)-1 : 0] remove,
     input  logic remove_en,
+    input  logic [$clog2(N_BUCKETS)-1 : 0] remove,
     // Remove shares a port with insert.  Insertion has priority, so
     // the remove port may become full.
     output logic remove_notFull
@@ -342,13 +342,13 @@ module cci_mpf_prim_filter_banked_counting
                 .test_isZero_req(bankBucket(test_isZero_req)),
                 .T2_test_isZero(bank_test_isZero[b]),
 
-                .insert(bankBucket(insert)),
                 .insert_en(insert_en &&
                            (bankFromBucket(insert) == t_bank_idx'(b))),
+                .insert(bankBucket(insert)),
 
-                .remove(bankBucket(remove_idx)),
                 .remove_en(process_remove &&
                            (bankFromBucket(remove_idx) == t_bank_idx'(b))),
+                .remove(bankBucket(remove_idx)),
                 .remove_notFull(bank_remove_notFull[b])
                 );
         end
@@ -421,11 +421,11 @@ module cci_mpf_prim_filter_counting_bank
     input  logic [N_TEST_IS_ZERO_CLIENTS-1 : 0][$clog2(N_BUCKETS)-1 : 0] test_isZero_req,
     output logic [N_TEST_IS_ZERO_CLIENTS-1 : 0] T2_test_isZero,
 
-    input  logic [$clog2(N_BUCKETS)-1 : 0] insert,
     input  logic insert_en,
+    input  logic [$clog2(N_BUCKETS)-1 : 0] insert,
 
-    input  logic [$clog2(N_BUCKETS)-1 : 0] remove,
     input  logic remove_en,
+    input  logic [$clog2(N_BUCKETS)-1 : 0] remove,
     // Remove shares a port with insert.  Insertion has priority, so
     // the remove port may become full.
     output logic remove_notFull
@@ -447,11 +447,7 @@ module cci_mpf_prim_filter_counting_bank
 
     // ====================================================================
     //
-    //   "Not full" memory client read port.  In addition to holding the
-    //   current counters, these ports track recent lookups and consider
-    //   them when reporting whether a bucket is full.  This allows
-    //   multiple requests to target the same bucket safely without fear
-    //   of overflowing a counter.
+    //   "Not full" memory client read port.
     //
     // ====================================================================
 

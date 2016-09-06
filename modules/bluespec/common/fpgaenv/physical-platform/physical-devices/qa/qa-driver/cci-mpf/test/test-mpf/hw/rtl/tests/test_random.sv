@@ -150,10 +150,16 @@ module test_afu
     t_counter cnt_wr_rsp;
     t_counter cnt_checked_rd;
 
+    // Return these through a CSR in order to preserve the entire response,
+    // making the dependence on CCI more realistic.
+    logic c0Rx_xor;
+    logic c1Rx_xor;
+
     logic [63:0] csr_state;
     always_ff @(posedge clk)
     begin
-        csr_state <= { 48'(0),
+        csr_state <= { c0Rx_xor, c1Rx_xor,
+                       46'(0),
                        8'(state),
                        3'(0),
                        chk_ram_rdy,
@@ -328,6 +334,45 @@ module test_afu
 
     // ====================================================================
     //
+    //   Random multi-line size generator
+    //
+    // ====================================================================
+
+    t_cci_clLen rand_rd_beats;
+    t_cci_clLen rand_wr_beats;
+
+    logic [11:0] ml_lfsr;
+
+    function automatic t_cci_clLen randomMultiLineLen(logic [3:0] r);
+        t_cci_clLen cl;
+
+        case (r) inside
+            [4'd0:4'd5]:  cl = eCL_LEN_1;
+            [4'd6:4'd10]: cl = eCL_LEN_2;
+            default:      cl = eCL_LEN_4;
+        endcase
+
+        return cl;
+    endfunction
+
+    assign rand_rd_beats = randomMultiLineLen(ml_lfsr[3:0]);
+    assign rand_wr_beats = randomMultiLineLen(ml_lfsr[7:4]);
+
+    cci_mpf_prim_lfsr12
+      #(
+        .INITIAL_VALUE(12'(513))
+        )
+      pwm_lfsr
+       (
+        .clk,
+        .reset,
+        .en(1'b1),
+        .value(ml_lfsr)
+        );
+
+
+    // ====================================================================
+    //
     //   Reads
     //
     // ====================================================================
@@ -366,7 +411,7 @@ module test_afu
         // to zero.  The corresponding bit for writes will be forced to one.
         if (! enable_rw_conflicts)
         begin
-            rd_addr_rand_idx.checked_low[0] = 1'b0;
+            rd_addr_rand_idx.checked_low[2] = 1'b0;
         end
     end
 
@@ -383,7 +428,10 @@ module test_afu
     t_checked_addr_idx wr_addr_chk_idx;
 
     t_cci_clLen rd_beats;
-    assign rd_beats = t_cci_clLen'(cl_beats);
+    always_ff @(posedge clk)
+    begin
+        rd_beats <= cl_beats_random ? rand_rd_beats : t_cci_clLen'(cl_beats);
+    end
 
     // Generate a mask of low bits that must be zero in order to align
     // the address to the number of beats requested.
@@ -419,7 +467,8 @@ module test_afu
         // We "solve" this by avoiding conflicting addresses in this window.
         logic chk_rd;
         chk_rd = rd_addr_is_checked &&
-                 ((rd_addr_chk_beat >= wr_beat_num) ||
+                 ((rd_addr_chk_idx[$bits(t_cci_clNum)-1 : 0] >= 
+                   (wr_addr_chk_idx[$bits(t_cci_clNum)-1 : 0] | wr_beat_num)) ||
                   (rd_addr_chk_idx[N_CHECKED_ADDR_BITS-1 : $bits(t_cci_clNum)] !=
                    wr_addr_chk_idx[N_CHECKED_ADDR_BITS-1 : $bits(t_cci_clNum)]));
 
@@ -461,6 +510,28 @@ module test_afu
         begin
             cnt_rd_rsp <= t_counter'(0);
         end
+    end
+
+    //
+    // Force preservation of the entire c0Rx response in order to be more
+    // realistic.
+    //
+    t_if_cci_c0_Rx c0Rx;
+    logic [7:0] c0Rx_xor_v;
+    logic c0Rx_xor_t;
+
+    always_ff @(posedge clk)
+    begin
+        c0Rx <= fiu.c0Rx;
+
+        // Two stage XOR reduction of c0Rx
+        for (int i = 0; i < 8; i = i + 1)
+        begin
+            c0Rx_xor_v[i] <= ^(c0Rx[i * ($bits(c0Rx) / 8) +: ($bits(c0Rx) / 8)]);
+        end
+
+        c0Rx_xor_t <= ^c0Rx_xor_v;
+        c0Rx_xor <= c0Rx_xor_t;
     end
 
     assign fiu.c2Tx.mmioRdValid = 1'b0;
@@ -506,7 +577,7 @@ module test_afu
         // to one.  The corresponding bit for reads will be forced to zero.
         if (! enable_rw_conflicts)
         begin
-            wr_addr_rand_idx.checked_low[0] = 1'b1;
+            wr_addr_rand_idx.checked_low[2] = 1'b1;
         end
     end
 
@@ -515,10 +586,14 @@ module test_afu
     t_checked_addr_idx wr_addr_chk_idx_q;
 
     t_cci_clLen wr_beats;
-
     logic wr_beat_last;
+
     t_cci_clLen wr_beats_next;
-    assign wr_beats_next = t_cci_clLen'(cl_beats);
+    always_ff @(posedge clk)
+    begin
+        wr_beats_next <= cl_beats_random ? rand_wr_beats : t_cci_clLen'(cl_beats);
+    end
+
     t_cci_clNum wr_beats_mask;
     assign wr_beats_mask = ~wr_beats_next;
 
@@ -700,6 +775,28 @@ module test_afu
         begin
             cnt_wr_rsp <= t_counter'(0);
         end
+    end
+
+    //
+    // Force preservation of the entire c1Rx response in order to be more
+    // realistic.
+    //
+    t_if_cci_c1_Rx c1Rx;
+    logic [7:0] c1Rx_xor_v;
+    logic c1Rx_xor_t;
+
+    always_ff @(posedge clk)
+    begin
+        c1Rx <= fiu.c1Rx;
+
+        // Two stage XOR reduction of c1Rx
+        for (int i = 0; i < 8; i = i + 1)
+        begin
+            c1Rx_xor_v[i] <= ^(c1Rx[i * ($bits(c1Rx) / 8) +: ($bits(c1Rx) / 8)]);
+        end
+
+        c1Rx_xor_t <= ^c1Rx_xor_v;
+        c1Rx_xor <= c1Rx_xor_t;
     end
 
 

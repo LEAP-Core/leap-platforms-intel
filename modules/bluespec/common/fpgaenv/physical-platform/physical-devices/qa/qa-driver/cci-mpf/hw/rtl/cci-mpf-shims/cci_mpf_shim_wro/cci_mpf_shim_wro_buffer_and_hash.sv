@@ -29,6 +29,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 `include "cci_mpf_if.vh"
+`include "cci_mpf_shim_wro.vh"
 `include "cci_mpf_prim_hash.vh"
 
 
@@ -56,6 +57,7 @@ module cci_mpf_shim_wro_buffer_and_hash
     output logic [ADDRESS_HASH_BITS-1 : 0] c0_hash[0:1],
     input  logic c0_hash_conflicts[0:1],
     output logic [ADDRESS_HASH_BITS-1 : 0] c1_hash[0:1],
+    output t_cci_mpf_wro_line_mask c1_line_mask[0:1],
     input  logic c1_hash_conflicts[0:1],
 
     // Consume the oldest requests
@@ -142,7 +144,7 @@ module cci_mpf_shim_wro_buffer_and_hash
     logic c1_hash_next_en;
 
     function automatic t_hash hashAddr(t_cci_clAddr addr);
-        return t_hash'(hash32(addr));
+        return t_hash'(hash32(addr[$bits(t_cci_clLen) +: 32]));
     endfunction
 
     always_ff @(posedge clk)
@@ -206,6 +208,7 @@ module cci_mpf_shim_wro_buffer_and_hash
     // current activity.
     assign c0_hash[1] = c0_hash_fifo;
     assign c1_hash[1] = c1_hash_fifo;
+    assign c1_line_mask[1] = wroWrFilterLineMask(afu_fifo.c1Tx.hdr);
 
 
     // ====================================================================
@@ -287,6 +290,7 @@ module cci_mpf_shim_wro_buffer_and_hash
             if (c1_hash_fifo_notEmpty && cci_mpf_c1TxIsWriteReq(afu_fifo.c1Tx))
             begin
                 c1_hash[0] <= c1_hash_fifo;
+                c1_line_mask[0] <= wroWrFilterLineMask(afu_fifo.c1Tx.hdr);
             end
 
             tx_addr_conflict <= afu_fifo_addr_conflict;
@@ -299,7 +303,9 @@ module cci_mpf_shim_wro_buffer_and_hash
 
             c1_pipe_conflicts <=
                 (c1_hash_conflicts[1] === 1'b1) ||
-                (c0_hash[0] === c1_hash[1]) || (c1_hash[0] === c1_hash[1]) ||
+                (c0_hash[0] === c1_hash[1]) ||
+                // Write address conflict & line masks within address intersect
+                ((c1_hash[0] === c1_hash[1]) && (|(c1_line_mask[0] & c1_line_mask[1]))) ||
                 afu_fifo_addr_conflict ||
                 cci_mpf_c1TxIsWriteFenceReq(afu_fifo.c1Tx);
         end
@@ -311,6 +317,7 @@ module cci_mpf_shim_wro_buffer_and_hash
             tx_addr_conflict <= 1'b0;
             c0_hash[0] <= 0;
             c1_hash[0] <= 0;
+            c1_line_mask[0] <= 0;
         end
     end
 

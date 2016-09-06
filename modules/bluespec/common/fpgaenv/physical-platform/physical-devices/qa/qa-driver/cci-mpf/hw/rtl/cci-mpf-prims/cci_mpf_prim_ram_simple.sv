@@ -307,20 +307,28 @@ module cci_mpf_prim_ram_simple_base
             // Register writes and bypass write data to reads in the delay slot
             logic addr_matched[0 : 1];
             logic [N_DATA_BITS-1 : 0] c_wdata_history[0 : 1];
+            logic c_wen_q;
+            logic [$clog2(N_ENTRIES)-1 : 0] c_waddr_q;
+            logic [$clog2(N_ENTRIES)-1 : 0] raddr_q;
 
             initial c_wen = 1'b0;
-            initial addr_matched[0] = 1'b0;
+            initial c_wen_q = 1'b0;
             initial addr_matched[1] = 1'b0;
+
+            // Bypass comparison
+            assign addr_matched[0] = (c_wen_q && (c_waddr_q == raddr_q));
 
             // Delay write one cycle
             always @(posedge clk)
             begin
                 c_wen <= wen;
+                c_wen_q <= c_wen;
                 c_waddr <= waddr;
+                c_waddr_q <= c_waddr;
                 c_wdata <= wdata;
+                raddr_q <= raddr;
 
                 // Bypass logic
-                addr_matched[0] <= (c_wen && (c_waddr == raddr));
                 addr_matched[1] <= addr_matched[0];
                 c_wdata_history[0] <= c_wdata;
                 c_wdata_history[1] <= c_wdata_history[0];

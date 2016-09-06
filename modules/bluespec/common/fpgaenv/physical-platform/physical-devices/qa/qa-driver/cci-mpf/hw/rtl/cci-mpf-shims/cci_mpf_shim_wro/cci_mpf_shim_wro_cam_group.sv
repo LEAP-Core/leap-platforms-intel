@@ -29,6 +29,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 `include "cci_mpf_if.vh"
+`include "cci_mpf_shim_wro.vh"
 
 
 //
@@ -98,6 +99,7 @@ module cci_mpf_shim_wro_cam_group
     typedef logic [ADDRESS_HASH_BITS-1 : 0] t_hash;
     t_hash c0_hash[0:1];
     t_hash c1_hash[0:1];
+    t_cci_mpf_wro_line_mask c1_line_mask[0:1];
     logic c0_new_req_conflict[0:1];
     logic c1_new_req_conflict[0:1];
 
@@ -118,6 +120,7 @@ module cci_mpf_shim_wro_cam_group
         .c0_hash,
         .c0_hash_conflicts(c0_new_req_conflict),
         .c1_hash,
+        .c1_line_mask,
         .c1_hash_conflicts(c1_new_req_conflict),
 
         .c0_deqTx(c0_afu_deq),
@@ -185,9 +188,7 @@ module cci_mpf_shim_wro_cam_group
 
     // There are two sets of filters: one for reads and one for writes.
     logic [0 : 1] rd_filter_test_notPresent;
-
     logic [0 : 1] wr_filter_test_notPresent;
-    logic [0 : 1] wr_filter_test_insert_tag;
 
     // One hash for each request channel
     t_hash [0 : 1] filter_test_req;
@@ -198,7 +199,7 @@ module cci_mpf_shim_wro_cam_group
     logic rd_filter_insert_en;
 
     t_hash wr_filter_insert_hash;
-    logic wr_filter_insert_tag;
+    t_cci_mpf_wro_line_mask wr_filter_insert_mask;
     logic wr_filter_insert_en;
 
     // Read response handling on channel 0.
@@ -207,7 +208,7 @@ module cci_mpf_shim_wro_cam_group
 
     // Write response handling on channel 1.
     t_hash wr_filter_remove_hash;
-    logic wr_filter_remove_tag;
+    t_cci_mpf_wro_line_mask wr_filter_remove_mask;
     logic wr_filter_remove_en;
 
     logic rd_filter_rdy;
@@ -220,12 +221,7 @@ module cci_mpf_shim_wro_cam_group
     end
 
     //
-    // Generate the read and write filters.  Both use simple decode filters
-    // instead of CAMs since a one bit entry in a block RAM is far more
-    // efficient.  The disadvantage of using such a simple filter for
-    // reads is that two reads to the same address must conflict because
-    // the filter can't represent both being active.  For now we accept this
-    // as an FPGA area tradeoff.
+    // Generate the read and write filters.
     //
 
     // Selecting the number of filter bits is a tension between block RAM
@@ -246,6 +242,10 @@ module cci_mpf_shim_wro_cam_group
     assign rd_filter_test_notPresent[0] =
         (rd_filter_test_cnt[RD_FILTER_BUCKET_BITS-1] == 1'b0);
 
+    //
+    // A counting filter allows multiple reads to the same address to be
+    // in flight.
+    //
     cci_mpf_prim_filter_banked_counting
       #(
         .N_BANKS_RADIX(1),
@@ -268,19 +268,37 @@ module cci_mpf_shim_wro_cam_group
         .test_isZero_en(filter_test_req_en[1]),
         .T3_test_isZero(rd_filter_test_notPresent[1]),
 
-        .insert(rd_filter_insert_hash),
         .insert_en(rd_filter_insert_en),
+        .insert(rd_filter_insert_hash),
 
-        .remove(rd_filter_remove_hash),
         .remove_en(rd_filter_remove_en),
+        .remove(rd_filter_remove_hash),
 
+        // N_REMOVE_FIFO_ENTRIES is large enough that we can ignore notFull
         .remove_notFull()
         );
 
-    cci_mpf_prim_filter_decode
+    //
+    // A decode filter allows at most one store per address at a time.
+    // We consider only addresses that can be accessed in the largest
+    // multi-line request, forcing multi-line requests to lock out accesses
+    // of any size to the same region.  The filter has multiple bits that
+    // can be used to mask single lines within an aligned multi-line group.
+    // This allows multiple small stores within what could have been a
+    // larger multi-line store to be active simultaneously while still
+    // locking out all loads to the region.
+    //
+    t_cci_mpf_wro_line_mask wr_filter_test_active_mask;
+
+    cci_mpf_prim_filter_banked_decode
       #(
-        .N_ENTRIES(1 << ADDRESS_HASH_BITS),
-        .N_TEST_CLIENTS(2)
+        .N_BANKS_RADIX(1),
+        .N_BUCKETS(1 << ADDRESS_HASH_BITS),
+        // CCI permits up to 4 beat write requests
+        .BITS_PER_BUCKET(4),
+        .N_TEST_VALUE_CLIENTS(1),
+        .N_TEST_IS_ZERO_CLIENTS(1),
+        .N_REMOVE_FIFO_ENTRIES(MAX_ACTIVE_REQS)
         )
       wrFilter
        (
@@ -288,18 +306,23 @@ module cci_mpf_shim_wro_cam_group
         .reset,
         .rdy(wr_filter_rdy),
 
-        .test_value(filter_test_req),
-        .test_en(filter_test_req_en),
-        .T3_test_notPresent(wr_filter_test_notPresent),
-        .T3_test_insert_tag(wr_filter_test_insert_tag),
+        .test_value_req(filter_test_req[1]),
+        .test_value_en(filter_test_req_en[1]),
+        .T3_test_value(wr_filter_test_active_mask),
+        .test_isZero_req(filter_test_req[0]),
+        .test_isZero_en(filter_test_req_en[0]),
+        .T3_test_isZero(wr_filter_test_notPresent[0]),
 
-        .insert_value(wr_filter_insert_hash),
-        .insert_tag(wr_filter_insert_tag),
         .insert_en(wr_filter_insert_en),
+        .insert_idx(wr_filter_insert_hash),
+        .insert_mask(wr_filter_insert_mask),
 
-        .remove_value(wr_filter_remove_hash),
-        .remove_tag(wr_filter_remove_tag),
-        .remove_en(wr_filter_remove_en)
+        .remove_en(wr_filter_remove_en),
+        .remove_idx(wr_filter_remove_hash),
+        .remove_mask(wr_filter_remove_mask),
+
+        // N_REMOVE_FIFO_ENTRIES is large enough that we can ignore notFull
+        .remove_notFull()
         );
 
 
@@ -384,8 +407,8 @@ module cci_mpf_shim_wro_cam_group
         // Hash is the index in the decode filter
         t_hash addrHash;
 
-        // Tag to pass to the filter to remove the entry
-        logic filterTag;
+        // Which lines in the aligned multi-line group are written?
+        t_cci_mpf_wro_line_mask lineMask;
 
         // Enforce order?
         logic enforceOrder;
@@ -439,7 +462,8 @@ module cci_mpf_shim_wro_cam_group
     typedef struct packed
     {
         t_if_cci_mpf_c1_Tx c1Tx;
-        t_hash             c1AddrHash;
+        t_hash c1AddrHash;
+        t_cci_mpf_wro_line_mask c1LineMask;
     }
     t_c1_request_pipe;
 
@@ -474,6 +498,14 @@ module cci_mpf_shim_wro_cam_group
     assign c0_filter_may_insert = (rd_filter_test_notPresent[0] &&
                                    wr_filter_test_notPresent[0]) ||
                                   ! c0_enforce_order;
+
+    // The write filter is indexed by 4 line aligned addresses.  The filter
+    // holds 4 bits corresponding to the lines within the 4 line group.
+    // A new entry is considered not present if the current filter state
+    // shows no activity in the lines written by the new request.  c1LineMask
+    // indicates the lines within the group written by the new request.
+    assign wr_filter_test_notPresent[1] =
+        ~(|(wr_filter_test_active_mask & c1_afu_pipe[FILTER_PIPE_LAST].c1LineMask));
 
     logic c1_filter_may_insert;
     assign c1_filter_may_insert = (rd_filter_test_notPresent[1] &&
@@ -525,7 +557,7 @@ module cci_mpf_shim_wro_cam_group
                                  cci_mpf_c0_getReqCheckOrder(c0_afu_pipe[FILTER_PIPE_LAST].c0Tx.hdr);
 
     assign wr_filter_insert_hash = c1_afu_pipe[FILTER_PIPE_LAST].c1AddrHash;
-    assign wr_filter_insert_tag = wr_filter_test_insert_tag[1];
+    assign wr_filter_insert_mask = c1_afu_pipe[FILTER_PIPE_LAST].c1LineMask;
     assign wr_filter_insert_en = c1_process_requests &&
                                  cci_mpf_c1_getReqCheckOrder(c1_afu_pipe[FILTER_PIPE_LAST].c1Tx.hdr);
 
@@ -626,6 +658,7 @@ module cci_mpf_shim_wro_cam_group
         c1_afu_pipe_init.c1Tx.hdr.ext.checkLoadStoreOrder =
             afu_buf.c1Tx.valid && afu_buf.c1Tx.hdr.ext.checkLoadStoreOrder;
         c1_afu_pipe_init.c1AddrHash = c1_hash[0];
+        c1_afu_pipe_init.c1LineMask = c1_line_mask[0];
     end
 
 
@@ -649,7 +682,8 @@ module cci_mpf_shim_wro_cam_group
                 c1_new_req_conflict[h] =
                     c1_new_req_conflict[h] ||
                     (cci_mpf_c1_getReqCheckOrder(c1_afu_pipe[i].c1Tx.hdr) &&
-                     (c1_hash[h] == c1_afu_pipe[i].c1AddrHash)) ||
+                     (c1_hash[h] == c1_afu_pipe[i].c1AddrHash) &&
+                     (|(c1_line_mask[h] & c1_afu_pipe[i].c1LineMask))) ||
                     (cci_mpf_c0_getReqCheckOrder(c0_afu_pipe[i].c0Tx.hdr) &&
                      (c1_hash[h] == c0_afu_pipe[i].c0AddrHash));
             end
@@ -801,7 +835,7 @@ module cci_mpf_shim_wro_cam_group
     always_comb
     begin
         c1_heap_enqData.addrHash = wr_filter_insert_hash;
-        c1_heap_enqData.filterTag = wr_filter_insert_tag;
+        c1_heap_enqData.lineMask = wr_filter_insert_mask;
         c1_heap_enqData.enforceOrder = cci_mpf_c1_getReqCheckOrder(c1_afu_pipe[FILTER_PIPE_LAST].c1Tx.hdr);
     end
 
@@ -819,7 +853,7 @@ module cci_mpf_shim_wro_cam_group
     always_comb
     begin
         wr_filter_remove_hash = c1_heap_readRsp.addrHash;
-        wr_filter_remove_tag = c1_heap_readRsp.filterTag;
+        wr_filter_remove_mask = c1_heap_readRsp.lineMask;
         wr_filter_remove_en = cci_c1Rx_isWriteRsp(fiu_buf.c1Rx) &&
                               c1_heap_readRsp.enforceOrder;
     end
@@ -828,7 +862,6 @@ module cci_mpf_shim_wro_cam_group
 `ifdef DEBUG_MESSAGES
     t_heap_idx c0_prev_heap_reqIdx;
     t_heap_idx c1_prev_heap_reqIdx;
-    logic [15:0] cycle;
 
     always_ff @(posedge clk)
     begin
@@ -836,12 +869,9 @@ module cci_mpf_shim_wro_cam_group
         begin
             c0_prev_heap_reqIdx <= 0;
             c1_prev_heap_reqIdx <= 0;
-            cycle <= 0;
         end
         else
         begin
-            cycle <= cycle + 1;
-
             if (c0_request_rdy && c0_blocked && ! c0_filter_may_insert && (c0_heap_reqIdx != c0_prev_heap_reqIdx))
             begin
                 c0_prev_heap_reqIdx <= c0_heap_reqIdx;
@@ -866,27 +896,25 @@ module cci_mpf_shim_wro_cam_group
 
             if (cci_mpf_c0TxIsReadReq(fiu_buf.c0Tx))
             begin
-                $display("XX A 0 %d %x %d",
+                $display("XX A 0 %d %x %t",
                          c0_heap_reqIdx,
                          cci_mpf_c0_getReqAddr(fiu_buf.c0Tx.hdr),
-                         cycle);
+                         $time);
             end
             if (cci_mpf_c1TxIsWriteReq(fiu_buf.c1Tx))
             begin
-                $display("XX A 1 %d %x hash 0x%x tag %0d %d",
+                $display("XX A 1 %d %x hash 0x%x %t",
                          c1_heap_reqIdx,
                          cci_mpf_c1_getReqAddr(fiu_buf.c1Tx.hdr),
                          wr_filter_insert_hash,
-                         wr_filter_insert_tag,
-                         cycle);
+                         $time);
             end
 
             if (cci_c1Rx_isWriteRsp(fiu_buf.c1Rx))
             begin
-                $display("XX F 1 hash 0x%x tag %0d %d",
+                $display("XX F 1 hash 0x%x %t",
                          wr_filter_remove_hash,
-                         wr_filter_remove_tag,
-                         cycle);
+                         $time);
             end
 
             if (filter_test_req_en)

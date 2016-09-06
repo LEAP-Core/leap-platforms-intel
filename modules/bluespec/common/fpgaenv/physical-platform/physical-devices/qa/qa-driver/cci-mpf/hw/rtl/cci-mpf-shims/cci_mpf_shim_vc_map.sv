@@ -839,9 +839,18 @@ module cci_mpf_shim_vc_map
     logic is_new_read_req;
     logic is_read_eop;
 
-    assign is_new_read_req = cci_mpf_c0TxIsReadReq(c0_tx);
-    assign is_read_eop = cci_mpf_c0Rx_isEOP(fiu.c0Rx) &&
-                         cci_c0Rx_isReadRsp(fiu.c0Rx);
+    always_ff @(posedge clk)
+    begin
+        is_new_read_req <= cci_mpf_c0TxIsReadReq(c0_tx);
+        is_read_eop <= cci_mpf_c0Rx_isEOP(fiu.c0Rx) &&
+                       cci_c0Rx_isReadRsp(fiu.c0Rx);
+
+        if (reset)
+        begin
+            is_new_read_req <= 1'b0;
+            is_read_eop <= 1'b0;
+        end
+    end
 
     always_ff @(posedge clk)
     begin

@@ -45,6 +45,7 @@ interface cci_mpf_shim_pwrite_if
     //
     logic wen;
     logic [$clog2(N_WRITE_HEAP_ENTRIES)-1 : 0] widx;
+    t_cci_clNum wclnum;
     t_cci_mpf_c1_PartialWriteHdr wpartial;
 
     //
@@ -60,6 +61,7 @@ interface cci_mpf_shim_pwrite_if
        (
         input  wen,
         input  widx,
+        input  wclnum,
         input  wpartial,
 
         output upd_en,
@@ -73,6 +75,7 @@ interface cci_mpf_shim_pwrite_if
        (
         output wen,
         output widx,
+        output wclnum,
         output wpartial
         );
 

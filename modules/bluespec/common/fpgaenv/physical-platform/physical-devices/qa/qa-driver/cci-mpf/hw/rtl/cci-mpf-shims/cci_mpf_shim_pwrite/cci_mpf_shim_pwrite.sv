@@ -113,18 +113,29 @@ module cci_mpf_shim_pwrite
 
     typedef logic [$clog2(N_WRITE_HEAP_ENTRIES)-1 : 0] t_write_heap_idx;
 
-    // Write heap index corresponding to reads for partial write is stored
-    // in mdata.  Retrieve both the write mask and the original write request
-    // when these reads return.
+    // State stored in mdata.
+    typedef struct packed
+    {
+        t_write_heap_idx idx;
+        t_ccip_clLen cl_len;
+    }
+    t_pwrite_mdata_state;
+
+    t_pwrite_mdata_state pw_state;
+    assign pw_state =
+        fiu.c0Rx.hdr.mdata[$bits(t_cci_mpf_shim_tag) +: $bits(t_pwrite_mdata_state)];
+
     t_write_heap_idx pw_idx;
-    assign pw_idx =
-        fiu.c0Rx.hdr.mdata[$bits(t_cci_mpf_shim_tag) +: $bits(t_write_heap_idx)];
+    assign pw_idx = pw_state.idx;
+
+    t_cci_clNum pw_clnum;
+    assign pw_clnum = fiu.c0Rx.hdr.cl_num;
 
     t_cci_mpf_clDataByteMask mask_rdata;
 
     cci_mpf_prim_ram_simple
       #(
-        .N_ENTRIES(N_WRITE_HEAP_ENTRIES),
+        .N_ENTRIES(N_WRITE_HEAP_ENTRIES * CCI_MAX_MULTI_LINE_BEATS),
         .N_DATA_BITS($bits(t_cci_mpf_clDataByteMask)),
         .N_OUTPUT_REG_STAGES(1),
         .REGISTER_WRITES(1),
@@ -137,10 +148,10 @@ module cci_mpf_shim_pwrite
         // Write mask arrives directly from the AFU edge module, bypassing
         // most of the MPF pipeline in order to reduce register consumption.
         .wen(pwrite.wen),
-        .waddr(pwrite.widx),
+        .waddr({ pwrite.widx, pwrite.wclnum }),
         .wdata(pwrite.wpartial.mask),
 
-        .raddr(pw_idx),
+        .raddr({ pw_idx, pw_clnum }),
         .rdata(mask_rdata)
         );
 
@@ -185,9 +196,11 @@ module cci_mpf_shim_pwrite
     // a read slot.
     assign afu.c0TxAlmFull = fiu.c0TxAlmFull || c1Tx_is_pwrite_q;
 
+    logic eop_tracker_rdy;
     logic may_inject_read;
     assign may_inject_read = ! cci_mpf_c0TxIsValid(afu.c0Tx) &&
-                             ! fiu.c0TxAlmFull;
+                             ! fiu.c0TxAlmFull &&
+                             eop_tracker_rdy;
 
     // Read requests flow straight through.  Inject read for modify
     // as needed.
@@ -199,6 +212,8 @@ module cci_mpf_shim_pwrite
         begin
             // Generate the read for modify
             t_cci_mpf_c0_ReqMemHdr h;
+            t_pwrite_mdata_state s;
+
             h = t_cci_mpf_c0_ReqMemHdr'(0);
             h.base.vc_sel = c1Tx.hdr.base.vc_sel;
 
@@ -210,8 +225,9 @@ module cci_mpf_shim_pwrite
             h.base.mdata = cci_mpf_setShimMdataTag(RESERVED_MDATA_IDX,
                                                    CCI_MPF_SHIM_TAG_PWRITE);
             // Store the index in which the write metadata is saved
-            h.base.mdata[$bits(t_cci_mpf_shim_tag) +: $bits(t_write_heap_idx)] =
-                c1Tx_pwrite_idx;
+            s.idx = c1Tx_pwrite_idx;
+            s.cl_len = c1Tx.hdr.base.cl_len;
+            h.base.mdata[$bits(t_cci_mpf_shim_tag) +: $bits(t_pwrite_mdata_state)] = s;
 
             h.ext = c1Tx.hdr.ext;
 
@@ -223,14 +239,6 @@ module cci_mpf_shim_pwrite
     begin
         if (c1Tx_is_pwrite && may_inject_read)
         begin
-            // For now we only support single line requests.  It would be pretty
-            // easy to allow any size.  Most of the code is ready.  The mask RAM
-            // above would need to become aware of multiple lines and the read
-            // response logic would have to look for the EOP flit before
-            // triggering a write.
-            assert (c1Tx.hdr.base.cl_len == eCL_LEN_1) else
-                $fatal("cci_mpf_shim_pwrite.sv: Only partial write of single line requests supported");
-
             if (DEBUG && ! reset)
             begin
                 $display("PWRITE: Read req addr 0x%x, widx 0x%x, mdata 0x%x",
@@ -346,6 +354,10 @@ module cci_mpf_shim_pwrite
     t_if_cci_c0_Rx c0Rx_q;
     t_if_cci_c0_Rx c0Rx_qq;
 
+    t_pwrite_mdata_state c0Rx_qq_mdata_state;
+    assign c0Rx_qq_mdata_state = 
+        c0Rx_qq.hdr.mdata[$bits(t_cci_mpf_shim_tag) +: $bits(t_pwrite_mdata_state)];
+
     always_ff @(posedge clk)
     begin
         c0Rx_is_pread_rsp_q <= c0Rx_is_pread_rsp;
@@ -365,7 +377,7 @@ module cci_mpf_shim_pwrite
     always_ff @(posedge clk)
     begin
         pwrite.upd_en <= c0Rx_is_pread_rsp_qq;
-        pwrite.upd_idx <= c0Rx_qq.hdr.mdata[$bits(t_cci_mpf_shim_tag) +: $bits(t_write_heap_idx)];
+        pwrite.upd_idx <= c0Rx_qq_mdata_state.idx;
         pwrite.upd_clNum <= c0Rx_qq.hdr.cl_num;
         pwrite.upd_data <= c0Rx_qq.data;
         // Send the inverse of the write mask so that existing data is filled
@@ -374,7 +386,7 @@ module cci_mpf_shim_pwrite
 
         if (DEBUG && pwrite.upd_en)
         begin
-            $display("PWRITE: Read rsp widx 0x%x", pwrite.upd_idx);
+            $display("PWRITE: Read rsp widx 0x%x cl_num %0d", pwrite.upd_idx, pwrite.upd_clNum);
         end
 
         if (reset)
@@ -384,6 +396,26 @@ module cci_mpf_shim_pwrite
     end
 
 
+    // Track multi-beat read responses and only fire the write when all
+    // read beats have arrived.
+    logic is_pread_eop;
+    logic is_pread_eop_q;
+
+    cci_mpf_shim_pwrite_eop_tracker
+      #(
+        .N_WRITE_HEAP_ENTRIES(N_WRITE_HEAP_ENTRIES)
+        )
+      eop_tracker
+       (
+        .clk,
+        .reset,
+        .rdy(eop_tracker_rdy),
+        .rsp_en(c0Rx_is_pread_rsp),
+        .rsp_idx(pw_state.idx),
+        .rsp_len(pw_state.cl_len),
+        .isEOP(is_pread_eop)
+        );
+
     //
     // Store read response indices in a FIFO in order to trigger the
     // requested write now that old and new data are merged.  We can't
@@ -392,6 +424,20 @@ module cci_mpf_shim_pwrite
     logic pw_fifo_notEmpty;
     logic pw_fifo_deq;
     assign pw_fifo_deq = pw_fifo_notEmpty && ! fiu.c1TxAlmFull;
+
+    // Only enq to the FIFO when all read beats have returned
+    t_write_heap_idx pw_idx_q;
+
+    always_ff @(posedge clk)
+    begin
+        pw_idx_q <= pw_idx;
+        is_pread_eop_q <= c0Rx_is_pread_rsp && is_pread_eop;
+
+        if (reset)
+        begin
+            is_pread_eop_q <= 1'b0;
+        end
+    end
 
     cci_mpf_prim_fifo_bram
       #(
@@ -403,8 +449,8 @@ module cci_mpf_shim_pwrite
         .clk,
         .reset,
 
-        .enq_data(pw_idx),
-        .enq_en(c0Rx_is_pread_rsp),
+        .enq_data(pw_idx_q),
+        .enq_en(is_pread_eop_q),
         // The FIFO is as large as the maximum number of outstanding reads
         .notFull(),
         .almostFull(),
@@ -489,3 +535,49 @@ module cci_mpf_shim_pwrite
     assign afu.c1Rx = fiu.c1Rx;
 
 endmodule // cci_mpf_shim_pwrite
+
+
+module cci_mpf_shim_pwrite_eop_tracker
+  #(
+    parameter N_WRITE_HEAP_ENTRIES = 0
+    )
+   (
+    input  logic clk,
+    input  logic reset,
+    output logic rdy,
+
+    // Note a new response
+    input  logic rsp_en,
+    input  logic [$clog2(N_WRITE_HEAP_ENTRIES)-1 : 0] rsp_idx,
+    input  t_ccip_clLen rsp_len,
+
+    // Is the response the last in the packet?  Output generated the
+    // same cycle as the EOP rsp_en is valid.
+    output logic isEOP
+    );
+
+    t_ccip_clNum num_recvd;
+    assign isEOP = (num_recvd === t_cci_clLen'(rsp_len));
+
+    cci_mpf_prim_lutram_init
+      #(
+        .N_ENTRIES(N_WRITE_HEAP_ENTRIES),
+        .N_DATA_BITS($bits(t_ccip_clNum))
+        )
+      ram
+       (
+        .clk,
+        .reset,
+        .rdy,
+
+        .raddr(rsp_idx),
+        .rdata(num_recvd),
+
+        .waddr(rsp_idx),
+        .wen(rsp_en),
+        // If response is last then reinitialize the counter to 0.  Otherwise,
+        // increment the flit counter.
+        .wdata(isEOP ? t_cci_clLen'(0) : num_recvd + t_cci_clLen'(1))
+        );
+
+endmodule // cci_mpf_shim_pwrite_eop_tracker

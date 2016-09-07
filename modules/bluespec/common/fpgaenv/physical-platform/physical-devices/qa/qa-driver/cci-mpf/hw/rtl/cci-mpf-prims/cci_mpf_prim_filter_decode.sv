@@ -669,10 +669,7 @@ module cci_mpf_prim_filter_decode_bank
       #(
         .N_ENTRIES(N_BUCKETS),
         .N_DATA_BITS(BITS_PER_BUCKET),
-        .N_OUTPUT_REG_STAGES(1),
-        .REGISTER_WRITES(1),
-        // Bypass handled here already
-        .BYPASS_REGISTERED_WRITES(0)
+        .N_OUTPUT_REG_STAGES(1)
         )
       mem_upd
        (
@@ -698,10 +695,10 @@ module cci_mpf_prim_filter_decode_bank
     // is performed in stage 1 for timing when it naturally should happen in
     // stage 0.  By the time upd_delta is computed the required state has
     // reached the extra stage 3.
-    logic upd_en[0:4];
-    t_bucket_idx upd_idx[0:4];
-    t_bucket_value upd_insert_mask[0:4];
-    t_bucket_value upd_remove_mask[0:4];
+    logic upd_en[0:3];
+    t_bucket_idx upd_idx[0:3];
+    t_bucket_value upd_insert_mask[0:3];
+    t_bucket_value upd_remove_mask[0:3];
 
     always_comb
     begin
@@ -721,7 +718,7 @@ module cci_mpf_prim_filter_decode_bank
     // Data flowing through the update pipeline
     //
     generate
-        for (p = 1; p <= 4; p = p + 1)
+        for (p = 1; p <= 3; p = p + 1)
         begin : upipe
             always_ff @(posedge clk)
             begin
@@ -754,7 +751,7 @@ module cci_mpf_prim_filter_decode_bank
         // The youngest slot with a matching index holds all the pending
         // changes to the bucket.
         //
-        for (int i = 4; i >= 2; i = i - 1)
+        for (int i = 3; i >= 2; i = i - 1)
         begin
             if (upd_en[i] && (upd_idx[1] == upd_idx[i]))
             begin
@@ -783,8 +780,8 @@ module cci_mpf_prim_filter_decode_bank
         upd_insert_mask[2] <= upd_insert_mask[1] | bypass_insert_mask;
         upd_remove_mask[2] <= upd_remove_mask[1] | bypass_remove_mask;
 
-        upd_insert_mask[3:4] <= upd_insert_mask[2:3];
-        upd_remove_mask[3:4] <= upd_remove_mask[2:3];
+        upd_insert_mask[3] <= upd_insert_mask[2];
+        upd_remove_mask[3] <= upd_remove_mask[2];
     end
 
 

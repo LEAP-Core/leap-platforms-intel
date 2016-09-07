@@ -751,19 +751,30 @@ package cci_mpf_if_pkg;
         );
 
         t_if_cci_mpf_c0_Tx r_out = r;
-        r_out.hdr.base.rsvd1 = 0;
-        r_out.hdr.base.rsvd0 = 0;
-
-        // Extension flags may only be set on read requests
-        if (! cci_mpf_c0TxIsReadReq(r))
-        begin
-            r_out.hdr.ext.checkLoadStoreOrder = 0;
-            r_out.hdr.ext.mapVAtoPhysChannel = 0;
-            r_out.hdr.ext.addrIsVirtual = 0;
-            r_out.hdr.base.cl_len = eCL_LEN_1;
-        end
+        r_out.hdr = cci_mpf_updC0TxCanonicalHdr(r.hdr, cci_mpf_c0TxIsReadReq(r));
 
         return r_out;
+    endfunction
+
+    function automatic t_cci_mpf_c0_ReqMemHdr cci_mpf_updC0TxCanonicalHdr(
+        input t_cci_mpf_c0_ReqMemHdr h,
+        input logic isReadReq
+        );
+
+        t_cci_mpf_c0_ReqMemHdr h_out = h;
+        h_out.base.rsvd1 = 0;
+        h_out.base.rsvd0 = 0;
+
+        // Extension flags may only be set on read requests
+        if (! isReadReq)
+        begin
+            h_out.ext.checkLoadStoreOrder = 0;
+            h_out.ext.mapVAtoPhysChannel = 0;
+            h_out.ext.addrIsVirtual = 0;
+            h_out.base.cl_len = eCL_LEN_1;
+        end
+
+        return h_out;
     endfunction
 
     // Canonicalize an MPF C1 TX request
@@ -772,19 +783,30 @@ package cci_mpf_if_pkg;
         );
 
         t_if_cci_mpf_c1_Tx r_out = r;
-        r_out.hdr.base.rsvd1 = 0;
-        r_out.hdr.base.rsvd0 = 0;
-
-        // Extension flags may only be set on write requests
-        if (! cci_mpf_c1TxIsWriteReq(r))
-        begin
-            r_out.hdr.ext.checkLoadStoreOrder = 0;
-            r_out.hdr.ext.mapVAtoPhysChannel = 0;
-            r_out.hdr.ext.addrIsVirtual = 0;
-            r_out.hdr.base.cl_len = eCL_LEN_1;
-        end
+        r_out.hdr = cci_mpf_updC1TxCanonicalHdr(r.hdr, cci_mpf_c1TxIsWriteReq(r));
 
         return r_out;
+    endfunction
+
+    function automatic t_cci_mpf_c1_ReqMemHdr cci_mpf_updC1TxCanonicalHdr(
+        input t_cci_mpf_c1_ReqMemHdr h,
+        input logic isWriteReq
+        );
+
+        t_cci_mpf_c1_ReqMemHdr h_out = h;
+        h_out.base.rsvd1 = 0;
+        h_out.base.rsvd0 = 0;
+
+        // Extension flags may only be set on write requests
+        if (! isWriteReq)
+        begin
+            h_out.ext.checkLoadStoreOrder = 0;
+            h_out.ext.mapVAtoPhysChannel = 0;
+            h_out.ext.addrIsVirtual = 0;
+            h_out.base.cl_len = eCL_LEN_1;
+        end
+
+        return h_out;
     endfunction
 
 

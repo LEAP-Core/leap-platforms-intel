@@ -299,6 +299,7 @@ module cci_mpf_shim_edge_afu_wr_data
     //
     assign pwrite.wen = cci_mpf_c1TxIsWriteReq(afu.c1Tx);
     assign pwrite.widx = wr_heap_enq_idx;
+    assign pwrite.wclnum = wr_heap_enq_clNum;
     assign pwrite.wpartial = afu.c1Tx.hdr.pwrite;
 
 
@@ -381,15 +382,15 @@ module cci_mpf_shim_edge_afu_wr_data
     // multi-beat packet to be don't care, which is rather annoying.
     // Register the sop values and add a mux to recover them.
     //
-    t_cci_clLen c1tx_sop_clLen;
-    t_cci_clAddr c1tx_sop_clAddr;
+    t_cci_mpf_c1_ReqMemHdr c1tx_sop_hdr;
 
     always_ff @(posedge clk)
     begin
         if (afu.c1Tx.hdr.base.sop == 1'b1)
         begin
-            c1tx_sop_clLen <= afu.c1Tx.hdr.base.cl_len;
-            c1tx_sop_clAddr <= afu.c1Tx.hdr.base.address;
+            c1tx_sop_hdr <=
+                cci_mpf_updC1TxCanonicalHdr(afu.c1Tx.hdr,
+                                            cci_mpf_c1TxIsWriteReq(afu.c1Tx));
         end
     end
 
@@ -400,10 +401,14 @@ module cci_mpf_shim_edge_afu_wr_data
     begin
         afu_canon_c1Tx = cci_mpf_updC1TxCanonical(afu.c1Tx);
 
+        // Some header fields in multi-line writes must be preserved from
+        // the start packet.
         if (! afu.c1Tx.hdr.base.sop)
         begin
-            afu_canon_c1Tx.hdr.base.cl_len = c1tx_sop_clLen;
-            afu_canon_c1Tx.hdr.base.address = c1tx_sop_clAddr;
+            afu_canon_c1Tx.hdr.base.cl_len = c1tx_sop_hdr.base.cl_len;
+            afu_canon_c1Tx.hdr.base.address = c1tx_sop_hdr.base.address;
+            afu_canon_c1Tx.hdr.ext = c1tx_sop_hdr.ext;
+            afu_canon_c1Tx.hdr.pwrite.isPartialWrite = c1tx_sop_hdr.pwrite.isPartialWrite;
         end
 
         if (ENABLE_PARTIAL_WRITES == 0)
@@ -415,7 +420,7 @@ module cci_mpf_shim_edge_afu_wr_data
 
     always_ff @(posedge clk)
     begin
-        fiu.c1Tx <= cci_mpf_updC1TxCanonical(afu_canon_c1Tx);
+        fiu.c1Tx <= afu_canon_c1Tx;
 
         // The cache line's value stored in fiu.c1Tx.data is no longer needed
         // in the pipeline.  Store 'x but use the low bits to hold the

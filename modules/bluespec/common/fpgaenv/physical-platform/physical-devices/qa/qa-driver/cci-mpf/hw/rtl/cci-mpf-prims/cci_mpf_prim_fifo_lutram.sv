@@ -57,7 +57,6 @@ module cci_mpf_prim_fifo_lutram
     output logic notEmpty
     );
 
-    logic fifo_enq;
     logic fifo_deq;
     logic fifo_notEmpty;
     logic [N_DATA_BITS-1 : 0] fifo_first;
@@ -73,7 +72,7 @@ module cci_mpf_prim_fifo_lutram
         .clk,
         .reset,
         .enq_data,
-        .enq_en(fifo_enq),
+        .enq_en,
         .notFull,
         .almostFull,
         .first(fifo_first),
@@ -85,37 +84,34 @@ module cci_mpf_prim_fifo_lutram
         if (REGISTER_OUTPUT == 0)
         begin : nr
             assign first = fifo_first;
-            assign fifo_enq = enq_en;
-            assign fifo_deq = deq_en;
             assign notEmpty = fifo_notEmpty;
+            assign fifo_deq = deq_en;
         end
         else
         begin : r
             //
-            // Add a skid buffer as the output register stage.
+            // Add an output register stage.
             //
-            logic skid_notFull;
+            logic first_reg_valid;
+            logic [N_DATA_BITS-1 : 0] first_reg;
 
-            cci_mpf_prim_fifo2
-              #(
-                .N_DATA_BITS(N_DATA_BITS)
-                )
-              skid
-               (
-                .clk,
-                .reset,
-                .enq_data(fifo_first),
-                .enq_en(fifo_deq),
-                .notFull(skid_notFull),
-                .first,
-                .deq_en,
-                .notEmpty
-                );
+            assign first = first_reg;
+            assign notEmpty = first_reg_valid;
+            assign fifo_deq = fifo_notEmpty && (deq_en || ! first_reg_valid);
 
-            assign fifo_enq = enq_en;
+            always_ff @(posedge clk)
+            begin
+                if (deq_en || ! first_reg_valid)
+                begin
+                    first_reg_valid <= fifo_notEmpty;
+                    first_reg <= fifo_first;
+                end
 
-            // Move the oldest FIFO entry to the skid buffer when possible
-            assign fifo_deq = skid_notFull && fifo_notEmpty;
+                if (reset)
+                begin
+                    first_reg_valid <= 1'b0;
+                end
+            end
         end
     endgenerate
 

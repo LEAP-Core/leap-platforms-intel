@@ -46,6 +46,7 @@ interface cci_mpf_shim_edge_if
     logic [$clog2(N_WRITE_HEAP_ENTRIES)-1 : 0] widx;
     t_cci_clNum wclnum;
     t_cci_clData wdata;
+    logic wAlmFull;
 
     //
     // Free write data heap entries.
@@ -60,6 +61,7 @@ interface cci_mpf_shim_edge_if
         output widx,
         output wclnum,
         output wdata,
+        input  wAlmFull,
 
         input  free,
         input  freeidx
@@ -71,6 +73,7 @@ interface cci_mpf_shim_edge_if
         input  widx,
         input  wclnum,
         input  wdata,
+        output wAlmFull,
 
         output free,
         output freeidx

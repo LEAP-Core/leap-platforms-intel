@@ -577,7 +577,7 @@ module cci_mpf_shim_pwrite_eop_tracker
         .wen(rsp_en),
         // If response is last then reinitialize the counter to 0.  Otherwise,
         // increment the flit counter.
-        .wdata(isEOP ? t_cci_clLen'(0) : num_recvd + t_cci_clLen'(1))
+        .wdata(isEOP ? t_cci_clNum'(0) : num_recvd + t_cci_clNum'(1))
         );
 
 endmodule // cci_mpf_shim_pwrite_eop_tracker

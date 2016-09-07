@@ -44,6 +44,12 @@ module cci_mpf_prim_ram_dualport_byteena
     // Size of a byte
     parameter N_BYTE_BITS = 8,
 
+    // Operation mode, either "BIDIR_DUAL_PORT" or "DUAL_PORT".
+    // For DUAL_PORT configure only writes on port a and reads
+    // on port b.  This mode can be useful since M20K RAM does
+    // not allow 512 x 32 or 512 x 40 modes in bidirectional mode.
+    parameter OPERATION_MODE = "BIDIR_DUAL_PORT",
+
     // Other options are "OLD_DATA" and "NEW_DATA"
     parameter READ_DURING_WRITE_MODE_MIXED_PORTS = "DONT_CARE",
 
@@ -87,7 +93,7 @@ module cci_mpf_prim_ram_dualport_byteena
 
     altsyncram
       #(
-        .operation_mode("BIDIR_DUAL_PORT"),
+        .operation_mode(OPERATION_MODE),
         .byte_size(N_BYTE_BITS),
         .width_a(N_DATA_BITS),
         .width_byteena_a(N_DATA_BITS / N_BYTE_BITS),

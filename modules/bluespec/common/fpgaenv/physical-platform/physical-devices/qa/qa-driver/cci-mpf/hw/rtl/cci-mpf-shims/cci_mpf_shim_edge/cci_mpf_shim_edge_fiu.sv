@@ -117,13 +117,6 @@ module cci_mpf_shim_edge_fiu
     t_cci_clNum wr_heap_deq_clNum;
     t_cci_clData wr_data;
 
-    // Free slots once write exits
-    always_ff @(posedge clk)
-    begin
-        afu_edge.free <= wr_heap_deq_en;
-        afu_edge.freeidx <= wr_heap_deq_idx;
-    end
-
     //
     // The true number of write heap entries is larger than
     // N_WRITE_HEAP_ENTRIES because only one logical slot is used, even
@@ -137,84 +130,103 @@ module cci_mpf_shim_edge_fiu
     // Heap data, addressed using the indices handed out by wr_heap_ctrl.
     typedef logic [(CCI_CLDATA_WIDTH / 8)-1 : 0] t_cldata_byteena;
 
+    //
+    // The write port is multiplexed between normal write data and, when
+    // enabled, partial write updates.  When partial writes are disabled
+    // the write updates are sent directly to the wr_heap_data write port.
+    // When partial writes are enabled a module is instantiated to manage
+    // the multiplexing.
+    //
     // Store the full line coming from the AFU in the local buffer whether
     // or not it is a partial write.  Partial writes will trigger a
     // read-modify-write, with the read-modify ultimately resulting in
     // a masked write to port 1 of wr_heap_data.
-    t_cldata_byteena afu_edge_wbyteena_q;
-    assign afu_edge_wbyteena_q = ~ t_cldata_byteena'(0);
+    //
+    logic heap_wen;
+    t_cldata_byteena heap_wbyteena;
+    logic [$clog2(N_UNIQUE_WRITE_HEAP_ENTRIES)-1 : 0] heap_waddr;
+    t_cci_clData heap_wdata;
 
-    // Buffer writes for timing
-    logic afu_edge_wen_q;
-    logic [$clog2(N_UNIQUE_WRITE_HEAP_ENTRIES)-1 : 0] afu_edge_addr_q;
-    t_cci_clData afu_edge_wdata_q;
+    generate
+        if (! ENABLE_PARTIAL_WRITES)
+        begin : npw
+            // No partial write support.  Connect incoming write data directly
+            // to the heap.
+            always_ff @(posedge clk)
+            begin
+                heap_wen <= afu_edge.wen;
+                heap_waddr <= { afu_edge.widx, afu_edge.wclnum };
+                heap_wdata <= afu_edge.wdata;
 
-    always_ff @(posedge clk)
-    begin
-        afu_edge_wen_q <= afu_edge.wen;
-        afu_edge_addr_q <= { afu_edge.widx, afu_edge.wclnum };
-        afu_edge_wdata_q <= afu_edge.wdata;
+                // Free slots once write exits
+                afu_edge.free <= wr_heap_deq_en;
+                afu_edge.freeidx <= wr_heap_deq_idx;
 
-        if (reset)
-        begin
-            afu_edge_wen_q <= 1'b0;
+                assert (reset || ! pwrite.upd_en) else
+                    $fatal("cci_mpf_shim_edge_fiu.sv: Partial write request but feature is disabled!");
+
+                if (reset)
+                begin
+                    heap_wen <= 1'b0;
+                    afu_edge.free <= 1'b0;
+                end
+            end
+
+            assign heap_wbyteena = ~ t_cldata_byteena'(0);
+            assign afu_edge.wAlmFull = 1'b0;
         end
-    end
+        else
+        begin : pw
+            // Partial writes enabled.  Build a MUX to combine normal write
+            // data and partial write updates into a single port.
+            cci_mpf_shim_edge_fiu_pwrite_mux
+              #(
+                .N_WRITE_HEAP_ENTRIES(N_WRITE_HEAP_ENTRIES),
+                .N_UNIQUE_WRITE_HEAP_ENTRIES(N_UNIQUE_WRITE_HEAP_ENTRIES)
+                )
+              pw_mux
+               (
+                .clk,
+                .reset,
+                .afu_edge,
+                .pwrite,
+                .wr_heap_deq_en,
+                .wr_heap_deq_idx,
+
+                .heap_wen,
+                .heap_wbyteena,
+                .heap_waddr,
+                .heap_wdata
+                );
+        end
+    endgenerate
 
     logic [$clog2(N_UNIQUE_WRITE_HEAP_ENTRIES)-1 : 0] wr_heap_data_addr1;
-    cci_mpf_shim_pwrite_if#(.N_WRITE_HEAP_ENTRIES(N_WRITE_HEAP_ENTRIES)) pwrite_q();
 
     cci_mpf_prim_ram_dualport_byteena
       #(
         .N_ENTRIES(N_UNIQUE_WRITE_HEAP_ENTRIES),
         .N_DATA_BITS(CCI_CLDATA_WIDTH),
-        .N_OUTPUT_REG_STAGES(1)
+        .N_OUTPUT_REG_STAGES(1),
+        .OPERATION_MODE("DUAL_PORT")
         )
       wr_heap_data
        (
         .clk0(clk),
         .clk1(clk),
 
-        .wen0(afu_edge_wen_q),
-        .byteena0(afu_edge_wbyteena_q),
-        .addr0(afu_edge_addr_q),
-        .wdata0(afu_edge_wdata_q),
+        .wen0(heap_wen),
+        .byteena0(heap_wbyteena),
+        .addr0(heap_waddr),
+        .wdata0(heap_wdata),
         .rdata0(),
 
-        // Port 1 is used mostly for reading write data but is shared with
-        // partial write updates.  wr_req_may_fire below handles the case
-        // that a write fired.
-        .wen1(pwrite_q.upd_en),
-        .byteena1(pwrite_q.upd_mask),
-        .addr1(wr_heap_data_addr1),
-        .wdata1(pwrite_q.upd_data),
-        .rdata1(wr_data)
+        .addr1({ wr_heap_deq_idx, wr_heap_deq_clNum }),
+        .rdata1(wr_data),
+        .wen1(),
+        .byteena1(),
+        .wdata1()
         );
-
-
-    always_ff @(posedge clk)
-    begin
-        pwrite_q.upd_en <= pwrite.upd_en;
-        pwrite_q.upd_idx <= pwrite.upd_idx;
-        pwrite_q.upd_clNum <= pwrite.upd_clNum;
-        pwrite_q.upd_data <= pwrite.upd_data;
-        pwrite_q.upd_mask <= pwrite.upd_mask;
-        if (reset)
-        begin
-            pwrite_q.upd_en <= 1'b0;
-        end
-    end
-
-    // Address in port 1, shared for partial writes and normal reads.
-    always_comb
-    begin
-        wr_heap_data_addr1 = {wr_heap_deq_idx, wr_heap_deq_clNum};
-
-        if (pwrite_q.upd_en)
-        begin
-            wr_heap_data_addr1 = {pwrite_q.upd_idx, pwrite_q.upd_clNum};
-        end
-    end
 
 
     // ====================================================================
@@ -348,7 +360,7 @@ module cci_mpf_shim_edge_fiu
         // if the wr_heap_data read port is available to retrieve the store
         // data.  The wr_heap_data read port is used as a write port for
         // updates to partial write data, which are given priority.
-        wr_req_may_fire = ! fiu.c1TxAlmFull && ! pwrite_q.upd_en;
+        wr_req_may_fire = ! fiu.c1TxAlmFull;
 
         // Processing is complete when all beats have been emitted.
         stg1_packet_done = wr_req_may_fire && (stg1_fiu_wr_beats_rem == 0);
@@ -475,3 +487,110 @@ module cci_mpf_shim_edge_fiu
     end
 
 endmodule // cci_mpf_shim_edge_fiu
+
+
+//
+// Manage write buffer's write port MUX between new write data and partial
+// write updates from the pwrite port.
+//
+module cci_mpf_shim_edge_fiu_pwrite_mux
+  #(
+    parameter N_WRITE_HEAP_ENTRIES = 0,
+    parameter N_UNIQUE_WRITE_HEAP_ENTRIES = 0
+    )
+   (
+    input  logic clk,
+    input  logic reset,
+
+    cci_mpf_shim_edge_if.edge_fiu afu_edge,
+    cci_mpf_shim_pwrite_if.pwrite_edge_fiu pwrite,
+
+    input  logic wr_heap_deq_en,
+    input  logic [$clog2(N_WRITE_HEAP_ENTRIES)-1 : 0] wr_heap_deq_idx,
+
+    output logic heap_wen,
+    output logic [(CCI_CLDATA_WIDTH / 8)-1 : 0] heap_wbyteena,
+    output logic [$clog2(N_UNIQUE_WRITE_HEAP_ENTRIES)-1 : 0] heap_waddr,
+    output t_cci_clData heap_wdata
+    );
+
+    typedef logic [$clog2(N_WRITE_HEAP_ENTRIES)-1 : 0] t_write_heap_idx;
+    typedef logic [$clog2(N_UNIQUE_WRITE_HEAP_ENTRIES)-1 : 0] t_unique_write_heap_idx;
+    typedef logic [(CCI_CLDATA_WIDTH / 8)-1 : 0] t_cldata_byteena;
+
+
+    //
+    // Priority in the MUX goes to partial write updates.  Normal write
+    // data is buffered in this FIFO and the usual almost full protocol
+    // prevents overflow.
+    //
+    logic fifo_notEmpty;
+    t_unique_write_heap_idx fifo_waddr;
+    t_cci_clData fifo_wdata;
+
+    cci_mpf_prim_fifo_lutram
+      #(
+        .N_DATA_BITS($bits(t_unique_write_heap_idx) + $bits(t_cci_clData)),
+        .N_ENTRIES(CCI_TX_ALMOST_FULL_THRESHOLD + 4),
+        // In normal conditions the FIFO drains immediately.  Signal almost
+        // full as soon as partial writes cause the FIFO to block.
+        .THRESHOLD(CCI_TX_ALMOST_FULL_THRESHOLD + 2)
+        )
+      afu_wdata_fifo
+       (
+        .clk,
+        .reset,
+
+        .enq_data({ afu_edge.widx, afu_edge.wclnum, afu_edge.wdata }),
+        .enq_en(afu_edge.wen),
+        .notFull(),
+        .almostFull(afu_edge.wAlmFull),
+
+        .first({ fifo_waddr, fifo_wdata }),
+        .deq_en(fifo_notEmpty && ! pwrite.upd_en),
+        .notEmpty(fifo_notEmpty)
+        );
+
+
+    //
+    // Choose between pwrite and normal data write.
+    //
+    always_ff @(posedge clk)
+    begin
+        heap_wen <= pwrite.upd_en || fifo_notEmpty;
+
+        if (pwrite.upd_en)
+        begin
+            heap_wbyteena <= pwrite.upd_mask;
+            heap_waddr <= { pwrite.upd_idx, pwrite.upd_clNum };
+            heap_wdata <= pwrite.upd_data;
+        end
+        else
+        begin
+            heap_wbyteena <= ~ t_cldata_byteena'(0);
+            heap_waddr <= fifo_waddr;
+            heap_wdata <= fifo_wdata;
+        end
+
+        if (reset)
+        begin
+            heap_wen <= 1'b0;
+        end
+    end
+
+
+    //
+    // Free slots once write exits
+    //
+    always_ff @(posedge clk)
+    begin
+        afu_edge.free <= wr_heap_deq_en;
+        afu_edge.freeidx <= wr_heap_deq_idx;
+
+        if (reset)
+        begin
+            afu_edge.free <= 1'b0;
+        end
+    end
+
+endmodule // cci_mpf_shim_edge_fiu_pwrite_mux

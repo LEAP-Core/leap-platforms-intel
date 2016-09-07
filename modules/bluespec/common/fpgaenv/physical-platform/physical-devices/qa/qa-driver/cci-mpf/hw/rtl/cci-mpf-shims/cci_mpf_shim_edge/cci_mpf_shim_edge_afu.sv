@@ -316,7 +316,8 @@ module cci_mpf_shim_edge_afu_wr_data
     assign wr_heap_alloc = cci_mpf_c1TxIsWriteReq(afu.c1Tx) && afu_wr_eop;
 
     logic afu_wr_almost_full;
-    assign afu_wr_almost_full = fiu.c1TxAlmFull || ! wr_heap_not_full;
+    assign afu_wr_almost_full = fiu.c1TxAlmFull || ! wr_heap_not_full ||
+                                fiu_edge.wAlmFull;
 
     // All but write requests flow straight through. The c1Tx channel needs
     // to be registered in this module due to the logic that drops all but
@@ -345,32 +346,30 @@ module cci_mpf_shim_edge_afu_wr_data
     //
     always_ff @(posedge clk)
     begin
+        afu.c0TxAlmFull <= fiu.c0TxAlmFull;
+
+        // Never signal almost full in the middle of a packet. Deadlocks
+        // can result since the control flit is already flowing through MPF.
+        afu.c1TxAlmFull <= afu_wr_almost_full &&
+                           (! afu_wr_packet_active || afu_wr_sticky_full);
+
+        // afu_wr_sticky_full goes high as soon as afu_wr_almost_full is
+        // asserted and no packet is in flight.  It stays high until
+        // afu_wr_almost_full is no longer asserted.
+        if (! afu_wr_almost_full)
+        begin
+            afu_wr_sticky_full <= 1'b0;
+        end
+        else if (afu_wr_almost_full && ! afu_wr_packet_active)
+        begin
+            afu_wr_sticky_full <= 1'b1;
+        end
+
         if (reset)
         begin
             afu.c0TxAlmFull <= 1'b1;
             afu.c1TxAlmFull <= 1'b1;
             afu_wr_sticky_full <= 1'b0;
-        end
-        else
-        begin
-            afu.c0TxAlmFull <= fiu.c0TxAlmFull;
-
-            // Never signal almost full in the middle of a packet. Deadlocks
-            // can result since the control flit is already flowing through MPF.
-            afu.c1TxAlmFull <= afu_wr_almost_full &&
-                               (! afu_wr_packet_active || afu_wr_sticky_full);
-
-            // afu_wr_sticky_full goes high as soon as afu_wr_almost_full is
-            // asserted and no packet is in flight.  It stays high until
-            // afu_wr_almost_full is no longer asserted.
-            if (! afu_wr_almost_full)
-            begin
-                afu_wr_sticky_full <= 1'b0;
-            end
-            else if (afu_wr_almost_full && ! afu_wr_packet_active)
-            begin
-                afu_wr_sticky_full <= 1'b1;
-            end
         end
     end
 

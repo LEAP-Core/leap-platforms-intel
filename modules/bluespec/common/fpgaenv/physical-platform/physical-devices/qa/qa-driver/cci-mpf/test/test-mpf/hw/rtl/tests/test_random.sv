@@ -507,9 +507,12 @@ module test_afu
         end
     end
 
+    logic c0Rx_is_read_rsp;
+
     always_ff @(posedge clk)
     begin
-        if (cci_c0Rx_isReadRsp(fiu.c0Rx))
+        c0Rx_is_read_rsp <= cci_c0Rx_isReadRsp(fiu.c0Rx);
+        if (c0Rx_is_read_rsp)
         begin
             cnt_rd_rsp <= cnt_rd_rsp + t_counter'(1);
         end
@@ -517,6 +520,7 @@ module test_afu
         if (reset || start_new_run)
         begin
             cnt_rd_rsp <= t_counter'(0);
+            c0Rx_is_read_rsp <= 1'b0;
         end
     end
 
@@ -785,6 +789,7 @@ module test_afu
         if (reset || start_new_run)
         begin
             cnt_wr_rsp <= t_counter'(0);
+            c1Rx_is_write_rsp <= 1'b0;
         end
     end
 

@@ -182,7 +182,10 @@ module cci_mpf_shim_wro_cam_group
     // ====================================================================
 
     localparam FILTER_PIPE_DEPTH = 4;
+    // Final stage in the pipeline
     localparam FILTER_PIPE_LAST = FILTER_PIPE_DEPTH-1;
+    // Stage in which filter lookups are tested
+    localparam FILTER_PIPE_TEST = FILTER_PIPE_DEPTH-2;
 
     typedef logic [$clog2(MAX_ACTIVE_REQS)-1 : 0] t_heap_idx;
 
@@ -263,10 +266,10 @@ module cci_mpf_shim_wro_cam_group
 
         .test_value_req(filter_test_req[0]),
         .test_value_en(filter_test_req_en[0]),
-        .T3_test_value(rd_filter_test_cnt),
+        .T2_test_value(rd_filter_test_cnt),
         .test_isZero_req(filter_test_req[1]),
         .test_isZero_en(filter_test_req_en[1]),
-        .T3_test_isZero(rd_filter_test_notPresent[1]),
+        .T2_test_isZero(rd_filter_test_notPresent[1]),
 
         .insert_en(rd_filter_insert_en),
         .insert(rd_filter_insert_hash),
@@ -308,10 +311,10 @@ module cci_mpf_shim_wro_cam_group
 
         .test_value_req(filter_test_req[1]),
         .test_value_en(filter_test_req_en[1]),
-        .T3_test_value(wr_filter_test_active_mask),
+        .T2_test_value(wr_filter_test_active_mask),
         .test_isZero_req(filter_test_req[0]),
         .test_isZero_en(filter_test_req_en[0]),
-        .T3_test_isZero(wr_filter_test_notPresent[0]),
+        .T2_test_isZero(wr_filter_test_notPresent[0]),
 
         .insert_en(wr_filter_insert_en),
         .insert_idx(wr_filter_insert_hash),
@@ -329,15 +332,15 @@ module cci_mpf_shim_wro_cam_group
     // Hold the hashed address associated with the buffered test result.
     // This is used only in assertions below and should be dropped
     // during dead code elimination when synthesized.
-    t_hash [0 : 1] filter_verify_req[1 : FILTER_PIPE_LAST];
-    logic  [0 : 1] filter_verify_req_en[1 : FILTER_PIPE_LAST];
+    t_hash [0 : 1] filter_verify_req[1 : FILTER_PIPE_TEST];
+    logic  [0 : 1] filter_verify_req_en[1 : FILTER_PIPE_TEST];
 
     always_ff @(posedge clk)
     begin
         filter_verify_req[1] <= filter_test_req;
         filter_verify_req_en[1] <= filter_test_req_en;
 
-        for (int i = 2; i < FILTER_PIPE_DEPTH; i = i + 1)
+        for (int i = 2; i <= FILTER_PIPE_TEST; i = i + 1)
         begin
             filter_verify_req[i] <= filter_verify_req[i - 1];
             filter_verify_req_en[i] <= filter_verify_req_en[i - 1];
@@ -345,7 +348,7 @@ module cci_mpf_shim_wro_cam_group
 
         if (reset)
         begin
-            for (int i = 1; i < FILTER_PIPE_DEPTH; i = i + 1)
+            for (int i = 1; i <= FILTER_PIPE_TEST; i = i + 1)
             begin
                 filter_verify_req_en[i] <= 2'b0;
             end
@@ -471,11 +474,103 @@ module cci_mpf_shim_wro_cam_group
     t_c0_request_pipe c0_afu_pipe[0 : FILTER_PIPE_LAST];
     t_c1_request_pipe c1_afu_pipe[0 : FILTER_PIPE_LAST];
 
+    logic c0_process_requests;
+    logic c1_process_requests;
+
+    // ====================================================================
+    //
+    // Consume the filter lookups and register their results for use in
+    // the next cycle.
+    //
+    // ====================================================================
+
+    // Does the request want order to be enforced?
+    logic c0_enforce_order;
+    assign c0_enforce_order = cci_mpf_c0_getReqCheckOrder(c0_afu_pipe[FILTER_PIPE_TEST].c0Tx.hdr);
+    logic c1_enforce_order;
+    assign c1_enforce_order = cci_mpf_c1_getReqCheckOrder(c1_afu_pipe[FILTER_PIPE_TEST].c1Tx.hdr);
+
+    //
+    // Compute whether new requests can be inserted into the filters.
+    // c0 is read requests, c1 is write requests.
+    //
+    logic c0_filter_may_insert;
+    always_ff @(posedge clk)
+    begin
+        c0_filter_may_insert <= (rd_filter_test_notPresent[0] &&
+                                 wr_filter_test_notPresent[0]) ||
+                                ! c0_enforce_order;
+    end
+
+    // The write filter is indexed by 4 line aligned addresses.  The filter
+    // holds 4 bits corresponding to the lines within the 4 line group.
+    // A new entry is considered not present if the current filter state
+    // shows no activity in the lines written by the new request.  c1LineMask
+    // indicates the lines within the group written by the new request.
+    assign wr_filter_test_notPresent[1] =
+        ~(|(wr_filter_test_active_mask & c1_afu_pipe[FILTER_PIPE_TEST].c1LineMask));
+
+    logic c1_filter_may_insert;
+    always_ff @(posedge clk)
+    begin
+        c1_filter_may_insert <= (rd_filter_test_notPresent[1] &&
+                                 wr_filter_test_notPresent[1]) ||
+                                ! c1_enforce_order;
+    end
+
+    // Events
+    always_ff @(posedge clk)
+    begin
+        events.wro_out_event_rr_conflict <=
+            cci_mpf_c0TxIsValid(c0_afu_pipe[FILTER_PIPE_TEST].c0Tx) &&
+            c0_enforce_order &&
+            ! rd_filter_test_notPresent[0];
+        events.wro_out_event_rw_conflict <=
+            cci_mpf_c0TxIsValid(c0_afu_pipe[FILTER_PIPE_TEST].c0Tx) &&
+            c0_enforce_order &&
+            ! wr_filter_test_notPresent[0];
+        events.wro_out_event_wr_conflict <=
+            cci_mpf_c1TxIsValid(c1_afu_pipe[FILTER_PIPE_TEST].c1Tx) &&
+            c1_enforce_order &&
+            ! rd_filter_test_notPresent[1];
+        events.wro_out_event_ww_conflict <=
+            cci_mpf_c1TxIsValid(c1_afu_pipe[FILTER_PIPE_TEST].c1Tx) &&
+            c1_enforce_order &&
+            ! wr_filter_test_notPresent[1];
+    end
+
+
+    //
+    // This pipeline has complicated control flow.  Confirm that
+    // decisions made this cycle were based on the correct addresses.
+    //
+
+    // synthesis translate_off
+    always_ff @(posedge clk)
+    begin
+        if (c0_process_requests)
+        begin
+            assert ((! filter_verify_req_en[FILTER_PIPE_TEST][0] || (filter_verify_req[FILTER_PIPE_TEST][0] == c0_afu_pipe[FILTER_PIPE_TEST].c0AddrHash)) &&
+                    (filter_verify_req_en[FILTER_PIPE_TEST][0] == cci_mpf_c0TxIsReadReq(c0_afu_pipe[FILTER_PIPE_TEST].c0Tx))) else
+                $fatal("cci_mpf_shim_wro: Incorrect c0 pipeline control");
+        end
+        if (c1_process_requests)
+        begin
+            assert ((! filter_verify_req_en[FILTER_PIPE_TEST][1] || (filter_verify_req[FILTER_PIPE_TEST][1] == c1_afu_pipe[FILTER_PIPE_TEST].c1AddrHash)) &&
+                    (filter_verify_req_en[FILTER_PIPE_TEST][1] == cci_mpf_c1TxIsWriteReq(c1_afu_pipe[FILTER_PIPE_TEST].c1Tx))) else
+                $fatal("cci_mpf_shim_wro: Incorrect c1 pipeline control");
+        end
+    end
+    // synthesis translate_on
+
+
+    // ====================================================================
     //
     // Work backwards in the pipeline.  First decide whether the oldest
     // request can fire.  If it can (or there is no request) then younger
     // requests will ripple through the pipeline.
     //
+    // ====================================================================
 
     // Is either AFU making a request?
     logic c0_request_rdy;
@@ -484,46 +579,6 @@ module cci_mpf_shim_wro_cam_group
     logic c1_request_rdy;
     assign c1_request_rdy = cci_mpf_c1TxIsValid(c1_afu_pipe[FILTER_PIPE_LAST].c1Tx);
 
-    // Does the request want order to be enforced?
-    logic c0_enforce_order;
-    assign c0_enforce_order = cci_mpf_c0_getReqCheckOrder(c0_afu_pipe[FILTER_PIPE_LAST].c0Tx.hdr);
-    logic c1_enforce_order;
-    assign c1_enforce_order = cci_mpf_c1_getReqCheckOrder(c1_afu_pipe[FILTER_PIPE_LAST].c1Tx.hdr);
-
-    //
-    // Compute whether new requests can be inserted into the filters.
-    // c0 is read requests, c1 is write requests.
-    //
-    logic c0_filter_may_insert;
-    assign c0_filter_may_insert = (rd_filter_test_notPresent[0] &&
-                                   wr_filter_test_notPresent[0]) ||
-                                  ! c0_enforce_order;
-
-    // The write filter is indexed by 4 line aligned addresses.  The filter
-    // holds 4 bits corresponding to the lines within the 4 line group.
-    // A new entry is considered not present if the current filter state
-    // shows no activity in the lines written by the new request.  c1LineMask
-    // indicates the lines within the group written by the new request.
-    assign wr_filter_test_notPresent[1] =
-        ~(|(wr_filter_test_active_mask & c1_afu_pipe[FILTER_PIPE_LAST].c1LineMask));
-
-    logic c1_filter_may_insert;
-    assign c1_filter_may_insert = (rd_filter_test_notPresent[1] &&
-                                   wr_filter_test_notPresent[1]) ||
-                                  ! c1_enforce_order;
-
-    // Events
-    always_ff @(posedge clk)
-    begin
-        events.wro_out_event_rr_conflict <= c0_request_rdy && c0_enforce_order &&
-                                            ! rd_filter_test_notPresent[0];
-        events.wro_out_event_rw_conflict <= c0_request_rdy && c0_enforce_order &&
-                                            ! wr_filter_test_notPresent[0];
-        events.wro_out_event_wr_conflict <= c1_request_rdy && c1_enforce_order &&
-                                            ! rd_filter_test_notPresent[1];
-        events.wro_out_event_ww_conflict <= c1_request_rdy && c1_enforce_order &&
-                                            ! wr_filter_test_notPresent[1];
-    end
 
     // Is a request blocked by inability to forward it to the FIU or a
     // conflict?
@@ -545,9 +600,7 @@ module cci_mpf_shim_wro_cam_group
     // allowed to enter afu_pipe if they are independent of all other
     // requests active in afu_pipe.  We can thus reorder requests in
     // afu_pipe arbitrarily without violating inter-line ordering.
-    logic c0_process_requests;
     assign c0_process_requests = (c0_request_rdy && ! c0_blocked);
-    logic c1_process_requests;
     assign c1_process_requests = (c1_request_rdy && ! c1_blocked);
 
     // Set the hashed value to insert in the filter when requests are
@@ -762,23 +815,6 @@ module cci_mpf_shim_wro_cam_group
             filter_test_req_en[1] <= cci_mpf_c1TxIsWriteReq(c1_afu_pipe_init.c1Tx);
         end
 
-        //
-        // This pipeline has complicated control flow.  Confirm that
-        // decisions made this cycle were based on the correct addresses.
-        //
-        if (c0_process_requests)
-        begin
-            assert ((! filter_verify_req_en[FILTER_PIPE_LAST][0] || (filter_verify_req[FILTER_PIPE_LAST][0] == c0_afu_pipe[FILTER_PIPE_LAST].c0AddrHash)) &&
-                    (filter_verify_req_en[FILTER_PIPE_LAST][0] == cci_mpf_c0TxIsReadReq(c0_afu_pipe[FILTER_PIPE_LAST].c0Tx))) else
-                $fatal("cci_mpf_shim_wro: Incorrect c0 pipeline control");
-        end
-        if (c1_process_requests)
-        begin
-            assert ((! filter_verify_req_en[FILTER_PIPE_LAST][1] || (filter_verify_req[FILTER_PIPE_LAST][1] == c1_afu_pipe[FILTER_PIPE_LAST].c1AddrHash)) &&
-                    (filter_verify_req_en[FILTER_PIPE_LAST][1] == cci_mpf_c1TxIsWriteReq(c1_afu_pipe[FILTER_PIPE_LAST].c1Tx))) else
-                $fatal("cci_mpf_shim_wro: Incorrect c1 pipeline control");
-        end
-
         if (reset)
         begin
             filter_test_req_en <= 0;
@@ -813,12 +849,17 @@ module cci_mpf_shim_wro_cam_group
     assign afu_buf.c0Rx = fiu.c0Rx;
 
     // Remove the entry from the filter
-    always_comb
+    always_ff @(posedge clk)
     begin
-        rd_filter_remove_hash = c0_heap_readRsp.addrHash;
-        rd_filter_remove_en = cci_c0Rx_isReadRsp(fiu_buf.c0Rx) &&
-                              cci_mpf_c0Rx_isEOP(fiu_buf.c0Rx) &&
-                              c0_heap_readRsp.enforceOrder;
+        rd_filter_remove_hash <= c0_heap_readRsp.addrHash;
+        rd_filter_remove_en <= cci_c0Rx_isReadRsp(fiu_buf.c0Rx) &&
+                               cci_mpf_c0Rx_isEOP(fiu_buf.c0Rx) &&
+                               c0_heap_readRsp.enforceOrder;
+
+        if (reset)
+        begin
+            rd_filter_remove_en <= 1'b0;
+        end
     end
 
 
@@ -850,12 +891,17 @@ module cci_mpf_shim_wro_cam_group
     assign afu_buf.c1Rx = fiu.c1Rx;
 
     // Remove the entry from the filter
-    always_comb
+    always_ff @(posedge clk)
     begin
-        wr_filter_remove_hash = c1_heap_readRsp.addrHash;
-        wr_filter_remove_mask = c1_heap_readRsp.lineMask;
-        wr_filter_remove_en = cci_c1Rx_isWriteRsp(fiu_buf.c1Rx) &&
-                              c1_heap_readRsp.enforceOrder;
+        wr_filter_remove_hash <= c1_heap_readRsp.addrHash;
+        wr_filter_remove_mask <= c1_heap_readRsp.lineMask;
+        wr_filter_remove_en <= cci_c1Rx_isWriteRsp(fiu_buf.c1Rx) &&
+                               c1_heap_readRsp.enforceOrder;
+
+        if (reset)
+        begin
+            wr_filter_remove_en <= 1'b0;
+        end
     end
 
 
@@ -910,7 +956,7 @@ module cci_mpf_shim_wro_cam_group
                          $time);
             end
 
-            if (cci_c1Rx_isWriteRsp(fiu_buf.c1Rx))
+            if (wr_filter_remove_en)
             begin
                 $display("XX F 1 hash 0x%x %t",
                          wr_filter_remove_hash,

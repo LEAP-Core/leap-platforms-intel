@@ -198,11 +198,11 @@ module cci_mpf_prim_filter_banked_decode
 
     input  logic [N_TEST_VALUE_CLIENTS-1 : 0][$clog2(N_BUCKETS)-1 : 0] test_value_req,
     input  logic [N_TEST_VALUE_CLIENTS-1 : 0] test_value_en,
-    output logic [N_TEST_VALUE_CLIENTS-1 : 0][BITS_PER_BUCKET-1 : 0] T3_test_value,
+    output logic [N_TEST_VALUE_CLIENTS-1 : 0][BITS_PER_BUCKET-1 : 0] T2_test_value,
 
     input  logic [N_TEST_IS_ZERO_CLIENTS-1 : 0][$clog2(N_BUCKETS)-1 : 0] test_isZero_req,
     input  logic [N_TEST_IS_ZERO_CLIENTS-1 : 0] test_isZero_en,
-    output logic [N_TEST_IS_ZERO_CLIENTS-1 : 0] T3_test_isZero,
+    output logic [N_TEST_IS_ZERO_CLIENTS-1 : 0] T2_test_isZero,
 
     input  logic insert_en,
     input  logic [$clog2(N_BUCKETS)-1 : 0] insert_idx,
@@ -384,11 +384,8 @@ module cci_mpf_prim_filter_banked_decode
     end
 
     // Return result from the bank handling the request
-    always_ff @(posedge clk)
-    begin
-        T3_test_value <= bank_test_value[test_value_which_bank[2]];
-        T3_test_isZero <= bank_test_isZero[test_isZero_which_bank[2]];
-    end
+    assign T2_test_value = bank_test_value[test_value_which_bank[2]];
+    assign T2_test_isZero = bank_test_isZero[test_isZero_which_bank[2]];
 
 endmodule // cci_mpf_prim_filter_banked_counting
 

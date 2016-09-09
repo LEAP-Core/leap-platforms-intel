@@ -228,9 +228,24 @@ module cci_mpf_shim_rsp_order
 
             // Read response index is the base index allocated by the
             // c0Tx read request plus the beat offset for multi-line reads.
-            t_req_idx rd_rob_data_idx;
-            assign rd_rob_data_idx = t_req_idx'(fiu.c0Rx.hdr.mdata) +
-                                     t_req_idx'(fiu.c0Rx.hdr.cl_num);
+            logic rd_rob_rsp_en;
+            t_req_idx rd_rob_rsp_idx;
+            t_cci_clNum rd_rob_rsp_cl_num;
+            t_cci_clData rd_rob_rsp_data;
+
+            always_ff @(posedge clk)
+            begin
+                rd_rob_rsp_en <= cci_c0Rx_isReadRsp(fiu.c0Rx);
+                rd_rob_rsp_idx <= t_req_idx'(fiu.c0Rx.hdr.mdata) +
+                                  t_req_idx'(fiu.c0Rx.hdr.cl_num);
+                rd_rob_rsp_cl_num <= fiu.c0Rx.hdr.cl_num;
+                rd_rob_rsp_data <= fiu.c0Rx.data;
+
+                if (reset)
+                begin
+                    rd_rob_rsp_en <= 1'b0;
+                end
+            end
 
             t_cci_mdata rd_sop_mdata;
             t_cci_mdata rd_beat_mdata;
@@ -261,9 +276,9 @@ module cci_mpf_shim_rsp_order
                 .notFull(rd_not_full),
                 .allocIdx(rd_rob_allocIdx),
 
-                .enqData_en(cci_c0Rx_isReadRsp(fiu.c0Rx)),
-                .enqDataIdx(rd_rob_data_idx),
-                .enqData({ fiu.c0Rx.hdr.cl_num, fiu.c0Rx.data }),
+                .enqData_en(rd_rob_rsp_en),
+                .enqDataIdx(rd_rob_rsp_idx),
+                .enqData({ rd_rob_rsp_cl_num, rd_rob_rsp_data }),
 
                 .deq_en(rd_rob_deq_en),
                 .notEmpty(rd_rob_notEmpty),

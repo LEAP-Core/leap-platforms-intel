@@ -144,10 +144,84 @@ module cci_mpf_prim_heap
 endmodule // cci_mpf_prim_heap
 
 
+// ========================================================================
 //
-// Just the control portion of heap entry allocation.
+//   Multiple implementations of the heap control logic.  Each is
+//   appropriate for a different heap size.
+//
+// ========================================================================
+
+
+//
+// Wrapper for heap control that picks an implementation appropriate
+// for the size of the heap.
 //
 module cci_mpf_prim_heap_ctrl
+  #(
+    parameter N_ENTRIES = 32,
+    // Threshold below which heap asserts "full"
+    parameter MIN_FREE_SLOTS = 1
+    )
+   (
+    input  logic clk,
+    input  logic reset,
+
+    input  logic enq,                                // Allocate an entry
+    output logic notFull,                            // Is scoreboard full?
+    output logic [$clog2(N_ENTRIES)-1 : 0] allocIdx, // Index of new entry
+
+    input  logic free,                               // enable free freeIdx
+    input  logic [$clog2(N_ENTRIES)-1 : 0] freeIdx
+    );
+
+    generate
+        if ((N_ENTRIES * $clog2(N_ENTRIES)) <= 1024)
+        begin : lr
+            // Small heap -- use LUTRAM
+            cci_mpf_prim_heap_ctrl_lutram
+              #(
+                .N_ENTRIES(N_ENTRIES),
+                .MIN_FREE_SLOTS(MIN_FREE_SLOTS)
+                )
+              fl
+               (
+                .clk,
+                .reset,
+                .enq,
+                .notFull,
+                .allocIdx,
+                .free,
+                .freeIdx
+                );
+        end
+        else
+        begin : br
+            // Large heap -- use BRAM
+            cci_mpf_prim_heap_ctrl_bram
+              #(
+                .N_ENTRIES(N_ENTRIES),
+                .MIN_FREE_SLOTS(MIN_FREE_SLOTS)
+                )
+              fl
+               (
+                .clk,
+                .reset,
+                .enq,
+                .notFull,
+                .allocIdx,
+                .free,
+                .freeIdx
+                );
+        end
+    endgenerate
+
+endmodule // cci_mpf_prim_heap_ctrl
+
+
+//
+// Heap free list implemented in LUTRAM.
+//
+module cci_mpf_prim_heap_ctrl_lutram
   #(
     parameter N_ENTRIES = 32,
     // Threshold below which heap asserts "full"
@@ -180,7 +254,231 @@ module cci_mpf_prim_heap_ctrl
     logic pop_free;
     logic free_idx_avail;
     logic free_idx_above_min;
-    logic [$clog2(N_ENTRIES)-1 : 0] next_free_idx;
+
+    t_idx free_head_idx;
+    t_idx free_tail_idx;
+
+    // Need a new entry in allocIdx?
+    logic need_pop_free;
+    // Is a free entry available?
+    assign pop_free = need_pop_free && free_idx_avail;
+
+    // Heap isn't full as long as an index is available and the number of free
+    // slots is above the MIN_FREE_SLOTS threshold.
+    logic fifo_notEmpty;
+    assign notFull = fifo_notEmpty && free_idx_above_min;
+
+    cci_mpf_prim_fifo2
+      #(
+        .N_DATA_BITS($clog2(N_ENTRIES))
+        )
+      alloc_fifo
+       (
+        .clk,
+        .reset,
+        .enq_data(free_head_idx),
+        .enq_en(pop_free),
+        .notFull(need_pop_free),
+        .first(allocIdx),
+        .deq_en(enq),
+        .notEmpty(fifo_notEmpty)
+        );
+
+
+    logic initialized;
+    t_idx init_idx;
+
+    //
+    // Free list memory
+    //
+    logic free_wen;
+    t_idx free_widx_next;
+    t_idx free_rnext;
+
+    cci_mpf_prim_lutram
+      #(
+        .N_ENTRIES(N_ENTRIES),
+        .N_DATA_BITS($bits(t_idx))
+        )
+      freeList
+       (
+        .clk,
+        .reset,
+
+        .wen(free_wen),
+        .waddr(free_tail_idx),
+        .wdata(free_widx_next),
+
+        .raddr(free_head_idx),
+        .rdata(free_rnext)
+        );
+
+
+    // Pop from free list
+    always_ff @(posedge clk)
+    begin
+        if (pop_free)
+        begin
+            free_head_idx <= free_rnext;
+        end
+
+        if (reset)
+        begin
+            free_head_idx <= t_idx'(0);
+        end
+    end
+
+
+    // Push released entry on the tail of a list, delayed by a cycle for
+    // timing.
+    logic free_q;
+    t_idx freeIdx_q;
+    always_ff @(posedge clk)
+    begin
+        free_q <= free;
+        freeIdx_q <= freeIdx;
+
+        if (reset)
+        begin
+            free_q <= 1'b0;
+        end
+    end
+
+    assign free_wen = ! initialized || free_q;
+    assign free_widx_next = (! initialized ? init_idx : freeIdx_q);
+
+
+    always_ff @(posedge clk)
+    begin
+        if (free_wen)
+        begin
+            // Move tail pointer to index just pushed
+            free_tail_idx <= free_widx_next;
+        end
+
+        if (reset)
+        begin
+            free_tail_idx <= t_idx'(0);
+        end
+    end
+
+
+    // Initialize the free list and track the number of free entries
+    t_idx num_free;
+
+    always_ff @(posedge clk)
+    begin
+        if (reset)
+        begin
+            // Start pushing with entry 1 since entry 0 starts as the
+            // free list head pointer above.
+            init_idx <= t_idx'(1);
+            initialized <= 1'b0;
+
+            // Reserve an entry that must stay on the free list.
+            // This guarantees that free_head_idx ever goes
+            // NULL, which would require managing a special case.
+            num_free <= t_idx'(N_ENTRIES - 1);
+            free_idx_avail <= 1'b0;
+            free_idx_above_min <= 1'b0;
+        end
+        else
+        begin
+            if (! initialized)
+            begin
+                init_idx <= init_idx + t_idx'(1);
+
+                if (init_idx == t_idx'(N_ENTRIES-1))
+                begin
+                    // Initialization complete
+                    initialized <= 1'b1;
+                    free_idx_avail <= 1'b1;
+                    free_idx_above_min <= 1'b1;
+
+                    assert (N_ENTRIES > 1 + MIN_FREE_SLOTS) else
+                       $fatal("cci_mpf_prim_heap: Heap too small");
+                end
+            end
+            else if (free_q != pop_free)
+            begin
+                if (free_q)
+                begin
+                    num_free <= num_free + t_idx'(1);
+                    free_idx_avail <= 1'b1;
+                    free_idx_above_min <= (num_free >= t_idx'(MIN_FREE_SLOTS));
+
+                    assert (num_free < N_ENTRIES - 1) else
+                       $fatal("cci_mpf_prim_heap: Too many free items. Pushed one twice?");
+                end
+                else
+                begin
+                    num_free <= num_free - t_idx'(1);
+                    free_idx_avail <= (num_free > t_idx'(0));
+                    free_idx_above_min <= (num_free > t_idx'(MIN_FREE_SLOTS+1));
+
+                    assert (num_free != 0) else
+                       $fatal("cci_mpf_prim_heap: alloc from empty heap!");
+                end
+            end
+        end
+    end
+
+
+    cci_mpf_prim_heap_ctrl_checker
+      #(
+        .N_ENTRIES(N_ENTRIES)
+        )
+      checker
+       (
+        .clk,
+        .reset,
+        .enq,
+        .allocIdx,
+        .free,
+        .freeIdx
+        );
+
+endmodule // cci_mpf_prim_heap_ctrl_lutram
+
+
+//
+// BRAM implementation for large heaps.  This version is more complicated
+// than the LUTRAM control because of the multi-cycle latency of BRAM.
+//
+module cci_mpf_prim_heap_ctrl_bram
+  #(
+    parameter N_ENTRIES = 32,
+    // Threshold below which heap asserts "full"
+    parameter MIN_FREE_SLOTS = 1
+    )
+   (
+    input  logic clk,
+    input  logic reset,
+
+    input  logic enq,                                // Allocate an entry
+    output logic notFull,                            // Is scoreboard full?
+    output logic [$clog2(N_ENTRIES)-1 : 0] allocIdx, // Index of new entry
+
+    input  logic free,                               // enable free freeIdx
+    input  logic [$clog2(N_ENTRIES)-1 : 0] freeIdx
+    );
+
+    typedef logic [$clog2(N_ENTRIES)-1 : 0] t_idx;
+
+
+    // ====================================================================
+    //
+    // Free list.
+    //
+    // ====================================================================
+
+    //
+    // Prefetch the next entry to be allocated.
+    //
+    logic pop_free;
+    logic free_idx_avail;
+    logic free_idx_above_min;
+    t_idx next_free_idx;
 
     // Need a new entry in allocIdx?
     logic need_pop_free;
@@ -410,64 +708,21 @@ module cci_mpf_prim_heap_ctrl
     end
 
 
-    // ====================================================================
-    //
-    // Error checker: detect duplicate allocation and deallocation.
-    //
-    // ====================================================================
+    cci_mpf_prim_heap_ctrl_checker
+      #(
+        .N_ENTRIES(N_ENTRIES)
+        )
+      checker
+       (
+        .clk,
+        .reset,
+        .enq,
+        .allocIdx,
+        .free,
+        .freeIdx
+        );
 
-    // synthesis translate_off
-
-    logic chk_alloc;
-    t_idx chk_alloc_idx;
-    logic chk_free;
-    t_idx chk_free_idx;
-
-    always_ff @(posedge clk)
-    begin
-        chk_alloc <= enq;
-        chk_alloc_idx <= allocIdx;
-
-        chk_free <= free;
-        chk_free_idx <= freeIdx;
-
-        if (reset)
-        begin
-            chk_alloc <= 1'b0;
-            chk_free <= 1'b0;
-        end
-    end
-
-
-    logic [N_ENTRIES-1 : 0] chk_state;
-
-    always_ff @(posedge clk)
-    begin
-        if (chk_alloc)
-        begin
-            assert (chk_state[chk_alloc_idx] == 1'b0) else
-                $fatal("cci_mpf_prim_heap.sv: HEAP double allocation!");
-
-            chk_state[chk_alloc_idx] <= 1'b1;
-        end
-
-        if (chk_free)
-        begin
-            assert (chk_state[chk_free_idx] == 1'b1) else
-                $fatal("cci_mpf_prim_heap.sv: HEAP double free!");
-
-            chk_state[chk_free_idx] <= 1'b0;
-        end
-
-        if (reset)
-        begin
-            chk_state <= N_ENTRIES'(0);
-        end
-    end
-
-    // synthesis translate_on
-
-endmodule // cci_mpf_prim_heap_ctrl
+endmodule // cci_mpf_prim_heap_ctrl_bram
 
 
 //
@@ -570,3 +825,81 @@ module cci_mpf_prim_heap_ctrl_simple
     end
 
 endmodule // cci_mpf_prim_heap_ctrl_simple
+
+
+
+// ========================================================================
+//
+//   Internal error checker: detect duplicate allocation and deallocation.
+//
+// ========================================================================
+
+module cci_mpf_prim_heap_ctrl_checker
+  #(
+    parameter N_ENTRIES = 32
+    )
+   (
+    input  logic clk,
+    input  logic reset,
+
+    input  logic enq,                                // Allocate an entry
+    input  logic [$clog2(N_ENTRIES)-1 : 0] allocIdx, // Index of new entry
+
+    input  logic free,                               // enable free freeIdx
+    input  logic [$clog2(N_ENTRIES)-1 : 0] freeIdx
+    );
+
+    typedef logic [$clog2(N_ENTRIES)-1 : 0] t_idx;
+
+    // synthesis translate_off
+
+    logic chk_alloc;
+    t_idx chk_alloc_idx;
+    logic chk_free;
+    t_idx chk_free_idx;
+
+    always_ff @(posedge clk)
+    begin
+        chk_alloc <= enq;
+        chk_alloc_idx <= allocIdx;
+
+        chk_free <= free;
+        chk_free_idx <= freeIdx;
+
+        if (reset)
+        begin
+            chk_alloc <= 1'b0;
+            chk_free <= 1'b0;
+        end
+    end
+
+
+    logic [N_ENTRIES-1 : 0] chk_state;
+
+    always_ff @(posedge clk)
+    begin
+        if (chk_alloc)
+        begin
+            assert (chk_state[chk_alloc_idx] == 1'b0) else
+                $fatal("cci_mpf_prim_heap.sv: HEAP double allocation!");
+
+            chk_state[chk_alloc_idx] <= 1'b1;
+        end
+
+        if (chk_free)
+        begin
+            assert (chk_state[chk_free_idx] == 1'b1) else
+                $fatal("cci_mpf_prim_heap.sv: HEAP double free!");
+
+            chk_state[chk_free_idx] <= 1'b0;
+        end
+
+        if (reset)
+        begin
+            chk_state <= N_ENTRIES'(0);
+        end
+    end
+
+    // synthesis translate_on
+
+endmodule // cci_mpf_prim_heap_ctrl_checker

@@ -47,6 +47,8 @@ void testConfigOptions(po::options_description &desc)
         ("enable-pw", po::value<bool>()->default_value(true), "Enable partial writes")
         ("enable-writes", po::value<bool>()->default_value(true), "Enable writes")
         ("enable-wro", po::value<bool>()->default_value(true), "Enable write/read hazard detection")
+        ("rdline-s", po::value<bool>()->default_value(true), "Emit read requests with shared cache hint")
+        ("wrline-m", po::value<bool>()->default_value(true), "Emit write requests with modified cache hint")
         ("mcl", po::value<int>()->default_value(1), "Multi-line requests (0 for random sizes)")
         ("repeat", po::value<int>()->default_value(1), "Number of repetitions")
         ("tc", po::value<int>()->default_value(0), "Test length (cycles)")
@@ -117,6 +119,9 @@ btInt TEST_RANDOM::test()
     uint64_t enable_writes = (vm["enable-writes"].as<bool>() ? 1 : 0);
     uint64_t enable_wro = (vm["enable-wro"].as<bool>() ? 1 : 0);
 
+    uint64_t rdline_s = (vm["rdline-s"].as<bool>() ? 1 : 0);
+    uint64_t wrline_m = (vm["wrline-m"].as<bool>() ? 1 : 0);
+
     uint64_t mcl = uint64_t(vm["mcl"].as<int>());
     if ((mcl > 4) || (mcl == 3))
     {
@@ -135,12 +140,19 @@ btInt TEST_RANDOM::test()
 
     uint64_t trips = uint64_t(vm["repeat"].as<int>());
     uint64_t iter = 0;
+
+    uint64_t vl0_lines = readCommonCSR(CCI_TEST::CSR_COMMON_VL0_LINES);
+    uint64_t vh0_lines = readCommonCSR(CCI_TEST::CSR_COMMON_VH0_LINES);
+    uint64_t vh1_lines = readCommonCSR(CCI_TEST::CSR_COMMON_VH1_LINES);
+
     while (trips--)
     {
         // Start the test
         writeTestCSR(0,
-                     (cycles << 9) |
-                     (mcl << 6) |
+                     (cycles << 11) |
+                     (mcl << 8) |
+                     (wrline_m << 7) |
+                     (rdline_s << 6) |
                      (enable_pw << 5) |
                      (enable_rw_conflicts << 4) |
                      (enable_checker << 3) |
@@ -186,6 +198,18 @@ btInt TEST_RANDOM::test()
              << boost::format("%.1f") % ((double(write_cnt) * CL(1) / 0x40000000) / run_sec) << " GB/s) "
              << " [" << checked_read_cnt << " reads checked]"
              << endl;
+
+        uint64_t vl0_lines_n = readCommonCSR(CCI_TEST::CSR_COMMON_VL0_LINES);
+        uint64_t vh0_lines_n = readCommonCSR(CCI_TEST::CSR_COMMON_VH0_LINES);
+        uint64_t vh1_lines_n = readCommonCSR(CCI_TEST::CSR_COMMON_VH1_LINES);
+
+        cout << "    VL0 " << vl0_lines_n - vl0_lines
+             << " : VH0 " << vh0_lines_n - vh0_lines
+             << " : VH1 " << vh1_lines_n - vh1_lines
+             << endl;
+        vl0_lines = vl0_lines_n;
+        vh0_lines = vh0_lines_n;
+        vh1_lines = vh1_lines_n;
 
         if (*dsm != 1)
         {

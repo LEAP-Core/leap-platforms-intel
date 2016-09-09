@@ -268,7 +268,7 @@ module cci_mpf_svc_vtp
     cci_mpf_svc_vtp_tlb
       #(
         .CCI_PT_PAGE_OFFSET_BITS(CCI_PT_4KB_PAGE_OFFSET_BITS),
-        .NUM_TLB_SETS(1024),
+        .NUM_TLB_SETS(512),
         .DEBUG_MESSAGES(DEBUG_MESSAGES),
         .DEBUG_NAME("4KB")
         )

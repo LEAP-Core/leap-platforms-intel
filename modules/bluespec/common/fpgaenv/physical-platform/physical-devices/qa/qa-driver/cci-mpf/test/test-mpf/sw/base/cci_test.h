@@ -106,8 +106,10 @@ class CCI_TEST
         CSR_COMMON_CACHE_RD_MISSES = 10,
         CSR_COMMON_CACHE_WR_HITS = 11,
         CSR_COMMON_CACHE_WR_MISSES = 12,
-        CSR_COMMON_VL0_RESPS = 13,
-        CSR_COMMON_FIU_STATE = 14
+        CSR_COMMON_VL0_LINES = 13,
+        CSR_COMMON_VH0_LINES = 14,
+        CSR_COMMON_VH1_LINES = 15,
+        CSR_COMMON_FIU_STATE = 16
     }
     t_csr_common;
 

@@ -36,6 +36,7 @@ int main(int argc, char *argv[])
         ("vcmap-all", po::value<bool>()->default_value(false), "VC MAP: Map all requests, ignoring vc_sel")
         ("vcmap-enable", po::value<bool>()->default_value(true), "VC MAP: Enable channel mapping")
         ("vcmap-dynamic", po::value<bool>()->default_value(true), "VC MAP: Use dynamic channel mapping")
+        ("vcmap-fixed", po::value<int>()->default_value(-1), "VC MAP: Use fixed mapping with VL0 getting <n>/64 of traffic (overridden by vcmap-dynamic)")
         ("wro-qos", po::value<bool>()->default_value(true), "WRO: Enable QoS for read/write channel balancing")
         ;
 
@@ -75,11 +76,17 @@ int main(int argc, char *argv[])
     bool vcmap_all = vm["vcmap-all"].as<bool>();
     bool vcmap_enable = vm["vcmap-enable"].as<bool>();
     bool vcmap_dynamic = vm["vcmap-dynamic"].as<bool>();
+    int32_t vcmap_fixed_vl0_ratio = int32_t(vm["vcmap-fixed"].as<int>());
+
     if (svc.m_pVCMAPService)
     {
         cout << "Configuring VC MAP shim..." << endl;
         svc.m_pVCMAPService->vcmapSetMapAll(vcmap_all);
         svc.m_pVCMAPService->vcmapSetMode(vcmap_enable, vcmap_dynamic);
+        if (! vcmap_dynamic && (vcmap_fixed_vl0_ratio >= 0))
+        {
+            svc.m_pVCMAPService->vcmapSetFixedMapping(true, vcmap_fixed_vl0_ratio);
+        }
     }
 
     bool wro_qos = vm["wro-qos"].as<bool>();
@@ -115,11 +122,18 @@ int main(int argc, char *argv[])
     uint64_t wr_misses = t->readCommonCSR(CCI_TEST::CSR_COMMON_CACHE_WR_MISSES);
     uint64_t wr_total = wr_hits + wr_misses;
 
+    uint64_t vl0_lines = t->readCommonCSR(CCI_TEST::CSR_COMMON_VL0_LINES);
+    uint64_t vh0_lines = t->readCommonCSR(CCI_TEST::CSR_COMMON_VH0_LINES);
+    uint64_t vh1_lines = t->readCommonCSR(CCI_TEST::CSR_COMMON_VH1_LINES);
+
     cout << endl << "Statistics:" << endl;
     cout << "  Cache read hits:    " << rd_hits << endl;
     cout << "  Cache read misses:  " << rd_misses << endl;
     cout << "  Cache write hits:   " << wr_hits << endl;
     cout << "  Cache write misses: " << wr_misses << endl;
+    cout << "  VL0 line ops:       " << vl0_lines << endl;
+    cout << "  VH0 line ops:       " << vh0_lines << endl;
+    cout << "  VH1 line ops:       " << vh1_lines << endl;
     cout << endl;
 
     uint64_t fiu_state = t->readCommonCSR(CCI_TEST::CSR_COMMON_FIU_STATE);

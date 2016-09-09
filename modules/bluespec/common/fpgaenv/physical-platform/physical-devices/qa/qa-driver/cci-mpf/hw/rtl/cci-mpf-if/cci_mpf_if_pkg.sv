@@ -638,6 +638,15 @@ package cci_mpf_if_pkg;
         return r;
     endfunction
 
+    function automatic t_if_cci_mpf_c0_Tx cci_mpf_c0TxSetValids(
+        input t_if_cci_mpf_c0_Tx r,
+        input logic valid
+        );
+
+        r.valid = valid;
+        return r;
+    endfunction
+
     // Mask the valid bits in an MPF C1 TX
     function automatic t_if_cci_mpf_c1_Tx cci_mpf_c1TxMaskValids(
         input t_if_cci_mpf_c1_Tx r,
@@ -645,6 +654,15 @@ package cci_mpf_if_pkg;
         );
 
         r.valid = r.valid && mask;
+        return r;
+    endfunction
+
+    function automatic t_if_cci_mpf_c1_Tx cci_mpf_c1TxSetValids(
+        input t_if_cci_mpf_c1_Tx r,
+        input logic valid
+        );
+
+        r.valid = valid;
         return r;
     endfunction
 

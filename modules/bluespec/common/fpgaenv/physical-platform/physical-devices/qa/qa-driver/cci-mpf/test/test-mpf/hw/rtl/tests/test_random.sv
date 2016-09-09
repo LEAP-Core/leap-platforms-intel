@@ -216,6 +216,10 @@ module test_afu
 
     logic enable_partial_writes;
 
+    logic rdline_mode_s;
+    logic wrline_mode_m;
+
+
     //
     // Consume configuration CSR writes
     //
@@ -257,6 +261,8 @@ module test_afu
             { cycles_rem,
               cl_beats_random,
               cl_beats,
+              wrline_mode_m,
+              rdline_mode_s,
               enable_partial_writes,
               enable_rw_conflicts,
               enable_checker,
@@ -270,6 +276,8 @@ module test_afu
             cycles_rem <= t_counter'(0);
             cl_beats_random <= 1'b0;
             cl_beats <= t_cci_clLen'(0);
+            wrline_mode_m <= 1'b0;
+            rdline_mode_s <= 1'b0;
             enable_writes <= 1'b0;
             enable_reads <= 1'b0;
             enable_wro <= 1'b0;
@@ -473,7 +481,7 @@ module test_afu
                    wr_addr_chk_idx[N_CHECKED_ADDR_BITS-1 : $bits(t_cci_clNum)]));
 
         rd_hdr = cci_mpf_c0_genReqHdr(
-                     eREQ_RDLINE_S,
+                     (rdline_mode_s ? eREQ_RDLINE_S : eREQ_RDLINE_I),
                      rd_rand_addr,
                      // Indicate in mdata whether requested address is checked
                      t_cci_mdata'({ rd_addr_chk_beat, chk_rd }),
@@ -649,7 +657,7 @@ module test_afu
 
     always_comb
     begin
-        wr_hdr = cci_mpf_c1_genReqHdr(eREQ_WRLINE_M,
+        wr_hdr = cci_mpf_c1_genReqHdr((wrline_mode_m ? eREQ_WRLINE_M : eREQ_WRLINE_I),
                                       wr_rand_addr,
                                       t_cci_mdata'(0),
                                       wr_params);

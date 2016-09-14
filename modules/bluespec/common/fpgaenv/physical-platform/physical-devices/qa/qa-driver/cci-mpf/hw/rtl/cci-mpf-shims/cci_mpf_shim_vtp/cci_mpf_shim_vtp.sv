@@ -419,6 +419,10 @@ module cci_mpf_shim_vtp_chan
     logic tlb_lookup_rsp_rdy;
 
     logic [N_META_BITS-1 : 0] cTx_q;
+    always_ff @(posedge clk)
+    begin
+        cTx_q <= cTx;
+    end
 
     always_comb
     begin
@@ -427,32 +431,25 @@ module cci_mpf_shim_vtp_chan
         state[0].cTxAddrIsVirtual = cTxAddrIsVirtual;
     end
 
-    always_ff @(posedge clk)
-    begin
-        if (reset)
-        begin
-            for (int s = 1; s <= MAX_STAGE; s = s + 1)
-            begin
-                state[s].cTxValid <= 1'b0;
-            end
-        end
-        else
-        begin
-            for (int s = 1; s <= MAX_STAGE; s = s + 1)
+    genvar s;
+    generate
+        for (s = 1; s <= MAX_STAGE; s = s + 1)
+        begin : st
+            always_ff @(posedge clk)
             begin
                 state[s].cTxValid <= state[s - 1].cTxValid;
+
+                state[s].cTxAddr <= state[s - 1].cTxAddr;
+                state[s].cTxAddrIsVirtual <= state[s - 1].cTxAddrIsVirtual;
+                state[s].allocIdx <= state[s - 1].allocIdx;
+
+                if (reset)
+                begin
+                    state[s].cTxValid <= 1'b0;
+                end
             end
         end
-
-        cTx_q <= cTx;
-
-        for (int s = 1; s <= MAX_STAGE; s = s + 1)
-        begin
-            state[s].cTxAddr <= state[s - 1].cTxAddr;
-            state[s].cTxAddrIsVirtual <= state[s - 1].cTxAddrIsVirtual;
-            state[s].allocIdx <= state[s - 1].allocIdx;
-        end
-    end
+    endgenerate
 
 
     // ====================================================================

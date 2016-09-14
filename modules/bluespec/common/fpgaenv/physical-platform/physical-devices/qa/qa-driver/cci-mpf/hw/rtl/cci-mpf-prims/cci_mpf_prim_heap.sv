@@ -428,7 +428,7 @@ module cci_mpf_prim_heap_ctrl_lutram
       #(
         .N_ENTRIES(N_ENTRIES)
         )
-      checker
+      ctrl_checker
        (
         .clk,
         .reset,
@@ -712,7 +712,7 @@ module cci_mpf_prim_heap_ctrl_bram
       #(
         .N_ENTRIES(N_ENTRIES)
         )
-      checker
+      ctrl_checker
        (
         .clk,
         .reset,

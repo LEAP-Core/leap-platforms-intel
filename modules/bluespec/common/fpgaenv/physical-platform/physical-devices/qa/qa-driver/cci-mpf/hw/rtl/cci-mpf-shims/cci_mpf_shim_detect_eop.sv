@@ -143,11 +143,8 @@ module cci_mpf_shim_detect_eop
 
     always_ff @(posedge clk)
     begin
-        for (int i = 0; i < 2; i = i + 1)
-        begin
-            c0Rx[i+1] <= c0Rx[i];
-            rd_rsp_is_tracked[i+1] <= rd_rsp_is_tracked[i];
-        end
+        c0Rx[1:2] <= c0Rx[0:1];
+        rd_rsp_is_tracked[1:2] <= rd_rsp_is_tracked[0:1];
     end
 
     always_ff @(posedge clk)
@@ -213,10 +210,7 @@ module cci_mpf_shim_detect_eop
 
     always_ff @(posedge clk)
     begin
-        for (int i = 0; i < 2; i = i + 1)
-        begin
-            c1Rx[i+1] <= c1Rx[i];
-        end
+        c1Rx[1:2] <= c1Rx[0:1];
     end
 
     always_ff @(posedge clk)
@@ -354,22 +348,15 @@ module cci_mpf_shim_detect_eop_track_flits
 
     always_ff @(posedge clk)
     begin
+        p_rsp_en[1:2] <= p_rsp_en[0:1];
+
+        p_rspIdx[1:2] <= p_rspIdx[0:1];
+        p_rspIsPacked[1:2] <= p_rspIsPacked[0:1];
+        p_num_inflight_same_idx[1:2] <= p_num_inflight_same_idx[0:1];
+
         if (reset)
         begin
-            p_rsp_en[1] <= 1'b0;
-            p_rsp_en[2] <= 1'b0;
-        end
-        else
-        begin
-            p_rsp_en[1] <= p_rsp_en[0];
-            p_rsp_en[2] <= p_rsp_en[1];
-        end
-
-        for (int i = 1; i <= 2; i = i + 1)
-        begin
-            p_rspIdx[i] <= p_rspIdx[i-1];
-            p_rspIsPacked[i] <= p_rspIsPacked[i-1];
-            p_num_inflight_same_idx[i] <= p_num_inflight_same_idx[i-1];
+            p_rsp_en[1:2] <= { 1'b0, 1'b0 };
         end
     end
 

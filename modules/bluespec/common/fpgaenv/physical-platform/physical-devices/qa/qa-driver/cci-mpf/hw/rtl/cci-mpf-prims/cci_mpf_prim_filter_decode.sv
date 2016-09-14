@@ -376,11 +376,8 @@ module cci_mpf_prim_filter_banked_decode
 
     always_ff @(posedge clk)
     begin
-        for (int c = 1; c <= 2; c = c + 1)
-        begin
-            test_value_which_bank[c] <= test_value_which_bank[c-1];
-            test_isZero_which_bank[c] <= test_isZero_which_bank[c-1];
-        end
+        test_value_which_bank[1:2] <= test_value_which_bank[0:1];
+        test_isZero_which_bank[1:2] <= test_isZero_which_bank[0:1];
     end
 
     // Return result from the bank handling the request

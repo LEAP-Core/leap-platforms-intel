@@ -277,10 +277,8 @@ module cci_mpf_svc_vtp_tlb
 
     always_ff @(posedge clk)
     begin
-        for (int s = 2; s < NUM_TLB_LOOKUP_PIPE_STAGES; s = s + 1)
-        begin
-            stg_tlb_rdata[s + 1] <= stg_tlb_rdata[s];
-        end
+        stg_tlb_rdata[3 : NUM_TLB_LOOKUP_PIPE_STAGES] <=
+            stg_tlb_rdata[2 : NUM_TLB_LOOKUP_PIPE_STAGES-1];
     end
 
 

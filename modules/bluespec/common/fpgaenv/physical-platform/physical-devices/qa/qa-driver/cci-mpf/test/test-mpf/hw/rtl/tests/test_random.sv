@@ -55,7 +55,7 @@ module test_afu
     //
     // State machine
     //
-    typedef enum [1:0]
+    typedef enum logic [1:0]
     {
         STATE_IDLE,
         STATE_RUN,

@@ -37,7 +37,6 @@ int main(int argc, char *argv[])
         ("vcmap-enable", po::value<bool>()->default_value(true), "VC MAP: Enable channel mapping")
         ("vcmap-dynamic", po::value<bool>()->default_value(true), "VC MAP: Use dynamic channel mapping")
         ("vcmap-fixed", po::value<int>()->default_value(-1), "VC MAP: Use fixed mapping with VL0 getting <n>/64 of traffic (overridden by vcmap-dynamic)")
-        ("wro-qos", po::value<bool>()->default_value(true), "WRO: Enable QoS for read/write channel balancing")
         ;
 
     testConfigOptions(desc);
@@ -87,12 +86,6 @@ int main(int argc, char *argv[])
         {
             svc.m_pVCMAPService->vcmapSetFixedMapping(true, vcmap_fixed_vl0_ratio);
         }
-    }
-
-    bool wro_qos = vm["wro-qos"].as<bool>();
-    if (svc.m_pWROService)
-    {
-        svc.m_pWROService->wroSetQoSParams(wro_qos);
     }
 
     CCI_TEST* t = allocTest(vm, svc);

@@ -62,20 +62,6 @@ public:
 
    btBool isOK( void ) { return m_isOK; }     // < status after initialization
 
-   //
-   // Set configuration of QoS parameters for managing sequenced load and
-   // store channels.  "beatCountDiff" controls when throttling is triggered
-   // as a function of the difference in request beats in the queue.
-   // "minBeats" is the minimum number of beats in the non-throttled channel
-   // above which throttling may be triggered.
-   //
-   // beatCountDiff affects throughput far more than minBeats.  minBeats
-   // doesn't affect throughput much but is left as a control for testing.
-   //
-   btBool wroSetQoSParams( btBool enabled,
-                           btUnsigned32bitInt beatCountDiff = 0,
-                           btUnsigned32bitInt minBeats = 0 );
-
    // Return all statistics counters
    btBool wroGetStats( t_cci_mpf_wro_stats *stats );
 

@@ -193,18 +193,7 @@ typedef enum
     // BBB feature ID high (read)
     CCI_MPF_WRO_CSR_ID_H = 16,
 
-    //
-    // Configure throttling in the input FIFO for QoS to balance load
-    // and store traffic:
-    //   Bit 0:
-    //      0 - QoS throttling disabled
-    //      1 - Enabled
-    //   Bits 15-8:
-    //      Inter-channel beat count difference that triggers throttling.
-    //   Bits 23-16:
-    //      Minimum number of beats in the non-throttled channel at or
-    //      below which no throttling is triggered.
-    //
+    // Not currently used
     CCI_MPF_WRO_CSR_CTRL_REG = 24,
 
     // New read conflicts with old read

@@ -147,20 +147,26 @@ module cci_mpf_prim_fifo_lutram_base
     t_idx enq_idx;
     t_idx first_idx;
 
-    // synthesis attribute ram_style of data is distributed
-    reg [N_DATA_BITS-1 : 0] data[0 : N_ENTRIES-1] /* synthesis ramstyle = "MLAB, no_rw_check" */;
+    cci_mpf_prim_lutram
+      #(
+        .N_ENTRIES(N_ENTRIES),
+        .N_DATA_BITS(N_DATA_BITS)
+        )
+      data
+       (
+        .clk,
+        .reset,
 
-    assign first = data[first_idx];
-    always_ff @(posedge clk)
-    begin
+        .raddr(first_idx),
+        .rdata(first),
+
         // Write the data as long as the FIFO isn't full.  This leaves the
         // data path independent of control.  notFull/notEmpty will track
         // the control messages.
-        if (notFull)
-        begin
-            data[enq_idx] <= enq_data;
-        end
-    end
+        .waddr(enq_idx),
+        .wen(notFull),
+        .wdata(enq_data)
+        );
 
     cci_mpf_prim_fifo_lutram_ctrl
       #(

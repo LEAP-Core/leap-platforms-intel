@@ -318,15 +318,28 @@ module cci_mpf_prim_filter_banked_decode
     //
     // Banks of filters
     //
+    t_bank_bucket_idx [N_TEST_VALUE_CLIENTS-1 : 0] bank_test_value_req[0 : N_BANKS-1];
+    t_bank_bucket_idx [N_TEST_IS_ZERO_CLIENTS-1 : 0] bank_test_isZero_req[0 : N_BANKS-1];
     t_bucket_value [N_TEST_VALUE_CLIENTS-1 : 0] bank_test_value[0 : N_BANKS-1];
     logic [N_TEST_IS_ZERO_CLIENTS-1 : 0] bank_test_isZero[0 : N_BANKS-1];
     logic bank_remove_notFull[0 : N_BANKS-1];
     logic bank_rdy[0 : N_BANKS-1];
 
     genvar b;
+    genvar c;
     generate
         for (b = 0; b < N_BANKS; b = b + 1)
         begin : fb
+            for (c = 0; c < N_TEST_VALUE_CLIENTS; c = c + 1)
+            begin : tv
+                assign bank_test_value_req[b][c] = bankBucket(test_value_req[c]);
+            end
+
+            for (c = 0; c < N_TEST_IS_ZERO_CLIENTS; c = c + 1)
+            begin : tz
+                assign bank_test_isZero_req[b][c] = bankBucket(test_isZero_req[c]);
+            end
+
             cci_mpf_prim_filter_decode_bank
               #(
                 // Buckets are spread evenly across banks
@@ -341,10 +354,10 @@ module cci_mpf_prim_filter_banked_decode
                 .reset,
                 .rdy(bank_rdy[b]),
 
-                .test_value_req(bankBucket(test_value_req)),
+                .test_value_req(bank_test_value_req[b]),
                 .T2_test_value(bank_test_value[b]),
 
-                .test_isZero_req(bankBucket(test_isZero_req)),
+                .test_isZero_req(bank_test_isZero_req[b]),
                 .T2_test_isZero(bank_test_isZero[b]),
 
                 .insert_en(insert_en &&
@@ -368,21 +381,32 @@ module cci_mpf_prim_filter_banked_decode
                             remove_notEmpty;
 
     // Record the bank used for tests and cascade down the pipeline
-    t_bank_idx test_value_which_bank[0 : 2];
-    t_bank_idx test_isZero_which_bank[0 : 2];
+    t_bank_idx [N_TEST_VALUE_CLIENTS-1 : 0] test_value_which_bank[0 : 2];
+    t_bank_idx [N_TEST_IS_ZERO_CLIENTS-1 : 0] test_isZero_which_bank[0 : 2];
 
-    assign test_value_which_bank[0] = bankFromBucket(test_value_req);
-    assign test_isZero_which_bank[0] = bankFromBucket(test_isZero_req);
+    generate
+        for (c = 0; c < N_TEST_VALUE_CLIENTS; c = c + 1)
+        begin : btv
+            assign test_value_which_bank[0][c] = bankFromBucket(test_value_req[c]);
+
+            // Return result from the bank handling the request
+            assign T2_test_value[c] = bank_test_value[test_value_which_bank[2][c]][c];
+        end
+
+        for (c = 0; c < N_TEST_IS_ZERO_CLIENTS; c = c + 1)
+        begin : btz
+            assign test_isZero_which_bank[0][c] = bankFromBucket(test_isZero_req[c]);
+
+            // Return result from the bank handling the request
+            assign T2_test_isZero[c] = bank_test_isZero[test_isZero_which_bank[2][c]][c];
+        end
+    endgenerate
 
     always_ff @(posedge clk)
     begin
         test_value_which_bank[1:2] <= test_value_which_bank[0:1];
         test_isZero_which_bank[1:2] <= test_isZero_which_bank[0:1];
     end
-
-    // Return result from the bank handling the request
-    assign T2_test_value = bank_test_value[test_value_which_bank[2]];
-    assign T2_test_isZero = bank_test_isZero[test_isZero_which_bank[2]];
 
 endmodule // cci_mpf_prim_filter_banked_counting
 
@@ -625,11 +649,9 @@ module cci_mpf_prim_filter_decode_bank
     logic process_remove;
     logic remove_notEmpty;
 
-    cci_mpf_prim_fifo_lutram
+    cci_mpf_prim_fifo2
       #(
-        .N_DATA_BITS($bits(t_bucket_idx) + $bits(t_bucket_value)),
-        .N_ENTRIES(N_REMOVE_FIFO_ENTRIES),
-        .REGISTER_OUTPUT(1)
+        .N_DATA_BITS($bits(t_bucket_idx) + $bits(t_bucket_value))
         )
       remove_fifo
        (
@@ -638,7 +660,6 @@ module cci_mpf_prim_filter_decode_bank
         .enq_data({remove_idx, remove_mask}),
         .enq_en(remove_en),
         .notFull(remove_notFull),
-        .almostFull(),
         .first({oldest_remove_idx, oldest_remove_mask}),
         .deq_en(process_remove),
         .notEmpty(remove_notEmpty)
@@ -682,17 +703,17 @@ module cci_mpf_prim_filter_decode_bank
         );
 
 
-    // The pipeline is 3 cycles starting with read request and ending with
+    // The pipeline is 4 cycles starting with read request and ending with
     // the write of mem_upd.  Entry 0 is used during the read request and
     // is set combinationally.  The others are registered downstream copies.
-    // An extra pipeline stage is recorded because the upd_delta computation
+    // Extra pipeline stages are recorded because the upd_delta computation
     // is performed in stage 1 for timing when it naturally should happen in
     // stage 0.  By the time upd_delta is computed the required state has
-    // reached the extra stage 3.
-    logic upd_en[0:3];
-    t_bucket_idx upd_idx[0:3];
-    t_bucket_value upd_insert_mask[0:3];
-    t_bucket_value upd_remove_mask[0:3];
+    // reached the extra stage 4.
+    logic upd_en[0:4];
+    t_bucket_idx upd_idx[0:4];
+    t_bucket_value upd_insert_mask[0:4];
+    t_bucket_value upd_remove_mask[0:4];
 
     always_comb
     begin
@@ -712,7 +733,7 @@ module cci_mpf_prim_filter_decode_bank
     // Data flowing through the update pipeline
     //
     generate
-        for (p = 1; p <= 3; p = p + 1)
+        for (p = 1; p <= 4; p = p + 1)
         begin : upipe
             always_ff @(posedge clk)
             begin
@@ -745,7 +766,7 @@ module cci_mpf_prim_filter_decode_bank
         // The youngest slot with a matching index holds all the pending
         // changes to the bucket.
         //
-        for (int i = 3; i >= 2; i = i - 1)
+        for (int i = 4; i >= 2; i = i - 1)
         begin
             if (upd_en[i] && (upd_idx[1] == upd_idx[i]))
             begin
@@ -774,8 +795,8 @@ module cci_mpf_prim_filter_decode_bank
         upd_insert_mask[2] <= upd_insert_mask[1] | bypass_insert_mask;
         upd_remove_mask[2] <= upd_remove_mask[1] | bypass_remove_mask;
 
-        upd_insert_mask[3] <= upd_insert_mask[2];
-        upd_remove_mask[3] <= upd_remove_mask[2];
+        upd_insert_mask[3:4] <= upd_insert_mask[2:3];
+        upd_remove_mask[3:4] <= upd_remove_mask[2:3];
     end
 
 

@@ -1,12 +1,23 @@
 ##
-## CCI_MPF_SRC must be defined before this file is included pointing to the
+## CCI_MPF_SRC must be defined before this file is included, pointing to the
 ## MPF source tree, e.g.:
 ##
 ##   set CCI_MPF_SRC "../src/cci-mpf"
 ##
+##     *** NOTE: The "set CCI_MPF_SRC ..." syntax does not work in
+##     ***       the primary QSF file since it is Tcl. You must, instead,
+##     ***       build a small file (e.g. "mpf_synth.qsf") and source it
+##     ***       from the qsf synthesis file. mpf_synth.qsf will likely
+##     ***       be small, e.g.:
+##
+##          # Import MPF library
+##          set CCI_MPF_SRC "../src/cci-mpf"
+##          set_global_assignment -name VERILOG_MACRO "MPF_PLATFORM_BDX=1"
+##          source $CCI_MPF_SRC/hw/par/qsf_cci_mpf_PAR_files.qsf
+##
 
 ##
-## MPF support multiple CCI platforms.  One of the platform macros must
+## MPF supports multiple CCI platforms.  One of the platform macros
 ## in cci_mpf_platform.vh must be defined, e.g.:
 ##
 ##   set_global_assignment -name VERILOG_MACRO "MPF_PLATFORM_BDX=1"
@@ -66,8 +77,9 @@ set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-prims
 
 ## MPF shims -- the building blocks of constructed MPF instances
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-shims/cci_mpf_shim_buffer_afu.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-shims/cci_mpf_shim_buffer_afu_epoch.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-shims/cci_mpf_shim_buffer_afu_lockstep.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-shims/cci_mpf_shim_buffer_fiu.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-shims/cci_mpf_shim_buffer_lockstep_afu.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-shims/cci_mpf_shim_csr.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-shims/cci_mpf_shim_detect_eop.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-shims/cci_mpf_shim_edge/cci_mpf_shim_edge_afu.sv
@@ -83,8 +95,8 @@ set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-shims
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_svc_vtp_pt_walk.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-shims/cci_mpf_shim_vtp/cci_mpf_svc_vtp_tlb.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-shims/cci_mpf_shim_wro/cci_mpf_shim_wro.sv
-set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-shims/cci_mpf_shim_wro/cci_mpf_shim_wro_buffer_and_hash.sv
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-shims/cci_mpf_shim_wro/cci_mpf_shim_wro_cam_group.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/hw/rtl/cci-mpf-shims/cci_mpf_shim_wro/cci_mpf_shim_wro_epoch_order.sv
 
 ## Constraints
 set_global_assignment -name SDC_FILE $CCI_MPF_SRC/hw/par/sdc_cci_mpf.sdc

@@ -37,7 +37,7 @@
 // for portions of the pipeline that need to maintain read/write ordering.
 //
 
-module cci_mpf_shim_buffer_lockstep_afu
+module cci_mpf_shim_buffer_afu_lockstep
   #(
     parameter THRESHOLD = CCI_TX_ALMOST_FULL_THRESHOLD,
     parameter N_ENTRIES = THRESHOLD * 2,
@@ -342,5 +342,4 @@ module cci_mpf_shim_buffer_lockstep_afu
 
     assign afu_buf.c2Tx = afu_raw.c2Tx;
 
-endmodule // cci_mpf_shim_buffer_lockstep_afu
-
+endmodule // cci_mpf_shim_buffer_afu_lockstep

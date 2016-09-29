@@ -61,8 +61,6 @@ module cci_mpf_shim_wro
         reset <= fiu.reset;
     end
 
-    logic c1_notEmpty;
-
     //
     // The filters are implemented as single bits in a block RAM, indexed
     // by a hash of line addresses.  One M20K is sufficient on all current
@@ -90,8 +88,7 @@ module cci_mpf_shim_wro
         .fiu,
         .afu,
         .csrs,
-        .events,
-        .c1_notEmpty
+        .events
         );
 
 endmodule // cci_mpf_shim_wro

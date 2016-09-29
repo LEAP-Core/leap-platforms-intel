@@ -102,7 +102,11 @@ module cci_mpf_shim_vc_map
         afu.c0Rx = fiu.c0Rx;
 
         // Drop locally generated WrFence
-        afu.c1Rx = cci_mpf_c1TxMaskValids(fiu.c1Rx, ! is_vc_map_wrfence_rsp);
+        afu.c1Rx = fiu.c1Rx;
+        if (is_vc_map_wrfence_rsp)
+        begin
+            afu.c1Rx = ccip_c1Rx_clearValids();
+        end
     end
 
 
@@ -324,7 +328,7 @@ module cci_mpf_shim_vc_map
             wrfence_params.vc_sel = eVC_VA;
 
             fiu.c1Tx.hdr = cci_mpf_c1_genReqHdr(eREQ_WRFENCE,
-                                                t_cci_clAddr'(0),
+                                                t_cci_clAddr'('x),
                                                 t_cci_mdata'(1 << RESERVED_MDATA_IDX),
                                                 wrfence_params);
             fiu.c1Tx.valid = 1'b1;

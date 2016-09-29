@@ -42,12 +42,59 @@ module cci_mpf_prim_fifo2
     input  logic reset,
 
     input  logic [N_DATA_BITS-1 : 0] enq_data,
-    input  logic                     enq_en,
-    output logic                     notFull,
+    input  logic enq_en,
+    output logic notFull,
 
     output logic [N_DATA_BITS-1 : 0] first,
-    input  logic                     deq_en,
-    output logic                     notEmpty
+    input  logic deq_en,
+    output logic notEmpty
+    );
+
+    cci_mpf_prim_fifo2_peek
+      #(
+        .N_DATA_BITS(N_DATA_BITS)
+        )
+      f
+       (
+        .clk,
+        .reset,
+
+        .enq_data,
+        .enq_en,
+        .notFull,
+
+        .first,
+        .deq_en,
+        .notEmpty,
+
+        .peek_valid(),
+        .peek_value()
+        );
+
+endmodule // cci_mpf_prim_fifo2
+
+
+//
+// FIFO2 with the internal data state exposed
+//
+module cci_mpf_prim_fifo2_peek
+  #(
+    parameter N_DATA_BITS = 32
+    )
+   (
+    input  logic clk,
+    input  logic reset,
+
+    input  logic [N_DATA_BITS-1 : 0] enq_data,
+    input  logic enq_en,
+    output logic notFull,
+
+    output logic [N_DATA_BITS-1 : 0] first,
+    input  logic deq_en,
+    output logic notEmpty,
+
+    output logic [1:0] peek_valid,
+    output logic [1:0][N_DATA_BITS-1 : 0] peek_value
     );
 
     logic [1:0] valid;
@@ -96,4 +143,8 @@ module cci_mpf_prim_fifo2
         end
     end
 
-endmodule // cci_mpf_prim_fifo2
+    assign peek_valid = valid;
+    assign peek_value[0] = data[0];
+    assign peek_value[1] = data[1];
+
+endmodule // cci_mpf_prim_fifo2_peek

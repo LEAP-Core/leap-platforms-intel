@@ -30,6 +30,7 @@
 
 `include "cci_mpf_if.vh"
 `include "cci_mpf_shim_wro.vh"
+`include "cci_mpf_prim_hash.vh"
 
 
 //
@@ -64,74 +65,74 @@ module cci_mpf_shim_wro_cam_group
     cci_mpf_if.to_afu afu,
 
     cci_mpf_csrs.wro csrs,
-    cci_mpf_csrs.wro_events events,
-
-    // Indicate whether the c1 request channel is empty.  This is needed
-    // to guarantee proper write fence ordering relative to other writes.
-    output logic c1_notEmpty
+    cci_mpf_csrs.wro_events events
     );
 
     logic reset;
     assign reset = fiu.reset;
 
+    localparam FILTER_PIPE_DEPTH = 4;
 
     // ====================================================================
     //
     //  Instantiate a buffer on the AFU request port, making it latency
-    //  insensitive.
+    //  insensitive.  The buffer also enforces order such that no two
+    //  conflicting requests are active in the outbound WRO pipeline at
+    //  the same time.
     //
     // ====================================================================
 
     cci_mpf_if afu_buf (.clk);
+    cci_mpf_if afu_filtered (.clk);
+    cci_mpf_if fiu_buf (.clk);
+
+    // Does the WRO pipeline here have active requests?
+    logic pipe_notEmpty;
+    logic c0_pipe_notEmpty;
+    logic c1_pipe_notEmpty;
 
     // Latency-insensitive ports need explicit dequeue (enable).
     logic c0_afu_deq;
     logic c1_afu_deq;
 
-    //
-    // Hash addresses into smaller values to reduce storage and comparison
-    // overhead.
-    //
-    // The buffer and hash module exports two hashes per channel because
-    // it must pre-compute the hash conflicts for timing in the pipeline.
-    // Index 0 corresponds to the oldest entry.
-    //
-    typedef logic [ADDRESS_HASH_BITS-1 : 0] t_hash;
-    t_hash c0_hash[0:1];
-    t_hash c1_hash[0:1];
-    t_cci_mpf_wro_line_mask c1_line_mask[0:1];
-    logic c0_new_req_conflict[0:1];
-    logic c1_new_req_conflict[0:1];
+    // Addresses active in the write request pipeline
+    logic c1_pipe_valid [0 : FILTER_PIPE_DEPTH-1];
+    logic [ADDRESS_HASH_BITS-1 : 0] c1_pipe_addrHash [0 : FILTER_PIPE_DEPTH-1];
+    t_cci_mpf_wro_line_mask c1_pipe_lineMask [0 : FILTER_PIPE_DEPTH-1];
 
-    logic c1_buf_notEmpty;
-    logic c1_pipe_notEmpty;
-
-    cci_mpf_shim_wro_buffer_and_hash
+    cci_mpf_shim_wro_epoch_order
       #(
         .AFU_BUF_THRESHOLD(AFU_BUF_THRESHOLD),
-        .ADDRESS_HASH_BITS(ADDRESS_HASH_BITS)
+        .ADDRESS_HASH_BITS(ADDRESS_HASH_BITS),
+        .PIPE_DEPTH(FILTER_PIPE_DEPTH)
         )
-      bufafu
+      epoch_order
        (
         .clk,
-        .afu_raw(afu),
-        .afu_buf(afu_buf),
 
-        .c0_hash,
-        .c0_hash_conflicts(c0_new_req_conflict),
-        .c1_hash,
-        .c1_line_mask,
-        .c1_hash_conflicts(c1_new_req_conflict),
+        // Incoming from AFU
+        .afu(afu),
+        // Buffered and epoch's tagged (from bufafu)
+        .client_afu(afu_buf),
+        // Addresses filtered (from pipeline here toward bufafu)
+        .client_fiu(afu_filtered),
+        // FIU-bound processing in bufafu complete (from bufafu toward fiu) 
+        .fiu(fiu_buf),
 
-        .c0_deqTx(c0_afu_deq),
-        .c1_deqTx(c1_afu_deq),
-        .c1_buf_notEmpty,
-        .c1_pipe_notEmpty,
+        .active_notEmpty(pipe_notEmpty),
+        .active_c0Tx_notEmpty(c0_pipe_notEmpty),
+        .active_c1Tx_notEmpty(c1_pipe_notEmpty),
 
-        .csrs
+        // States of existing requests in the write pipeline
+        .active_valid(c1_pipe_valid),
+        .active_addrHash(c1_pipe_addrHash),
+        .active_lineMask(c1_pipe_lineMask),
+
+        .deqC0Tx(c0_afu_deq),
+        .deqC1Tx(c1_afu_deq)
         );
 
-    assign afu_buf.reset = fiu.reset;
+    assign afu_buf.reset = afu_filtered.reset;
 
     //
     // Almost full signals in the buffered input are ignored --
@@ -141,14 +142,27 @@ module cci_mpf_shim_wro_cam_group
     assign afu_buf.c0TxAlmFull = 1'b1;
     assign afu_buf.c1TxAlmFull = 1'b1;
 
-    // The c1 request channel is empty if both the buffer is empty and
-    // the pipeline is empty.  It is registered here for timing and is
-    // thus conservative.
-    always_ff @(posedge clk)
-    begin
-        c1_notEmpty <= c1_buf_notEmpty || c1_pipe_notEmpty ||
-                       cci_mpf_c1TxIsValid(afu.c1Tx);
-    end
+
+    // ====================================================================
+    //
+    // Hash addresses into smaller values to reduce storage and comparison
+    // overhead.
+    //
+    // ====================================================================
+
+    typedef logic [ADDRESS_HASH_BITS-1 : 0] t_hash;
+
+    function automatic t_hash hashAddr(t_cci_clAddr addr);
+        return t_hash'(hash32(addr[$bits(t_cci_clLen) +: 32]));
+    endfunction
+
+    t_hash c0_hash;
+    t_hash c1_hash;
+    t_cci_mpf_wro_line_mask c1_line_mask;
+
+    assign c0_hash = hashAddr(cci_mpf_c0_getReqAddr(afu_buf.c0Tx.hdr));
+    assign c1_hash = hashAddr(cci_mpf_c1_getReqAddr(afu_buf.c1Tx.hdr));
+    assign c1_line_mask = wroWrFilterLineMask(afu_buf.c1Tx.hdr);
 
 
     // ====================================================================
@@ -158,8 +172,6 @@ module cci_mpf_shim_wro_cam_group
     //  toward the AFU.
     //
     // ====================================================================
-
-    cci_mpf_if fiu_buf (.clk);
 
     cci_mpf_shim_buffer_fiu
       #(
@@ -181,7 +193,6 @@ module cci_mpf_shim_wro_cam_group
     //
     // ====================================================================
 
-    localparam FILTER_PIPE_DEPTH = 4;
     // Final stage in the pipeline
     localparam FILTER_PIPE_LAST = FILTER_PIPE_DEPTH-1;
     // Stage in which filter lookups are tested
@@ -278,7 +289,8 @@ module cci_mpf_shim_wro_cam_group
         .remove(rd_filter_remove_hash),
 
         // N_REMOVE_FIFO_ENTRIES is large enough that we can ignore notFull
-        .remove_notFull()
+        .remove_notFull(),
+        .remove_almostFull()
         );
 
     //
@@ -375,7 +387,7 @@ module cci_mpf_shim_wro_cam_group
 
     t_c0_heap_entry c0_heap_enqData;
     t_heap_idx c0_heap_reqIdx;
-    assign c0_heap_reqIdx = t_heap_idx'(fiu_buf.c0Tx.hdr.base.mdata);
+    assign c0_heap_reqIdx = t_heap_idx'(afu_filtered.c0Tx.hdr.base.mdata);
 
     t_heap_idx c0_heap_readReq;
     t_c0_heap_entry c0_heap_readRsp;
@@ -392,7 +404,7 @@ module cci_mpf_shim_wro_cam_group
        (
         .clk,
 
-        .wen(cci_mpf_c0TxIsReadReq(fiu_buf.c0Tx)),
+        .wen(cci_mpf_c0TxIsReadReq(afu_filtered.c0Tx)),
         .waddr(c0_heap_reqIdx),
         .wdata(c0_heap_enqData),
 
@@ -420,7 +432,7 @@ module cci_mpf_shim_wro_cam_group
 
     t_c1_heap_entry c1_heap_enqData;
     t_heap_idx c1_heap_reqIdx;
-    assign c1_heap_reqIdx = t_heap_idx'(fiu_buf.c1Tx.hdr.base.mdata);
+    assign c1_heap_reqIdx = t_heap_idx'(afu_filtered.c1Tx.hdr.base.mdata);
 
     t_heap_idx c1_heap_readReq;
     t_c1_heap_entry c1_heap_readRsp;
@@ -437,7 +449,7 @@ module cci_mpf_shim_wro_cam_group
        (
         .clk,
 
-        .wen(cci_mpf_c1TxIsWriteReq(fiu_buf.c1Tx)),
+        .wen(cci_mpf_c1TxIsWriteReq(afu_filtered.c1Tx)),
         .waddr(c1_heap_reqIdx),
         .wdata(c1_heap_enqData),
 
@@ -476,6 +488,20 @@ module cci_mpf_shim_wro_cam_group
 
     logic c0_process_requests;
     logic c1_process_requests;
+
+    //
+    // Export some state to the epoch filter
+    //
+    always_comb
+    begin
+        for (int i = 0; i < FILTER_PIPE_DEPTH; i = i + 1)
+        begin
+            c1_pipe_valid[i] = cci_mpf_c1TxIsValid(c1_afu_pipe[i].c1Tx) &&
+                               c1_afu_pipe[i].c1Tx.hdr.ext.checkLoadStoreOrder;
+            c1_pipe_addrHash[i] = c1_afu_pipe[i].c1AddrHash;
+            c1_pipe_lineMask[i] = c1_afu_pipe[i].c1LineMask;
+        end
+    end
 
     // ====================================================================
     //
@@ -548,15 +574,15 @@ module cci_mpf_shim_wro_cam_group
     // synthesis translate_off
     always_ff @(posedge clk)
     begin
-        if (c0_process_requests)
+        if (! reset && c0_process_requests)
         begin
-            assert ((! filter_verify_req_en[FILTER_PIPE_TEST][0] || (filter_verify_req[FILTER_PIPE_TEST][0] == c0_afu_pipe[FILTER_PIPE_TEST].c0AddrHash)) &&
+            assert ((! filter_verify_req_en[FILTER_PIPE_TEST][0] || (filter_verify_req[FILTER_PIPE_TEST][0] === c0_afu_pipe[FILTER_PIPE_TEST].c0AddrHash)) &&
                     (filter_verify_req_en[FILTER_PIPE_TEST][0] == cci_mpf_c0TxIsReadReq(c0_afu_pipe[FILTER_PIPE_TEST].c0Tx))) else
                 $fatal("cci_mpf_shim_wro: Incorrect c0 pipeline control");
         end
-        if (c1_process_requests)
+        if (! reset && c1_process_requests)
         begin
-            assert ((! filter_verify_req_en[FILTER_PIPE_TEST][1] || (filter_verify_req[FILTER_PIPE_TEST][1] == c1_afu_pipe[FILTER_PIPE_TEST].c1AddrHash)) &&
+            assert ((! filter_verify_req_en[FILTER_PIPE_TEST][1] || (filter_verify_req[FILTER_PIPE_TEST][1] === c1_afu_pipe[FILTER_PIPE_TEST].c1AddrHash)) &&
                     (filter_verify_req_en[FILTER_PIPE_TEST][1] == cci_mpf_c1TxIsWriteReq(c1_afu_pipe[FILTER_PIPE_TEST].c1Tx))) else
                 $fatal("cci_mpf_shim_wro: Incorrect c1 pipeline control");
         end
@@ -625,15 +651,17 @@ module cci_mpf_shim_wro_cam_group
     logic c1_advance_pipeline;
     assign c1_advance_pipeline = (! c1_blocked || ! c1_request_rdy);
 
-    // Is the incoming pipeline moving?
-    assign c0_afu_deq = c0_advance_pipeline && cci_mpf_c0TxIsValid(afu_buf.c0Tx);
-    assign c1_afu_deq = c1_advance_pipeline && cci_mpf_c1TxIsValid(afu_buf.c1Tx);
-
     // Update the pipeline
     t_c0_request_pipe c0_afu_pipe_init;
     t_c1_request_pipe c1_afu_pipe_init;
     logic c0_swap_entries;
     logic c1_swap_entries;
+
+    // Is the incoming pipeline moving?
+    assign c0_afu_deq = c0_advance_pipeline &&
+                        cci_mpf_c0TxIsValid(c0_afu_pipe_init.c0Tx);
+    assign c1_afu_deq = c1_advance_pipeline &&
+                        cci_mpf_c1TxIsValid(c1_afu_pipe_init.c1Tx);
 
     always_ff @(posedge clk)
     begin
@@ -700,74 +728,56 @@ module cci_mpf_shim_wro_cam_group
         end
     end
 
+    //
+    // Will the pipeline be empty next cycle?
+    //
+    logic c0_pipe_notEmpty_next;
+    logic c1_pipe_notEmpty_next;
+
+    always_ff @(posedge clk)
+    begin
+        pipe_notEmpty <= c0_pipe_notEmpty_next || c1_pipe_notEmpty_next;
+        c0_pipe_notEmpty <= c0_pipe_notEmpty_next;
+        c1_pipe_notEmpty <= c1_pipe_notEmpty_next;
+    end
+
     always_comb
     begin
+        // New request coming into the pipeline?
+        c0_pipe_notEmpty_next = c0_afu_deq;
+        for (int i = 0; i < FILTER_PIPE_DEPTH; i = i + 1)
+        begin
+            // Check all pipeline slots
+            c0_pipe_notEmpty_next = c0_pipe_notEmpty_next ||
+                                    cci_mpf_c0TxIsValid(c0_afu_pipe[i].c0Tx);
+        end
+
+        // Same for c1
+        c1_pipe_notEmpty_next = c1_afu_deq;
+        for (int i = 0; i < FILTER_PIPE_DEPTH; i = i + 1)
+        begin
+            c1_pipe_notEmpty_next = c1_pipe_notEmpty_next ||
+                                    cci_mpf_c1TxIsValid(c1_afu_pipe[i].c1Tx);
+        end
+    end
+
+
+    always_comb
+    begin
+        //
+        // Hold back new requests when the epoch changes until the request
+        // pipeline drains.
+        //
         c0_afu_pipe_init.c0Tx = afu_buf.c0Tx;
         c0_afu_pipe_init.c0Tx.hdr.ext.checkLoadStoreOrder =
             afu_buf.c0Tx.valid && afu_buf.c0Tx.hdr.ext.checkLoadStoreOrder;
-        c0_afu_pipe_init.c0AddrHash = c0_hash[0];
+        c0_afu_pipe_init.c0AddrHash = c0_hash;
 
         c1_afu_pipe_init.c1Tx = afu_buf.c1Tx;
         c1_afu_pipe_init.c1Tx.hdr.ext.checkLoadStoreOrder =
             afu_buf.c1Tx.valid && afu_buf.c1Tx.hdr.ext.checkLoadStoreOrder;
-        c1_afu_pipe_init.c1AddrHash = c1_hash[0];
-        c1_afu_pipe_init.c1LineMask = c1_line_mask[0];
-    end
-
-
-    //
-    // Don't allow new requests to enter afu_pipe if they may conflict
-    // with entries already in the pipeline.  This simplifies address
-    // conflict checks in the pipeline, allowing tests to be multi-cycle
-    // without fear of needing bypasses to handle back-to-back requests
-    // to the same address.
-    //
-    always_comb
-    begin
-        // Two sets of hashes are tested because of pipelining inside the
-        // buffer and hash module.  They are tested independently.
-        for (int h = 0; h < 2; h = h + 1)
-        begin
-            // Incoming write against all other writes and reads
-            c1_new_req_conflict[h] = 1'b0;
-            for (int i = 0; i < FILTER_PIPE_DEPTH; i = i + 1)
-            begin
-                c1_new_req_conflict[h] =
-                    c1_new_req_conflict[h] ||
-                    (cci_mpf_c1_getReqCheckOrder(c1_afu_pipe[i].c1Tx.hdr) &&
-                     (c1_hash[h] == c1_afu_pipe[i].c1AddrHash) &&
-                     (|(c1_line_mask[h] & c1_afu_pipe[i].c1LineMask))) ||
-                    (cci_mpf_c0_getReqCheckOrder(c0_afu_pipe[i].c0Tx.hdr) &&
-                     (c1_hash[h] == c0_afu_pipe[i].c0AddrHash));
-            end
-
-            // Incoming read against all other writes.  We allow multiple
-            // reads to the same address since a counting filter is used
-            // for reads, so c0_hash is not compared against reads.
-            c0_new_req_conflict[h] = 1'b0;
-            for (int i = 0; i < FILTER_PIPE_DEPTH; i = i + 1)
-            begin
-                c0_new_req_conflict[h] =
-                    c0_new_req_conflict[h] ||
-                    (cci_mpf_c1_getReqCheckOrder(c1_afu_pipe[i].c1Tx.hdr) &&
-                     (c0_hash[h] == c1_afu_pipe[i].c1AddrHash));
-            end
-        end
-    end
-
-
-    //
-    // Is the write channel empty?  This must be known in order to guarantee
-    // write fence order.
-    //
-    always_comb
-    begin
-        c1_pipe_notEmpty = 1'b0;
-        for (int i = 0; i < FILTER_PIPE_DEPTH; i = i + 1)
-        begin
-            c1_pipe_notEmpty = c1_pipe_notEmpty ||
-                               cci_mpf_c1TxIsValid(c1_afu_pipe[i].c1Tx);
-        end
+        c1_afu_pipe_init.c1AddrHash = c1_hash;
+        c1_afu_pipe_init.c1LineMask = c1_line_mask;
     end
 
 
@@ -796,7 +806,7 @@ module cci_mpf_shim_wro_cam_group
         begin
             // Normal, pipelined flow.  Next cycle we will test the value
             // being written to the first stage of the pipeline.
-            filter_test_req[0] <= c0_hash[0];
+            filter_test_req[0] <= c0_hash;
             filter_test_req_en[0] <= cci_mpf_c0TxIsReadReq(c0_afu_pipe_init.c0Tx);
         end
 
@@ -811,7 +821,7 @@ module cci_mpf_shim_wro_cam_group
         begin
             // Normal, pipelined flow.  Next cycle we will test the value
             // being written to the first stage of the pipeline.
-            filter_test_req[1] <= c1_hash[0];
+            filter_test_req[1] <= c1_hash;
             filter_test_req_en[1] <= cci_mpf_c1TxIsWriteReq(c1_afu_pipe_init.c1Tx);
         end
 
@@ -828,8 +838,9 @@ module cci_mpf_shim_wro_cam_group
     //
     // ====================================================================
 
-    assign fiu_buf.c0Tx = cci_mpf_c0TxMaskValids(c0_afu_pipe[FILTER_PIPE_LAST].c0Tx,
-                                                 c0_process_requests);
+    assign afu_filtered.c0Tx =
+        cci_mpf_c0TxMaskValids(c0_afu_pipe[FILTER_PIPE_LAST].c0Tx,
+                               c0_process_requests);
 
     // Save state that will be used when the response is returned.
     always_comb
@@ -869,8 +880,9 @@ module cci_mpf_shim_wro_cam_group
     //
     // ====================================================================
 
-    assign fiu_buf.c1Tx = cci_mpf_c1TxMaskValids(c1_afu_pipe[FILTER_PIPE_LAST].c1Tx,
-                                                 c1_process_requests);
+    assign afu_filtered.c1Tx =
+        cci_mpf_c1TxMaskValids(c1_afu_pipe[FILTER_PIPE_LAST].c1Tx,
+                               c1_process_requests);
 
     // Save state that will be used when the response is returned.
     always_comb
@@ -940,18 +952,18 @@ module cci_mpf_shim_wro_cam_group
                 $display("C1 heap full %d", c1_heap_reqIdx);
             end
 
-            if (cci_mpf_c0TxIsReadReq(fiu_buf.c0Tx))
+            if (cci_mpf_c0TxIsReadReq(afu_filtered.c0Tx))
             begin
                 $display("XX A 0 %d %x %t",
                          c0_heap_reqIdx,
-                         cci_mpf_c0_getReqAddr(fiu_buf.c0Tx.hdr),
+                         cci_mpf_c0_getReqAddr(afu_filtered.c0Tx.hdr),
                          $time);
             end
-            if (cci_mpf_c1TxIsWriteReq(fiu_buf.c1Tx))
+            if (cci_mpf_c1TxIsWriteReq(afu_filtered.c1Tx))
             begin
                 $display("XX A 1 %d %x hash 0x%x %t",
                          c1_heap_reqIdx,
-                         cci_mpf_c1_getReqAddr(fiu_buf.c1Tx.hdr),
+                         cci_mpf_c1_getReqAddr(afu_filtered.c1Tx.hdr),
                          wr_filter_insert_hash,
                          $time);
             end
@@ -982,7 +994,6 @@ module cci_mpf_shim_wro_cam_group
     //
     // ====================================================================
 
-    assign fiu_buf.c2Tx = afu_buf.c2Tx;
+    assign afu_filtered.c2Tx = afu_buf.c2Tx;
 
 endmodule // cci_mpf_shim_wro_cam_group
-

@@ -155,11 +155,13 @@ module cci_mpf_prim_filter_counting
 endmodule // cci_mpf_prim_filter_counting
 
 
+
+// ========================================================================
 //
-// Banked counting filter using block RAM.  The filter is fully bypassed
-// so that values inserted are recorded the cycle after insertion.
+// Banked counting filter.  The filter is fully bypassed so that values
+// inserted are recorded the cycle after insertion.
 //
-// Banking is available because the block RAM's read port for updates
+// The filters are banked because the memory's read port for updates
 // is oversubscribed by the required read-modify-write for both insertion
 // and removal.  Insertion is always given priority.  While a single
 // bank may work in many cases, removal requests may back up and cause
@@ -168,6 +170,8 @@ endmodule // cci_mpf_prim_filter_counting
 // It is the client's responsibility either to honor remove_notFull or
 // to set N_REMOVE_FIFO_ENTRIES large enough that the FIFO can never fill.
 //
+// ========================================================================
+
 module cci_mpf_prim_filter_banked_counting
   #(
     // Log2 of the number of parallel banks, specified this way because the
@@ -189,7 +193,8 @@ module cci_mpf_prim_filter_banked_counting
     // Number of entries in the remove port's FIFO.  The remove port
     // shares a block RAM port with insertion.  Remove requests are
     // buffered until they can be processed.
-    parameter N_REMOVE_FIFO_ENTRIES = 128
+    parameter N_REMOVE_FIFO_ENTRIES = 128,
+    parameter N_REMOVE_FIFO_THRESHOLD = 1
     )
    (
     input  logic clk,
@@ -211,7 +216,8 @@ module cci_mpf_prim_filter_banked_counting
     input  logic [$clog2(N_BUCKETS)-1 : 0] remove,
     // Remove shares a port with insert.  Insertion has priority, so
     // the remove port may become full.
-    output logic remove_notFull
+    output logic remove_notFull,
+    output logic remove_almostFull
     );
 
     typedef logic [$clog2(N_BUCKETS)-1 : 0] t_bucket_idx;
@@ -271,7 +277,8 @@ module cci_mpf_prim_filter_banked_counting
             cci_mpf_prim_fifo_bram
               #(
                 .N_DATA_BITS($bits(t_bucket_idx)),
-                .N_ENTRIES(N_REMOVE_FIFO_ENTRIES)
+                .N_ENTRIES(N_REMOVE_FIFO_ENTRIES),
+                .THRESHOLD(N_REMOVE_FIFO_THRESHOLD)
                 )
               remove_fifo_br
                (
@@ -280,7 +287,7 @@ module cci_mpf_prim_filter_banked_counting
                 .enq_data(remove),
                 .enq_en(remove_en),
                 .notFull(remove_notFull),
-                .almostFull(),
+                .almostFull(remove_almostFull),
                 .first(remove_idx),
                 .deq_en(process_remove),
                 .notEmpty(remove_notEmpty)
@@ -292,6 +299,7 @@ module cci_mpf_prim_filter_banked_counting
               #(
                 .N_DATA_BITS($bits(t_bucket_idx)),
                 .N_ENTRIES(N_REMOVE_FIFO_ENTRIES),
+                .THRESHOLD(N_REMOVE_FIFO_THRESHOLD),
                 .REGISTER_OUTPUT(1)
                 )
               remove_fifo_lr
@@ -301,7 +309,7 @@ module cci_mpf_prim_filter_banked_counting
                 .enq_data(remove),
                 .enq_en(remove_en),
                 .notFull(remove_notFull),
-                .almostFull(),
+                .almostFull(remove_almostFull),
                 .first(remove_idx),
                 .deq_en(process_remove),
                 .notEmpty(remove_notEmpty)
@@ -313,15 +321,28 @@ module cci_mpf_prim_filter_banked_counting
     //
     // Banks of filters
     //
+    t_bank_bucket_idx [N_TEST_VALUE_CLIENTS-1 : 0] bank_test_value_req[0 : N_BANKS-1];
+    t_bank_bucket_idx [N_TEST_IS_ZERO_CLIENTS-1 : 0] bank_test_isZero_req[0 : N_BANKS-1];
     t_bucket_value [N_TEST_VALUE_CLIENTS-1 : 0] bank_test_value[0 : N_BANKS-1];
     logic [N_TEST_IS_ZERO_CLIENTS-1 : 0] bank_test_isZero[0 : N_BANKS-1];
     logic bank_remove_notFull[0 : N_BANKS-1];
     logic bank_rdy[0 : N_BANKS-1];
 
     genvar b;
+    genvar c;
     generate
         for (b = 0; b < N_BANKS; b = b + 1)
         begin : fb
+            for (c = 0; c < N_TEST_VALUE_CLIENTS; c = c + 1)
+            begin : tv
+                assign bank_test_value_req[b][c] = bankBucket(test_value_req[c]);
+            end
+
+            for (c = 0; c < N_TEST_IS_ZERO_CLIENTS; c = c + 1)
+            begin : tz
+                assign bank_test_isZero_req[b][c] = bankBucket(test_isZero_req[c]);
+            end
+
             cci_mpf_prim_filter_counting_bank
               #(
                 // Buckets are spread evenly across banks
@@ -336,10 +357,10 @@ module cci_mpf_prim_filter_banked_counting
                 .reset,
                 .rdy(bank_rdy[b]),
 
-                .test_value_req(bankBucket(test_value_req)),
+                .test_value_req(bank_test_value_req[b]),
                 .T2_test_value(bank_test_value[b]),
 
-                .test_isZero_req(bankBucket(test_isZero_req)),
+                .test_isZero_req(bank_test_isZero_req[b]),
                 .T2_test_isZero(bank_test_isZero[b]),
 
                 .insert_en(insert_en &&
@@ -361,11 +382,26 @@ module cci_mpf_prim_filter_banked_counting
                             remove_notEmpty;
 
     // Record the bank used for tests and cascade down the pipeline
-    t_bank_idx test_value_which_bank[0 : 2];
-    t_bank_idx test_isZero_which_bank[0 : 2];
+    t_bank_idx [N_TEST_VALUE_CLIENTS-1 : 0] test_value_which_bank[0 : 2];
+    t_bank_idx [N_TEST_IS_ZERO_CLIENTS-1 : 0] test_isZero_which_bank[0 : 2];
 
-    assign test_value_which_bank[0] = bankFromBucket(test_value_req);
-    assign test_isZero_which_bank[0] = bankFromBucket(test_isZero_req);
+    generate
+        for (c = 0; c < N_TEST_VALUE_CLIENTS; c = c + 1)
+        begin : btv
+            assign test_value_which_bank[0][c] = bankFromBucket(test_value_req[c]);
+
+            // Return result from the bank handling the request
+            assign T2_test_value[c] = bank_test_value[test_value_which_bank[2][c]][c];
+        end
+
+        for (c = 0; c < N_TEST_IS_ZERO_CLIENTS; c = c + 1)
+        begin : btz
+            assign test_isZero_which_bank[0][c] = bankFromBucket(test_isZero_req[c]);
+
+            // Return result from the bank handling the request
+            assign T2_test_isZero[c] = bank_test_isZero[test_isZero_which_bank[2][c]][c];
+        end
+    endgenerate
 
     always_ff @(posedge clk)
     begin
@@ -373,17 +409,15 @@ module cci_mpf_prim_filter_banked_counting
         test_isZero_which_bank[1:2] <= test_isZero_which_bank[0:1];
     end
 
-    // Return result from the bank handling the request
-    assign T2_test_value = bank_test_value[test_value_which_bank[2]];
-    assign T2_test_isZero = bank_test_isZero[test_isZero_which_bank[2]];
-
 endmodule // cci_mpf_prim_filter_banked_counting
 
 
 //
-// One bank of a banked counting filter.  This should be treated as a module
-// internal to the counting filter.  To allocate a single bank clients should
-// use cci_mpf_prim_filter_banked_counting and specify N_BANKS_RADIX 0.
+// One bank of a banked counting filter.
+//
+// This should be treated as a module internal to the counting filter.
+// To allocate a single bank, clients should use
+// cci_mpf_prim_filter_banked_counting and specify N_BANKS_RADIX 0.
 //
 module cci_mpf_prim_filter_counting_bank
   #(
@@ -545,7 +579,8 @@ module cci_mpf_prim_filter_counting_bank
               #(
                 .N_ENTRIES(N_BUCKETS),
                 .N_DATA_BITS(1),
-                .N_OUTPUT_REG_STAGES(1)
+                .N_OUTPUT_REG_STAGES(1),
+                .REGISTER_WRITES(1)
                 )
               mem_port_is_zero
                (
@@ -611,11 +646,9 @@ module cci_mpf_prim_filter_counting_bank
     logic process_remove;
     logic remove_notEmpty;
 
-    cci_mpf_prim_fifo_lutram
+    cci_mpf_prim_fifo2
       #(
-        .N_DATA_BITS($bits(t_bucket_idx)),
-        .N_ENTRIES(N_REMOVE_FIFO_ENTRIES),
-        .REGISTER_OUTPUT(1)
+        .N_DATA_BITS($bits(t_bucket_idx))
         )
       remove_fifo
        (
@@ -624,7 +657,6 @@ module cci_mpf_prim_filter_counting_bank
         .enq_data(remove),
         .enq_en(remove_en),
         .notFull(remove_notFull),
-        .almostFull(),
         .first(remove_idx),
         .deq_en(process_remove),
         .notEmpty(remove_notEmpty)

@@ -1105,7 +1105,7 @@ module test_gen_pwrite_hdr
         pwh.mask <= pw_rand_mask;
 
         // Most writes are not partial
-        pwh.isPartialWrite <= (5'(pw_lfsr) == 5'(0)) && enable_partial_writes;
+        pwh.isPartialWrite <= (6'(pw_lfsr) == 6'(0)) && enable_partial_writes;
     end
 
 endmodule // test_gen_pwrite_hdr

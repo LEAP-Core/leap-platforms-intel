@@ -297,11 +297,27 @@ module cci_mpf_shim_edge_afu_wr_data
     //
     // Forward partial write requests to the partial write emulator.
     //
-    assign pwrite.wen = cci_mpf_c1TxIsWriteReq(afu.c1Tx);
-    assign pwrite.widx = wr_heap_enq_idx;
-    assign pwrite.wclnum = wr_heap_enq_clNum;
-    assign pwrite.wpartial = afu.c1Tx.hdr.pwrite;
+    always_ff @(posedge clk)
+    begin
+        pwrite.wen <= cci_mpf_c1TxIsWriteReq(afu.c1Tx);
+        pwrite.widx <= wr_heap_enq_idx;
+        pwrite.wclnum <= wr_heap_enq_clNum;
 
+        pwrite.wpartial <= afu.c1Tx.hdr.pwrite;
+        if (! afu.c1Tx.hdr.pwrite.isPartialWrite)
+        begin
+            // Turn off the mask if this isn't a partial write.  Multi-beat
+            // requests may have isPartialWrite set on any beat, so this
+            // mask ultimately may be used even when isPartialWrite is
+            // false for the current beat.
+            pwrite.wpartial.mask <= ~ t_cci_mpf_clDataByteMask'(0);
+        end
+
+        if (reset)
+        begin
+            pwrite.wen <= 1'b0;
+        end
+    end
 
     // ====================================================================
     //
@@ -391,6 +407,13 @@ module cci_mpf_shim_edge_afu_wr_data
                 cci_mpf_updC1TxCanonicalHdr(afu.c1Tx.hdr,
                                             cci_mpf_c1TxIsWriteReq(afu.c1Tx));
         end
+        else if (cci_mpf_c1TxIsWriteReq(afu.c1Tx) &&
+                 afu.c1Tx.hdr.pwrite.isPartialWrite)
+        begin
+            // Setting isPartialWrite in any beat of a multi-line write
+            // makes the write partial.
+            c1tx_sop_hdr.pwrite.isPartialWrite <= 1'b1;
+        end
     end
 
     // Generate canonical c1Tx, including cl_len and address.
@@ -408,7 +431,9 @@ module cci_mpf_shim_edge_afu_wr_data
             afu_canon_c1Tx.hdr.base.cl_len = c1tx_sop_hdr.base.cl_len;
             afu_canon_c1Tx.hdr.base.address = c1tx_sop_hdr.base.address;
             afu_canon_c1Tx.hdr.ext = c1tx_sop_hdr.ext;
-            afu_canon_c1Tx.hdr.pwrite.isPartialWrite = c1tx_sop_hdr.pwrite.isPartialWrite;
+            afu_canon_c1Tx.hdr.pwrite.isPartialWrite =
+                afu_canon_c1Tx.hdr.pwrite.isPartialWrite ||
+                c1tx_sop_hdr.pwrite.isPartialWrite;
         end
 
         if (ENABLE_PARTIAL_WRITES == 0)

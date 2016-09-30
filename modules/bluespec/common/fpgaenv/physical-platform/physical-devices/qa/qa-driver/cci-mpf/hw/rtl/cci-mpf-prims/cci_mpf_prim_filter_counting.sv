@@ -575,27 +575,62 @@ module cci_mpf_prim_filter_counting_bank
         // For each client
         for (c = 0; c < N_TEST_IS_ZERO_CLIENTS; c = c + 1)
         begin : izm
-            cci_mpf_prim_ram_simple_init
-              #(
-                .N_ENTRIES(N_BUCKETS),
-                .N_DATA_BITS(1),
-                .N_OUTPUT_REG_STAGES(1),
-                .REGISTER_WRITES(1)
-                )
-              mem_port_is_zero
-               (
-                .clk,
-                .reset,
-                // rdy from mem_upd goes high at the same time
-                .rdy(),
+            if (N_BUCKETS > 1024)
+            begin : br
+                cci_mpf_prim_ram_simple_init
+                  #(
+                    .N_ENTRIES(N_BUCKETS),
+                    .N_DATA_BITS(1),
+                    .N_OUTPUT_REG_STAGES(1),
+                    .REGISTER_WRITES(1)
+                    )
+                  mem_port_is_zero
+                   (
+                    .clk,
+                    .reset,
+                    // rdy from mem_upd goes high at the same time
+                    .rdy(),
 
-                .raddr(mem_port_iz_rd_idx[0][c]),
-                .rdata(mem_port_iz_rd_val[c]),
+                    .raddr(mem_port_iz_rd_idx[0][c]),
+                    .rdata(mem_port_iz_rd_val[c]),
 
-                .waddr(mem_upd_wr_idx),
-                .wen(mem_upd_wr_en),
-                .wdata(mem_upd_wr_notZero)
-                );
+                    .waddr(mem_upd_wr_idx),
+                    .wen(mem_upd_wr_en),
+                    .wdata(mem_upd_wr_notZero)
+                    );
+            end
+            else
+            begin : lr
+                // Read result pipeline register to make timing of LUTRAM the
+                // same as BRAM.
+                logic is_zero_rd_val[0:1];
+
+                cci_mpf_prim_lutram_init
+                  #(
+                    .N_ENTRIES(N_BUCKETS),
+                    .N_DATA_BITS(1)
+                    )
+                  mem_port_is_zero
+                   (
+                    .clk,
+                    .reset,
+                    // rdy from mem_upd goes high at the same time
+                    .rdy(),
+
+                    .raddr(mem_port_iz_rd_idx[0][c]),
+                    .rdata(is_zero_rd_val[0]),
+
+                    .waddr(mem_upd_wr_idx),
+                    .wen(mem_upd_wr_en),
+                    .wdata(mem_upd_wr_notZero)
+                    );
+
+                always_ff @(posedge clk)
+                begin
+                    is_zero_rd_val[1] <= is_zero_rd_val[0];
+                    mem_port_iz_rd_val[c] <= is_zero_rd_val[1];
+                end
+            end
 
             assign mem_port_iz_rd_idx[0][c] = test_isZero_req[c];
 

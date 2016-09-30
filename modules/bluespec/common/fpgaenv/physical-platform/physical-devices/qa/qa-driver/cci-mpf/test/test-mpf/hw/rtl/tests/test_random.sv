@@ -609,8 +609,6 @@ module test_afu
     t_cci_clNum wr_beats_mask;
     assign wr_beats_mask = ~wr_beats_next;
 
-    logic wr_is_pwrite;
-
     // Map the random address index to the address space
     always_ff @(posedge clk)
     begin
@@ -628,8 +626,6 @@ module test_afu
                 t_cci_clLen'(wr_addr_rand_idx) & wr_beats_mask;
 
             wr_beats <= wr_beats_next;
-
-            wr_is_pwrite <= pwh.isPartialWrite;
         end
 
         wr_addr_chk_idx_q <= wr_addr_chk_idx;
@@ -673,10 +669,6 @@ module test_afu
             wr_hdr.base.address[0 +: $bits(t_cci_clNum)] | wr_beat_num;
 
         wr_hdr.pwrite = pwh;
-        // Use previously preserved flag to indicate whether write is partial
-        // so that the same state is preserved for all beats of multi-line
-        // requests.
-        wr_hdr.pwrite.isPartialWrite = wr_is_pwrite;
     end
 
     //

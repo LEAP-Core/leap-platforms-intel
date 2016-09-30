@@ -293,6 +293,10 @@ module cci_mpf_shim_wro_epoch_order
             c1Tx_wr_conflict_in =
                 c1Tx_wr_conflict_in ||
                 (active_valid[i] &&
+                 // Hashed addresses refer to groups that can be addressed by
+                 // the largest multi-beat request.  LineMask separates
+                 // smaller requests to unique addresses within the multi-beat
+                 // region.
                  (c1Tx_stg2_hash === active_addrHash[i]) &&
                  (|(c1Tx_stg2_lineMask & active_lineMask[i])));
         end

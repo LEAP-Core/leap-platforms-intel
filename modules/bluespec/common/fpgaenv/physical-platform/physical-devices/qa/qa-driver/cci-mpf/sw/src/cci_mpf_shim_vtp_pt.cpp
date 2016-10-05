@@ -135,7 +135,8 @@ bool
 MPFVTP_PAGE_TABLE::ptInsertPageMapping(
     btVirtAddr va,
     btPhysAddr pa,
-    MPFVTP_PAGE_SIZE size)
+    MPFVTP_PAGE_SIZE size,
+    uint32_t flags)
 {
     // Are the addresses reasonable?
     uint64_t mask = (size == MPFVTP_PAGE_4KB) ? (1 << 12) - 1 :
@@ -145,15 +146,86 @@ MPFVTP_PAGE_TABLE::ptInsertPageMapping(
 
     uint32_t depth = (size == MPFVTP_PAGE_4KB) ? 4 : 3;
 
-    AddVAtoPA(va, pa, depth);
+    AddVAtoPA(va, pa, depth, flags);
 
     return true;
 }
 
 
 bool
+MPFVTP_PAGE_TABLE::ptRemovePageMapping(
+    btVirtAddr va,
+    btPhysAddr *pa,
+    btPhysAddr *pt_pa,
+    MPFVTP_PAGE_SIZE *size,
+    uint32_t *flags)
+{
+    MPFVTP_PT_TREE table = ptVtoP;
+    // Physical address of the page table at current depth
+    btPhysAddr pt_depth_pa = 0;
+
+    uint32_t depth = 4;
+    while (depth--)
+    {
+        // Index in the current level
+        uint64_t idx = ptIdxFromAddr(uint64_t(va), depth);
+
+        if (! table->EntryExists(idx)) return false;
+
+        if (table->EntryIsTerminal(idx))
+        {
+            if (pa)
+            {
+                *pa = btPhysAddr(table->GetTranslatedAddr(idx));
+            }
+
+            if (pt_pa)
+            {
+                // Address of the lowest PTE pointing to the entry just removed
+                *pt_pa = pt_depth_pa + 8 * idx;
+            }
+
+            if (size)
+            {
+                *size = (depth == 1 ? MPFVTP_PAGE_2MB : MPFVTP_PAGE_4KB);
+            }
+
+            if (flags)
+            {
+                *flags = table->GetTranslatedAddrFlags(idx);
+            }
+
+            table->RemoveTranslatedAddr(idx);
+
+#if __cplusplus > 199711L
+            // C++11 knows atomics
+            std::atomic_thread_fence(std::memory_order_seq_cst);
+#elif __GNUC__
+            // GNU C++ before C++11 should be able to do the same using inline asm
+            asm volatile ("" : : : "memory");
+#else
+#   warning "Neither C++ 11 atomics nor GNU asm volatile - don't know how to do memory barriers."
+#endif
+
+            return true;
+        }
+
+        // Walk down to child
+        btPhysAddr child_pa = table->GetChildAddr(idx);
+        btVirtAddr child_va;
+        if (! ptTranslatePAtoVA(child_pa, &child_va)) return false;
+        table = MPFVTP_PT_TREE(child_va);
+        pt_depth_pa = child_pa;
+    }
+
+    return false;
+}
+
+
+bool
 MPFVTP_PAGE_TABLE::ptTranslateVAtoPA(btVirtAddr va,
-                                     btPhysAddr *pa)
+                                     btPhysAddr *pa,
+                                     uint32_t *flags)
 {
     MPFVTP_PT_TREE table = ptVtoP;
 
@@ -168,6 +240,12 @@ MPFVTP_PAGE_TABLE::ptTranslateVAtoPA(btVirtAddr va,
         if (table->EntryIsTerminal(idx))
         {
             *pa = btPhysAddr(table->GetTranslatedAddr(idx));
+
+            if (flags)
+            {
+                *flags = table->GetTranslatedAddrFlags(idx);
+            }
+
             return true;
         }
 
@@ -221,7 +299,7 @@ MPFVTP_PAGE_TABLE::ptTranslatePAtoVA(btPhysAddr pa, btVirtAddr *va)
 
 
 bool
-MPFVTP_PAGE_TABLE::AddVAtoPA(btVirtAddr va, btPhysAddr pa, uint32_t depth)
+MPFVTP_PAGE_TABLE::AddVAtoPA(btVirtAddr va, btPhysAddr pa, uint32_t depth, uint32_t flags)
 {
     MPFVTP_PT_TREE table = ptVtoP;
 
@@ -265,7 +343,7 @@ MPFVTP_PAGE_TABLE::AddVAtoPA(btVirtAddr va, btPhysAddr pa, uint32_t depth)
     // Now at the leaf.  Add the translation.
     if (table->EntryExists(leaf_idx)) return false;
 
-    table->InsertTranslatedAddr(leaf_idx, pa);
+    table->InsertTranslatedAddr(leaf_idx, pa, flags);
 
     // Memory fence for updates before claiming the table is ready
 #if __cplusplus > 199711L
@@ -350,10 +428,21 @@ MPFVTP_PAGE_TABLE::DumpPageTableVAtoPA(
                     break;
                 }
 
-                printf("    VA 0x%016lx -> PA 0x%016lx (%s)\n",
+                printf("    VA 0x%016lx -> PA 0x%016lx (%s)",
                        va,
                        table->GetTranslatedAddr(idx),
                        kind);
+
+                uint32_t flags = table->GetTranslatedAddrFlags(idx);
+                if (flags & (MPFVTP_PT_FLAG_ALLOC_START |
+                             MPFVTP_PT_FLAG_ALLOC_END))
+                {
+                    printf(" [");
+                    if (flags & MPFVTP_PT_FLAG_ALLOC_START) printf(" START");
+                    if (flags & MPFVTP_PT_FLAG_ALLOC_END) printf(" END");
+                    printf(" ]");
+                }
+                printf("\n");
 
                 // Validate translation function
                 btPhysAddr check_pa;

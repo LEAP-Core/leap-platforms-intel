@@ -462,11 +462,13 @@ module cci_mpf_shim_vtp_chan
     t_tlb_4kb_pa_page_idx cache_4kb_pa;
     t_tlb_4kb_pa_page_idx cache_4kb_pa_q;
     t_vtp_tlb_4kb_cache_tag cache_4kb_tag;
+    logic cache_4kb_valid;
 
     logic cache_4kb_upd_en;
     t_tlb_4kb_pa_page_idx cache_4kb_upd_pa;
     t_vtp_tlb_cache_idx cache_4kb_upd_idx;
     t_vtp_tlb_4kb_cache_tag cache_4kb_upd_tag;
+    logic cache_4kb_upd_valid;
 
     // Reset (invalidate) the TLB when requested by SW.
     // inval_translation_cache is held for only one cycle.
@@ -486,7 +488,8 @@ module cci_mpf_shim_vtp_chan
     cci_mpf_prim_ram_simple_init
       #(
         .N_ENTRIES(512),
-        .N_DATA_BITS($bits(t_tlb_4kb_pa_page_idx) + $bits(t_vtp_tlb_4kb_cache_tag)),
+        .N_DATA_BITS($bits(t_tlb_4kb_pa_page_idx) + $bits(t_vtp_tlb_4kb_cache_tag) + 1),
+        .INIT_VALUE({ t_tlb_4kb_pa_page_idx'('x), t_vtp_tlb_4kb_cache_tag'('x), 1'b0 }),
         .N_OUTPUT_REG_STAGES(1)
         )
       cache4kb
@@ -497,18 +500,19 @@ module cci_mpf_shim_vtp_chan
 
         .wen(cache_4kb_upd_en),
         .waddr(cache_4kb_upd_idx),
-        .wdata({ cache_4kb_upd_pa, cache_4kb_upd_tag }),
+        .wdata({ cache_4kb_upd_pa, cache_4kb_upd_tag, cache_4kb_upd_valid }),
 
         // Cache read is initiated in pipeline cycle 0
         .raddr(cacheIdx4KB(state[0])),
-        .rdata({ cache_4kb_pa, cache_4kb_tag })
+        .rdata({ cache_4kb_pa, cache_4kb_tag, cache_4kb_valid })
         );
 
     // Cache read data arrives in cycle 2
     logic cache_4kb_hit;
     always_ff @(posedge clk)
     begin
-        cache_4kb_hit <= (cacheTag4KB(state[2]) == cache_4kb_tag);
+        cache_4kb_hit <= (cacheTag4KB(state[2]) == cache_4kb_tag) &&
+                         cache_4kb_valid;
         cache_4kb_pa_q <= cache_4kb_pa;
     end
 
@@ -523,16 +527,19 @@ module cci_mpf_shim_vtp_chan
     t_tlb_2mb_pa_page_idx cache_2mb_pa;
     t_tlb_2mb_pa_page_idx cache_2mb_pa_q;
     t_vtp_tlb_2mb_cache_tag cache_2mb_tag;
+    logic cache_2mb_valid;
 
     logic cache_2mb_upd_en;
     t_tlb_2mb_pa_page_idx cache_2mb_upd_pa;
     t_vtp_tlb_cache_idx cache_2mb_upd_idx;
     t_vtp_tlb_2mb_cache_tag cache_2mb_upd_tag;
+    logic cache_2mb_upd_valid;
 
     cci_mpf_prim_ram_simple_init
       #(
         .N_ENTRIES(512),
-        .N_DATA_BITS($bits(t_tlb_2mb_pa_page_idx) + $bits(t_vtp_tlb_2mb_cache_tag)),
+        .N_DATA_BITS($bits(t_tlb_2mb_pa_page_idx) + $bits(t_vtp_tlb_2mb_cache_tag) + 1),
+        .INIT_VALUE({ t_tlb_2mb_pa_page_idx'('x), t_vtp_tlb_2mb_cache_tag'('x), 1'b0 }),
         .N_OUTPUT_REG_STAGES(1)
         )
       cache2mb
@@ -543,18 +550,19 @@ module cci_mpf_shim_vtp_chan
 
         .wen(cache_2mb_upd_en),
         .waddr(cache_2mb_upd_idx),
-        .wdata({ cache_2mb_upd_pa, cache_2mb_upd_tag }),
+        .wdata({ cache_2mb_upd_pa, cache_2mb_upd_tag, cache_2mb_upd_valid }),
 
         // Cache read is initiated in pipeline cycle 0
         .raddr(cacheIdx2MB(state[0])),
-        .rdata({ cache_2mb_pa, cache_2mb_tag })
+        .rdata({ cache_2mb_pa, cache_2mb_tag, cache_2mb_valid })
         );
 
     // Cache read data arrives in cycle 2
     logic cache_2mb_hit;
     always_ff @(posedge clk)
     begin
-        cache_2mb_hit <= (cacheTag2MB(state[2]) == cache_2mb_tag);
+        cache_2mb_hit <= (cacheTag2MB(state[2]) == cache_2mb_tag) &&
+                         cache_2mb_valid;
         cache_2mb_pa_q <= cache_2mb_pa;
     end
 
@@ -799,22 +807,77 @@ module cci_mpf_shim_vtp_chan
     //
     always_ff @(posedge clk)
     begin
+        cache_4kb_upd_en <= tlb_lookup_deq_qq && ! cTxAddrIsBigPage_out;
+        cache_2mb_upd_en <= tlb_lookup_deq_qq && cTxAddrIsBigPage_out;
+
+        cache_4kb_upd_pa <= cTxAddr_out;
+        { cache_4kb_upd_tag, cache_4kb_upd_idx } <= cTxAddr_va_out;
+        cache_4kb_upd_valid <= 1'b1;
+
+        cache_2mb_upd_pa <= vtp4kbTo2mbPA(cTxAddr_out);
+        { cache_2mb_upd_tag, cache_2mb_upd_idx } <= vtp4kbTo2mbVA(cTxAddr_va_out);
+        cache_2mb_upd_valid <= 1'b1;
+
+        //
+        // Invalidation requested by host?  Invalidation has higher priority
+        // than TLB fill.
+        //
+        if (csrs.vtp_in_inval_page_valid)
+        begin
+            cache_4kb_upd_valid <= 1'b0;
+            cache_2mb_upd_valid <= 1'b0;
+
+            cache_4kb_upd_idx <=
+                t_vtp_tlb_cache_idx'(vtp4kbPageIdxFromVA(csrs.vtp_in_inval_page));
+            cache_2mb_upd_idx <=
+                t_vtp_tlb_cache_idx'(vtp4kbTo2mbVA(vtp4kbPageIdxFromVA(csrs.vtp_in_inval_page)));
+
+            cache_4kb_upd_en <= 1'b1;
+            cache_2mb_upd_en <= 1'b1;
+        end
+
         if (reset)
         begin
             cache_4kb_upd_en <= 1'b0;
             cache_2mb_upd_en <= 1'b0;
         end
-        else
+    end
+
+    localparam DEBUG_MESSAGES = 0;
+    always_ff @(posedge clk)
+    begin
+        if (DEBUG_MESSAGES && ! reset)
         begin
-            cache_4kb_upd_en <= tlb_lookup_deq_qq && ! cTxAddrIsBigPage_out;
-            cache_2mb_upd_en <= tlb_lookup_deq_qq && cTxAddrIsBigPage_out;
+            if (cache_4kb_upd_en)
+            begin
+                if (cache_4kb_upd_valid)
+                begin
+                    $display("VTP L1 TLB 4KB: Insert idx %0d, VA 0x%x, PA 0x%x",
+                             cache_4kb_upd_idx,
+                             {cache_4kb_upd_tag, cache_4kb_upd_idx, CCI_PT_4KB_PAGE_OFFSET_BITS'(0), 6'b0},
+                             {cache_4kb_upd_pa, CCI_PT_4KB_PAGE_OFFSET_BITS'(0), 6'b0});
+                end
+                else
+                begin
+                    $display("VTP L1 TLB 4KB: Remove idx %0d", cache_4kb_upd_idx);
+                end
+            end
+
+            if (cache_2mb_upd_en)
+            begin
+                if (cache_2mb_upd_valid)
+                begin
+                    $display("VTP L1 TLB 2MB: Insert idx %0d, VA 0x%x, PA 0x%x",
+                             cache_2mb_upd_idx,
+                             {cache_2mb_upd_tag, cache_2mb_upd_idx, CCI_PT_2MB_PAGE_OFFSET_BITS'(0), 6'b0},
+                             {cache_2mb_upd_pa, CCI_PT_2MB_PAGE_OFFSET_BITS'(0), 6'b0});
+                end
+                else
+                begin
+                    $display("VTP L1 TLB 2MB: Remove idx %0d", cache_2mb_upd_idx);
+                end
+            end
         end
-
-        cache_4kb_upd_pa <= cTxAddr_out;
-        { cache_4kb_upd_tag, cache_4kb_upd_idx } <= cTxAddr_va_out;
-
-        cache_2mb_upd_pa <= vtp4kbTo2mbPA(cTxAddr_out);
-        { cache_2mb_upd_tag, cache_2mb_upd_idx } <= vtp4kbTo2mbVA(cTxAddr_va_out);
     end
 
 

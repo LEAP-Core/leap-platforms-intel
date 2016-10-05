@@ -137,6 +137,8 @@ module cci_mpf_svc_vtp_tlb
     {
         t_tlb_virtual_tag tag;
         t_tlb_pa_page_idx idx;
+        // Must be in lowest bit position so that initialization works.
+        logic valid;
     }
     t_tlb_entry;
 
@@ -191,6 +193,7 @@ module cci_mpf_svc_vtp_tlb
               #(
                 .N_ENTRIES(NUM_TLB_SETS),
                 .N_DATA_BITS($bits(t_tlb_entry)),
+                .INIT_VALUE(t_tlb_entry'({ 'x, 1'b0 })),
                 .N_OUTPUT_REG_STAGES(1)
                 )
               tlb
@@ -334,7 +337,8 @@ module cci_mpf_svc_vtp_tlb
         begin
             // Last cycle did a partial comparison, leaving multiple
             // bits per way that all must be 1 for a match.
-            stg4_tag_cmp[way] <= ~ (|(stg3_xor_tag[way]));
+            stg4_tag_cmp[way] <= stg_tlb_rdata[3][way].valid &&
+                                 ~ (|(stg3_xor_tag[way]));
         end
     end
 
@@ -567,21 +571,46 @@ module cci_mpf_svc_vtp_tlb
     //
     // Set TLB update value and way mask.
     //
-    always_comb
+    always_ff @(posedge clk)
     begin
         // TLB update -- write virtual address TAG and physical page index.
-        tlb_wdata.tag = fill_tag;
-        tlb_wdata.idx = fill_pa;
+        tlb_wdata.valid <= 1'b1;
+        tlb_wdata.tag <= fill_tag;
+        tlb_wdata.idx <= fill_pa;
 
-        tlb_waddr = t_tlb_idx'(fill_idx);
+        tlb_waddr <= t_tlb_idx'(fill_idx);
 
         // Pick the victim way when writing.  This happens only during
         // initialization and when a new translation is being added to
         // the TLB: STATE_TLB_FILL_INSERT.
         for (int way = 0; way < NUM_TLB_SET_WAYS; way = way + 1)
         begin
-            tlb_wen[way] = (fill_state == STATE_TLB_FILL_INSERT) &&
-                           way_repl_vec[way];
+            tlb_wen[way] <= (fill_state == STATE_TLB_FILL_INSERT) &&
+                            way_repl_vec[way];
+        end
+
+        //
+        // Invalidation requested by host?  Invalidation has higher priority
+        // than TLB fill.
+        //
+        if (csrs.vtp_in_inval_page_valid)
+        begin
+            tlb_wdata.valid <= 1'b0;
+            tlb_waddr <=
+                t_tlb_idx'(tlbVAIdxFrom4K(vtp4kbPageIdxFromVA(csrs.vtp_in_inval_page)));
+
+            for (int way = 0; way < NUM_TLB_SET_WAYS; way = way + 1)
+            begin
+                tlb_wen[way] <= 1'b1;
+            end
+        end
+
+        if (reset)
+        begin
+            for (int way = 0; way < NUM_TLB_SET_WAYS; way = way + 1)
+            begin
+                tlb_wen[way] <= 1'b0;
+            end
         end
     end
 
@@ -613,17 +642,23 @@ module cci_mpf_svc_vtp_tlb
                          {lookup_page_pa, CCI_PT_PAGE_OFFSET_BITS'(0), 6'b0});
             end
 
-            if (fill_state == STATE_TLB_FILL_INSERT)
+            for (int way = 0; way < NUM_TLB_SET_WAYS; way = way + 1)
             begin
-                for (int way = 0; way < NUM_TLB_SET_WAYS; way = way + 1)
+                if (tlb_wen[way])
                 begin
-                    if (tlb_wen[way])
+                    if (tlb_wdata.valid)
                     begin
                         $display("VTP TLB %s: Insert idx %0d, way %0d, VA 0x%x, PA 0x%x",
                                  DEBUG_NAME,
                                  tlb_waddr, way,
                                  {tlb_wdata.tag, tlb_waddr, CCI_PT_PAGE_OFFSET_BITS'(0), 6'b0},
                                  {tlb_wdata.idx, CCI_PT_PAGE_OFFSET_BITS'(0), 6'b0});
+                    end
+                    else
+                    begin
+                        $display("VTP TLB %s: Remove idx %0d, way %0d",
+                                 DEBUG_NAME,
+                                 tlb_waddr, way);
                     end
                 end
             end

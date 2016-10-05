@@ -80,6 +80,11 @@ class CCI_TEST
         return va;
     }
 
+    void free(void* va)
+    {
+        assert(svc.m_pVTPService->bufferFree(btVirtAddr(va)) == ali_errnumOK);
+    }
+
     void writeTestCSR(uint32_t idx, uint64_t v)
     {
         svc.m_pALIMMIOService->mmioWrite64(8 * (TEST_CSR_BASE + idx), v);

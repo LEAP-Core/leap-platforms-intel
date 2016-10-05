@@ -265,19 +265,23 @@ btInt HelloALIVTPNLBApp::run()
 
 #if defined( HWAFU )                /* Use FPGA hardware */
    // Service Library to use
-   ConfigRecord.Add(AAL_FACTORY_CREATE_CONFIGRECORD_FULL_SERVICE_NAME, "libHWALIAFU");
+   ConfigRecord.Add(AAL_FACTORY_CREATE_CONFIGRECORD_FULL_SERVICE_NAME, "libALI");
 
    // the AFUID to be passed to the Resource Manager. It will be used to locate the appropriate device.
+#ifdef USE_BDX_NLB
    ConfigRecord.Add(keyRegAFU_ID,"C000C966-0D82-4272-9AEF-FE5F84570612");
-
+#else
+   ConfigRecord.Add(keyRegAFU_ID,"D8424DC4-A4A3-C413-F89E-433683F9040B");
+#endif
 
    // indicate that this service needs to allocate an AIAService, too to talk to the HW
    ConfigRecord.Add(AAL_FACTORY_CREATE_CONFIGRECORD_FULL_AIA_NAME, "libaia");
 
    #elif defined ( ASEAFU )         /* Use ASE based RTL simulation */
    Manifest.Add(keyRegHandle, 20);
+   Manifest.Add(ALIAFU_NVS_KEY_TARGET, ali_afu_ase);
 
-   ConfigRecord.Add(AAL_FACTORY_CREATE_CONFIGRECORD_FULL_SERVICE_NAME, "libASEALIAFU");
+   ConfigRecord.Add(AAL_FACTORY_CREATE_CONFIGRECORD_FULL_SERVICE_NAME, "libALI");
    ConfigRecord.Add(AAL_FACTORY_CREATE_SOFTWARE_SERVICE,true);
 
    #else                            /* default is Software Simulator */

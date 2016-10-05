@@ -469,7 +469,8 @@ module cci_mpf_svc_vtp
         .csrs,
         .tlb_fill_if(tlb_if),
 
-        .statBusy(events.vtp_out_event_pt_walk_busy)
+        .statBusy(events.vtp_out_event_pt_walk_busy),
+        .statLastTranslateVA(events.vtp_out_pt_walk_last_vaddr)
         );
 
 endmodule // cci_mpf_svc_vtp

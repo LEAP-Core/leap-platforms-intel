@@ -65,6 +65,25 @@ typedef enum
 }
 MPFVTP_PAGE_SIZE;
 
+//
+// Flags that may be set in page table entries.  These are ORed into the low
+// address bits which are guaranteed to be 0 since the smallest page is 4KB
+// aligned.
+//
+typedef enum
+{
+    // Terminal entry in table hierarchy -- indicates an actual address
+    // translation as opposed to an intra-table pointer
+    MPFVTP_PT_FLAG_TERMINAL = 1,
+    // Is entry the first or last block in an allocated region?  These
+    // flags are used only in virtual to physical translation tables.
+    MPFVTP_PT_FLAG_ALLOC_START = 2,
+    MPFVTP_PT_FLAG_ALLOC_END = 4,
+
+    // All flags (mask)
+    MPFVTP_PT_FLAG_MASK = 7
+}
+MPFVTP_PT_FLAG;
 
 typedef class MPFVTP_PT_TREE_CLASS* MPFVTP_PT_TREE;
 
@@ -94,11 +113,25 @@ class MPFVTP_PAGE_TABLE
     // Add a new page to the table
     bool ptInsertPageMapping(btVirtAddr va,
                              btPhysAddr pa,
-                             MPFVTP_PAGE_SIZE size);
+                             MPFVTP_PAGE_SIZE size,
+                             // ORed MPFVTP_PT_FLAG values
+                             uint32_t flags = 0);
+
+    // Remove a page from the table, returning some state from the page
+    // as it is dropped.  State pointers are not written if they are NULL.
+    bool ptRemovePageMapping(btVirtAddr va,
+                             // PA corresponding to VA
+                             btPhysAddr *pa = NULL,
+                             // PA of the page table entry holding page translation
+                             btPhysAddr *pt_pa = NULL,
+                             // Physical page size
+                             MPFVTP_PAGE_SIZE *size = NULL,
+                             uint32_t *flags = NULL);
 
     // Translate an address from virtual to physical.
     bool ptTranslateVAtoPA(btVirtAddr va,
-                           btPhysAddr *pa);
+                           btPhysAddr *pa,
+                           uint32_t *flags = NULL);
 
     // Dump the page table (debugging)
     void ptDumpPageTable();
@@ -123,7 +156,7 @@ class MPFVTP_PAGE_TABLE
 
     // Add a virtual to physical mapping at depth in the tree.  Returns
     // false if a mapping already exists.
-    bool AddVAtoPA(btVirtAddr va, btPhysAddr pa, uint32_t depth);
+    bool AddVAtoPA(btVirtAddr va, btPhysAddr pa, uint32_t depth, uint32_t flags);
 
     // Add a physical to virtual mapping at depth in the tree.  Returns
     // false if a mapping already exists.
@@ -159,7 +192,7 @@ class MPFVTP_PAGE_TABLE
 class MPFVTP_PT_TREE_CLASS
 {
   public:
-    MPFVTP_PT_TREE_CLASS()
+MPFVTP_PT_TREE_CLASS()
     {
         Reset();
     }
@@ -191,7 +224,7 @@ class MPFVTP_PT_TREE_CLASS
             return false;
         }
 
-        return (table[idx] & 1) != 0;
+        return (table[idx] & MPFVTP_PT_FLAG_TERMINAL) != 0;
     }
 
     // Walk the tree.  Ideally this would be a pointer to another
@@ -215,9 +248,18 @@ class MPFVTP_PT_TREE_CLASS
             return -1;
         }
 
-        // Subtract 1 to clear the low bit that is set to indicate the entry
-        // is terminal.
-        return table[idx] - 1;
+        // Clear the flags stored in low bits
+        return table[idx] & ~ int64_t(MPFVTP_PT_FLAG_MASK);
+    }
+
+    uint32_t GetTranslatedAddrFlags(uint32_t idx)
+    {
+        if ((idx >= 512) || ! EntryIsTerminal(idx))
+        {
+            return 0;
+        }
+
+        return uint32_t(table[idx]) & uint32_t(MPFVTP_PT_FLAG_MASK);
     }
 
     void InsertChildAddr(uint32_t idx, int64_t addr)
@@ -228,11 +270,21 @@ class MPFVTP_PT_TREE_CLASS
         }
     }
 
-    void InsertTranslatedAddr(uint32_t idx, int64_t addr)
+    void InsertTranslatedAddr(uint32_t idx, int64_t addr,
+                              // Flags, ORed from MPFVTP_PT_FLAG
+                              int64_t flags = 0)
     {
         if (idx < 512)
         {
-            table[idx] = addr | 1;
+            table[idx] = addr | MPFVTP_PT_FLAG_TERMINAL | flags;
+        }
+    }
+
+    void RemoveTranslatedAddr(uint32_t idx)
+    {
+        if (idx < 512)
+        {
+            table[idx] = -1;
         }
     }
 

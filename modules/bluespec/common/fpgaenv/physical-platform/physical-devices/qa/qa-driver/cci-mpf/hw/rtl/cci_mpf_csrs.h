@@ -59,16 +59,24 @@ typedef enum
     // Page table physical address (line address) (write)
     CCI_MPF_VTP_CSR_PAGE_TABLE_PADDR = 32,
 
+    // Invalidate cached translations of virtual address (line address) (write)
+    CCI_MPF_VTP_CSR_INVAL_PAGE_VADDR = 40,
+
     // Statistics -- all 8 byte read-only CSRs
-    CCI_MPF_VTP_CSR_STAT_4KB_TLB_NUM_HITS = 40,
-    CCI_MPF_VTP_CSR_STAT_4KB_TLB_NUM_MISSES = 48,
-    CCI_MPF_VTP_CSR_STAT_2MB_TLB_NUM_HITS = 56,
-    CCI_MPF_VTP_CSR_STAT_2MB_TLB_NUM_MISSES = 64,
-    CCI_MPF_VTP_CSR_STAT_PT_WALK_BUSY_CYCLES = 72,
-    CCI_MPF_VTP_CSR_STAT_FAILED_TRANSLATIONS = 80,
+    CCI_MPF_VTP_CSR_STAT_4KB_TLB_NUM_HITS = 48,
+    CCI_MPF_VTP_CSR_STAT_4KB_TLB_NUM_MISSES = 56,
+    CCI_MPF_VTP_CSR_STAT_2MB_TLB_NUM_HITS = 64,
+    CCI_MPF_VTP_CSR_STAT_2MB_TLB_NUM_MISSES = 72,
+    CCI_MPF_VTP_CSR_STAT_PT_WALK_BUSY_CYCLES = 80,
+    CCI_MPF_VTP_CSR_STAT_FAILED_TRANSLATIONS = 88,
+
+    // Last address that was the target of a page table walk.  If
+    // CCI_MPF_VTP_CSR_STAT_FAILED_TRANSLATIONS is set this will be the
+    // virtual address that failed.
+    CCI_MPF_VTP_CSR_STAT_PT_WALK_LAST_VADDR = 96,
 
     // Must be last
-    CCI_MPF_VTP_CSR_SIZE = 88
+    CCI_MPF_VTP_CSR_SIZE = 104
 }
 t_cci_mpf_vtp_csr_offsets;
 

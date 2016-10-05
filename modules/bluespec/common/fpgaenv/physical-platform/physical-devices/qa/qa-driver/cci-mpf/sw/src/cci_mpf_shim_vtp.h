@@ -130,7 +130,7 @@ private:
 
    static const size_t CCI_MPF_VTP_LARGE_PAGE_THRESHOLD = KB(128);
 
-   ali_errnum_e _allocate(btVirtAddr va, size_t pageSize);
+   ali_errnum_e _allocate(btVirtAddr va, size_t pageSize, uint32_t flags = 0);
    // reinitialize VTP registers after vtpReset
    btBool _vtpEnable( void );
 

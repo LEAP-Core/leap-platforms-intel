@@ -213,6 +213,10 @@ ali_errnum_e MPFVTP::bufferAllocate( btWSSize             Length,
 
    void * va_alloc = (void *)(size_t(va_aligned) + Length);
 
+   // Flags to indicate first/last page in an allocated region, stored in
+   // the page table
+   uint32_t pt_flags = MPFVTP_PT_FLAG_ALLOC_END;
+
    // -------------------------------------------------------------------------
    // small buffer allocation loop
    // -------------------------------------------------------------------------
@@ -229,13 +233,17 @@ ali_errnum_e MPFVTP::bufferAllocate( btWSSize             Length,
       va_base_len -= SMALL_PAGE_SIZE;
 
       // allocate buffer
-      err = _allocate((btVirtAddr)va_alloc, SMALL_PAGE_SIZE);
+      if (Length <= SMALL_PAGE_SIZE) {
+         pt_flags |= MPFVTP_PT_FLAG_ALLOC_START;
+      }
+      err = _allocate((btVirtAddr)va_alloc, SMALL_PAGE_SIZE, pt_flags);
       if (err != ali_errnumOK) {
          AAL_ERR(LM_AFU, "Unable to allocate buffer. Err: " << err);
          return err;
          // FIXME: leaking already allocated pages!
       }
 
+      pt_flags = 0;
       Length -= SMALL_PAGE_SIZE;
    }
 
@@ -267,7 +275,10 @@ ali_errnum_e MPFVTP::bufferAllocate( btWSSize             Length,
       }
 
       // allocate buffer
-      err = _allocate((btVirtAddr)va_alloc, effPageSize);
+      if (Length <= effPageSize) {
+         pt_flags |= MPFVTP_PT_FLAG_ALLOC_START;
+      }
+      err = _allocate((btVirtAddr)va_alloc, effPageSize, pt_flags);
       if (err != ali_errnumOK) {
          if (effPageSize == LARGE_PAGE_SIZE) {
             // fall back to small buffers:
@@ -298,6 +309,7 @@ ali_errnum_e MPFVTP::bufferAllocate( btWSSize             Length,
       }
 
       // mapping successful, on to the next
+      pt_flags = 0;
       Length -= effPageSize;
    }
 
@@ -319,7 +331,7 @@ ali_errnum_e MPFVTP::bufferAllocate( btWSSize             Length,
 // allocate page of size pageSize to virtual address va and add entry to VTP
 // page table
 //
-ali_errnum_e MPFVTP::_allocate(btVirtAddr va, size_t pageSize)
+ali_errnum_e MPFVTP::_allocate(btVirtAddr va, size_t pageSize, uint32_t flags)
 {
    ali_errnum_e err;
    MPFVTP_PAGE_SIZE mapType;
@@ -349,7 +361,8 @@ ali_errnum_e MPFVTP::_allocate(btVirtAddr va, size_t pageSize)
       ASSERT(va == alloc);
       ptInsertPageMapping(btVirtAddr(va),
                           m_pALIBuffer->bufferGetIOVA((unsigned char *)va),
-                          mapType);
+                          mapType,
+                          flags);
    }
    delete bufAllocArgs;
    return err;
@@ -358,10 +371,47 @@ ali_errnum_e MPFVTP::_allocate(btVirtAddr va, size_t pageSize)
 //
 // Free buffer (not supported).
 //
-ali_errnum_e MPFVTP::bufferFree( btVirtAddr Address)
+ali_errnum_e MPFVTP::bufferFree(btVirtAddr Address)
 {
-   // TODO: not implemented
-   AAL_ERR(LM_All, "NOT IMPLEMENTED" << std::endl);
+   btVirtAddr va = Address;
+   btPhysAddr pa;
+   MPFVTP_PAGE_SIZE size;
+   uint32_t flags;
+   bool ret;
+
+   // Is the address the beginning of an allocation region?
+   if (! ptTranslateVAtoPA(va, &pa, &flags)) {
+      AAL_ERR(LM_All, "VA not allocated" << std::endl);
+      return ali_errnumNoMem;
+   }
+   if ((flags & MPFVTP_PT_FLAG_ALLOC_START) == 0) {
+      AAL_ERR(LM_All, "VA not start of allocated region" << std::endl);
+      return ali_errnumNoMem;
+   }
+
+   while (ptRemovePageMapping(va, NULL, NULL, &size, &flags)) {
+      ret = m_pALIMMIO->mmioWrite64(m_dfhOffset + CCI_MPF_VTP_CSR_INVAL_PAGE_VADDR,
+                                    uint64_t(va) / CL(1));
+      ASSERT(ret);
+      if (!ret) {
+         return ali_errnumNoMem;
+      }
+
+      m_pALIBuffer->bufferFree(va);
+
+      // Done?
+      if (flags & MPFVTP_PT_FLAG_ALLOC_END) {
+#if defined(ENABLE_DEBUG) && (0 != ENABLE_DEBUG)
+         ptDumpPageTable();
+#endif
+         return ali_errnumOK;
+      }
+
+      // Next page address
+      va += (size == MPFVTP_PAGE_2MB ? LARGE_PAGE_SIZE : SMALL_PAGE_SIZE);
+   }
+
+   AAL_ERR(LM_All, "bufferFree translation error" << std::endl);
    return ali_errnumNoMem;
 }
 
@@ -415,7 +465,7 @@ btBool MPFVTP::_vtpEnable( void )
 
    // Write page table physical address CSR
    ret = m_pALIMMIO->mmioWrite64(m_dfhOffset + CCI_MPF_VTP_CSR_PAGE_TABLE_PADDR,
-                           ptGetPageTableRootPA() / CL(1));
+                                 ptGetPageTableRootPA() / CL(1));
    ASSERT(ret);
 
    if (!ret) {
@@ -440,6 +490,9 @@ btBool MPFVTP::vtpGetStats( t_cci_mpf_vtp_stats *stats )
     stats->numTLBMisses2MB = vtpGetStatCounter(CCI_MPF_VTP_CSR_STAT_2MB_TLB_NUM_MISSES);
     stats->numPTWalkBusyCycles = vtpGetStatCounter(CCI_MPF_VTP_CSR_STAT_PT_WALK_BUSY_CYCLES);
     stats->numFailedTranslations = vtpGetStatCounter(CCI_MPF_VTP_CSR_STAT_FAILED_TRANSLATIONS);
+
+    stats->ptWalkLastVAddr = btVirtAddr(CL(1) * vtpGetStatCounter(CCI_MPF_VTP_CSR_STAT_PT_WALK_LAST_VADDR));
+
     return true;
 }
 

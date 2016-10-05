@@ -55,6 +55,9 @@ interface cci_mpf_csrs();
     // Input: page table base address (line address)
     t_cci_clAddr vtp_in_page_table_base;
     logic        vtp_in_page_table_base_valid;
+    // Input: invalidate the translation for one page
+    t_cci_clAddr vtp_in_inval_page;
+    logic        vtp_in_inval_page_valid;
 
     // Events: these wires fire to indicate an event. The CSR shim sums
     // events into counters.
@@ -64,7 +67,7 @@ interface cci_mpf_csrs();
     logic vtp_out_event_2mb_miss;
     logic vtp_out_event_pt_walk_busy;
     logic vtp_out_event_failed_translation;
-
+    t_cci_clAddr vtp_out_pt_walk_last_vaddr;
 
     //
     // VC MAP -- Mapping eVC_VA to real physical channels.
@@ -104,6 +107,8 @@ interface cci_mpf_csrs();
         output vtp_in_mode,
         output vtp_in_page_table_base,
         output vtp_in_page_table_base_valid,
+        output vtp_in_inval_page,
+        output vtp_in_inval_page_valid,
 
         output vc_map_ctrl,
         output vc_map_ctrl_valid,
@@ -120,6 +125,7 @@ interface cci_mpf_csrs();
         input  vtp_out_event_2mb_miss,
         input  vtp_out_event_pt_walk_busy,
         input  vtp_out_event_failed_translation,
+        input  vtp_out_pt_walk_last_vaddr,
 
         input  vc_map_out_event_mapping_changed,
 
@@ -135,7 +141,9 @@ interface cci_mpf_csrs();
        (
         input  vtp_in_mode,
         input  vtp_in_page_table_base,
-        input  vtp_in_page_table_base_valid
+        input  vtp_in_page_table_base_valid,
+        input  vtp_in_inval_page,
+        input  vtp_in_inval_page_valid
         );
     modport vtp_events
        (
@@ -144,7 +152,8 @@ interface cci_mpf_csrs();
         output vtp_out_event_2mb_hit,
         output vtp_out_event_2mb_miss,
         output vtp_out_event_pt_walk_busy,
-        output vtp_out_event_failed_translation
+        output vtp_out_event_failed_translation,
+        output vtp_out_pt_walk_last_vaddr
         );
 
     modport vc_map

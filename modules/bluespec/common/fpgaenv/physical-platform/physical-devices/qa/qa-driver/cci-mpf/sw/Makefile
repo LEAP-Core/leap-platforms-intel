@@ -33,7 +33,7 @@
 ##  History:
 ##     02/17/2016    EL   Initial version based on canonical Service makefile
 ##******************************************************************************
-CPPFLAGS ?=
+CPPFLAGS ?= -g -O2
 CXX      ?= g++
 LDFLAGS  ?=
 
@@ -85,7 +85,7 @@ libMPF.so.0.0.0: $(OBJECTS)
 	$(CXX) -fPIC -shared -Wl,-soname -Wl,libMPF.so.0 $(LDFLAGS) -lOSAL -lAAS -laalrt -o libMPF.so.0.0.0 $(OBJECTS)
 
 %.o: %.cpp
-	$(CXX) $(CPPFLAGS) -I$(INCLUDE) -DHAVE_CONFIG_H -D__AAL_USER__=1 -fPIC -DPIC -g -O2 -c -o $@ $<
+	$(CXX) $(CPPFLAGS) -I$(INCLUDE) -DHAVE_CONFIG_H -D__AAL_USER__=1 -fPIC -DPIC -c -o $@ $<
 
 clean:
 	$(RM) libMPF.so libMPF.so.0 libMPF.so.0.0.0 $(OBJECTS)

@@ -122,6 +122,9 @@ typedef struct
    // If this number is non-zero the program has passed an illegal
    // address and should be fixed.
    btUnsigned64bitInt numFailedTranslations;
+   // Last virtual address translated. If numFailedTranslations is non-zero
+   // this is the failing virtual address.
+   btVirtAddr ptWalkLastVAddr;
 }
 t_cci_mpf_vtp_stats;
 

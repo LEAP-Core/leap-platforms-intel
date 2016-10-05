@@ -175,8 +175,6 @@ module cci_mpf_shim_csr
     //
     // VTP CSR writes (host to FPGA)
     //
-    t_cci_clAddr page_table_base;
-
     always_ff @(posedge clk)
     begin
         // Momentary data set unconditionally to avoid control logic.
@@ -210,10 +208,17 @@ module cci_mpf_shim_csr
             csrs.vtp_in_page_table_base_valid <= 1'b1;
         end
 
+        // Inval page held only one cycle
+        csrs.vtp_in_inval_page <= t_cci_clAddr'(c0_rx.data);
+        csrs.vtp_in_inval_page_valid <=
+            csrAddrMatches(c0_rx, CCI_MPF_VTP_CSR_BASE +
+                                  CCI_MPF_VTP_CSR_INVAL_PAGE_VADDR);
+
         if (reset)
         begin
             csrs.vtp_in_mode <= t_cci_mpf_vtp_csr_mode'(0);
             csrs.vtp_in_page_table_base_valid <= 1'b0;
+            csrs.vtp_in_inval_page_valid <= 1'b0;
             csrs.vc_map_ctrl_valid <= 1'b0;
             csrs.wro_ctrl_valid <= 1'b0;
         end
@@ -337,12 +342,20 @@ module cci_mpf_shim_csr
             begin
                 // New MMIO read request.  Request the value of the register.
                 case (mmio_req_addr)
+                 (CCI_MPF_VTP_CSR_OFFSET + CCI_MPF_VTP_CSR_STAT_PT_WALK_LAST_VADDR) >> 3:
+                    begin
+                        // VC MAP state history register
+                        c2_rsp.data <= events.vtp_out_pt_walk_last_vaddr;
+                        c2_rsp.mmioRdValid <= 1'b1;
+                    end
+
                  (CCI_MPF_VC_MAP_CSR_OFFSET + CCI_MPF_VC_MAP_CSR_STAT_HISTORY) >> 3:
                     begin
                         // VC MAP state history register
                         c2_rsp.data <= csrs.vc_map_history;
                         c2_rsp.mmioRdValid <= 1'b1;
                     end
+
                  default:
                     // Most requests are to counters in block RAM.
                     mmio_read_active <= 1'b1;

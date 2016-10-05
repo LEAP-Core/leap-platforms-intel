@@ -146,6 +146,10 @@ int main(int argc, char *argv[])
     t_cci_mpf_vtp_stats vtp_stats;
     svc.m_pVTPService->vtpGetStats(&vtp_stats);
     cout << "  VTP failed:         " << vtp_stats.numFailedTranslations << endl;
+    if (vtp_stats.numFailedTranslations)
+    {
+        cout << "  VTP failed addr:    0x" << hex << uint64_t(vtp_stats.ptWalkLastVAddr) << dec << endl;
+    }
     cout << "  VTP PT walk cycles: " << vtp_stats.numPTWalkBusyCycles << endl;
     cout << "  VTP 4KB hit / miss: " << vtp_stats.numTLBHits4KB << " / "
                                      << vtp_stats.numTLBMisses4KB << endl;

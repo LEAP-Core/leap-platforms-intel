@@ -113,7 +113,7 @@ btInt AAL_SVC_WRAPPER::initialize()
 
     if (use_hw) {
         // Service Library to use
-        ConfigRecord.Add(AAL_FACTORY_CREATE_CONFIGRECORD_FULL_SERVICE_NAME, "libHWALIAFU");
+        ConfigRecord.Add(AAL_FACTORY_CREATE_CONFIGRECORD_FULL_SERVICE_NAME, "libALI");
 
         // the AFUID to be passed to the Resource Manager. It will be used to locate the appropriate device.
         ConfigRecord.Add(keyRegAFU_ID, "438D6C19-FF0C-40DA-A43D-1F18BF214D19");
@@ -123,8 +123,10 @@ btInt AAL_SVC_WRAPPER::initialize()
     }
     else {
         Manifest.Add(keyRegHandle, 20);
+        Manifest.Add(ALIAFU_NVS_KEY_TARGET, ali_afu_ase);
 
         ConfigRecord.Add(AAL_FACTORY_CREATE_CONFIGRECORD_FULL_SERVICE_NAME, "libASEALIAFU");
+//        ConfigRecord.Add(AAL_FACTORY_CREATE_CONFIGRECORD_FULL_SERVICE_NAME, "libALI");
         ConfigRecord.Add(AAL_FACTORY_CREATE_SOFTWARE_SERVICE,true);
     }
 

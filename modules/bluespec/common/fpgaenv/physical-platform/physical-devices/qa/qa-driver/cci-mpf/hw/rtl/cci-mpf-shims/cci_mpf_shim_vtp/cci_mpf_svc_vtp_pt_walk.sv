@@ -78,9 +78,9 @@ t_cci_mpf_pt_walk_status;
 function automatic t_cci_mpf_pt_walk_status cci_mpf_ptWalkWordToStatus(logic [63:0] w);
     t_cci_mpf_pt_walk_status s;
 
-    // The SW initializes entries to ~0.  Check bit 1 as a proxy for
-    // the entire entry being invalid.
-    s.error = w[1];
+    // The SW initializes entries to ~0.  Check bit 3 as a proxy for
+    // the entire entry being invalid.  Bits 0-2 are used as flags.
+    s.error = w[3];
 
     // Bit 0 in the response word indicates a successful translation.
     s.terminal = w[0];
@@ -107,7 +107,8 @@ module cci_mpf_svc_vtp_pt_walk
     cci_mpf_shim_vtp_tlb_if.fill tlb_fill_if,
 
     // Statistics
-    output logic statBusy
+    output logic statBusy,
+    output t_cci_clAddr statLastTranslateVA
     );
 
     initial begin
@@ -226,6 +227,7 @@ module cci_mpf_svc_vtp_pt_walk
 
     // VA being translated
     t_tlb_4kb_va_page_idx translate_va;
+    assign statLastTranslateVA = { translate_va, CCI_PT_4KB_PAGE_OFFSET_BITS'(0) };
 
     // During translation the VA is broken down into 9 bit indices during
     // the tree-based page walk.  This register is shifted as each level
@@ -741,11 +743,18 @@ module cci_mpf_svc_vtp_pt_walk_cache
     t_pt_cache_idx lookup_idx;
     assign lookup_idx = cacheIdx(reqPageIdxVec, reqWalkDepth);
     t_pt_entry_tag lookup_tag;
+    logic lookup_tag_valid;
 
     logic n_reset_tlb[0:1];
     always @(posedge clk)
     begin
-        n_reset_tlb[1] <= ~csrs.vtp_in_mode.inval_translation_cache;
+        n_reset_tlb[1] <= ~csrs.vtp_in_mode.inval_translation_cache &&
+                          // Reset the page table cache when any page is
+                          // invalidated.  The cost isn't that high and the
+                          // protocol for invalidating a single entry is
+                          // complicated.
+                          ~csrs.vtp_in_inval_page_valid;
+
         n_reset_tlb[0] <= n_reset_tlb[1];
 
         if (reset)
@@ -755,10 +764,22 @@ module cci_mpf_svc_vtp_pt_walk_cache
         end
     end
 
+    always_ff @(posedge clk)
+    begin
+        if (! reset && DEBUG_MESSAGES)
+        begin
+            if (~n_reset_tlb[0])
+            begin
+                $display("VTP PT WALK: Invalidate PT cache");
+            end
+        end
+    end
+
     cci_mpf_prim_ram_simple_init
       #(
         .N_ENTRIES(PT_CACHE_ENTRIES),
-        .N_DATA_BITS($bits(t_pt_entry_tag)),
+        .N_DATA_BITS(1 + $bits(t_pt_entry_tag)),
+        .INIT_VALUE({ 1'b0, t_pt_entry_tag'('x) }),
         .REGISTER_WRITES(1),
         .BYPASS_REGISTERED_WRITES(0),
         .N_OUTPUT_REG_STAGES(1)
@@ -771,10 +792,10 @@ module cci_mpf_svc_vtp_pt_walk_cache
 
         .waddr(ins_idx),
         .wen(ins_tag_en),
-        .wdata(ins_tag),
+        .wdata({ 1'b1, ins_tag }),
 
         .raddr(lookup_idx),
-        .rdata(lookup_tag)
+        .rdata({ lookup_tag_valid, lookup_tag })
         );
 
     //
@@ -822,7 +843,9 @@ module cci_mpf_svc_vtp_pt_walk_cache
     t_pt_entry_tag lookup_tgt_tag_qq;
 
     logic lookup_hit;
-    assign lookup_hit = (lookup_tgt_tag_qq == lookup_tag) && ! rsp_status.error;
+    assign lookup_hit = lookup_tag_valid &&
+                        (lookup_tgt_tag_qq == lookup_tag) &&
+                        ! rsp_status.error;
 
     always_ff @(posedge clk)
     begin

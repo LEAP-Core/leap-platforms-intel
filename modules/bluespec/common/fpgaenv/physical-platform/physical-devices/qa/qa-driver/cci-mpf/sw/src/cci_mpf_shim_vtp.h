@@ -97,7 +97,7 @@ public:
                                 NamedValueSet const &rInputArgs,
                                 NamedValueSet       &rOutputArgs );
    ali_errnum_e bufferFree(     btVirtAddr           Address );
-   ali_errnum_e bufferFreeAll();
+
    btPhysAddr   bufferGetIOVA(  btVirtAddr           Address );
 
    // invalidate FPGA-side translation cache

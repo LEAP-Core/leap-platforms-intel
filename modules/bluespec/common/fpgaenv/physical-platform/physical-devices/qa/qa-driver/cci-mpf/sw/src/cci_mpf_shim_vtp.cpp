@@ -415,15 +415,6 @@ ali_errnum_e MPFVTP::bufferFree(btVirtAddr Address)
    return ali_errnumNoMem;
 }
 
-//
-// Free all buffers (not supported).
-//
-ali_errnum_e MPFVTP::bufferFreeAll()
-{
-   // TODO: not implemented
-   AAL_ERR(LM_All, "NOT IMPLEMENTED" << std::endl);
-   return ali_errnumNoMem;
-}
 
 //
 // Get virtual to physical address mapping.

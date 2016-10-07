@@ -39,6 +39,9 @@
 #include <time.h>
 #include <vector>
 
+#ifdef Register
+#undef Register
+#endif
 #include <aalsdk/AAL.h>
 
 #include "awb/provides/qa_driver.h"
@@ -256,6 +259,7 @@ public:
                           TransactionID const &rTranID);
     void serviceAllocateFailed(const IEvent &rEvent);
     void serviceReleased(const TransactionID &rTranID);
+    void serviceReleaseRequest(IBase *pServiceBase, const IEvent &rEvent);
     void serviceReleaseFailed(const IEvent &rEvent);
 
     // CCI-S only

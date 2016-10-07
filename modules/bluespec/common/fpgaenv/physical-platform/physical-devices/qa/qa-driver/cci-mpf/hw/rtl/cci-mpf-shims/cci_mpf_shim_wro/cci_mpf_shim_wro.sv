@@ -39,7 +39,7 @@
 
 module cci_mpf_shim_wro
   #(
-    parameter AFU_BUF_THRESHOLD = CCI_TX_ALMOST_FULL_THRESHOLD + 4,
+    parameter AFU_BUF_THRESHOLD = CCI_TX_ALMOST_FULL_THRESHOLD + 6,
     parameter MAX_ACTIVE_REQS = 128
     )
    (

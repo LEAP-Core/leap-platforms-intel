@@ -44,7 +44,8 @@ void testConfigOptions(po::options_description &desc)
         ("enable-checker", po::value<bool>()->default_value(true), "Enable read value checker")
         ("enable-reads", po::value<bool>()->default_value(true), "Enable reads")
         ("enable-rw-conflicts", po::value<bool>()->default_value(true), "Enable address conflicts between reads and writes")
-        ("enable-pw", po::value<bool>()->default_value(true), "Enable partial writes")
+        ("enable-pw", po::value<bool>()->default_value(true), "Enable partial writes on a fraction of writes")
+        ("enable-pw-all", po::value<bool>()->default_value(false), "Enable partial writes on all writes")
         ("enable-writes", po::value<bool>()->default_value(true), "Enable writes")
         ("enable-wro", po::value<bool>()->default_value(true), "Enable write/read hazard detection")
         ("rdline-s", po::value<bool>()->default_value(true), "Emit read requests with shared cache hint")
@@ -115,7 +116,11 @@ btInt TEST_RANDOM::test()
     uint64_t enable_checker = (vm["enable-checker"].as<bool>() ? 1 : 0);
     uint64_t enable_reads = (vm["enable-reads"].as<bool>() ? 1 : 0);
     uint64_t enable_rw_conflicts = (vm["enable-rw-conflicts"].as<bool>() ? 1 : 0);
+
     uint64_t enable_pw = (vm["enable-pw"].as<bool>() ? 1 : 0);
+    uint64_t enable_pw_all = (vm["enable-pw-all"].as<bool>() ? 1 : 0);
+    enable_pw |= enable_pw_all;
+
     uint64_t enable_writes = (vm["enable-writes"].as<bool>() ? 1 : 0);
     uint64_t enable_wro = (vm["enable-wro"].as<bool>() ? 1 : 0);
 
@@ -149,10 +154,11 @@ btInt TEST_RANDOM::test()
     {
         // Start the test
         writeTestCSR(0,
-                     (cycles << 11) |
-                     (mcl << 8) |
-                     (wrline_m << 7) |
-                     (rdline_s << 6) |
+                     (cycles << 12) |
+                     (mcl << 9) |
+                     (wrline_m << 8) |
+                     (rdline_s << 7) |
+                     (enable_pw_all << 6) |
                      (enable_pw << 5) |
                      (enable_rw_conflicts << 4) |
                      (enable_checker << 3) |

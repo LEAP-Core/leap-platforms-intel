@@ -8,5 +8,5 @@
 %sources -t VERILOG_H  -v PRIVATE cci_mpf_shim_wro.vh
 
 %sources -t VERILOG    -v PRIVATE cci_mpf_shim_wro.sv
-%sources -t VERILOG    -v PRIVATE cci_mpf_shim_wro_buffer_and_hash.sv
 %sources -t VERILOG    -v PRIVATE cci_mpf_shim_wro_cam_group.sv
+%sources -t VERILOG    -v PRIVATE cci_mpf_shim_wro_epoch_order.sv

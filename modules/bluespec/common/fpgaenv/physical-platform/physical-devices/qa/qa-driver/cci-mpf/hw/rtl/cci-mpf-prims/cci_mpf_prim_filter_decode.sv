@@ -821,18 +821,14 @@ module cci_mpf_prim_filter_decode_bank
     t_bucket_value chk_remove_mask[1:2];
 
     t_bucket_value bucket_check_upd;
-    assign bucket_check_upd = (bucket_checker[upd_idx[2]] & ~chk_remove_mask[2]) |
+    assign bucket_check_upd = (bucket_checker[mem_upd_wr_idx] & ~chk_remove_mask[2]) |
                               chk_insert_mask[2];
 
     always_ff @(posedge clk)
     begin
-        if (! reset && upd_en[2])
+        if (mem_upd_wr_en)
         begin
-            assert (mem_upd_wr_val == bucket_check_upd) else
-                $fatal("cci_mpf_prim_filter_decode.sv: Bucket 0x%0x wrote %0d expected %0d",
-                       upd_idx[2], mem_upd_wr_val, bucket_check_upd);
-
-            bucket_checker[upd_idx[2]] <= bucket_check_upd;
+            bucket_checker[mem_upd_wr_idx] <= bucket_check_upd;
         end
 
         chk_insert_mask[1] <= upd_insert_mask[0];
@@ -846,6 +842,16 @@ module cci_mpf_prim_filter_decode_bank
             begin
                 bucket_checker[b] = t_bucket_value'(0);
             end
+        end
+    end
+
+    always_ff @(posedge clk)
+    begin
+        if (! reset && mem_upd_wr_en)
+        begin
+            assert (mem_upd_wr_val == bucket_check_upd) else
+                $fatal("cci_mpf_prim_filter_decode.sv: Bucket 0x%0x wrote %0d expected %0d",
+                       mem_upd_wr_idx, mem_upd_wr_val, bucket_check_upd);
         end
     end
 

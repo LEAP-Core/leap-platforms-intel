@@ -104,8 +104,10 @@ module cci_mpf_prim_fifo_bram
         .almost_empty(),
 
         .aclr(),
-        .usedw(),
-        .eccstatus()
+        .usedw()
+`ifndef MPF_PLATFORM_OME
+        , .eccstatus()
+`endif
         );
 
 

@@ -861,25 +861,15 @@ module cci_mpf_prim_filter_counting_bank
     t_bucket_value bucket_checker[0 : N_BUCKETS];
 
     t_bucket_value bucket_check_upd;
-    assign bucket_check_upd = bucket_checker[upd_idx[2]] +
+    assign bucket_check_upd = bucket_checker[mem_upd_wr_idx] +
                               (upd_is_insert[2] ? t_bucket_value'(1) :
                                                   t_bucket_value'(-1));
 
     always_ff @(posedge clk)
     begin
-        if (! reset && upd_en[2])
+        if (mem_upd_wr_en)
         begin
-            assert ((&(bucket_checker[upd_idx[2]]) == 1'b0) || ! upd_is_insert[2]) else
-                $fatal("cci_mpf_prim_filter_counting.sv: Bucket 0x%0x overflow", upd_idx[2]);
-
-            assert ((|(bucket_checker[upd_idx[2]]) != 1'b0) || upd_is_insert[2]) else
-                $fatal("cci_mpf_prim_filter_counting.sv: Bucket 0x%0x underflow", upd_idx[2]);
-
-            assert (mem_upd_wr_val == bucket_check_upd) else
-                $fatal("cci_mpf_prim_filter_counting.sv: Bucket 0x%0x wrote %0d expected %0d",
-                       upd_idx[2], mem_upd_wr_val, bucket_check_upd);
-
-            bucket_checker[upd_idx[2]] <= bucket_check_upd;
+            bucket_checker[mem_upd_wr_idx] <= bucket_check_upd;
         end
 
         if (reset)
@@ -888,6 +878,22 @@ module cci_mpf_prim_filter_counting_bank
             begin
                 bucket_checker[b] = t_bucket_value'(0);
             end
+        end
+    end
+
+    always_ff @(posedge clk)
+    begin
+        if (! reset && mem_upd_wr_en)
+        begin
+            assert ((&(bucket_checker[mem_upd_wr_idx]) == 1'b0) || ! upd_is_insert[2]) else
+                $fatal("cci_mpf_prim_filter_counting.sv: Bucket 0x%0x overflow", mem_upd_wr_idx);
+
+            assert ((|(bucket_checker[mem_upd_wr_idx]) != 1'b0) || upd_is_insert[2]) else
+                $fatal("cci_mpf_prim_filter_counting.sv: Bucket 0x%0x underflow", mem_upd_wr_idx);
+
+            assert (mem_upd_wr_val == bucket_check_upd) else
+                $fatal("cci_mpf_prim_filter_counting.sv: Bucket 0x%0x wrote %0d expected %0d",
+                       mem_upd_wr_idx, mem_upd_wr_val, bucket_check_upd);
         end
     end
 

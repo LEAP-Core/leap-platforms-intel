@@ -531,10 +531,10 @@ module cci_mpf_shim_edge_fiu_pwrite_mux
     cci_mpf_prim_fifo_lutram
       #(
         .N_DATA_BITS($bits(t_unique_write_heap_idx) + $bits(t_cci_clData)),
-        .N_ENTRIES(CCI_TX_ALMOST_FULL_THRESHOLD + 4),
+        .N_ENTRIES(CCI_TX_ALMOST_FULL_THRESHOLD + 6),
         // In normal conditions the FIFO drains immediately.  Signal almost
         // full as soon as partial writes cause the FIFO to block.
-        .THRESHOLD(CCI_TX_ALMOST_FULL_THRESHOLD + 2)
+        .THRESHOLD(CCI_TX_ALMOST_FULL_THRESHOLD + 4)
         )
       afu_wdata_fifo
        (

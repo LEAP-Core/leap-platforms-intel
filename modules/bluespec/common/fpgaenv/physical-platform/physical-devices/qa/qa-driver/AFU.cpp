@@ -617,6 +617,17 @@ AFU_CLIENT_CLASS::serviceReleased(const TransactionID &rTranID)
 }
 
 void
+AFU_CLIENT_CLASS::serviceReleaseRequest(IBase *pServiceBase, const IEvent &rEvent)
+{
+    if (NULL != m_pAALService)
+    {
+        IAALService *pIAALService = dynamic_ptr<IAALService>(iidService, m_pAALService);
+        assert(NULL != pIAALService);
+        pIAALService->Release(TransactionID());
+    }
+}
+
+void
 AFU_CLIENT_CLASS::serviceReleaseFailed(const IEvent &rEvent)
 {
     fprintf(stderr, "ERROR: AFU CLIENT service release failed\n");

@@ -133,6 +133,46 @@ module test_afu
 
     // ====================================================================
     //
+    //   Almost full tracker
+    //
+    // ====================================================================
+
+    // An AFU may continue to send up to CCI_TX_ALMOST_FULL_THRESHOLD
+    // requests after the almost full signal is raised.  Use the maximum
+    // so it is tested.
+
+    logic c0TxAlmFull_vec[1 : CCI_TX_ALMOST_FULL_THRESHOLD-1];
+    logic c0TxAlmFull;
+
+    logic c1TxAlmFull_vec[1 : CCI_TX_ALMOST_FULL_THRESHOLD-1];
+    logic c1TxAlmFull;
+
+    assign c0TxAlmFull = c0TxAlmFull_vec[1] && fiu.c0TxAlmFull;
+    assign c1TxAlmFull = c1TxAlmFull_vec[1] && fiu.c1TxAlmFull;
+
+    always_ff @(posedge clk)
+    begin
+        c0TxAlmFull_vec[CCI_TX_ALMOST_FULL_THRESHOLD-1] <= fiu.c0TxAlmFull;
+        c0TxAlmFull_vec[1 : CCI_TX_ALMOST_FULL_THRESHOLD-2] <=
+            c0TxAlmFull_vec[2 : CCI_TX_ALMOST_FULL_THRESHOLD-1];
+
+        c1TxAlmFull_vec[CCI_TX_ALMOST_FULL_THRESHOLD-1] <= fiu.c1TxAlmFull;
+        c1TxAlmFull_vec[1 : CCI_TX_ALMOST_FULL_THRESHOLD-2] <=
+            c1TxAlmFull_vec[2 : CCI_TX_ALMOST_FULL_THRESHOLD-1];
+
+        if (reset)
+        begin
+            for (int i = 1; i < CCI_TX_ALMOST_FULL_THRESHOLD; i = i + 1)
+            begin
+                c0TxAlmFull_vec[i] <= 1'b1;
+                c1TxAlmFull_vec[i] <= 1'b1;
+            end
+        end
+    end
+
+
+    // ====================================================================
+    //
     //  CSRs
     //
     // ====================================================================
@@ -215,6 +255,7 @@ module test_afu
     logic enable_rw_conflicts;
 
     logic enable_partial_writes;
+    logic enable_partial_writes_all;
 
     logic rdline_mode_s;
     logic wrline_mode_m;
@@ -263,6 +304,7 @@ module test_afu
               cl_beats,
               wrline_mode_m,
               rdline_mode_s,
+              enable_partial_writes_all,
               enable_partial_writes,
               enable_rw_conflicts,
               enable_checker,
@@ -284,6 +326,7 @@ module test_afu
             enable_checker <= 1'b0;
             enable_rw_conflicts <= 1'b0;
             enable_partial_writes <= 1'b0;
+            enable_partial_writes_all <= 1'b0;
         end
     end
 
@@ -324,7 +367,7 @@ module test_afu
           default:
             begin
                 // Various signalling states terminate when a write is allowed
-                if (! fiu.c1TxAlmFull && (wr_beat_num == t_cci_clNum'(0)))
+                if (! c1TxAlmFull && (wr_beat_num == t_cci_clNum'(0)))
                 begin
                     state <= STATE_IDLE;
                     $display("Test done.");
@@ -499,7 +542,7 @@ module test_afu
                                    (state == STATE_RUN) &&
                                    enable_reads &&
                                    chk_rdy &&
-                                   ! fiu.c0TxAlmFull);
+                                   ! c0TxAlmFull);
 
         if (reset)
         begin
@@ -646,6 +689,7 @@ module test_afu
         .clk,
         .reset,
         .enable_partial_writes,
+        .enable_partial_writes_all,
         .pwh
         );
 
@@ -719,7 +763,7 @@ module test_afu
             chk_wr_valid_q <= wr_addr_is_checked;
             wr_beat_num <= wr_beat_num_next;
         end
-        else if (! fiu.c1TxAlmFull)
+        else if (! c1TxAlmFull)
         begin
             // Normal running state
             if (state == STATE_RUN)
@@ -1056,6 +1100,7 @@ module test_gen_pwrite_hdr
     input  logic clk,
     input  logic reset,
     input  logic enable_partial_writes,
+    input  logic enable_partial_writes_all,
 
     output t_cci_mpf_c1_PartialWriteHdr pwh
     );
@@ -1105,7 +1150,8 @@ module test_gen_pwrite_hdr
         pwh.mask <= pw_rand_mask;
 
         // Most writes are not partial
-        pwh.isPartialWrite <= (6'(pw_lfsr) == 6'(0)) && enable_partial_writes;
+        pwh.isPartialWrite <= ((6'(pw_lfsr) == 6'(0)) && enable_partial_writes) ||
+                              enable_partial_writes_all;
     end
 
 endmodule // test_gen_pwrite_hdr

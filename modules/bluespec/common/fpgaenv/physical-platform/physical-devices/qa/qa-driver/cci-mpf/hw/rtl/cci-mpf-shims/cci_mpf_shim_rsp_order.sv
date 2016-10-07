@@ -82,7 +82,10 @@ module cci_mpf_shim_rsp_order
     parameter PRESERVE_WRITE_MDATA = 1,
 
     // Maximum number in-flight requests per channel.
-    parameter MAX_ACTIVE_REQS = 128
+    parameter MAX_ACTIVE_REQS = 128,
+
+    // Extra stages to add to usual threshold
+    parameter THRESHOLD_EXTRA = 6
     )
    (
     input  logic clk,
@@ -151,7 +154,7 @@ module cci_mpf_shim_rsp_order
       #(
         .N_ENTRIES(MAX_ACTIVE_REQS),
         .N_DATA_BITS(CCI_MDATA_WIDTH),
-        .MIN_FREE_SLOTS(CCI_TX_ALMOST_FULL_THRESHOLD + 1),
+        .MIN_FREE_SLOTS(CCI_TX_ALMOST_FULL_THRESHOLD + THRESHOLD_EXTRA),
         .N_OUTPUT_REG_STAGES(1)
         )
       wr_heap
@@ -263,7 +266,7 @@ module cci_mpf_shim_rsp_order
                 .N_ENTRIES(MAX_ACTIVE_REQS),
                 .N_DATA_BITS($bits(t_cci_clNum) + CCI_CLDATA_WIDTH),
                 .N_META_BITS($bits(t_cci_clNum) + CCI_MDATA_WIDTH),
-                .MIN_FREE_SLOTS(CCI_TX_ALMOST_FULL_THRESHOLD * CCI_MAX_MULTI_LINE_BEATS),
+                .MIN_FREE_SLOTS((CCI_TX_ALMOST_FULL_THRESHOLD + THRESHOLD_EXTRA) * CCI_MAX_MULTI_LINE_BEATS),
                 .MAX_ALLOC_PER_CYCLE(CCI_MAX_MULTI_LINE_BEATS)
                 )
               rd_rob
@@ -362,7 +365,7 @@ module cci_mpf_shim_rsp_order
               #(
                 .N_ENTRIES(MAX_ACTIVE_REQS),
                 .N_DATA_BITS(CCI_MDATA_WIDTH),
-                .MIN_FREE_SLOTS(CCI_TX_ALMOST_FULL_THRESHOLD + 1),
+                .MIN_FREE_SLOTS(CCI_TX_ALMOST_FULL_THRESHOLD + THRESHOLD_EXTRA),
                 .N_OUTPUT_REG_STAGES(1)
                 )
               rd_heap

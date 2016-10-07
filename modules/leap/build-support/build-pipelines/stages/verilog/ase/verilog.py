@@ -227,7 +227,7 @@ class Verilog():
         wrapper_handle.write('$platform = $ENV{"PLATFORM_DIRECTORY"};\n')
         wrapper_handle.write('$ENV{LD_LIBRARY_PATH} = $platform . ":" . $ENV{LD_LIBRARY_PATH};\n')
         wrapper_handle.write('`ln -sf $platform/directc_mk_model_Wrapper.so .`;\n')
-        wrapper_handle.write('exec("$platform/' + TMP_BSC_DIR + '/' + APM_NAME + '_hw.exe  -licqueue \$* ");\n')
+        wrapper_handle.write('exec("$platform/' + TMP_BSC_DIR + '/' + APM_NAME + '_hw.exe +CONFIG=ase.cfg +SCRIPT=ase.cfg -licqueue \$* ");\n')
         wrapper_handle.close()
  
     def modify_path_ba_local(path):

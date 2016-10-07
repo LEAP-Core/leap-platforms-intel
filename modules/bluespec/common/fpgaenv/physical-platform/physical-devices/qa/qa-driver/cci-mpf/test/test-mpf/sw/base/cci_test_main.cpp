@@ -209,5 +209,7 @@ int main(int argc, char *argv[])
              << endl;
     }
 
+    svc.terminate();
+
     return result;
 }

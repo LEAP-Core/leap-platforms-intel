@@ -784,7 +784,7 @@ module cci_mpf_prim_heap_ctrl_simple
         begin
             allocIdx <= t_idx'(0);
 
-            free_vec <= ~ N_ENTRIES'(0);
+            free_vec <= ~ (N_ENTRIES'(0));
             free_vec[0] <= 1'b0;
         end
     end

@@ -123,7 +123,7 @@ module cci_mpf_prim_ram_simple_init
     parameter REGISTER_WRITES = 0,
     parameter BYPASS_REGISTERED_WRITES = 1,
 
-    parameter INIT_VALUE = N_DATA_BITS'(0)
+    parameter INIT_VALUE = 0
     )
    (
     input  logic clk,
@@ -169,7 +169,7 @@ module cci_mpf_prim_ram_simple_init
 
     assign waddr_local = rdy ? waddr : waddr_init;
     assign wen_local = rdy ? wen : 1'b1;
-    assign wdata_local = rdy ? wdata : INIT_VALUE;
+    assign wdata_local = rdy ? wdata : (N_DATA_BITS'(INIT_VALUE));
 
     always_ff @(posedge clk)
     begin

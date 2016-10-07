@@ -1,6 +1,9 @@
-set_global_assignment -name TOP_LEVEL_ENTITY bdw_502_pr_afu
+set_global_assignment -name OUTPUT_IO_TIMING_NEAR_END_VMEAS "HALF VCCIO"
+set_global_assignment -name OUTPUT_IO_TIMING_FAR_END_VMEAS "HALF SIGNAL SWING"
 set_global_assignment -name EDA_GENERATE_FUNCTIONAL_NETLIST ON -section_id eda_simulation
-set_global_assignment -name SDC_FILE lib/blue/BDW_refresh.sdc
+
+set_global_assignment -name TOP_LEVEL_ENTITY green_top
+set_instance_assignment -name PARTITION root_partition -to |
 
 #---------------------------------------------------------------------------#
 #                       Synthesis Options                                   #
@@ -48,13 +51,17 @@ set_global_assignment -name OUTPUT_IO_TIMING_FAR_END_VMEAS "HALF SIGNAL SWING" -
 set_global_assignment -name OUTPUT_IO_TIMING_FAR_END_VMEAS "HALF SIGNAL SWING" -fall
 set_global_assignment -name ACTIVE_SERIAL_CLOCK FREQ_100MHZ
 
-set_global_assignment -name OUTPUT_IO_TIMING_NEAR_END_VMEAS "HALF VCCIO"
-set_global_assignment -name OUTPUT_IO_TIMING_FAR_END_VMEAS "HALF SIGNAL SWING"
+# Green Region Mandatory RTL files
+# ================================
+set_global_assignment -name SYSTEMVERILOG_FILE lib/green/ccip_if_pkg.sv
+set_global_assignment -name SYSTEMVERILOG_FILE lib/green/green_top.sv
+set_global_assignment -name MISC_FILE          lib/green/AFU_debug/SCJIO.qsys
+set_global_assignment -name QSYS_FILE          lib/green/AFU_debug/SCJIO.qsys
+
 
 # ==============================================================================================================================
 # DO NOT MODIFY the contents above this
 # ==============================================================================================================================
 
-# AFU SDC section - User AFU SDCs goes here
-# ========================================
+source project_sources.tcl
 source project_constraints.tcl

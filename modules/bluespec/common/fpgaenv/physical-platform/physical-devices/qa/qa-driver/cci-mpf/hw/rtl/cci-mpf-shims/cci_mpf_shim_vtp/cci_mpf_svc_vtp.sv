@@ -450,8 +450,7 @@ module cci_mpf_svc_vtp
         if (! reset)
         begin
             assert (! pt_walk_client.notPresent) else
-                $display("cci_mpf_svc_vtp: VA not present in page table");
-//                $fatal("cci_mpf_svc_vtp: VA not present in page table");
+                $fatal("cci_mpf_svc_vtp: VA not present in page table");
         end
     end
 

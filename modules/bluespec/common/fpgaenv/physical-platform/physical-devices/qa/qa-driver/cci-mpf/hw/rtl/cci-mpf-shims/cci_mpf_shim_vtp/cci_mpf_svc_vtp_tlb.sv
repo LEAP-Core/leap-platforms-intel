@@ -193,7 +193,7 @@ module cci_mpf_svc_vtp_tlb
               #(
                 .N_ENTRIES(NUM_TLB_SETS),
                 .N_DATA_BITS($bits(t_tlb_entry)),
-                .INIT_VALUE(t_tlb_entry'({ 'x, 1'b0 })),
+                .INIT_VALUE($bits(t_tlb_entry)'({ 'x, 1'b0 })),
                 .N_OUTPUT_REG_STAGES(1)
                 )
               tlb

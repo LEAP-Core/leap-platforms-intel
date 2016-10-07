@@ -1,9 +1,6 @@
-set_global_assignment -name OUTPUT_IO_TIMING_NEAR_END_VMEAS "HALF VCCIO"
-set_global_assignment -name OUTPUT_IO_TIMING_FAR_END_VMEAS "HALF SIGNAL SWING"
+set_global_assignment -name TOP_LEVEL_ENTITY wcp_top
 set_global_assignment -name EDA_GENERATE_FUNCTIONAL_NETLIST ON -section_id eda_simulation
-
-set_global_assignment -name TOP_LEVEL_ENTITY green_top
-set_instance_assignment -name PARTITION root_partition -to "|"
+set_global_assignment -name SDC_FILE lib/blue/BDW_base.sdc
 
 #---------------------------------------------------------------------------#
 #                       Synthesis Options                                   #
@@ -51,17 +48,17 @@ set_global_assignment -name OUTPUT_IO_TIMING_FAR_END_VMEAS "HALF SIGNAL SWING" -
 set_global_assignment -name OUTPUT_IO_TIMING_FAR_END_VMEAS "HALF SIGNAL SWING" -fall
 set_global_assignment -name ACTIVE_SERIAL_CLOCK FREQ_100MHZ
 
-# Green Region Mandatory RTL files
-# ================================
-set_global_assignment -name SYSTEMVERILOG_FILE lib/green/ccip_if_pkg.sv
-set_global_assignment -name SYSTEMVERILOG_FILE lib/green/green_top.sv
-set_global_assignment -name QSYS_FILE          lib/green/AFU_debug/SCJIO.qsys
-set_global_assignment -name MISC_FILE          lib/green/AFU_debug/SCJIO.qsys
-
+set_global_assignment -name VCCT_L_USER_VOLTAGE 0.9V
+set_global_assignment -name VCCT_R_USER_VOLTAGE 0.9V
+set_global_assignment -name VCCR_L_USER_VOLTAGE 0.9V
+set_global_assignment -name VCCR_R_USER_VOLTAGE 0.9V
+set_global_assignment -name VCCA_L_USER_VOLTAGE 1.8V
+set_global_assignment -name VCCA_R_USER_VOLTAGE 1.8V
 
 # ==============================================================================================================================
 # DO NOT MODIFY the contents above this
 # ==============================================================================================================================
 
-source project_sources.tcl
+# AFU SDC section - User AFU SDCs goes here
+# ========================================
 source project_constraints.tcl

@@ -172,7 +172,7 @@ module cci_mpf_shim_edge_fiu
                 end
             end
 
-            assign heap_wbyteena = ~ t_cldata_byteena'(0);
+            assign heap_wbyteena = ~ (t_cldata_byteena'(0));
             assign afu_edge.wAlmFull = 1'b0;
         end
         else
@@ -567,7 +567,7 @@ module cci_mpf_shim_edge_fiu_pwrite_mux
         end
         else
         begin
-            heap_wbyteena <= ~ t_cldata_byteena'(0);
+            heap_wbyteena <= ~ (t_cldata_byteena'(0));
             heap_waddr <= fifo_waddr;
             heap_wdata <= fifo_wdata;
         end

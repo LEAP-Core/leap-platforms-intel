@@ -27,9 +27,11 @@ class PostSynthesize():
         ## Make a link to the Xeon+FPGA release directory
         ##
         if (not os.path.exists(moduleList.compileDirectory + '/lib')):
-            os.symlink(aal_hw + '/bdw_pr_pkg.16/lib', moduleList.compileDirectory + '/lib')
+            os.symlink(aal_hw + '/bdw_503_pr_pkg/lib', moduleList.compileDirectory + '/lib')
             # Copy blue bitstream base components
-            os.system('rsync -a ' + moduleList.compileDirectory + '/lib/blue/bdw_static_db/ ' + \
+            os.system('rsync -a ' + moduleList.compileDirectory + '/lib/blue/output_files/ ' + \
+                      moduleList.compileDirectory + '/output_files/')
+            os.system('rsync -a ' + moduleList.compileDirectory + '/lib/blue/qdb_file/ ' + \
                       moduleList.compileDirectory + '/')
 
         ##
@@ -131,31 +133,31 @@ class PostSynthesize():
         ##
 
         output_dir = moduleList.compileDirectory + '/output_files/'
-        proj_name_base = 'PR_enabled_BDW_refresh_fbc9_seed0'
-        proj_name_synth = 'bdw_502_pr_afu_synth'
-        proj_name = 'bdw_502_pr_afu'
+        proj_name_base = 'BDW_503_BASE_2041_seed2'
+        proj_name_synth = 'bdw_503_pr_afu_synth'
+        proj_name = 'bdw_503_pr_afu'
 
         altera_syn = moduleList.env.Command(
             output_dir + proj_name_synth + '.syn.rpt',
             globalVerilogs + globalVHDs + [constrFile_name] + [prjFile_name] + [paramTclFile] + sdcs,
             ['cd ' + moduleList.compileDirectory + \
-             '; quartus_syn ' + proj_name_base + ' -c ' + proj_name_synth ])
+             '; quartus_syn --read_settings_files=on ' + proj_name_base + ' -c ' + proj_name_synth ])
 
         altera_syn_qdb = moduleList.env.Command(
             moduleList.compileDirectory + '/' + proj_name_synth + '.qdb',
             altera_syn,
             ['cd ' + moduleList.compileDirectory + \
-               '; quartus_cdb ' + proj_name_synth + ' --export_block root_partition --snapshot synthesized --file ' + proj_name_synth + '.qdb', \
+               '; quartus_cdb --read_settings_files=on ' + proj_name_synth + ' --export_block root_partition --snapshot synthesized --file ' + proj_name_synth + '.qdb', \
              'cd ' + moduleList.compileDirectory + \
-               '; quartus_cdb ' + proj_name + ' --import_block root_partition --file ' + proj_name_base + '.qdb', \
+               '; quartus_cdb --read_settings_files=on ' + proj_name + ' --import_block root_partition --file ' + proj_name_base + '.qdb', \
              'cd ' + moduleList.compileDirectory + \
-               '; quartus_cdb ' + proj_name + ' --import_block persona1 --file ' + proj_name_synth + '.qdb' ])
+               '; quartus_cdb --read_settings_files=on ' + proj_name + ' --import_block persona1 --file ' + proj_name_synth + '.qdb' ])
 
         altera_fit = moduleList.env.Command(
             output_dir + proj_name + '.fit.rpt',
             altera_syn_qdb,
             ['cd ' + moduleList.compileDirectory + \
-             '; quartus_fit ' + proj_name_base + ' -c ' + proj_name ])
+             '; quartus_fit --read_settings_files=on ' + proj_name_base + ' -c ' + proj_name ])
 
         altera_sof = moduleList.env.Command(
             output_dir + proj_name + '.sof',

@@ -310,7 +310,7 @@ module cci_mpf_shim_edge_afu_wr_data
             // requests may have isPartialWrite set on any beat, so this
             // mask ultimately may be used even when isPartialWrite is
             // false for the current beat.
-            pwrite.wpartial.mask <= ~ t_cci_mpf_clDataByteMask'(0);
+            pwrite.wpartial.mask <= ~ (t_cci_mpf_clDataByteMask'(0));
         end
 
         if (reset)

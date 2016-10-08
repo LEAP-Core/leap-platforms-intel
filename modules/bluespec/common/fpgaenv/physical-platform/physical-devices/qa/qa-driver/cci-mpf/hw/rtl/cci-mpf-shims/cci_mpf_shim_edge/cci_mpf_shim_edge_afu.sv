@@ -156,7 +156,7 @@ module cci_mpf_shim_edge_afu
                 .afu_raw(afu_wr),
                 // Forward requests whenever transmission is allowed
                 .deqC0Tx(cci_mpf_c0TxIsValid(afu_buf.c0Tx) && ! c0TxAlmFull_q),
-                .deqC1Tx(cci_mpf_c0TxIsValid(afu_buf.c1Tx) && ! c1TxAlmFull_q)
+                .deqC1Tx(cci_mpf_c1TxIsValid(afu_buf.c1Tx) && ! c1TxAlmFull_q)
                 );
 
             // Connect afu_buf and fiu_buf.  The connection is trivial
@@ -382,7 +382,7 @@ module cci_mpf_shim_edge_afu_wr_data
 
     always_ff @(posedge clk)
     begin
-        if (afu.c1Tx.hdr.base.sop == 1'b1)
+        if (cci_mpf_c1TxIsValid(afu.c1Tx) && afu.c1Tx.hdr.base.sop)
         begin
             c1tx_sop_hdr <=
                 cci_mpf_updC1TxCanonicalHdr(afu.c1Tx.hdr,

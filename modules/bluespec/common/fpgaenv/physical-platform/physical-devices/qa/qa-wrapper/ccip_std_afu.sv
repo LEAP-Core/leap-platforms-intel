@@ -127,7 +127,9 @@ module ccip_std_afu
                 .afu_softreset(plIfc_reset),
                 .afu_clk(plIfc_clk),
                 .afu_rx(plIfc_cp2af_sRx),
-                .afu_tx(plIfc_af2cp_sTx)
+                .afu_tx(plIfc_af2cp_sTx),
+
+                .async_shim_error()
                 );
         end
     endgenerate

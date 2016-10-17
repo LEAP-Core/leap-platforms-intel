@@ -261,6 +261,13 @@ module ccip_std_afu
         // no protection against races with CPU-generates writes.
         .ENABLE_PARTIAL_WRITES(1),
 
+        // Experimental:  Merge nearby reads from the same address?  Some
+        // applications generate reads to the same line within a few cycles
+        // of each other.  This module reduces the requests to single host
+        // read and replicates the result.  The module requires a wide
+        // block RAM FIFO, so should not be enabled without some thought.
+        .MERGE_DUPLICATE_READS(0),
+
         // Address of the MPF feature header.  See comment above.
         .DFH_MMIO_BASE_ADDR(MPF_DFH_MMIO_ADDR)
         )

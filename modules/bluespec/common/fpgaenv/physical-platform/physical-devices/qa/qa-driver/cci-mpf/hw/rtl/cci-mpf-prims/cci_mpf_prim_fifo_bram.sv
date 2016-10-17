@@ -83,8 +83,8 @@ module cci_mpf_prim_fifo_bram
         .lpm_width(N_DATA_BITS),
         .lpm_widthu($clog2(N_ENTRIES)),
         .almost_full_value(N_ENTRIES - THRESHOLD),
-        .overflow_checking("ON"),
-        .underflow_checking("ON"),
+        .overflow_checking("OFF"),
+        .underflow_checking("OFF"),
         .use_eab("ON"),
         .add_ram_output_register("ON")
         )
@@ -110,6 +110,20 @@ module cci_mpf_prim_fifo_bram
 `endif
         );
 
+    // synthesis translate_off
 
+    always_ff @(posedge clk)
+    begin
+        if (! reset)
+        begin
+            assert (! (sc_full && enq_en)) else
+                $fatal(2, "ENQ to full SCFIFO");
+
+            assert (notEmpty || ! deq_en) else
+                $fatal(2, "DEQ from empty SCFIFO");
+        end
+    end
+
+    // synthesis translate_on
 
 endmodule // cci_mpf_prim_fifo_bram

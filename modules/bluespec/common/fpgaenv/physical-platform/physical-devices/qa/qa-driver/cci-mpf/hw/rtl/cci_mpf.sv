@@ -104,7 +104,14 @@ module cci_mpf
     // with ENFORCE_WR_ORDER, partial writes are free of races on the
     // FPGA side.  There are no guarantees of atomicity and there is
     // no protection against races with CPU-generates writes.
-    parameter ENABLE_PARTIAL_WRITES = 0
+    parameter ENABLE_PARTIAL_WRITES = 0,
+
+    // Experimental:  Merge nearby reads from the same address?  Some
+    // applications generate reads to the same line within a few cycles
+    // of each other.  This module reduces the requests to single host
+    // read and replicates the result.  The module requires a wide
+    // block RAM FIFO, so should not be enabled without some thought.
+    parameter MERGE_DUPLICATE_READS = 0
     )
    (
     input  logic      clk,
@@ -275,6 +282,7 @@ module cci_mpf
         .ENFORCE_WR_ORDER(ENFORCE_WR_ORDER),
         .SORT_READ_RESPONSES(SORT_READ_RESPONSES),
         .PRESERVE_WRITE_MDATA(PRESERVE_WRITE_MDATA),
+        .MERGE_DUPLICATE_READS(MERGE_DUPLICATE_READS),
         .ENABLE_PARTIAL_WRITES(ENABLE_PARTIAL_WRITES),
         .N_WRITE_HEAP_ENTRIES(N_WRITE_HEAP_ENTRIES),
         .RESERVED_MDATA_IDX(CCI_PLATFORM_MDATA_WIDTH-2)

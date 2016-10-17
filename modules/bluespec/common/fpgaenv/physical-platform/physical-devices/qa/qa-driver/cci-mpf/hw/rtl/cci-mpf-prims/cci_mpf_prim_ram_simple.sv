@@ -41,6 +41,12 @@ module cci_mpf_prim_ram_simple
     // Number of extra stages of output register buffering to add
     parameter N_OUTPUT_REG_STAGES = 0,
 
+    // Bypass writes during the pipelined read response?  The memory
+    // becomes write-before-read and subsequent writes are also bypassed
+    // to in flight pipelined reads.  Writes during the final cycle
+    // in which the result is returned are NOT bypassed.
+    parameter BYPASS_FULL_PIPELINE = 0,
+
     // Register writes for a cycle and optionally bypass delayed writes
     // to reads in the delay cycle?  In some cases it is better to impose
     // a delay on the read path for the bypass when the write path has
@@ -82,17 +88,19 @@ module cci_mpf_prim_ram_simple
     //
     // Optional extra registered read responses
     //
+    logic [N_DATA_BITS-1 : 0] mem_rdata;
+
     genvar s;
     generate
         if (N_OUTPUT_REG_STAGES <= 1)
         begin : nr
             // 0 or 1 stages handled in base primitive
-            assign rdata = c_rdata;
+            assign mem_rdata = c_rdata;
         end
         else
         begin : r
             logic [N_DATA_BITS-1 : 0] mem_rd[2 : N_OUTPUT_REG_STAGES];
-            assign rdata = mem_rd[N_OUTPUT_REG_STAGES];
+            assign mem_rdata = mem_rd[N_OUTPUT_REG_STAGES];
 
             always_ff @(posedge clk)
             begin
@@ -108,6 +116,62 @@ module cci_mpf_prim_ram_simple
             end
         end
     endgenerate
+
+
+    //
+    // Optional full pipeline bypass
+    //
+    generate
+        if (BYPASS_FULL_PIPELINE == 0)
+        begin : nw
+            assign rdata = mem_rdata;
+        end
+        else
+        begin : w
+            if (N_OUTPUT_REG_STAGES == 0)
+            begin
+                assign rdata = (wen && (waddr == raddr)) ? wdata : mem_rdata;
+            end
+            else
+            begin
+                logic [$clog2(N_ENTRIES)-1 : 0] pipe_raddr[0 : N_OUTPUT_REG_STAGES];
+                logic pipe_byp_en[0 : N_OUTPUT_REG_STAGES];
+                logic [N_DATA_BITS-1 : 0] pipe_byp_rdata[0 : N_OUTPUT_REG_STAGES];
+
+                always_comb
+                begin
+                    if (pipe_byp_en[N_OUTPUT_REG_STAGES])
+                        rdata = pipe_byp_rdata[N_OUTPUT_REG_STAGES];
+                    else
+                        rdata = mem_rdata;
+                end
+
+                always_ff @(posedge clk)
+                begin
+                    pipe_raddr[0] <= raddr;
+                    pipe_byp_en[0] <= (wen && (waddr == raddr));
+                    pipe_byp_rdata[0] <= wdata;
+                end
+
+                for (s = 1; s <= N_OUTPUT_REG_STAGES; s = s + 1)
+                begin : shft
+                    always_ff @(posedge clk)
+                    begin
+                        pipe_raddr[s] <= pipe_raddr[s-1];
+                        pipe_byp_en[s] <= pipe_byp_en[s-1];
+                        pipe_byp_rdata[s] <= pipe_byp_rdata[s-1];
+
+                        if (wen && (waddr == pipe_raddr[s-1]))
+                        begin
+                            pipe_byp_en[s] <= 1'b1;
+                            pipe_byp_rdata[s] <= wdata;
+                        end
+                    end
+                end
+            end
+        end
+    endgenerate
+
 endmodule // cci_mpf_prim_ram_simple
 
 

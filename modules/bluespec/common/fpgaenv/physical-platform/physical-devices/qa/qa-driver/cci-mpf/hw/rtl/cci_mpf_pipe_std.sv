@@ -69,8 +69,10 @@ module cci_mpf_pipe_std
     parameter ENFORCE_WR_ORDER = 0,
     parameter SORT_READ_RESPONSES = 1,
     parameter PRESERVE_WRITE_MDATA = 0,
-    parameter N_WRITE_HEAP_ENTRIES = 0,
     parameter ENABLE_PARTIAL_WRITES = 0,
+    parameter MERGE_DUPLICATE_READS = 0,
+
+    parameter N_WRITE_HEAP_ENTRIES = 0,
 
     // Computed in cci_mpf module
     parameter RESERVED_MDATA_IDX = CCI_PLATFORM_MDATA_WIDTH - 1
@@ -176,6 +178,41 @@ module cci_mpf_pipe_std
 
     // ====================================================================
     //
+    //  Partial write emulation
+    //
+    // ====================================================================
+
+    cci_mpf_if stgp3_dedup_reads (.clk);
+
+    generate
+        if (MERGE_DUPLICATE_READS)
+        begin : dr
+            cci_mpf_shim_dedup_reads
+              #(
+                .MAX_ACTIVE_REQS(MAX_ACTIVE_REQS)
+                )
+              dedup_reads
+               (
+                .clk,
+                .fiu(stgp2_pwrite),
+                .afu(stgp3_dedup_reads)
+                );
+        end
+        else
+        begin : no_dupr
+            cci_mpf_shim_null
+              no_dedup_reads
+               (
+                .clk,
+                .fiu(stgp2_pwrite),
+                .afu(stgp3_dedup_reads)
+                );
+        end
+    endgenerate
+
+
+    // ====================================================================
+    //
     //  Virtual to physical translation.
     //
     //  *** This stage may reorder requests relative to each other,
@@ -189,7 +226,7 @@ module cci_mpf_pipe_std
     //
     // ====================================================================
 
-    cci_mpf_if stgp3_fiu_virtual (.clk);
+    cci_mpf_if stgp4_fiu_virtual (.clk);
 
     generate
         if (ENABLE_VTP)
@@ -198,8 +235,8 @@ module cci_mpf_pipe_std
               v_to_p
                (
                 .clk,
-                .fiu(stgp2_pwrite),
-                .afu(stgp3_fiu_virtual),
+                .fiu(stgp3_dedup_reads),
+                .afu(stgp4_fiu_virtual),
                 .vtp_svc,
                 .csrs(mpf_csrs)
                 );
@@ -210,8 +247,8 @@ module cci_mpf_pipe_std
               physical
                (
                 .clk,
-                .fiu(stgp2_pwrite),
-                .afu(stgp3_fiu_virtual)
+                .fiu(stgp3_dedup_reads),
+                .afu(stgp4_fiu_virtual)
                 );
         end
     endgenerate
@@ -225,7 +262,7 @@ module cci_mpf_pipe_std
     //
     // ====================================================================
 
-    cci_mpf_if stgp4_fiu_wro (.clk);
+    cci_mpf_if stgp5_fiu_wro (.clk);
 
     generate
         if (ENFORCE_WR_ORDER)
@@ -237,8 +274,8 @@ module cci_mpf_pipe_std
               order
                (
                 .clk,
-                .fiu(stgp3_fiu_virtual),
-                .afu(stgp4_fiu_wro),
+                .fiu(stgp4_fiu_virtual),
+                .afu(stgp5_fiu_wro),
                 .csrs(mpf_csrs),
                 .events(mpf_csrs)
                 );
@@ -249,8 +286,8 @@ module cci_mpf_pipe_std
               unordered
                (
                 .clk,
-                .fiu(stgp3_fiu_virtual),
-                .afu(stgp4_fiu_wro)
+                .fiu(stgp4_fiu_virtual),
+                .afu(stgp5_fiu_wro)
                 );
         end
     endgenerate
@@ -271,7 +308,7 @@ module cci_mpf_pipe_std
     //
     // ====================================================================
 
-    cci_mpf_if stgp5_fiu_vc_map (.clk);
+    cci_mpf_if stgp6_fiu_vc_map (.clk);
 
     generate
         if (ENABLE_VC_MAP)
@@ -285,8 +322,8 @@ module cci_mpf_pipe_std
               vc_map
                (
                 .clk,
-                .fiu(stgp4_fiu_wro),
-                .afu(stgp5_fiu_vc_map),
+                .fiu(stgp5_fiu_wro),
+                .afu(stgp6_fiu_vc_map),
                 .csrs(mpf_csrs),
                 .events(mpf_csrs)
                 );
@@ -297,8 +334,8 @@ module cci_mpf_pipe_std
               no_vc_map
                (
                 .clk,
-                .fiu(stgp4_fiu_wro),
-                .afu(stgp5_fiu_vc_map)
+                .fiu(stgp5_fiu_wro),
+                .afu(stgp6_fiu_vc_map)
                 );
         end
     endgenerate
@@ -320,7 +357,7 @@ module cci_mpf_pipe_std
     //
     // ====================================================================
 
-    cci_mpf_if stgp6_fiu_rsp_order (.clk);
+    cci_mpf_if stgp7_fiu_rsp_order (.clk);
 
     cci_mpf_shim_rsp_order
       #(
@@ -331,8 +368,8 @@ module cci_mpf_pipe_std
       rspOrder
        (
         .clk,
-        .fiu(stgp5_fiu_vc_map),
-        .afu(stgp6_fiu_rsp_order)
+        .fiu(stgp6_fiu_vc_map),
+        .afu(stgp7_fiu_rsp_order)
         );
 
 
@@ -355,7 +392,7 @@ module cci_mpf_pipe_std
       mpf_edge_afu
        (
         .clk,
-        .fiu(stgp6_fiu_rsp_order),
+        .fiu(stgp7_fiu_rsp_order),
         .afu,
         .fiu_edge(edge_if),
         .pwrite

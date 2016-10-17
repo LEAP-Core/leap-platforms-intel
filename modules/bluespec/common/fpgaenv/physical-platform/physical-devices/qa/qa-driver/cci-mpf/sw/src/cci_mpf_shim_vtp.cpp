@@ -283,12 +283,12 @@ ali_errnum_e MPFVTP::bufferAllocate( btWSSize             Length,
          if (effPageSize == LARGE_PAGE_SIZE) {
             // fall back to small buffers:
             // restore last large mapping
-            if (va_base_len = 0) {
+            if (va_base_len == 0) {
                // corner case: this was the last mapping - we destroyed it, so
                // try to restore it.
                va_base = mmap(va_alloc, LARGE_PAGE_SIZE,
-                     PROT_READ | PROT_WRITE,
-                     MAP_SHARED | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+                              PROT_READ | PROT_WRITE,
+                              MAP_SHARED | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
                ASSERT(va_base == va_alloc);
             } else {
                // this was not the last mapping (or va_base is not aligned), so

@@ -1,0 +1,12 @@
+##
+## CCI_MPF_SRC must be defined before this file is included, pointing
+## to the MPF source tree and MPF sources must be included.  See
+## hw/par/qsf_cci_mpf_PAR_files.qsf in the root of the MPF source tree.
+##
+
+## Base test sources
+
+set_global_assignment -name SEARCH_PATH $CCI_MPF_SRC/test/test-mpf/base/hw/rtl
+
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/test/test-mpf/base/hw/rtl/cci_test_afu.sv
+set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/test/test-mpf/base/hw/rtl/cci_test_csrs.sv

@@ -248,13 +248,16 @@ module cci_mpf_shim_wro_cam_group
     // to FILTER_PIPE_DEPTH-1 above the current state.  Using the counter
     // this way is far easier than address matching and detecting multipel
     // references to the same address in the pipeline.
-    localparam RD_FILTER_BUCKET_BITS = 4;
+    localparam RD_FILTER_BUCKET_BITS = 5;
     logic [RD_FILTER_BUCKET_BITS-1 : 0] rd_filter_test_cnt;
+
     // Consider the filter full if less than FILTER_PIPE_DEPTH slots are
-    // available.  See the comment a few lines up.  For >= 3 bit buckets we
-    // can just test the high bit of the counter.
+    // available.
+    localparam RD_FILTER_BUCKET_LIMIT =
+        (1 << RD_FILTER_BUCKET_BITS) - (FILTER_PIPE_DEPTH + 1);
     assign rd_filter_test_notPresent[0] =
-        (rd_filter_test_cnt[RD_FILTER_BUCKET_BITS-1] == 1'b0);
+        (rd_filter_test_cnt[RD_FILTER_BUCKET_BITS-1] <
+         (RD_FILTER_BUCKET_BITS'(RD_FILTER_BUCKET_LIMIT)));
 
     //
     // A counting filter allows multiple reads to the same address to be

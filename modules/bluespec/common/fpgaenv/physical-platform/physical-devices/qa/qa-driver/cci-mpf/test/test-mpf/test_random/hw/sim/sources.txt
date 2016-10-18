@@ -1,0 +1,3 @@
+-F ../../../base/hw/sim/cci_mpf_test_base_addenda.txt
+
+../rtl/test_random.sv

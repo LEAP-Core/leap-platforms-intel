@@ -27,7 +27,7 @@
 #ifndef __TEST_RANDOM_H__
 #define __TEST_RANDOM_H__ 1
 
-#include "base/cci_test.h"
+#include "cci_test.h"
 
 class TEST_RANDOM : public CCI_TEST
 {

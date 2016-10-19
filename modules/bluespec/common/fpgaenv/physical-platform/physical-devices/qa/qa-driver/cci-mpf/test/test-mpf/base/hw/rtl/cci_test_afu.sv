@@ -29,7 +29,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 `include "cci_mpf_platform.vh"
-`include "cci_test_conf_default.vh"
+`include "cci_mpf_test_conf_default.vh"
 `include "cci_test_csrs.vh"
 
 import ccip_if_pkg::*;
@@ -197,20 +197,20 @@ module ccip_std_afu
       #(
         // Should read responses be returned in the same order that
         // the reads were requested?
-        .SORT_READ_RESPONSES(1),
+        .SORT_READ_RESPONSES(`MPF_CONF_SORT_READ_RESPONSES),
 
         // Should the Mdata from write requests be returned in write
         // responses?  If the AFU is simply counting write responses
         // and isn't consuming Mdata, then setting this to 0 eliminates
         // the memory and logic inside MPF for preserving Mdata.
-        .PRESERVE_WRITE_MDATA(1),
+        .PRESERVE_WRITE_MDATA(`MPF_CONF_PRESERVE_WRITE_MDATA),
 
         // Enable virtual to physical translation?  When enabled, MPF
         // accepts requests with either virtual or physical addresses.
         // Virtual addresses are indicated by setting the
         // addrIsVirtual flag in the MPF extended Tx channel
         // request header.
-        .ENABLE_VTP(1),
+        .ENABLE_VTP(`MPF_CONF_ENABLE_VTP),
 
         // Enable mapping of eVC_VA to physical channels?  AFUs that both use
         // eVC_VA and read back memory locations written by the AFU must either
@@ -225,13 +225,13 @@ module ccip_std_afu
         //
         // The mapVAtoPhysChannel extended header bit must be set on each
         // request to enable mapping.
-        .ENABLE_VC_MAP(1),
+        .ENABLE_VC_MAP(`MPF_CONF_ENABLE_VC_MAP),
         // When ENABLE_VC_MAP is set the mapping is either static for the entire
         // run or dynamic, changing in response to traffic patterns.  The mapper
         // guarantees synchronization when the mapping changes by emitting a
         // WrFence on eVC_VA and draining all reads.  Ignored when ENABLE_VC_MAP
         // is 0.
-        .ENABLE_DYNAMIC_VC_MAPPING(1),
+        .ENABLE_DYNAMIC_VC_MAPPING(`MPF_CONF_ENABLE_DYNAMIC_VC_MAPPING),
 
         // Should write/write and write/read ordering within a cache
         // be enforced?  By default CCI makes no guarantees on the order
@@ -251,7 +251,7 @@ module ccip_std_afu
         // ***  requesting a write fence on eVC_VA and waiting for the
         // ***  corresponding write fence response.
         //
-        .ENFORCE_WR_ORDER(1),
+        .ENFORCE_WR_ORDER(`MPF_CONF_ENFORCE_WR_ORDER),
 
         // Enable partial write emulation.  CCI has no support for masked
         // writes that merge new data with existing data in a line.  MPF
@@ -260,14 +260,14 @@ module ccip_std_afu
         // with ENFORCE_WR_ORDER, partial writes are free of races on the
         // FPGA side.  There are no guarantees of atomicity and there is
         // no protection against races with CPU-generates writes.
-        .ENABLE_PARTIAL_WRITES(1),
+        .ENABLE_PARTIAL_WRITES(`MPF_CONF_ENABLE_PARTIAL_WRITES),
 
         // Experimental:  Merge nearby reads from the same address?  Some
         // applications generate reads to the same line within a few cycles
         // of each other.  This module reduces the requests to single host
         // read and replicates the result.  The module requires a wide
         // block RAM FIFO, so should not be enabled without some thought.
-        .MERGE_DUPLICATE_READS(0),
+        .MERGE_DUPLICATE_READS(`MPF_CONF_MERGE_DUPLICATE_READS),
 
         // Address of the MPF feature header.  See comment above.
         .DFH_MMIO_BASE_ADDR(MPF_DFH_MMIO_ADDR)

@@ -7,7 +7,7 @@
 ## Base test sources
 source $CCI_MPF_SRC/test/test-mpf/base/hw/par/cci_mpf_test_base_PAR_files.qsf
 
-## This test sources
+## This test's sources
 set_global_assignment -name SEARCH_PATH $CCI_MPF_SRC/test/test-mpf/test_random/hw/rtl
 
 set_global_assignment -name SYSTEMVERILOG_FILE $CCI_MPF_SRC/test/test-mpf/test_random/hw/rtl/test_random.sv

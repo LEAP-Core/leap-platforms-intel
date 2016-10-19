@@ -29,7 +29,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 `include "cci_mpf_if.vh"
-`include "cci_test_conf_default.vh"
+`include "cci_mpf_test_conf_default.vh"
 `include "cci_test_csrs.vh"
 
 

@@ -84,11 +84,17 @@ module test_afu
     typedef logic [31:0] t_random;
 
     // Size of the allocated memory address region
-    localparam N_MEM_REGION_BITS = 18;
+`ifndef CFG_N_MEM_REGION_BITS
+  `define CFG_N_MEM_REGION_BITS 18
+`endif
+    localparam N_MEM_REGION_BITS = `CFG_N_MEM_REGION_BITS;
 
     // Size of the checker region.  If this is smaller than N_MEM_REGION_BITS
     // then a subset of references are checked.
-    localparam N_CHECKED_ADDR_BITS = 14;
+`ifndef CFG_N_CHECKED_ADDR_BITS
+  `define CFG_N_CHECKED_ADDR_BITS 14
+`endif
+    localparam N_CHECKED_ADDR_BITS = `CFG_N_CHECKED_ADDR_BITS;
     typedef logic [N_CHECKED_ADDR_BITS-1 : 0] t_checked_addr_idx;
 
     // The checked address space is a mapping from the larger memory region,
@@ -96,7 +102,10 @@ module test_afu
     // a few high bits so that multiple virtual pages are checked.  References
     // are checked only when the unmapped middle address bits are zero.
 
-    localparam N_CHECKED_LOW_ADDR_BITS = 9;
+`ifndef CFG_N_CHECKED_LOW_ADDR_BITS
+  `define CFG_N_CHECKED_LOW_ADDR_BITS 9
+`endif
+    localparam N_CHECKED_LOW_ADDR_BITS = `CFG_N_CHECKED_LOW_ADDR_BITS;
 
     typedef struct packed {
         logic [N_CHECKED_ADDR_BITS-N_CHECKED_LOW_ADDR_BITS-1 : 0] checked_high;

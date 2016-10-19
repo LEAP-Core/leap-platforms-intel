@@ -28,6 +28,31 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-`ifndef AFU_CLOCK_FREQ
-  `define AFU_CLOCK_FREQ 400
+//
+// test_random configuration.  These are in ifdefs so they can be overridden
+// by command line definitions.
+//
+
+`ifndef MPF_CONF_SORT_READ_RESPONSES
+  `define MPF_CONF_SORT_READ_RESPONSES 1
+`endif
+
+`ifndef MPF_CONF_PRESERVE_WRITE_MDATA
+  `define MPF_CONF_PRESERVE_WRITE_MDATA 1
+`endif
+
+`ifndef MPF_CONF_ENABLE_VTP
+  `define MPF_CONF_ENABLE_VTP 1
+`endif
+
+`ifndef MPF_CONF_ENABLE_VC_MAP
+  `define MPF_CONF_ENABLE_VC_MAP 1
+`endif
+
+`ifndef MPF_CONF_ENFORCE_WR_ORDER
+  `define MPF_CONF_ENFORCE_WR_ORDER 1
+`endif
+
+`ifndef MPF_CONF_ENABLE_PARTIAL_WRITES
+  `define MPF_CONF_ENABLE_PARTIAL_WRITES 1
 `endif

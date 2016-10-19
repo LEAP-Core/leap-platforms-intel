@@ -29,6 +29,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 `include "cci_mpf_platform.vh"
+`include "cci_test_conf_default.vh"
 `include "cci_test_csrs.vh"
 
 import ccip_if_pkg::*;

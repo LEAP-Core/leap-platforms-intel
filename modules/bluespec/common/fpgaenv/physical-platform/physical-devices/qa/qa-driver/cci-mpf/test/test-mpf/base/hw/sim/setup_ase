@@ -1,0 +1,81 @@
+#!/usr/bin/env python
+
+import sys, os
+
+##
+## Find the path and name of the script.  We assume the script is in the test's
+## hw/sim directory.
+##
+
+script_reldir = os.path.dirname(sys.argv[0])
+script_absdir = os.path.abspath(script_reldir)
+script_name = os.path.basename(sys.argv[0])
+
+def usage():
+    print "Usage: %s <target directory>" % (script_name)
+    sys.exit(1)
+
+if len(sys.argv) != 2:
+    usage()
+
+try:
+    aal_src = os.environ['AALSDK']
+    ase_src = aal_src + '/ase'
+except:
+    print 'AALSDK environment variable must point to the root of the AAL SDK.'
+    sys.exit(1)
+
+if not os.path.isfile(ase_src + '/scripts/generate_ase_environment.py'):
+    print 'Failed to find setup script %s' % (ase_src + '/ase/scripts/generate_ase_environment.py')
+    sys.exit(1)
+
+
+## Make the target directory
+tgt_dir = sys.argv[1]
+try:
+    os.mkdir(tgt_dir)
+except:
+    print 'Target directory (%s) already exists.' % tgt_dir
+    sys.exit(1)
+
+# Copy ASE to target directory
+os.system('rsync -a ' + ase_src + '/ ' + tgt_dir + '/')
+os.chdir(tgt_dir)
+
+# Make a dummy Verilog file for setup purposes
+os.mkdir('dummy')
+os.close(os.open('dummy/null.sv', os.O_WRONLY | os.O_CREAT, 0644))
+
+# Configure both Questa and VCS.  VCS will be the default since it is last.
+os.system('./scripts/generate_ase_environment.py dummy -t QUESTA > /dev/null')
+os.system('./scripts/generate_ase_environment.py dummy -t VCS')
+
+# Clean up files no longer needed
+os.remove('dummy/null.sv')
+os.rmdir('dummy')
+os.remove('vlog_files.list')
+
+# Configure sources for the target workload
+os.rename('ase_sources.mk', 'ase_sources.mk.orig')
+os.system('sed ' +
+          '-e \'s^DUT_VLOG_SRC_LIST =.*^DUT_VLOG_SRC_LIST = ' + script_absdir + '/sources.txt^\' ' +
+          '-e \'s^DUT_INCDIR =.*^DUT_INCDIR =^\' ' +
+          'ase_sources.mk.orig > ase_sources.mk')
+os.remove('ase_sources.mk.orig')
+
+# Update Makefile
+os.system('sed ' +
+          '-i \'/.*SNPS_VLOGAN_OPT.*NUM_AFUS.*/aSNPS_VLOGAN_OPT+= +define+MPF_PLATFORM_BDX\' ' +
+          'Makefile')
+os.system('sed ' +
+          '-i \'/.*MENT_VLOG_OPT.*NUM_AFUS.*/aMENT_VLOG_OPT+= +define+MPF_PLATFORM_BDX\' ' +
+          'Makefile')
+# Use relative paths in VCS builds
+os.system('sed -i \'s/ -f / -F /\' Makefile')
+
+# Use ASE mode 3 (exit when workload finishes)
+os.system('sed -i \'s/ASE_MODE.*/ASE_MODE = 3/\' ase.cfg')
+# Don't print every transaction to the console
+os.system('sed -i \'s/ENABLE_CL_VIEW.*/ENABLE_CL_VIEW = 0/\' ase.cfg')
+
+# Is 

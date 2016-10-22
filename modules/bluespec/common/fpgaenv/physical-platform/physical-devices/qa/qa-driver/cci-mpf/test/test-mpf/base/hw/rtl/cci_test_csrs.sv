@@ -254,21 +254,21 @@ module cci_test_csrs
     logic rd_is_vl0_q;
     assign rd_is_vl0 = ccip_c0Rx_isReadRsp(c0Rx) && (c0Rx.hdr.vc_used == eVC_VL0);
     logic wr_is_vl0;
-    logic wr_is_vl0_q;
+    logic [2:0] wr_cnt_vl0_q;
     assign wr_is_vl0 = ccip_c1Rx_isWriteRsp(c1Rx) && (c1Rx.hdr.vc_used == eVC_VL0);
 
     logic rd_is_vh0;
     logic rd_is_vh0_q;
     assign rd_is_vh0 = ccip_c0Rx_isReadRsp(c0Rx) && (c0Rx.hdr.vc_used == eVC_VH0);
     logic wr_is_vh0;
-    logic wr_is_vh0_q;
+    logic [2:0] wr_cnt_vh0_q;
     assign wr_is_vh0 = ccip_c1Rx_isWriteRsp(c1Rx) && (c1Rx.hdr.vc_used == eVC_VH0);
 
     logic rd_is_vh1;
     logic rd_is_vh1_q;
     assign rd_is_vh1 = ccip_c0Rx_isReadRsp(c0Rx) && (c0Rx.hdr.vc_used == eVC_VH1);
     logic wr_is_vh1;
-    logic wr_is_vh1_q;
+    logic [2:0] wr_cnt_vh1_q;
     assign wr_is_vh1 = ccip_c1Rx_isWriteRsp(c1Rx) && (c1Rx.hdr.vc_used == eVC_VH1);
 
     always_ff @(posedge clk)
@@ -289,28 +289,30 @@ module cci_test_csrs
         begin
             if (c1Rx.hdr.hit_miss)
             begin
-                ctr_wr_cache_hits <= ctr_wr_cache_hits + t_cci_test_counter'(1);
+                ctr_wr_cache_hits <= ctr_wr_cache_hits + t_cci_test_counter'(1) +
+                                     t_cci_test_counter'(c1Rx.hdr.cl_num);
             end
             else
             begin
-                ctr_wr_cache_misses <= ctr_wr_cache_misses + t_cci_test_counter'(1);
+                ctr_wr_cache_misses <= ctr_wr_cache_misses + t_cci_test_counter'(1) +
+                                     t_cci_test_counter'(c1Rx.hdr.cl_num);
             end
         end
 
         rd_is_vl0_q <= rd_is_vl0;
-        wr_is_vl0_q <= wr_is_vl0;
-        ctr_chan_vl0 <= ctr_chan_vl0 + t_cci_test_counter'(2'(rd_is_vl0_q) +
-                                                           2'(wr_is_vl0_q));
+        wr_cnt_vl0_q <= (wr_is_vl0 ? 3'(1) + 3'(c1Rx.hdr.cl_num) : 3'(0));
+        ctr_chan_vl0 <= ctr_chan_vl0 + t_cci_test_counter'(3'(rd_is_vl0_q) +
+                                                           wr_cnt_vl0_q);
 
         rd_is_vh0_q <= rd_is_vh0;
-        wr_is_vh0_q <= wr_is_vh0;
-        ctr_chan_vh0 <= ctr_chan_vh0 + t_cci_test_counter'(2'(rd_is_vh0_q) +
-                                                           2'(wr_is_vh0_q));
+        wr_cnt_vh0_q <= (wr_is_vh0 ? 3'(1) + 3'(c1Rx.hdr.cl_num) : 3'(0));
+        ctr_chan_vh0 <= ctr_chan_vh0 + t_cci_test_counter'(3'(rd_is_vh0_q) +
+                                                           wr_cnt_vh0_q);
 
         rd_is_vh1_q <= rd_is_vh1;
-        wr_is_vh1_q <= wr_is_vh1;
-        ctr_chan_vh1 <= ctr_chan_vh1 + t_cci_test_counter'(2'(rd_is_vh1_q) +
-                                                           2'(wr_is_vh1_q));
+        wr_cnt_vh1_q <= (wr_is_vh1 ? 3'(1) + 3'(c1Rx.hdr.cl_num) : 3'(0));
+        ctr_chan_vh1 <= ctr_chan_vh1 + t_cci_test_counter'(3'(rd_is_vh1_q) +
+                                                           wr_cnt_vh1_q);
 
         if (reset)
         begin
@@ -323,11 +325,11 @@ module cci_test_csrs
             ctr_chan_vh1 <= t_cci_test_counter'(0);
 
             rd_is_vl0_q <= 1'b0;
-            wr_is_vl0_q <= 1'b0;
+            wr_cnt_vl0_q <= 3'b0;
             rd_is_vh0_q <= 1'b0;
-            wr_is_vh0_q <= 1'b0;
+            wr_cnt_vh0_q <= 3'b0;
             rd_is_vh1_q <= 1'b0;
-            wr_is_vh1_q <= 1'b0;
+            wr_cnt_vh1_q <= 3'b0;
         end
     end
 

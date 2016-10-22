@@ -235,7 +235,7 @@ module test_afu
         csrs.cpu_rd_csrs[1].data = 64'(dsm);
         csrs.cpu_rd_csrs[2].data = 64'(mem);
 
-        // Number of checked read responses
+        // Number of reads responses
         csrs.cpu_rd_csrs[4].data = 64'(cnt_rd_rsp);
 
         // Number of completed writes

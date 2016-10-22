@@ -27,6 +27,10 @@
 #include "cci_test.h"
 #include <boost/format.hpp>
 
+#ifndef VCMAP_ENABLE_DEFAULT
+  #define VCMAP_ENABLE_DEFAULT true
+#endif
+
 int main(int argc, char *argv[])
 {
     po::options_description desc("Usage");
@@ -34,9 +38,9 @@ int main(int argc, char *argv[])
         ("help", "Print this message")
         ("target", po::value<string>()->default_value("fpga"), "RTL target (\"fpga\" or \"ase\")")
         ("vcmap-all", po::value<bool>()->default_value(false), "VC MAP: Map all requests, ignoring vc_sel")
-        ("vcmap-enable", po::value<bool>()->default_value(true), "VC MAP: Enable channel mapping")
-        ("vcmap-dynamic", po::value<bool>()->default_value(true), "VC MAP: Use dynamic channel mapping")
-        ("vcmap-fixed", po::value<int>()->default_value(-1), "VC MAP: Use fixed mapping with VL0 getting <n>/64 of traffic (overridden by vcmap-dynamic)")
+        ("vcmap-enable", po::value<bool>()->default_value(VCMAP_ENABLE_DEFAULT), "VC MAP: Enable channel mapping")
+        ("vcmap-dynamic", po::value<bool>()->default_value(true), "VC MAP: Use dynamic channel mapping (overridden by --vcmap-fixed)")
+        ("vcmap-fixed", po::value<int>()->default_value(-1), "VC MAP: Use fixed mapping with VL0 getting <n>/64 of traffic")
         ;
 
     testConfigOptions(desc);
@@ -55,7 +59,7 @@ int main(int argc, char *argv[])
     if (! use_fpga && tgt.compare("ase"))
     {
         cerr << "Illegal --target" << endl << endl;
-        cout << desc << endl;
+        cerr << desc << endl;
         exit(1);
     }
 
@@ -76,13 +80,20 @@ int main(int argc, char *argv[])
     bool vcmap_enable = vm["vcmap-enable"].as<bool>();
     bool vcmap_dynamic = vm["vcmap-dynamic"].as<bool>();
     int32_t vcmap_fixed_vl0_ratio = int32_t(vm["vcmap-fixed"].as<int>());
+    // If a fixed ratio is set ignore "dynamic" and enable VC mapping
+    if (vcmap_fixed_vl0_ratio >= 0)
+    {
+        assert(vcmap_fixed_vl0_ratio <= 64);
+        vcmap_enable = true;
+        vcmap_dynamic = false;
+    }
 
     if (svc.m_pVCMAPService)
     {
         cout << "Configuring VC MAP shim..." << endl;
         svc.m_pVCMAPService->vcmapSetMapAll(vcmap_all);
         svc.m_pVCMAPService->vcmapSetMode(vcmap_enable, vcmap_dynamic);
-        if (! vcmap_dynamic && (vcmap_fixed_vl0_ratio >= 0))
+        if (vcmap_fixed_vl0_ratio >= 0)
         {
             svc.m_pVCMAPService->vcmapSetFixedMapping(true, vcmap_fixed_vl0_ratio);
         }
@@ -96,16 +107,17 @@ int main(int argc, char *argv[])
 
     if (0 == result)
     {
-        MSG("======= SUCCESS =======");
+        cout << endl << "# ======= SUCCESS =======" << endl;
     } else
     {
-        MSG("!!!!!!! FAILURE (code " << result << ") !!!!!!!");
+        cerr << endl << "!!!!!!! FAILURE (code " << result << ") !!!!!!!" << endl;
     }
 
     uint64_t cycles = t->testNumCyclesExecuted();
     if (cycles != 0)
     {
-        cout << endl << "Test cycles executed: " << cycles << endl;
+        cout << "#" << endl
+             << "# Test cycles executed: " << cycles << endl;
     }
 
     uint64_t rd_hits = t->readCommonCSR(CCI_TEST::CSR_COMMON_CACHE_RD_HITS);
@@ -119,50 +131,51 @@ int main(int argc, char *argv[])
     uint64_t vh0_lines = t->readCommonCSR(CCI_TEST::CSR_COMMON_VH0_LINES);
     uint64_t vh1_lines = t->readCommonCSR(CCI_TEST::CSR_COMMON_VH1_LINES);
 
-    cout << endl << "Statistics:" << endl;
-    cout << "  Cache read hits:    " << rd_hits << endl;
-    cout << "  Cache read misses:  " << rd_misses << endl;
-    cout << "  Cache write hits:   " << wr_hits << endl;
-    cout << "  Cache write misses: " << wr_misses << endl;
-    cout << "  VL0 line ops:       " << vl0_lines << endl;
-    cout << "  VH0 line ops:       " << vh0_lines << endl;
-    cout << "  VH1 line ops:       " << vh1_lines << endl;
-    cout << endl;
+    cout << "#" << endl
+         << "# Statistics:" << endl
+         << "#   Cache read hits:    " << rd_hits << endl
+         << "#   Cache read misses:  " << rd_misses << endl
+         << "#   Cache write hits:   " << wr_hits << endl
+         << "#   Cache write misses: " << wr_misses << endl
+         << "#   VL0 line ops:       " << vl0_lines << endl
+         << "#   VH0 line ops:       " << vh0_lines << endl
+         << "#   VH1 line ops:       " << vh1_lines << endl
+         << "#" << endl;
 
     uint64_t fiu_state = t->readCommonCSR(CCI_TEST::CSR_COMMON_FIU_STATE);
     if (fiu_state & 3)
     {
         if (fiu_state & 1)
         {
-            cout << "FIU C0 Tx is almost full!" << endl;
+            cout << "# FIU C0 Tx is almost full!" << endl;
         }
         if (fiu_state & 2)
         {
-            cout << "FIU C1 Tx is almost full!" << endl;
+            cout << "# FIU C1 Tx is almost full!" << endl;
         }
-        cout << endl;
+        cout << "#" << endl;
     }
 
     t_cci_mpf_vtp_stats vtp_stats;
     svc.m_pVTPService->vtpGetStats(&vtp_stats);
-    cout << "  VTP failed:         " << vtp_stats.numFailedTranslations << endl;
+    cout << "#   VTP failed:         " << vtp_stats.numFailedTranslations << endl;
     if (vtp_stats.numFailedTranslations)
     {
-        cout << "  VTP failed addr:    0x" << hex << uint64_t(vtp_stats.ptWalkLastVAddr) << dec << endl;
+        cout << "#   VTP failed addr:    0x" << hex << uint64_t(vtp_stats.ptWalkLastVAddr) << dec << endl;
     }
-    cout << "  VTP PT walk cycles: " << vtp_stats.numPTWalkBusyCycles << endl;
-    cout << "  VTP 4KB hit / miss: " << vtp_stats.numTLBHits4KB << " / "
-                                     << vtp_stats.numTLBMisses4KB << endl;
-    cout << "  VTP 2MB hit / miss: " << vtp_stats.numTLBHits2MB << " / "
-                                     << vtp_stats.numTLBMisses2MB << endl;
+    cout << "#   VTP PT walk cycles: " << vtp_stats.numPTWalkBusyCycles << endl
+         << "#   VTP 4KB hit / miss: " << vtp_stats.numTLBHits4KB << " / "
+                                       << vtp_stats.numTLBMisses4KB << endl
+         << "#   VTP 2MB hit / miss: " << vtp_stats.numTLBHits2MB << " / "
+                                       << vtp_stats.numTLBMisses2MB << endl;
 
     if (svc.m_pVCMAPService)
     {
         t_cci_mpf_vc_map_stats vcmap_stats;
         svc.m_pVCMAPService->vcmapGetStats(&vcmap_stats);
-        cout << endl;
-        cout << "  VC MAP map chngs:   " << vcmap_stats.numMappingChanges << endl;
-        cout << "  VC MAP history:     0x" << hex
+        cout << "#" << endl
+             << "#   VC MAP map chngs:   " << vcmap_stats.numMappingChanges << endl
+             << "#   VC MAP history:     0x" << hex
              << svc.m_pVCMAPService->vcmapGetMappingHistory() << dec << endl;
     }
 
@@ -172,25 +185,25 @@ int main(int argc, char *argv[])
         svc.m_pWROService->wroGetStats(&wro_stats);
 
         cout << endl;
-        cout << "  WRO conflict cycles RR:   " << wro_stats.numConflictCyclesRR;
+        cout << "#   WRO conflict cycles RR:   " << wro_stats.numConflictCyclesRR;
         if (cycles != 0)
         {
             cout << "  (" << boost::format("%.1f") % (double(wro_stats.numConflictCyclesRR) * 100.0 / cycles) << "% of cycles)";
         }
 
-        cout << endl << "  WRO conflict cycles RW:   " << wro_stats.numConflictCyclesRW;
+        cout << endl << "#   WRO conflict cycles RW:   " << wro_stats.numConflictCyclesRW;
         if (cycles != 0)
         {
             cout << "  (" << boost::format("%.1f") % (double(wro_stats.numConflictCyclesRW) * 100.0 / cycles) << "% of cycles)";
         }
 
-        cout << endl << "  WRO conflict cycles WR:   " << wro_stats.numConflictCyclesWR;
+        cout << endl << "#   WRO conflict cycles WR:   " << wro_stats.numConflictCyclesWR;
         if (cycles != 0)
         {
             cout << "  (" << boost::format("%.1f") % (double(wro_stats.numConflictCyclesWR) * 100.0 / cycles) << "% of cycles)";
         }
 
-        cout << endl << "  WRO conflict cycles WW:   " << wro_stats.numConflictCyclesWW;
+        cout << endl << "#   WRO conflict cycles WW:   " << wro_stats.numConflictCyclesWW;
         if (cycles != 0)
         {
             cout << "  (" << boost::format("%.1f") % (double(wro_stats.numConflictCyclesWW) * 100.0 / cycles) << "% of cycles)";
@@ -204,8 +217,8 @@ int main(int argc, char *argv[])
         t_cci_mpf_pwrite_stats pwrite_stats;
         svc.m_pPWRITEService->pwriteGetStats(&pwrite_stats);
 
-        cout << endl
-             << "  PWRITE partial writes:    " << pwrite_stats.numPartialWrites
+        cout << "#" << endl
+             << "#   PWRITE partial writes:    " << pwrite_stats.numPartialWrites
              << endl;
     }
 

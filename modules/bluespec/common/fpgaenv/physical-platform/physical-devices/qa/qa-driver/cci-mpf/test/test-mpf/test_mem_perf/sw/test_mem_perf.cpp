@@ -26,7 +26,6 @@
 
 #include "test_mem_perf.h"
 #include <time.h>
-#include <boost/format.hpp>
 
 
 // ========================================================================
@@ -46,8 +45,8 @@ void testConfigOptions(po::options_description &desc)
         ("wrline-m", po::value<bool>()->default_value(true), "Emit write requests with modified cache hint")
         ("mcl", po::value<int>()->default_value(1), "Multi-line requests (0 for random sizes)")
         ("max-stride", po::value<int>()->default_value(128), "Maximum stride value")
-        ("tc", po::value<int>()->default_value(0), "Test length (cycles)")
-        ("ts", po::value<int>()->default_value(1), "Test length (seconds)")
+        ("tc", po::value<int>()->default_value(10000000), "Test length (cycles)")
+        ("ts", po::value<int>()->default_value(0), "Test length (seconds)")
         ("test-mode", po::value<bool>()->default_value(false), "Generate simple memory patterns for testing address logic")
         ;
 }
@@ -96,11 +95,11 @@ btInt TEST_MEM_PERF::test()
     // What's the AFU frequency (MHz)?
     uint64_t afu_mhz = readCommonCSR(CSR_COMMON_FREQ);
 
-    uint64_t cycles = uint64_t(vm["tc"].as<int>());
+    uint64_t cycles = uint64_t(vm["ts"].as<int>()) * afu_mhz * 1000 * 1000;
     if (cycles == 0)
     {
-        // Didn't specify --tc.  Use seconds instead.
-        cycles = uint64_t(vm["ts"].as<int>()) * afu_mhz * 1000 * 1000;
+        // Didn't specify --ts.  Use cycles instead.
+        cycles = uint64_t(vm["tc"].as<int>());
     }
 
     // Run length in seconds
@@ -141,6 +140,7 @@ btInt TEST_MEM_PERF::test()
 
         cout << "# Mem Bytes, Stride, Read GB/s, Write GB/s, VL0 lines, VH0 lines, VH1 lines" << endl;
         t_test_stats stats;
+        stats.run_sec = run_sec;
         uint64_t stride = 12;
         assert(runTest(cycles, stride, vc, mcl,
                        wrline_m, rdline_s,
@@ -150,11 +150,7 @@ btInt TEST_MEM_PERF::test()
 
         cout << 0x100 * CL(1) << " "
              << stride << " "
-             << boost::format("%.1f") % ((double(stats.read_cnt) * CL(1) / 0x40000000) / run_sec) << " "
-             << boost::format("%.1f") % ((double(stats.write_cnt) * CL(1) / 0x40000000) / run_sec) << " "
-             << stats.vl0_cnt << " "
-             << stats.vh0_cnt << " "
-             << stats.vh1_cnt << " "
+             << stats
              << endl;
 
         return 0;
@@ -167,6 +163,8 @@ btInt TEST_MEM_PERF::test()
     bool vcmap_dynamic = vm["vcmap-dynamic"].as<bool>();
     int32_t vcmap_fixed_vl0_ratio = int32_t(vm["vcmap-fixed"].as<int>());
     cout << "# MCL = " << mcl << endl
+         << "# Cycles per test = " << cycles << endl
+         << "# AFU MHz = " << afu_mhz << endl
          << "# VC = " << vc << endl
          << "# VC Map enabled: " << (vcmap_enable ? "true" : "false") << endl;
     if (vcmap_enable)
@@ -193,6 +191,7 @@ btInt TEST_MEM_PERF::test()
         for (uint64_t stride = 0; stride < stride_limit; stride += (1 + mcl))
         {
             t_test_stats stats;
+            stats.run_sec = run_sec;
             assert(runTest(cycles, stride, vc, mcl,
                            wrline_m, rdline_s,
                            0,  // No writes
@@ -201,10 +200,7 @@ btInt TEST_MEM_PERF::test()
 
             cout << mem_lines * CL(1) << " "
                  << stride << " "
-                 << boost::format("%.1f") % ((double(stats.read_cnt) * CL(1) / 0x40000000) / run_sec) << " "
-                 << stats.vl0_cnt << " "
-                 << stats.vh0_cnt << " "
-                 << stats.vh1_cnt << " "
+                 << stats
                  << endl;
         }
     }
@@ -224,6 +220,7 @@ btInt TEST_MEM_PERF::test()
         for (uint64_t stride = 0; stride < stride_limit; stride += (1 + mcl))
         {
             t_test_stats stats;
+            stats.run_sec = run_sec;
             assert(runTest(cycles, stride, vc, mcl,
                            wrline_m, rdline_s,
                            1,  // Enable writes
@@ -232,10 +229,7 @@ btInt TEST_MEM_PERF::test()
 
             cout << mem_lines * CL(1) << " "
                  << stride << " "
-                 << boost::format("%.1f") % ((double(stats.write_cnt) * CL(1) / 0x40000000) / run_sec) << " "
-                 << stats.vl0_cnt << " "
-                 << stats.vh0_cnt << " "
-                 << stats.vh1_cnt << " "
+                 << stats
                  << endl;
         }
     }
@@ -256,6 +250,7 @@ btInt TEST_MEM_PERF::test()
         for (uint64_t stride = 0; stride < stride_limit; stride += (1 + mcl))
         {
             t_test_stats stats;
+            stats.run_sec = run_sec;
             assert(runTest(cycles, stride, vc, mcl,
                            wrline_m, rdline_s,
                            1,  // Enable writes
@@ -264,11 +259,7 @@ btInt TEST_MEM_PERF::test()
 
             cout << mem_lines * CL(1) << " "
                  << stride << " "
-                 << boost::format("%.1f") % ((double(stats.read_cnt) * CL(1) / 0x40000000) / run_sec) << " "
-                 << boost::format("%.1f") % ((double(stats.write_cnt) * CL(1) / 0x40000000) / run_sec) << " "
-                 << stats.vl0_cnt << " "
-                 << stats.vh0_cnt << " "
-                 << stats.vh1_cnt << " "
+                 << stats
                  << endl;
         }
     }

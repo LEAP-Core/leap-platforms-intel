@@ -364,9 +364,13 @@ module cci_mpf_shim_vtp_chan
 
     // The local cache is direct mapped.  Break a VA into cache index
     // and tag.
-    typedef logic [8 : 0] t_vtp_tlb_cache_idx;
-    typedef logic [$bits(t_tlb_4kb_va_page_idx)-10 : 0] t_vtp_tlb_4kb_cache_tag;
-    typedef logic [$bits(t_tlb_2mb_va_page_idx)-10 : 0] t_vtp_tlb_2mb_cache_tag;
+    localparam N_LOCAL_CACHE_ENTRIES = 512;
+
+    typedef logic [$clog2(N_LOCAL_CACHE_ENTRIES)-1 : 0] t_vtp_tlb_cache_idx;
+    typedef logic [$bits(t_tlb_4kb_va_page_idx)-$bits(t_vtp_tlb_cache_idx)-1 : 0]
+        t_vtp_tlb_4kb_cache_tag;
+    typedef logic [$bits(t_tlb_2mb_va_page_idx)-$bits(t_vtp_tlb_cache_idx)-1 : 0]
+        t_vtp_tlb_2mb_cache_tag;
 
     // Struct for passing state through the pipeline
     typedef struct
@@ -487,7 +491,7 @@ module cci_mpf_shim_vtp_chan
 
     cci_mpf_prim_ram_simple_init
       #(
-        .N_ENTRIES(512),
+        .N_ENTRIES(N_LOCAL_CACHE_ENTRIES),
         .N_DATA_BITS($bits(t_tlb_4kb_pa_page_idx) + $bits(t_vtp_tlb_4kb_cache_tag) + 1),
         .INIT_VALUE({ t_tlb_4kb_pa_page_idx'('x), t_vtp_tlb_4kb_cache_tag'('x), 1'b0 }),
         .N_OUTPUT_REG_STAGES(1)
@@ -537,7 +541,7 @@ module cci_mpf_shim_vtp_chan
 
     cci_mpf_prim_ram_simple_init
       #(
-        .N_ENTRIES(512),
+        .N_ENTRIES(N_LOCAL_CACHE_ENTRIES),
         .N_DATA_BITS($bits(t_tlb_2mb_pa_page_idx) + $bits(t_vtp_tlb_2mb_cache_tag) + 1),
         .INIT_VALUE({ t_tlb_2mb_pa_page_idx'('x), t_vtp_tlb_2mb_cache_tag'('x), 1'b0 }),
         .N_OUTPUT_REG_STAGES(1)

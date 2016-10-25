@@ -106,6 +106,9 @@ module test_afu
     t_cci_clAddr rd_mem, wr_mem;
     t_cci_clAddr memMask;
 
+    t_cci_mdata rd_mdata, rd_mdata_rsp;
+    t_cci_mdata wr_mdata, wr_mdata_rsp;
+
     //
     // Read CSR from host
     //
@@ -144,6 +147,10 @@ module test_afu
 
         // Number of completed writes
         csrs.cpu_rd_csrs[5].data = 64'(cnt_wr_rsp);
+
+        // Debugging state
+        csrs.cpu_rd_csrs[6].data = { wr_mdata_rsp, wr_mdata,
+                                     rd_mdata_rsp, rd_mdata };
 
         // Various state
         csrs.cpu_rd_csrs[7].data = csr_state;
@@ -332,6 +339,7 @@ module test_afu
         begin
             rd_offset <= rd_offset_next;
             rd_offset_next <= rd_offset_next + t_cci_clAddr'(stride);
+            rd_mdata <= rd_mdata + t_cci_mdata'(1);
 
             if (|(rd_offset_next & ~ memMask))
             begin
@@ -353,6 +361,7 @@ module test_afu
             rd_offset_base_next <= t_stride'(0);
             rd_offset_base_upd <= 1'b1;
             rd_offset_next <= t_cci_clAddr'(stride);
+            rd_mdata <= t_cci_mdata'(0);
         end
     end
 
@@ -369,7 +378,7 @@ module test_afu
         rd_hdr = cci_mpf_c0_genReqHdr(
                      (rdline_mode_s ? eREQ_RDLINE_S : eREQ_RDLINE_I),
                      rd_mem + rd_offset,
-                     t_cci_mdata'(0),
+                     rd_mdata,
                      rd_params);
 
         rd_hdr.base.cl_len = t_cci_clLen'(cl_beats);
@@ -395,6 +404,11 @@ module test_afu
         if (c0Rx_is_read_rsp)
         begin
             cnt_rd_rsp <= cnt_rd_rsp + t_counter'(1);
+        end
+
+        if (cci_c0Rx_isReadRsp(fiu.c0Rx))
+        begin
+            rd_mdata_rsp <= fiu.c0Rx.hdr.mdata;
         end
 
         if (reset || start_new_run)
@@ -444,6 +458,7 @@ module test_afu
         begin
             wr_offset <= wr_offset_next;
             wr_offset_next <= wr_offset_next + t_cci_clAddr'(stride);
+            wr_mdata <= wr_mdata + t_cci_mdata'(1);
 
             if (|(wr_offset_next & ~ memMask))
             begin
@@ -465,6 +480,7 @@ module test_afu
             wr_offset_base_next <= t_stride'(0);
             wr_offset_base_upd <= 1'b1;
             wr_offset_next <= t_cci_clAddr'(stride);
+            wr_mdata <= t_cci_mdata'(0);
         end
     end
 
@@ -480,7 +496,7 @@ module test_afu
 
         wr_hdr = cci_mpf_c1_genReqHdr((wrline_mode_m ? eREQ_WRLINE_M : eREQ_WRLINE_I),
                                       wr_mem + wr_offset,
-                                      t_cci_mdata'(0),
+                                      wr_mdata,
                                       wr_params);
 
         // Get the low bits of the address right
@@ -570,6 +586,11 @@ module test_afu
         begin
             // Count beats so multi-line writes get credit for all data
             cnt_wr_rsp <= cnt_wr_rsp + t_counter'(1) + t_counter'(c1Rx_cl_num);
+        end
+
+        if (cci_c1Rx_isWriteRsp(fiu.c1Rx))
+        begin
+            wr_mdata_rsp <= fiu.c1Rx.hdr.mdata;
         end
 
         if (reset || start_new_run)

@@ -66,6 +66,7 @@
 ../rtl/cci-mpf-shims/cci_mpf_shim_buffer_afu_lockstep.sv
 ../rtl/cci-mpf-shims/cci_mpf_shim_buffer_fiu.sv
 ../rtl/cci-mpf-shims/cci_mpf_shim_csr.sv
+../rtl/cci-mpf-shims/cci_mpf_shim_dbg_history.sv
 ../rtl/cci-mpf-shims/cci_mpf_shim_dedup_reads.sv
 ../rtl/cci-mpf-shims/cci_mpf_shim_detect_eop.sv
 ../rtl/cci-mpf-shims/cci_mpf_shim_edge/cci_mpf_shim_edge_afu.sv

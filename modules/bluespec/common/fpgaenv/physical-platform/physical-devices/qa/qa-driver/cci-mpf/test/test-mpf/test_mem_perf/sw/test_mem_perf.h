@@ -27,6 +27,9 @@
 #ifndef __TEST_MEM_PERF_H__
 #define __TEST_MEM_PERF_H__ 1
 
+#include <iostream>
+#include <boost/format.hpp>
+
 #include "cci_test.h"
 
 class TEST_MEM_PERF : public CCI_TEST
@@ -39,6 +42,8 @@ class TEST_MEM_PERF : public CCI_TEST
 
     typedef struct
     {
+        double run_sec;
+
         uint64_t read_cnt;
         uint64_t write_cnt;
         uint64_t vl0_cnt;
@@ -70,6 +75,16 @@ class TEST_MEM_PERF : public CCI_TEST
                 uint64_t enable_writes,
                 uint64_t enable_reads,
                 t_test_stats* stats);
+
+    friend std::ostream& operator<< (std::ostream& os, const t_test_stats& stats)
+    {
+        os << boost::format("%.1f") % ((double(stats.read_cnt) * CL(1) / 0x40000000) / stats.run_sec) << " "
+           << boost::format("%.1f") % ((double(stats.write_cnt) * CL(1) / 0x40000000) / stats.run_sec) << " "
+           << stats.vl0_cnt << " "
+           << stats.vh0_cnt << " "
+           << stats.vh1_cnt << " ";
+        return os;
+    }
 
     void dbgRegDump(uint64_t r);
 

@@ -40,7 +40,10 @@ module test_afu
     cci_mpf_if.to_fiu fiu,
 
     // CSR connections
-    test_csrs.test csrs
+    test_csrs.test csrs,
+
+    input  logic c0NotEmpty,
+    input  logic c1NotEmpty
     );
 
     logic reset = 1'b1;

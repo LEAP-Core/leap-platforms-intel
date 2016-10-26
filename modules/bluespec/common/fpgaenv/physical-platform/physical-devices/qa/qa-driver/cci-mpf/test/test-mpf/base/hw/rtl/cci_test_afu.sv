@@ -193,6 +193,9 @@ module ccip_std_afu
 
     cci_mpf_if#(.ENABLE_LOG(1)) afu(.clk(afu_clk));
 
+    logic c0NotEmpty;
+    logic c1NotEmpty;
+
     cci_mpf
       #(
         // Should read responses be returned in the same order that
@@ -276,7 +279,9 @@ module ccip_std_afu
        (
         .clk(afu_clk),
         .fiu(afu_csrs),
-        .afu
+        .afu,
+        .c0NotEmpty,
+        .c1NotEmpty
         );
 
 
@@ -291,7 +296,9 @@ module ccip_std_afu
        (
         .clk(afu_clk),
         .fiu(afu),
-        .csrs
+        .csrs,
+        .c0NotEmpty,
+        .c1NotEmpty
         );
 
 endmodule

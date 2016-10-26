@@ -40,7 +40,10 @@ module test_afu
     cci_mpf_if.to_fiu fiu,
 
     // CSR connections
-    test_csrs.test csrs
+    test_csrs.test csrs,
+
+    input  logic c0NotEmpty,
+    input  logic c1NotEmpty
     );
 
     logic reset = 1'b1;
@@ -281,10 +284,10 @@ module test_afu
                 end
             end
 
-          default:
+          STATE_TERMINATE:
             begin
-                // Various signalling states terminate when a write is allowed
-                if (! c1TxAlmFull && (wr_beat_num == t_cci_clNum'(0)))
+                if (! c1TxAlmFull && (wr_beat_num == t_cci_clNum'(0)) &&
+                    ! c0NotEmpty && ! c1NotEmpty)
                 begin
                     state <= STATE_IDLE;
                     $display("Test done.");
@@ -555,7 +558,7 @@ module test_afu
             end
 
             // Normal termination: signal done by writing to status memory
-            if (state == STATE_TERMINATE)
+            if ((state == STATE_TERMINATE) && ! c0NotEmpty && ! c1NotEmpty)
             begin
                 fiu.c1Tx.valid <= 1'b1;
                 fiu.c1Tx.hdr.base.address <= dsm;

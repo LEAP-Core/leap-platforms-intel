@@ -124,7 +124,14 @@ module cci_mpf
     //
     // Signals connecting to AFU, the client code
     //
-    cci_mpf_if.to_afu afu
+    cci_mpf_if.to_afu afu,
+
+    //
+    // Is a request active somewhere in the memory?  Clients waiting for
+    // all responses to complete can monitor these signals.
+    //
+    output logic c0NotEmpty,
+    output logic c1NotEmpty
     );
 
     // Maximum number of outstanding read and write requests per channel
@@ -297,5 +304,62 @@ module cci_mpf
         .pwrite,
         .vtp_svc(vtp_svc_ports[0:1])
         );
+
+
+    // ====================================================================
+    //
+    //  Track active request counts
+    //
+    // ====================================================================
+
+    // Leave an extra bit since the counter is at the edge before the
+    // initial buffer that limits request counts to MAX_ACTIVE_REQS.
+    // The count can thus be higher than MAX_ACTIVE_REQS here.
+    typedef logic [$clog2(MAX_ACTIVE_REQS) : 0] t_active_cnt;
+
+    t_active_cnt c0_num_active, c1_num_active;
+
+    logic c0_active_incr, c0_active_decr;
+    logic c1_active_incr, c1_active_decr;
+
+    always_comb
+    begin
+        c0_active_incr = cci_mpf_c0TxIsReadReq(afu.c0Tx);
+        c0_active_decr = cci_mpf_c0Rx_isEOP(afu.c0Rx);
+
+        c1_active_incr = cci_mpf_c1TxIsWriteReq(afu.c1Tx) && afu.c1Tx.hdr.base.sop;
+        c1_active_decr = cci_c1Rx_isWriteRsp(afu.c1Rx);
+    end
+
+    always_ff @(posedge clk)
+    begin
+        c0NotEmpty <= c0_active_incr || (|(c0_num_active));
+        c1NotEmpty <= c1_active_incr || (|(c1_num_active));
+
+        if (c0_active_incr != c0_active_decr)
+        begin
+            if (c0_active_incr)
+                c0_num_active <= c0_num_active + t_active_cnt'(1);
+            else
+                c0_num_active <= c0_num_active - t_active_cnt'(1);
+        end
+
+        if (c1_active_incr != c1_active_decr)
+        begin
+            if (c1_active_incr)
+                c1_num_active <= c1_num_active + t_active_cnt'(1);
+            else
+                c1_num_active <= c1_num_active - t_active_cnt'(1);
+        end
+
+        if (reset)
+        begin
+            c0NotEmpty <= 1'b0;
+            c1NotEmpty <= 1'b0;
+
+            c0_num_active <= t_active_cnt'(0);
+            c1_num_active <= t_active_cnt'(0);
+        end
+    end
 
 endmodule // cci_mpf

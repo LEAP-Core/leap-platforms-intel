@@ -211,7 +211,9 @@ module ccip_std_afu
        (
         .clk(afu_clk),
         .fiu,
-        .afu
+        .afu,
+        .c0NotEmpty(),
+        .c1NotEmpty()
         );
 
 

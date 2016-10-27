@@ -32,6 +32,7 @@
 `include "cci_mpf_shim_vtp.vh"
 `include "cci_mpf_prim_hash.vh"
 
+`include "cci_mpf_config.vh"
 
 //
 // Virtual to physical pipeline shim performs address translation in
@@ -364,7 +365,7 @@ module cci_mpf_shim_vtp_chan
 
     // The local cache is direct mapped.  Break a VA into cache index
     // and tag.
-    localparam N_LOCAL_CACHE_ENTRIES = 512;
+    localparam N_LOCAL_CACHE_ENTRIES = `VTP_N_L1_CACHE_ENTRIES;
 
     typedef logic [$clog2(N_LOCAL_CACHE_ENTRIES)-1 : 0] t_vtp_tlb_cache_idx;
     typedef logic [$bits(t_tlb_4kb_va_page_idx)-$bits(t_vtp_tlb_cache_idx)-1 : 0]

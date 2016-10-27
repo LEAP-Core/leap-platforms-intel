@@ -32,6 +32,7 @@
 `include "cci_mpf_csrs.vh"
 
 `include "cci_mpf_shim_vtp.vh"
+`include "cci_mpf_config.vh"
 
 
 //
@@ -268,7 +269,8 @@ module cci_mpf_svc_vtp
     cci_mpf_svc_vtp_tlb
       #(
         .CCI_PT_PAGE_OFFSET_BITS(CCI_PT_4KB_PAGE_OFFSET_BITS),
-        .NUM_TLB_SETS(512),
+        .NUM_TLB_SETS(`VTP_N_TLB_4KB_SETS),
+        .NUM_TLB_SET_WAYS(`VTP_N_TLB_4KB_WAYS),
         .DEBUG_MESSAGES(DEBUG_MESSAGES),
         .DEBUG_NAME("4KB")
         )
@@ -286,7 +288,8 @@ module cci_mpf_svc_vtp
     cci_mpf_svc_vtp_tlb
       #(
         .CCI_PT_PAGE_OFFSET_BITS(CCI_PT_2MB_PAGE_OFFSET_BITS),
-        .NUM_TLB_SETS(512),
+        .NUM_TLB_SETS(`VTP_N_TLB_2MB_SETS),
+        .NUM_TLB_SET_WAYS(`VTP_N_TLB_2MB_WAYS),
         .DEBUG_MESSAGES(DEBUG_MESSAGES),
         .DEBUG_NAME("2MB")
         )

@@ -30,6 +30,7 @@
 
 `include "cci_mpf_if.vh"
 
+`include "cci_mpf_config.vh"
 
 //
 // Guarantee that writes to the same address complete in order and that reads
@@ -61,24 +62,9 @@ module cci_mpf_shim_wro
         reset <= fiu.reset;
     end
 
-    //
-    // The filters are implemented as single bits in a block RAM, indexed
-    // by a hash of line addresses.  One M20K is sufficient on all current
-    // platforms.
-    //
-`ifndef CCI_SIMULATION
-    // Building for real hardware.  One M20K (16K entries) is sufficient.
-    localparam ADDRESS_HASH_BITS = 14;
-`else
-    // We make the filter/hash space smaller in simulation solely because
-    // the filters are initialized with a loop on reset and running through
-    // 16K entries is too slow in simulation.
-    localparam ADDRESS_HASH_BITS = 11;
-`endif
-
     cci_mpf_shim_wro_cam_group
       #(
-        .ADDRESS_HASH_BITS(ADDRESS_HASH_BITS),
+        .ADDRESS_HASH_BITS(`WRO_ADDRESS_HASH_BITS),
         .AFU_BUF_THRESHOLD(AFU_BUF_THRESHOLD),
         .MAX_ACTIVE_REQS(MAX_ACTIVE_REQS)
         )

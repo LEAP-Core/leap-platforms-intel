@@ -25,6 +25,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 #include "cci_test.h"
+#include <math.h>
 #include <boost/format.hpp>
 
 #ifndef VCMAP_ENABLE_DEFAULT
@@ -121,23 +122,29 @@ int main(int argc, char *argv[])
     }
 
     uint64_t rd_hits = t->readCommonCSR(CCI_TEST::CSR_COMMON_CACHE_RD_HITS);
-    uint64_t rd_misses = t->readCommonCSR(CCI_TEST::CSR_COMMON_CACHE_RD_MISSES);
-    uint64_t rd_total = rd_hits + rd_misses;
     uint64_t wr_hits = t->readCommonCSR(CCI_TEST::CSR_COMMON_CACHE_WR_HITS);
-    uint64_t wr_misses = t->readCommonCSR(CCI_TEST::CSR_COMMON_CACHE_WR_MISSES);
-    uint64_t wr_total = wr_hits + wr_misses;
 
-    uint64_t vl0_lines = t->readCommonCSR(CCI_TEST::CSR_COMMON_VL0_LINES);
+    uint64_t vl0_rd_lines = t->readCommonCSR(CCI_TEST::CSR_COMMON_VL0_RD_LINES);
+    uint64_t vl0_wr_lines = t->readCommonCSR(CCI_TEST::CSR_COMMON_VL0_WR_LINES);
     uint64_t vh0_lines = t->readCommonCSR(CCI_TEST::CSR_COMMON_VH0_LINES);
     uint64_t vh1_lines = t->readCommonCSR(CCI_TEST::CSR_COMMON_VH1_LINES);
 
     cout << "#" << endl
          << "# Statistics:" << endl
-         << "#   Cache read hits:    " << rd_hits << endl
-         << "#   Cache read misses:  " << rd_misses << endl
-         << "#   Cache write hits:   " << wr_hits << endl
-         << "#   Cache write misses: " << wr_misses << endl
-         << "#   VL0 line ops:       " << vl0_lines << endl
+         << "#   Cache read hits:    " << rd_hits;
+    if (rd_hits)
+    {
+        cout << " (" << round((1000.0 * rd_hits) / vl0_rd_lines) << " per 1000)";
+    }
+    cout << endl
+         << "#   Cache write hits:   " << wr_hits;
+    if (wr_hits)
+    {
+        cout << " (" << round((1000.0 * wr_hits) / vl0_wr_lines) << " per 1000)";
+    }
+    cout << endl
+         << "#   VL0 line ops:       " << vl0_rd_lines + vl0_wr_lines
+         << " (" << vl0_rd_lines << " read / " << vl0_wr_lines << " write)" << endl
          << "#   VH0 line ops:       " << vh0_lines << endl
          << "#   VH1 line ops:       " << vh1_lines << endl
          << "#" << endl;
@@ -171,12 +178,20 @@ int main(int argc, char *argv[])
 
     if (svc.m_pVCMAPService)
     {
-        t_cci_mpf_vc_map_stats vcmap_stats;
-        svc.m_pVCMAPService->vcmapGetStats(&vcmap_stats);
-        cout << "#" << endl
-             << "#   VC MAP map chngs:   " << vcmap_stats.numMappingChanges << endl
-             << "#   VC MAP history:     0x" << hex
-             << svc.m_pVCMAPService->vcmapGetMappingHistory() << dec << endl;
+        if (! vcmap_enable)
+        {
+            cout << "#" << endl
+                 << "#   VC MAP disabled" << endl;
+        }
+        else
+        {
+            t_cci_mpf_vc_map_stats vcmap_stats;
+            svc.m_pVCMAPService->vcmapGetStats(&vcmap_stats);
+            cout << "#" << endl
+                 << "#   VC MAP map chngs:   " << vcmap_stats.numMappingChanges << endl
+                 << "#   VC MAP history:     0x" << hex
+                 << svc.m_pVCMAPService->vcmapGetMappingHistory() << dec << endl;
+        }
     }
 
     if (svc.m_pWROService)

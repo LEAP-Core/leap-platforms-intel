@@ -4,7 +4,7 @@ CFLAGS += -DVCMAP_ENABLE_DEFAULT=false
 
 all: test_mem_perf
 
-test_mem_perf: test_mem_perf.o $(BASE_FILE_OBJ)
+test_mem_perf: test_mem_perf.o test_mem_perf_common.o $(BASE_FILE_OBJ)
 	$(CXX) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 .cpp.o: cci_test.h $(BASE_FILE_INC)

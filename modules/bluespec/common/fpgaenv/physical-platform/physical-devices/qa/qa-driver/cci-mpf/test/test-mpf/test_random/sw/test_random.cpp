@@ -146,7 +146,8 @@ btInt TEST_RANDOM::test()
     uint64_t trips = uint64_t(vm["repeat"].as<int>());
     uint64_t iter = 0;
 
-    uint64_t vl0_lines = readCommonCSR(CCI_TEST::CSR_COMMON_VL0_LINES);
+    uint64_t vl0_lines = readCommonCSR(CCI_TEST::CSR_COMMON_VL0_RD_LINES) +
+                         readCommonCSR(CCI_TEST::CSR_COMMON_VL0_WR_LINES);
     uint64_t vh0_lines = readCommonCSR(CCI_TEST::CSR_COMMON_VH0_LINES);
     uint64_t vh1_lines = readCommonCSR(CCI_TEST::CSR_COMMON_VH1_LINES);
 
@@ -205,7 +206,8 @@ btInt TEST_RANDOM::test()
              << " [" << checked_read_cnt << " reads checked]"
              << endl;
 
-        uint64_t vl0_lines_n = readCommonCSR(CCI_TEST::CSR_COMMON_VL0_LINES);
+        uint64_t vl0_lines_n = readCommonCSR(CCI_TEST::CSR_COMMON_VL0_RD_LINES) +
+                               readCommonCSR(CCI_TEST::CSR_COMMON_VL0_WR_LINES);
         uint64_t vh0_lines_n = readCommonCSR(CCI_TEST::CSR_COMMON_VH0_LINES);
         uint64_t vh1_lines_n = readCommonCSR(CCI_TEST::CSR_COMMON_VH1_LINES);
 

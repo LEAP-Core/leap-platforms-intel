@@ -103,7 +103,11 @@ module test_afu
     //
     // ====================================================================
 
-    typedef logic [39 : 0] t_counter;
+    // The requested number of cycles is limited by a 31 bit counter so
+    // that the total executed cycles, including cool down to complete
+    // all transactions, fits in 32 bits.  Events limited to one per cycle
+    // will all fit in 32 bit counters.
+    typedef logic [31 : 0] t_counter;
 
     t_cci_clAddr dsm;
     t_cci_clAddr rd_mem, wr_mem;
@@ -117,6 +121,13 @@ module test_afu
     //
     t_counter cnt_rd_rsp;
     t_counter cnt_wr_rsp;
+
+    // Counts of active reads and writes from which average latency
+    // can be computed using Little's Law.
+    t_counter rd_req_inflight_now, rd_req_inflight_max;
+    t_counter wr_req_inflight_now, wr_req_inflight_max;
+    logic [63:0] rd_req_inflight_total;
+    logic [63:0] wr_req_inflight_total;
 
     logic [63:0] csr_state;
     always_ff @(posedge clk)
@@ -145,10 +156,10 @@ module test_afu
         csrs.cpu_rd_csrs[2].data = 64'(rd_mem);
         csrs.cpu_rd_csrs[3].data = 64'(wr_mem);
 
-        // Number of read responses
+        // Number of read line responses
         csrs.cpu_rd_csrs[4].data = 64'(cnt_rd_rsp);
 
-        // Number of completed writes
+        // Number of completed line writes
         csrs.cpu_rd_csrs[5].data = 64'(cnt_wr_rsp);
 
         // Debugging state
@@ -163,6 +174,7 @@ module test_afu
     // Incoming configuration
     //
     t_counter cycles_rem;
+    t_counter cycles_executed;
 
     t_cci_vc req_vc;
     t_cci_clNum cl_beats;
@@ -170,17 +182,25 @@ module test_afu
     typedef logic [15:0] t_stride;
     t_stride stride;
     t_stride offset_base_max;
+    t_stride offset_base_stride;
 
-    logic enable_writes;
-    logic enable_reads;
+    logic config_enable_writes, enable_writes;
+    logic config_enable_reads, enable_reads;
 
     logic rdline_mode_s;
     logic wrline_mode_m;
+
+    // Counters to control offered load.  Counters are decremented each cycle.
+    logic [7:0] rd_req_enable_interval, rd_req_enable_cnt;
+    logic rd_req_enable;
+    logic [7:0] wr_req_enable_interval, wr_req_enable_cnt;
+    logic wr_req_enable;
 
 
     //
     // Consume configuration CSR writes
     //
+
     always_ff @(posedge clk)
     begin
         if (csrs.cpu_wr_csrs[1].en)
@@ -206,6 +226,29 @@ module test_afu
             memMask <= csrs.cpu_wr_csrs[4].data;
             $display("MEM MASK: 0x%x", csrs.cpu_wr_csrs[4].data);
         end
+
+        if (csrs.cpu_wr_csrs[5].en)
+        begin
+            { stride,
+              req_vc,
+              cl_beats,
+              wrline_mode_m,
+              rdline_mode_s,
+              config_enable_writes,
+              config_enable_reads } <= csrs.cpu_wr_csrs[5].data;
+        end
+
+        if (csrs.cpu_wr_csrs[6].en)
+        begin
+            { wr_req_enable_interval, rd_req_enable_interval } <=
+                csrs.cpu_wr_csrs[6].data;
+        end
+
+        if (reset)
+        begin
+            rd_req_enable_interval <= 0;
+            wr_req_enable_interval <= 0;
+        end
     end
 
     //
@@ -222,15 +265,50 @@ module test_afu
         // Execution cycle count update from the host?
         if (csrs.cpu_wr_csrs[0].en)
         begin
-            { cycles_rem,
-              stride,
-              req_vc,
-              cl_beats,
-              wrline_mode_m,
-              rdline_mode_s,
-              enable_writes,
-              enable_reads } <= csrs.cpu_wr_csrs[0].data;
+            cycles_rem <= t_counter'(csrs.cpu_wr_csrs[0].data);
         end
+
+        if (reset)
+        begin
+            cycles_rem <= t_counter'(0);
+        end
+    end
+
+
+    // Update rd/wr enable based on offered load interval
+    always_ff @(posedge clk)
+    begin
+        rd_req_enable <= ! (|(rd_req_enable_cnt));
+        rd_req_enable_cnt <= rd_req_enable_cnt - 1;
+        if (! (|(rd_req_enable_cnt)))
+        begin
+            rd_req_enable_cnt <= rd_req_enable_interval;
+        end
+
+        wr_req_enable <= ! (|(wr_req_enable_cnt));
+        wr_req_enable_cnt <= wr_req_enable_cnt - 1;
+        if (! (|(wr_req_enable_cnt)))
+        begin
+            wr_req_enable_cnt <= wr_req_enable_interval;
+        end
+
+        if (reset)
+        begin
+            rd_req_enable_cnt <= 0;
+            rd_req_enable <= 1'b0;
+            wr_req_enable_cnt <= 0;
+            wr_req_enable <= 1'b0;
+        end
+    end
+
+
+    //
+    // Offset base values take a couple cycles to setting but there is time
+    // since the inputs are set by CSR sequentially.
+    //
+    always_ff @(posedge clk)
+    begin
+        offset_base_stride <= t_stride'(cl_beats) + t_stride'(1);
 
         // Offset base max is the largest starting point offset in the buffer
         // when the pointer rotates back to the buffer head.  The starting point
@@ -240,24 +318,16 @@ module test_afu
             (stride == t_stride'(0) ?
              t_stride'(0) :
              // One address below the stride, constrained by the memory area
-             (stride - t_stride'(cl_beats) - t_stride'(1)) & memMask);
-
-        if (reset)
-        begin
-            cycles_rem <= t_counter'(0);
-            req_vc <= t_cci_vc'(0);
-            cl_beats <= t_cci_clLen'(0);
-            wrline_mode_m <= 1'b0;
-            rdline_mode_s <= 1'b0;
-            enable_writes <= 1'b0;
-            enable_reads <= 1'b0;
-        end
+             (stride - offset_base_stride) & memMask);
     end
-
 
     logic start_new_run;
     t_cci_clNum wr_beat_num;
     logic wr_beat_last;
+
+    logic can_terminate;
+    assign can_terminate = ! c0NotEmpty && ! c1NotEmpty &&
+                           ! fiu.c0Tx.valid && ! fiu.c1Tx.valid;
 
     always_ff @(posedge clk)
     begin
@@ -270,8 +340,12 @@ module test_afu
                 if (start_new_run)
                 begin
                     state <= STATE_RUN;
+                    enable_reads <= config_enable_reads;
+                    enable_writes <= config_enable_writes;
                     $display("Starting test...");
                 end
+
+                cycles_executed <= t_counter'(0);
             end
 
           STATE_RUN:
@@ -280,18 +354,24 @@ module test_afu
                 if (cycles_rem == t_counter'(0))
                 begin
                     state <= STATE_TERMINATE;
+                    enable_reads <= 1'b0;
+                    enable_writes <= 1'b0;
                     $display("Ending test...");
                 end
+
+                cycles_executed <= cycles_executed + t_counter'(1);
             end
 
           STATE_TERMINATE:
             begin
                 if (! c1TxAlmFull && (wr_beat_num == t_cci_clNum'(0)) &&
-                    ! c0NotEmpty && ! c1NotEmpty)
+                    can_terminate)
                 begin
                     state <= STATE_IDLE;
                     $display("Test done.");
                 end
+
+                cycles_executed <= cycles_executed + t_counter'(1);
             end
         endcase
 
@@ -299,6 +379,9 @@ module test_afu
         begin
             start_new_run <= 1'b0;
             state <= STATE_IDLE;
+            enable_reads <= 1'b0;
+            enable_writes <= 1'b0;
+            cycles_executed <= t_counter'(0);
         end
     end
 
@@ -310,7 +393,7 @@ module test_afu
     // ====================================================================
 
     logic do_read;
-    assign do_read = (state == STATE_RUN) && enable_reads && ! c0TxAlmFull;
+    assign do_read = enable_reads && ! c0TxAlmFull && rd_req_enable;
 
     t_cci_clAddr rd_offset, rd_offset_next;
 
@@ -326,8 +409,8 @@ module test_afu
         begin
             if (rd_offset_base_next < offset_base_max)
             begin
-                rd_offset_base_next <= rd_offset_base_next + t_stride'(1) +
-                                       t_stride'(cl_beats);
+                rd_offset_base_next <= rd_offset_base_next +
+                                       offset_base_stride;
             end
             else
             begin
@@ -400,10 +483,14 @@ module test_afu
     end
 
     logic c0Rx_is_read_rsp;
+    logic c0Rx_is_read_eop;
 
     always_ff @(posedge clk)
     begin
         c0Rx_is_read_rsp <= cci_c0Rx_isReadRsp(fiu.c0Rx);
+        c0Rx_is_read_eop <= cci_c0Rx_isReadRsp(fiu.c0Rx) &&
+                            cci_mpf_c0Rx_isEOP(fiu.c0Rx);
+
         if (c0Rx_is_read_rsp)
         begin
             cnt_rd_rsp <= cnt_rd_rsp + t_counter'(1);
@@ -418,6 +505,31 @@ module test_afu
         begin
             cnt_rd_rsp <= t_counter'(0);
             c0Rx_is_read_rsp <= 1'b0;
+        end
+    end
+
+    // Count in-flight read requests
+    always_ff @(posedge clk)
+    begin
+        if (rd_req_inflight_now > rd_req_inflight_max)
+        begin
+            rd_req_inflight_max <= rd_req_inflight_now;
+        end
+
+        if (do_read != c0Rx_is_read_eop)
+        begin
+            rd_req_inflight_now <=
+                (c0Rx_is_read_eop ? rd_req_inflight_now - (t_counter'(1)) :
+                                    rd_req_inflight_now + t_counter'(1));
+        end
+
+        rd_req_inflight_total <= rd_req_inflight_total + 64'(rd_req_inflight_now);
+
+        if (reset || start_new_run)
+        begin
+            rd_req_inflight_now <= t_counter'(0);
+            rd_req_inflight_max <= t_counter'(0);
+            rd_req_inflight_total <= 64'b0;
         end
     end
 
@@ -444,8 +556,8 @@ module test_afu
         begin
             if (wr_offset_base_next < offset_base_max)
             begin
-                wr_offset_base_next <= wr_offset_base_next + t_stride'(1) +
-                                       t_stride'(cl_beats);
+                wr_offset_base_next <= wr_offset_base_next +
+                                       offset_base_stride;
             end
             else
             begin
@@ -456,8 +568,7 @@ module test_afu
         wr_offset_base_upd <= 1'b0;
 
         // Next address
-        if ((state == STATE_RUN) && enable_writes && ! c1TxAlmFull &&
-            wr_beat_last)
+        if (enable_writes && ! c1TxAlmFull && wr_beat_last)
         begin
             wr_offset <= wr_offset_next;
             wr_offset_next <= wr_offset_next + t_cci_clAddr'(stride);
@@ -530,6 +641,11 @@ module test_afu
         end
     end
 
+    // New write?  (Not the remainder of a multi-beat write.)
+    logic do_write;
+    assign do_write = enable_writes && ! c1TxAlmFull && wr_req_enable &&
+                      (wr_beat_num == t_cci_clNum'(0));
+
     always_ff @(posedge clk)
     begin
         chk_wr_valid_q <= 1'b0;
@@ -548,24 +664,32 @@ module test_afu
             // Normal running state
             if (state == STATE_RUN)
             begin
-                fiu.c1Tx.valid <= enable_writes;
+                fiu.c1Tx.valid <= enable_writes && wr_req_enable;
 
                 // Update beat number
-                if (enable_writes)
+                if (enable_writes && wr_req_enable)
                 begin
                     wr_beat_num <= wr_beat_num_next;
                 end
             end
 
             // Normal termination: signal done by writing to status memory
-            if ((state == STATE_TERMINATE) && ! c0NotEmpty && ! c1NotEmpty)
+            if ((state == STATE_TERMINATE) && can_terminate)
             begin
                 fiu.c1Tx.valid <= 1'b1;
                 fiu.c1Tx.hdr.base.address <= dsm;
                 fiu.c1Tx.hdr.base.sop <= 1'b1;
+                // Use an uncached channel to avoid polluting cache statistics
+                fiu.c1Tx.hdr.base.vc_sel <= eVC_VH1;
                 fiu.c1Tx.hdr.base.cl_len <= eCL_LEN_1;
                 fiu.c1Tx.hdr.pwrite.isPartialWrite <= 1'b0;
-                fiu.c1Tx.data <= t_cci_clData'(1);
+                fiu.c1Tx.data <=
+                    t_cci_clData'({ wr_req_inflight_total,   // 64 bits
+                                    rd_req_inflight_total,   // 64 bits
+                                    wr_req_inflight_max,     // 32 bits
+                                    rd_req_inflight_max,     // 32 bits
+                                    32'b0,
+                                    cycles_executed });      // 32 bits
             end
         end
 
@@ -600,6 +724,32 @@ module test_afu
         begin
             cnt_wr_rsp <= t_counter'(0);
             c1Rx_is_write_rsp <= 1'b0;
+        end
+    end
+
+
+    // Count in-flight write requests
+    always_ff @(posedge clk)
+    begin
+        if (wr_req_inflight_now > wr_req_inflight_max)
+        begin
+            wr_req_inflight_max <= wr_req_inflight_now;
+        end
+
+        if (do_write != c1Rx_is_write_rsp)
+        begin
+            wr_req_inflight_now <=
+                (c1Rx_is_write_rsp ? wr_req_inflight_now - (t_counter'(1)) :
+                                     wr_req_inflight_now + t_counter'(1));
+        end
+
+        wr_req_inflight_total <= wr_req_inflight_total + 64'(wr_req_inflight_now);
+
+        if (reset || start_new_run)
+        begin
+            wr_req_inflight_now <= t_counter'(0);
+            wr_req_inflight_max <= t_counter'(0);
+            wr_req_inflight_total <= 64'b0;
         end
     end
 

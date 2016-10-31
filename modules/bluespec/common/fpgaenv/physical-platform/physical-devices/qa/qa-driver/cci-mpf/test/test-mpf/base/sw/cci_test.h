@@ -108,13 +108,12 @@ class CCI_TEST
         CSR_COMMON_ID_H = 2,
         CSR_COMMON_FREQ = 8,
         CSR_COMMON_CACHE_RD_HITS = 9,
-        CSR_COMMON_CACHE_RD_MISSES = 10,
-        CSR_COMMON_CACHE_WR_HITS = 11,
-        CSR_COMMON_CACHE_WR_MISSES = 12,
-        CSR_COMMON_VL0_LINES = 13,
-        CSR_COMMON_VH0_LINES = 14,
-        CSR_COMMON_VH1_LINES = 15,
-        CSR_COMMON_FIU_STATE = 16
+        CSR_COMMON_CACHE_WR_HITS = 10,
+        CSR_COMMON_VL0_RD_LINES = 11,
+        CSR_COMMON_VL0_WR_LINES = 12,
+        CSR_COMMON_VH0_LINES = 13,
+        CSR_COMMON_VH1_LINES = 14,
+        CSR_COMMON_FIU_STATE = 15
     }
     t_csr_common;
 
@@ -126,6 +125,20 @@ class CCI_TEST
         return v;
     }
 
+    string vcNumToName(uint32_t vcNum)
+    {
+        switch (vcNum)
+        {
+          case 1:
+            return "VL0";
+          case 2:
+            return "VH0";
+          case 3:
+            return "VH1";
+          default:
+            return "VA";
+        }
+    }
 
   protected:
     const po::variables_map& vm;

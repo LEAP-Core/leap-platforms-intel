@@ -487,26 +487,27 @@ module cci_mpf_shim_edge_afu_wr_data
             if (cci_mpf_c0TxIsReadReq(afu.c0Tx))
             begin
                 assert((afu.c0Tx.hdr.base.address[1:0] & afu.c0Tx.hdr.base.cl_len) == 2'b0) else
-                    $fatal("cci_mpf_shim_edge_connect: Multi-beat read address must be naturally aligned");
+                    $fatal(2, "cci_mpf_shim_edge_connect: Multi-beat read address must be naturally aligned, cl_len=%0d, addr=0x%x",
+                           afu.c0Tx.hdr.base.cl_len, afu.c0Tx.hdr.base.address);
             end
 
             if (cci_mpf_c1TxIsWriteReq(afu_canon_c1Tx))
             begin
                 assert(afu.c1Tx.hdr.base.sop != afu_wr_packet_active) else
                     if (! afu.c1Tx.hdr.base.sop)
-                        $fatal("cci_mpf_shim_edge_connect: Expected SOP flag on write");
+                        $fatal(2, "cci_mpf_shim_edge_connect: Expected SOP flag on write");
                     else
-                        $fatal("cci_mpf_shim_edge_connect: Wrong number of multi-beat writes");
+                        $fatal(2, "cci_mpf_shim_edge_connect: Wrong number of multi-beat writes");
 
                 if (afu.c1Tx.hdr.base.sop)
                 begin
                     assert ((afu.c1Tx.hdr.base.address[1:0] & afu_canon_c1Tx.hdr.base.cl_len) == 2'b0) else
-                        $fatal("cci_mpf_shim_edge_connect: Multi-beat write address must be naturally aligned");
+                        $fatal(2, "cci_mpf_shim_edge_connect: Multi-beat write address must be naturally aligned");
                 end
                 else
                 begin
                     assert (afu_wr_prev_cl_len == afu_canon_c1Tx.hdr.base.cl_len) else
-                        $fatal("cci_mpf_shim_edge_connect: cl_len must be the same in all beats of a multi-line write");
+                        $fatal(2, "cci_mpf_shim_edge_connect: cl_len must be the same in all beats of a multi-line write");
                 end
 
                 afu_wr_prev_cl_len <= afu_canon_c1Tx.hdr.base.cl_len;

@@ -110,11 +110,13 @@ module cci_test_csrs
 
     // Counters available in all tests
     t_cci_test_counter ctr_rd_cache_hits;
-    t_cci_test_counter ctr_rd_cache_misses;
     t_cci_test_counter ctr_wr_cache_hits;
-    t_cci_test_counter ctr_wr_cache_misses;
 
-    t_cci_test_counter ctr_chan_vl0;
+    // Count reads and writes separately on VL0 but not on PCIe channels.
+    // The separate read/write counters can be used along with cache hit
+    // statistics for analyzing hit rates of reads vs. writes.
+    t_cci_test_counter ctr_chan_vl0_rd;
+    t_cci_test_counter ctr_chan_vl0_wr;
     t_cci_test_counter ctr_chan_vh0;
     t_cci_test_counter ctr_chan_vh1;
 
@@ -183,22 +185,17 @@ module cci_test_csrs
           // Cache read hits
           9: c2Tx.data <= ctr_rd_cache_hits;
 
-          // Cache read misses
-          10: c2Tx.data <= ctr_rd_cache_misses;
-
           // Cache write hits
-          11: c2Tx.data <= ctr_wr_cache_hits;
-
-          // Cache write misses
-          12: c2Tx.data <= ctr_wr_cache_misses;
+          10: c2Tx.data <= ctr_wr_cache_hits;
 
           // Responses on VL0/VH0/VH1
-          13: c2Tx.data <= ctr_chan_vl0;
-          14: c2Tx.data <= ctr_chan_vh0;
-          15: c2Tx.data <= ctr_chan_vh1;
+          11: c2Tx.data <= ctr_chan_vl0_rd;
+          12: c2Tx.data <= ctr_chan_vl0_wr;
+          13: c2Tx.data <= ctr_chan_vh0;
+          14: c2Tx.data <= ctr_chan_vh1;
 
           // FIU state
-          16: c2Tx.data <= { 62'(0),
+          15: c2Tx.data <= { 62'(0),
                              fiu.c1TxAlmFull,
                              fiu.c0TxAlmFull };
 
@@ -271,56 +268,44 @@ module cci_test_csrs
     logic [2:0] wr_cnt_vh1_q;
     assign wr_is_vh1 = ccip_c1Rx_isWriteRsp(c1Rx) && (c1Rx.hdr.vc_used == eVC_VH1);
 
+    // Number of lines in write response
+    logic [2:0] wr_rsp_len;
+    assign wr_rsp_len = 3'(1) + (c1Rx.hdr.format ? 3'(c1Rx.hdr.cl_num) : 3'(0));
+
     always_ff @(posedge clk)
     begin
-        if (ccip_c0Rx_isReadRsp(c0Rx))
+        if (ccip_c0Rx_isReadRsp(c0Rx) && c0Rx.hdr.hit_miss)
         begin
-            if (c0Rx.hdr.hit_miss)
-            begin
-                ctr_rd_cache_hits <= ctr_rd_cache_hits + t_cci_test_counter'(1);
-            end
-            else
-            begin
-                ctr_rd_cache_misses <= ctr_rd_cache_misses + t_cci_test_counter'(1);
-            end
+            ctr_rd_cache_hits <= ctr_rd_cache_hits + t_cci_test_counter'(1);
         end
 
-        if (ccip_c1Rx_isWriteRsp(c1Rx))
+        if (ccip_c1Rx_isWriteRsp(c1Rx) && c1Rx.hdr.hit_miss)
         begin
-            if (c1Rx.hdr.hit_miss)
-            begin
-                ctr_wr_cache_hits <= ctr_wr_cache_hits + t_cci_test_counter'(1) +
-                                     t_cci_test_counter'(c1Rx.hdr.cl_num);
-            end
-            else
-            begin
-                ctr_wr_cache_misses <= ctr_wr_cache_misses + t_cci_test_counter'(1) +
-                                     t_cci_test_counter'(c1Rx.hdr.cl_num);
-            end
+            ctr_wr_cache_hits <= ctr_wr_cache_hits +
+                                 t_cci_test_counter'(wr_rsp_len);
         end
 
         rd_is_vl0_q <= rd_is_vl0;
-        wr_cnt_vl0_q <= (wr_is_vl0 ? 3'(1) + 3'(c1Rx.hdr.cl_num) : 3'(0));
-        ctr_chan_vl0 <= ctr_chan_vl0 + t_cci_test_counter'(3'(rd_is_vl0_q) +
-                                                           wr_cnt_vl0_q);
+        wr_cnt_vl0_q <= (wr_is_vl0 ? wr_rsp_len : 3'(0));
+        ctr_chan_vl0_rd <= ctr_chan_vl0_rd + t_cci_test_counter'(rd_is_vl0_q);
+        ctr_chan_vl0_wr <= ctr_chan_vl0_wr + t_cci_test_counter'(wr_cnt_vl0_q);
 
         rd_is_vh0_q <= rd_is_vh0;
-        wr_cnt_vh0_q <= (wr_is_vh0 ? 3'(1) + 3'(c1Rx.hdr.cl_num) : 3'(0));
+        wr_cnt_vh0_q <= (wr_is_vh0 ? wr_rsp_len : 3'(0));
         ctr_chan_vh0 <= ctr_chan_vh0 + t_cci_test_counter'(3'(rd_is_vh0_q) +
                                                            wr_cnt_vh0_q);
 
         rd_is_vh1_q <= rd_is_vh1;
-        wr_cnt_vh1_q <= (wr_is_vh1 ? 3'(1) + 3'(c1Rx.hdr.cl_num) : 3'(0));
+        wr_cnt_vh1_q <= (wr_is_vh1 ? wr_rsp_len : 3'(0));
         ctr_chan_vh1 <= ctr_chan_vh1 + t_cci_test_counter'(3'(rd_is_vh1_q) +
                                                            wr_cnt_vh1_q);
 
         if (reset)
         begin
             ctr_rd_cache_hits <= t_cci_test_counter'(0);
-            ctr_rd_cache_misses <= t_cci_test_counter'(0);
             ctr_wr_cache_hits <= t_cci_test_counter'(0);
-            ctr_wr_cache_misses <= t_cci_test_counter'(0);
-            ctr_chan_vl0 <= t_cci_test_counter'(0);
+            ctr_chan_vl0_rd <= t_cci_test_counter'(0);
+            ctr_chan_vl0_wr <= t_cci_test_counter'(0);
             ctr_chan_vh0 <= t_cci_test_counter'(0);
             ctr_chan_vh1 <= t_cci_test_counter'(0);
 

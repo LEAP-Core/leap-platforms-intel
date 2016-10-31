@@ -27,6 +27,7 @@
 #ifndef __TEST_MEM_PERF_H__
 #define __TEST_MEM_PERF_H__ 1
 
+#include <math.h>
 #include <iostream>
 #include <boost/format.hpp>
 
@@ -42,13 +43,40 @@ class TEST_MEM_PERF : public CCI_TEST
 
     typedef struct
     {
+        uint64_t cycles;
+        uint64_t buf_lines;
+        uint64_t stride;
+        uint8_t vc;
+        uint8_t mcl;
+        bool rdline_s;
+        bool wrline_m;
+        bool enable_writes;
+        bool enable_reads;
+
+        // Offered load: Cycles between read and write requests
+        uint8_t rd_interval;
+        uint8_t wr_interval;
+    }
+    t_test_config;
+
+    typedef struct
+    {
+        uint64_t actual_cycles;
         double run_sec;
 
-        uint64_t read_cnt;
-        uint64_t write_cnt;
-        uint64_t vl0_cnt;
-        uint64_t vh0_cnt;
-        uint64_t vh1_cnt;
+        uint64_t read_lines;
+        uint64_t write_lines;
+        uint64_t read_cache_line_hits;
+        uint64_t write_cache_line_hits;
+        uint64_t vl0_rd_lines;
+        uint64_t vl0_wr_lines;
+        uint64_t vh0_lines;
+        uint64_t vh1_lines;
+
+        uint64_t read_max_inflight_lines;
+        uint64_t read_average_latency;
+        uint64_t write_max_inflight_lines;
+        uint64_t write_average_latency;
     }
     t_test_stats;
 
@@ -66,23 +94,41 @@ class TEST_MEM_PERF : public CCI_TEST
     uint64_t testNumCyclesExecuted();
 
   private:
-    int runTest(uint64_t cycles,
-                uint64_t stride,
-                uint64_t vc,
-                uint64_t mcl,
-                uint64_t wrline_m,
-                uint64_t rdline_s,
-                uint64_t enable_writes,
-                uint64_t enable_reads,
-                t_test_stats* stats);
+    int runTest(const t_test_config* config, t_test_stats* stats);
+
+    // Warm up both VTP and the first 2K lines in VL0 for a region
+    void warmUp(void* buf, uint64_t n_bytes);
+
+    string statsHeader(void)
+    {
+        return "Read GB/s, Write GB/s, VL0 lines, VH0 lines, VH1 lines, VL0 Rd Hits per 1000, VL0 Wr Hits per 1000, Read Max Inflight Lines, Read Ave Cycle Lat, Write Max Inflight Lines, Write Ave Cycle Lat";
+    }
 
     friend std::ostream& operator<< (std::ostream& os, const t_test_stats& stats)
     {
-        os << boost::format("%.1f") % ((double(stats.read_cnt) * CL(1) / 0x40000000) / stats.run_sec) << " "
-           << boost::format("%.1f") % ((double(stats.write_cnt) * CL(1) / 0x40000000) / stats.run_sec) << " "
-           << stats.vl0_cnt << " "
-           << stats.vh0_cnt << " "
-           << stats.vh1_cnt << " ";
+        uint32_t vl0_rd_hit_rate = 0;
+        if (stats.vl0_rd_lines)
+        {
+            vl0_rd_hit_rate = round((1000.0 * stats.read_cache_line_hits) / stats.vl0_rd_lines);
+        }
+
+        uint32_t vl0_wr_hit_rate = 0;
+        if (stats.vl0_wr_lines)
+        {
+            vl0_wr_hit_rate = round((1000.0 * stats.write_cache_line_hits) / stats.vl0_wr_lines);
+        }
+
+        os << boost::format("%.1f") % ((double(stats.read_lines) * CL(1) / 0x40000000) / stats.run_sec) << " "
+           << boost::format("%.1f") % ((double(stats.write_lines) * CL(1) / 0x40000000) / stats.run_sec) << " "
+           << stats.vl0_rd_lines + stats.vl0_wr_lines << " "
+           << stats.vh0_lines << " "
+           << stats.vh1_lines << " "
+           << vl0_rd_hit_rate << " "
+           << vl0_wr_hit_rate << " "
+           << stats.read_max_inflight_lines << " "
+           << stats.read_average_latency << " "
+           << stats.write_max_inflight_lines << " "
+           << stats.write_average_latency << " ";
         return os;
     }
 

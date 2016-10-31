@@ -25,7 +25,6 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 #include "test_mem_perf.h"
-#include <time.h>
 
 
 // ========================================================================
@@ -35,7 +34,6 @@
 //
 // ========================================================================
 
-
 void testConfigOptions(po::options_description &desc)
 {
     // Add test-specific options
@@ -44,9 +42,11 @@ void testConfigOptions(po::options_description &desc)
         ("rdline-s", po::value<bool>()->default_value(true), "Emit read requests with shared cache hint")
         ("wrline-m", po::value<bool>()->default_value(true), "Emit write requests with modified cache hint")
         ("mcl", po::value<int>()->default_value(1), "Multi-line requests (0 for random sizes)")
+        ("min-stride", po::value<int>()->default_value(0), "Minimum stride value")
         ("max-stride", po::value<int>()->default_value(128), "Maximum stride value")
         ("tc", po::value<int>()->default_value(10000000), "Test length (cycles)")
         ("ts", po::value<int>()->default_value(0), "Test length (seconds)")
+        ("enable-warmup", po::value<bool>()->default_value(true), "Warm up VTP's TLB")
         ("test-mode", po::value<bool>()->default_value(false), "Generate simple memory patterns for testing address logic")
         ;
 }
@@ -75,58 +75,66 @@ btInt TEST_MEM_PERF::test()
     
     // Low 16 bits holds the number of line address bits required
     uint64_t n_bytes = CL(1) * (1LL << uint16_t(addr_info));
+    cout << "# Allocating two " << n_bytes / (1024 * 1024) << "MB test buffers..." << endl;
 
-    cout << "# Allocating " << n_bytes / (1024 * 1024) << "MB read test buffer..." << endl;
-    volatile uint64_t* rd_mem = (uint64_t*) this->malloc(n_bytes);
+    // Allocate two buffers worth plus an extra 2MB page to allow for alignment
+    // changes.
+    uint64_t* rd_mem = (uint64_t*) this->malloc(2 * n_bytes + 2048 * 1024);
+    // Align to minimize cache conflicts
+    uint64_t* wr_mem = (uint64_t*) (uint64_t(rd_mem) + n_bytes + 512 * CL(1));
+
     memset((void*)rd_mem, 0, n_bytes);
-
-    cout << "# Allocating " << n_bytes / (1024 * 1024) << "MB write test buffer..." << endl;
-    volatile uint64_t* wr_mem = (uint64_t*) this->malloc(n_bytes);
     memset((void*)wr_mem, 0, n_bytes);
 
     //
     // Configure the HW test
     //
     writeTestCSR(1, uint64_t(dsm) / CL(1));
+
+    if (vm["enable-warmup"].as<bool>())
+    {
+        warmUp(wr_mem, n_bytes);
+        warmUp(rd_mem, n_bytes);
+    }
+
     writeTestCSR(2, uint64_t(rd_mem) / CL(1));
     writeTestCSR(3, uint64_t(wr_mem) / CL(1));
-    writeTestCSR(4, (n_bytes / CL(1)) - 1);
+
+    t_test_config config;
+    memset(&config, 0, sizeof(config));
 
     // What's the AFU frequency (MHz)?
     uint64_t afu_mhz = readCommonCSR(CSR_COMMON_FREQ);
 
-    uint64_t cycles = uint64_t(vm["ts"].as<int>()) * afu_mhz * 1000 * 1000;
-    if (cycles == 0)
+    config.cycles = uint64_t(vm["ts"].as<int>()) * afu_mhz * 1000 * 1000;
+    if (config.cycles == 0)
     {
         // Didn't specify --ts.  Use cycles instead.
-        cycles = uint64_t(vm["tc"].as<int>());
+        config.cycles = uint64_t(vm["tc"].as<int>());
     }
 
-    // Run length in seconds
-    double run_sec = double(cycles) / (double(afu_mhz) * 1000.0 * 1000.0);
-
     const uint64_t counter_bits = 40;
-    if (cycles & (int64_t(-1) << counter_bits))
+    if (config.cycles & (int64_t(-1) << counter_bits))
     {
         cerr << "Run length overflows " << counter_bits << " bit counter" << endl;
         exit(1);
     }
 
-    uint64_t vc = uint64_t(vm["vc"].as<int>());
-    assert(vc < 4);
+    config.vc = uint8_t(vm["vc"].as<int>());
+    assert(config.vc < 4);
 
-    uint64_t rdline_s = (vm["rdline-s"].as<bool>() ? 1 : 0);
-    uint64_t wrline_m = (vm["wrline-m"].as<bool>() ? 1 : 0);
+    config.rdline_s = vm["rdline-s"].as<bool>();
+    config.wrline_m = vm["wrline-m"].as<bool>();
 
-    uint64_t mcl = uint64_t(vm["mcl"].as<int>());
-    if ((mcl > 4) || (mcl == 3))
+    config.mcl = uint64_t(vm["mcl"].as<int>());
+    if ((config.mcl > 4) || (config.mcl == 3))
     {
-        cerr << "Illegal multi-line (mcl) parameter:  " << mcl << endl;
+        cerr << "Illegal multi-line (mcl) parameter:  " << config.mcl << endl;
         exit(1);
     }
     // Encode mcl as 3 bits.  The low 2 are the Verilog t_ccip_clLen and the
     // high bit indicates random sizes.
-    mcl = (mcl - 1) & 7;
+    config.mcl = (config.mcl - 1) & 7;
 
     // Wait for the HW to be ready
     while ((readTestCSR(7) & 3) != 0)
@@ -136,36 +144,37 @@ btInt TEST_MEM_PERF::test()
 
     if (vm["test-mode"].as<bool>())
     {
-        writeTestCSR(4, 0xff);
-
-        cout << "# Mem Bytes, Stride, Read GB/s, Write GB/s, VL0 lines, VH0 lines, VH1 lines" << endl;
+        cout << "# Mem Bytes, Stride, " << statsHeader() << endl;
         t_test_stats stats;
-        stats.run_sec = run_sec;
-        uint64_t stride = 12;
-        assert(runTest(cycles, stride, vc, mcl,
-                       wrline_m, rdline_s,
-                       1,  // Enable writes
-                       1,  // Enable reads
-                       &stats) == 0);
+
+        config.buf_lines = 256;
+        config.stride = 12;
+        config.enable_writes = true;
+        config.enable_reads = true;
+        assert(runTest(&config, &stats) == 0);
 
         cout << 0x100 * CL(1) << " "
-             << stride << " "
+             << config.stride << " "
              << stats
              << endl;
 
         return 0;
     }
 
+    uint64_t stride_incr = 1 + config.mcl;
+
+    uint64_t min_stride = uint64_t(vm["min-stride"].as<int>());
+    min_stride = (min_stride + stride_incr - 1) & ~ (stride_incr - 1);
     uint64_t max_stride = uint64_t(vm["max-stride"].as<int>()) + 1;
 
     bool vcmap_all = vm["vcmap-all"].as<bool>();
     bool vcmap_enable = vm["vcmap-enable"].as<bool>();
     bool vcmap_dynamic = vm["vcmap-dynamic"].as<bool>();
     int32_t vcmap_fixed_vl0_ratio = int32_t(vm["vcmap-fixed"].as<int>());
-    cout << "# MCL = " << mcl << endl
-         << "# Cycles per test = " << cycles << endl
+    cout << "# MCL = " << (config.mcl + 1) << endl
+         << "# Cycles per test = " << config.cycles << endl
          << "# AFU MHz = " << afu_mhz << endl
-         << "# VC = " << vc << endl
+         << "# VC = " << vcNumToName(config.vc) << endl
          << "# VC Map enabled: " << (vcmap_enable ? "true" : "false") << endl;
     if (vcmap_enable)
     {
@@ -179,24 +188,24 @@ btInt TEST_MEM_PERF::test()
 
     // Read
     cout << "#" << endl
-         << "# Reads " << (rdline_s ? "" : "not ") << "cached" << endl
-         << "# Mem Bytes, Stride, GB/s, VL0 lines, VH0 lines, VH1 lines" << endl;
+         << "# Reads " << (config.rdline_s ? "" : "not ") << "cached" << endl
+         << "# Mem Bytes, Stride, " << statsHeader()
+         << endl;
 
-    for (uint64_t mem_lines = 1; mem_lines * CL(1) <= n_bytes; mem_lines <<= 1)
+    for (uint64_t mem_lines = stride_incr; mem_lines * CL(1) <= n_bytes; mem_lines <<= 1)
     {
-        writeTestCSR(4, mem_lines - 1);
+        config.buf_lines = mem_lines;
 
         // Vary stride
-        uint64_t stride_limit = (mem_lines < max_stride ? mem_lines : max_stride);
-        for (uint64_t stride = 0; stride < stride_limit; stride += (1 + mcl))
+        uint64_t stride_limit = (mem_lines < max_stride ? mem_lines+1 : max_stride);
+        for (uint64_t stride = min_stride; stride < stride_limit; stride += stride_incr)
         {
             t_test_stats stats;
-            stats.run_sec = run_sec;
-            assert(runTest(cycles, stride, vc, mcl,
-                           wrline_m, rdline_s,
-                           0,  // No writes
-                           1,  // Enable reads
-                           &stats) == 0);
+
+            config.stride = stride;
+            config.enable_writes = false;
+            config.enable_reads = true;
+            assert(runTest(&config, &stats) == 0);
 
             cout << mem_lines * CL(1) << " "
                  << stride << " "
@@ -208,24 +217,24 @@ btInt TEST_MEM_PERF::test()
     // Write
     cout << endl
          << endl
-         << "# Writes " << (wrline_m ? "" : "not ") << "cached" << endl
-         << "# Mem Bytes, Stride, GB/s, VL0 lines, VH0 lines, VH1 lines" << endl;
+         << "# Writes " << (config.wrline_m ? "" : "not ") << "cached" << endl
+         << "# Mem Bytes, Stride, " << statsHeader()
+         << endl;
 
-    for (uint64_t mem_lines = 1; mem_lines * CL(1) <= n_bytes; mem_lines <<= 1)
+    for (uint64_t mem_lines = stride_incr; mem_lines * CL(1) <= n_bytes; mem_lines <<= 1)
     {
-        writeTestCSR(4, mem_lines - 1);
+        config.buf_lines = mem_lines;
 
         // Vary stride
-        uint64_t stride_limit = (mem_lines < max_stride ? mem_lines : max_stride);
-        for (uint64_t stride = 0; stride < stride_limit; stride += (1 + mcl))
+        uint64_t stride_limit = (mem_lines < max_stride ? mem_lines+1 : max_stride);
+        for (uint64_t stride = min_stride; stride < stride_limit; stride += stride_incr)
         {
             t_test_stats stats;
-            stats.run_sec = run_sec;
-            assert(runTest(cycles, stride, vc, mcl,
-                           wrline_m, rdline_s,
-                           1,  // Enable writes
-                           0,  // No reads
-                           &stats) == 0);
+
+            config.stride = stride;
+            config.enable_writes = true;
+            config.enable_reads = false;
+            assert(runTest(&config, &stats) == 0);
 
             cout << mem_lines * CL(1) << " "
                  << stride << " "
@@ -237,25 +246,25 @@ btInt TEST_MEM_PERF::test()
     // Throughput (independent read and write)
     cout << endl
          << endl
-         << "# Reads " << (rdline_s ? "" : "not ") << "cached +"
-         << " Writes " << (wrline_m ? "" : "not ") << "cached" << endl
-         << "# Mem Bytes, Stride, GB/s, VL0 lines, VH0 lines, VH1 lines" << endl;
+         << "# Reads " << (config.rdline_s ? "" : "not ") << "cached +"
+         << " Writes " << (config.wrline_m ? "" : "not ") << "cached" << endl
+         << "# Mem Bytes, Stride, " << statsHeader()
+         << endl;
 
-    for (uint64_t mem_lines = 1; mem_lines * CL(1) <= n_bytes; mem_lines <<= 1)
+    for (uint64_t mem_lines = stride_incr; mem_lines * CL(1) <= n_bytes; mem_lines <<= 1)
     {
-        writeTestCSR(4, mem_lines - 1);
+        config.buf_lines = mem_lines;
 
         // Vary stride
-        uint64_t stride_limit = (mem_lines < max_stride ? mem_lines : max_stride);
-        for (uint64_t stride = 0; stride < stride_limit; stride += (1 + mcl))
+        uint64_t stride_limit = (mem_lines < max_stride ? mem_lines+1 : max_stride);
+        for (uint64_t stride = min_stride; stride < stride_limit; stride += stride_incr)
         {
             t_test_stats stats;
-            stats.run_sec = run_sec;
-            assert(runTest(cycles, stride, vc, mcl,
-                           wrline_m, rdline_s,
-                           1,  // Enable writes
-                           1,  // Enable reads
-                           &stats) == 0);
+
+            config.stride = stride;
+            config.enable_writes = true;
+            config.enable_reads = true;
+            assert(runTest(&config, &stats) == 0);
 
             cout << mem_lines * CL(1) << " "
                  << stride << " "
@@ -265,94 +274,4 @@ btInt TEST_MEM_PERF::test()
     }
 
     return 0;
-}
-
-
-int
-TEST_MEM_PERF::runTest(uint64_t cycles,
-                       uint64_t stride,
-                       uint64_t vc,
-                       uint64_t mcl,
-                       uint64_t wrline_m,
-                       uint64_t rdline_s,
-                       uint64_t enable_writes,
-                       uint64_t enable_reads,
-                       t_test_stats* stats)
-{
-    uint64_t vl0_lines = readCommonCSR(CCI_TEST::CSR_COMMON_VL0_LINES);
-    uint64_t vh0_lines = readCommonCSR(CCI_TEST::CSR_COMMON_VH0_LINES);
-    uint64_t vh1_lines = readCommonCSR(CCI_TEST::CSR_COMMON_VH1_LINES);
-
-    // Start the test
-    writeTestCSR(0,
-                 (cycles << 24) |
-                 (stride << 8) |
-                 (vc << 6) |
-                 (mcl << 4) |
-                 (wrline_m << 3) |
-                 (rdline_s << 2) |
-                 (enable_writes << 1) |
-                 enable_reads);
-
-    // Wait time for something to happen
-    struct timespec ms;
-    // Longer when simulating
-    ms.tv_sec = (hwIsSimulated() ? 2 : 0);
-    ms.tv_nsec = 2500000;
-
-    uint64_t iter_state_end = 0;
-
-    // Wait for test to signal it is complete
-    while (*dsm == 0)
-    {
-        nanosleep(&ms, NULL);
-
-        // Is the test done but not writing to DSM?  Could be a bug.
-        uint8_t state = (readTestCSR(7) >> 8) & 255;
-        if (state > 1)
-        {
-            if (iter_state_end++ == 5)
-            {
-                // Give up and signal an error
-                break;
-            }
-        }
-    }
-
-    totalCycles += cycles;
-
-    stats->read_cnt = readTestCSR(4);
-    stats->write_cnt = readTestCSR(5);
-
-    stats->vl0_cnt = readCommonCSR(CCI_TEST::CSR_COMMON_VL0_LINES) - vl0_lines;
-    stats->vh0_cnt = readCommonCSR(CCI_TEST::CSR_COMMON_VH0_LINES) - vh0_lines;
-    stats->vh1_cnt = readCommonCSR(CCI_TEST::CSR_COMMON_VH1_LINES) - vh1_lines;
-
-    if (*dsm != 1)
-    {
-        // Error!
-        dbgRegDump(readTestCSR(7));
-        return (*dsm == 1) ? 1 : 2;
-    }
-
-    *dsm = 0;
-
-    return 0;
-}
-
-
-uint64_t
-TEST_MEM_PERF::testNumCyclesExecuted()
-{
-    return totalCycles;
-}
-
-
-void
-TEST_MEM_PERF::dbgRegDump(uint64_t r)
-{
-    cerr << "Test state:" << endl
-         << "  State:           " << ((r >> 8) & 255) << endl
-         << "  FIU C0 Alm Full: " << (r & 1) << endl
-         << "  FIU C1 Alm Full: " << ((r >> 1) & 1) << endl;
 }

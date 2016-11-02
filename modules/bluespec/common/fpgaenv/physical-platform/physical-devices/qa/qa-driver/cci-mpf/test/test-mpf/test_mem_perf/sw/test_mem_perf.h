@@ -83,6 +83,10 @@ class TEST_MEM_PERF : public CCI_TEST
   public:
     TEST_MEM_PERF(const po::variables_map& vm, AAL_SVC_WRAPPER& svc) :
         CCI_TEST(vm, svc),
+        dsm(NULL),
+        buffer_bytes(0),
+        rd_mem(NULL),
+        wr_mem(NULL),
         totalCycles(0)
     {};
 
@@ -95,6 +99,8 @@ class TEST_MEM_PERF : public CCI_TEST
 
   private:
     int runTest(const t_test_config* config, t_test_stats* stats);
+
+    bool initMem(bool enableWarmup = false);
 
     // Warm up both VTP and the first 2K lines in VL0 for a region
     void warmUp(void* buf, uint64_t n_bytes);
@@ -135,6 +141,9 @@ class TEST_MEM_PERF : public CCI_TEST
     void dbgRegDump(uint64_t r);
 
     volatile uint64_t* dsm;
+    uint64_t buffer_bytes;
+    uint64_t* rd_mem;
+    uint64_t* wr_mem;
     uint64_t totalCycles;
 };
 

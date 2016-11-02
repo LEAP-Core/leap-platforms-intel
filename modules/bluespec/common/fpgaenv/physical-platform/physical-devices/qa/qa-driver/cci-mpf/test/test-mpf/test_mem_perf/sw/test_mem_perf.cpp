@@ -65,40 +65,7 @@ CCI_TEST* allocTest(const po::variables_map& vm, AAL_SVC_WRAPPER& svc)
 
 btInt TEST_MEM_PERF::test()
 {
-    // Allocate memory for control
-    dsm = (uint64_t*) this->malloc(4096);
-    memset((void*)dsm, 0, 4096);
-
-    // Allocate memory for read/write tests.  The HW indicates the size
-    // of the memory buffer in CSR 0.
-    uint64_t addr_info = readTestCSR(0);
-    
-    // Low 16 bits holds the number of line address bits required
-    uint64_t n_bytes = CL(1) * (1LL << uint16_t(addr_info));
-    cout << "# Allocating two " << n_bytes / (1024 * 1024) << "MB test buffers..." << endl;
-
-    // Allocate two buffers worth plus an extra 2MB page to allow for alignment
-    // changes.
-    uint64_t* rd_mem = (uint64_t*) this->malloc(2 * n_bytes + 2048 * 1024);
-    // Align to minimize cache conflicts
-    uint64_t* wr_mem = (uint64_t*) (uint64_t(rd_mem) + n_bytes + 512 * CL(1));
-
-    memset((void*)rd_mem, 0, n_bytes);
-    memset((void*)wr_mem, 0, n_bytes);
-
-    //
-    // Configure the HW test
-    //
-    writeTestCSR(1, uint64_t(dsm) / CL(1));
-
-    if (vm["enable-warmup"].as<bool>())
-    {
-        warmUp(wr_mem, n_bytes);
-        warmUp(rd_mem, n_bytes);
-    }
-
-    writeTestCSR(2, uint64_t(rd_mem) / CL(1));
-    writeTestCSR(3, uint64_t(wr_mem) / CL(1));
+    assert(initMem(vm["enable-warmup"].as<bool>()));
 
     t_test_config config;
     memset(&config, 0, sizeof(config));
@@ -135,12 +102,6 @@ btInt TEST_MEM_PERF::test()
     // Encode mcl as 3 bits.  The low 2 are the Verilog t_ccip_clLen and the
     // high bit indicates random sizes.
     config.mcl = (config.mcl - 1) & 7;
-
-    // Wait for the HW to be ready
-    while ((readTestCSR(7) & 3) != 0)
-    {
-        sleep(1);
-    }
 
     if (vm["test-mode"].as<bool>())
     {
@@ -192,7 +153,7 @@ btInt TEST_MEM_PERF::test()
          << "# Mem Bytes, Stride, " << statsHeader()
          << endl;
 
-    for (uint64_t mem_lines = stride_incr; mem_lines * CL(1) <= n_bytes; mem_lines <<= 1)
+    for (uint64_t mem_lines = stride_incr; mem_lines * CL(1) <= buffer_bytes; mem_lines <<= 1)
     {
         config.buf_lines = mem_lines;
 
@@ -221,7 +182,7 @@ btInt TEST_MEM_PERF::test()
          << "# Mem Bytes, Stride, " << statsHeader()
          << endl;
 
-    for (uint64_t mem_lines = stride_incr; mem_lines * CL(1) <= n_bytes; mem_lines <<= 1)
+    for (uint64_t mem_lines = stride_incr; mem_lines * CL(1) <= buffer_bytes; mem_lines <<= 1)
     {
         config.buf_lines = mem_lines;
 
@@ -251,7 +212,7 @@ btInt TEST_MEM_PERF::test()
          << "# Mem Bytes, Stride, " << statsHeader()
          << endl;
 
-    for (uint64_t mem_lines = stride_incr; mem_lines * CL(1) <= n_bytes; mem_lines <<= 1)
+    for (uint64_t mem_lines = stride_incr; mem_lines * CL(1) <= buffer_bytes; mem_lines <<= 1)
     {
         config.buf_lines = mem_lines;
 

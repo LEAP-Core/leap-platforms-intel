@@ -435,7 +435,7 @@ module cci_mpf_shim_vc_map
         CCI_MPF_VC_MAP_SAMPLING,
         CCI_MPF_VC_MAP_EMIT_WRFENCE,
         CCI_MPF_VC_MAP_WAIT_WRFENCE_RSP,
-        CCI_MPF_VC_MAP_WAIT_READS
+        CCI_MPF_VC_MAP_WAIT_QUIET
     }
     t_cci_mpf_vc_map_state;
     t_cci_mpf_vc_map_state state;
@@ -444,7 +444,8 @@ module cci_mpf_shim_vc_map
     t_map_ratio req_ratio_vl0;
     logic req_always_use_vl0;
 
-    logic [$clog2(MAX_ACTIVE_REQS)-1 : 0] num_outstanding_reads;
+    logic c0_req_active;
+    logic c1_req_active;
 
     //
     // Primary state machine.  When a new ratio is requested a WrFence must
@@ -484,20 +485,18 @@ module cci_mpf_shim_vc_map
                 begin
                     new_ratio_vl0_en <= 1'b1;
                     events.vc_map_out_event_mapping_changed <= 1'b1;
-                    state <= CCI_MPF_VC_MAP_WAIT_READS;
+                    state <= CCI_MPF_VC_MAP_WAIT_QUIET;
                 end
             end
 
-          CCI_MPF_VC_MAP_WAIT_READS:
+          CCI_MPF_VC_MAP_WAIT_QUIET:
             begin
                 new_ratio_vl0_en <= 1'b0;
                 events.vc_map_out_event_mapping_changed <= 1'b0;
 
-                // Wait for all previous reads to complete since they are now
-                // tracked on the wrong channel.  The WRO module only compares
-                // addresses within a channel.  We don't want new writes to
-                // commit before outstanding reads complete.
-                if (num_outstanding_reads == 0)
+                // Wait for all previous requests to complete since they are
+                // now tracked on the wrong channel.
+                if (! c0_req_active && ! c1_req_active)
                 begin
                     block_tx_traffic <= 1'b0;
 
@@ -836,42 +835,95 @@ module cci_mpf_shim_vc_map
 
     // ====================================================================
     // 
-    //   Track outstanding reads
+    //   Track outstanding requests
     // 
     // ====================================================================
 
-    logic is_new_read_req;
-    logic is_read_eop;
+    cci_mpf_shim_vc_map_track_active
+      #(
+        .MAX_ACTIVE_REQS(MAX_ACTIVE_REQS)
+        )
+      c0_tracker
+       (
+        .clk,
+        .reset,
+        .noteReq(cci_mpf_c0TxIsReadReq(c0_tx)),
+        .noteRsp(cci_mpf_c0Rx_isEOP(fiu.c0Rx) && cci_c0Rx_isReadRsp(fiu.c0Rx)),
+        .isActive(c0_req_active)
+        );
 
-    always_ff @(posedge clk)
-    begin
-        is_new_read_req <= cci_mpf_c0TxIsReadReq(c0_tx);
-        is_read_eop <= cci_mpf_c0Rx_isEOP(fiu.c0Rx) &&
-                       cci_c0Rx_isReadRsp(fiu.c0Rx);
-
-        if (reset)
-        begin
-            is_new_read_req <= 1'b0;
-            is_read_eop <= 1'b0;
-        end
-    end
-
-    always_ff @(posedge clk)
-    begin
-        if (is_new_read_req && ! is_read_eop)
-        begin
-            num_outstanding_reads <= num_outstanding_reads + 1;
-        end
-
-        if (! is_new_read_req && is_read_eop)
-        begin
-            num_outstanding_reads <= num_outstanding_reads - 1;
-        end
-
-        if (reset)
-        begin
-            num_outstanding_reads <= 0;
-        end
-    end
+    cci_mpf_shim_vc_map_track_active
+      #(
+        .MAX_ACTIVE_REQS(MAX_ACTIVE_REQS)
+        )
+      c1_tracker
+       (
+        .clk,
+        .reset,
+        .noteReq(cci_mpf_c1TxIsWriteReq(c1_tx)),
+        .noteRsp(cci_c1Rx_isWriteRsp(fiu.c1Rx)),
+        .isActive(c1_req_active)
+        );
 
 endmodule // cci_mpf_shim_vc_map
+
+
+//
+// Track requests and responses on a channel and output a flag indicating
+// whether any requests are active.
+//
+module cci_mpf_shim_vc_map_track_active
+  #(
+    parameter MAX_ACTIVE_REQS = 128
+    )
+   (
+    input  logic clk,
+    input  logic reset,
+
+    // Client enables each cycle a request or response is processed
+    input  logic noteReq,
+    input  logic noteRsp,
+
+    // False iff no requests are active
+    output logic isActive
+    );
+
+    logic [$clog2(MAX_ACTIVE_REQS)-1 : 0] num_outstanding_reqs;
+
+    logic noteReq_q;
+    logic noteRsp_q;
+
+    always_ff @(posedge clk)
+    begin
+        noteReq_q <= noteReq;
+        noteRsp_q <= noteRsp;
+
+        if (reset)
+        begin
+            noteReq_q <= 1'b0;
+            noteRsp_q <= 1'b0;
+        end
+    end
+
+    always_ff @(posedge clk)
+    begin
+        isActive <= (|(num_outstanding_reqs)) || noteReq || noteReq_q;
+
+        if (noteReq_q && ! noteRsp_q)
+        begin
+            num_outstanding_reqs <= num_outstanding_reqs + 1;
+        end
+
+        if (! noteReq_q && noteRsp_q)
+        begin
+            num_outstanding_reqs <= num_outstanding_reqs - 1;
+        end
+
+        if (reset)
+        begin
+            isActive <= 1'b0;
+            num_outstanding_reqs <= 0;
+        end
+    end
+
+endmodule // cci_mpf_shim_vc_map_track_active

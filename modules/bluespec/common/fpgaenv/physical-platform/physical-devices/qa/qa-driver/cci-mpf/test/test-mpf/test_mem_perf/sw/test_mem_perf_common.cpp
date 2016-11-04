@@ -65,7 +65,7 @@ TEST_MEM_PERF::initMem(bool enableWarmup)
 
     if (enableWarmup)
     {
-        warmUp(wr_mem, buffer_bytes / 2);
+        warmUp(wr_mem, buffer_bytes);
         warmUp(rd_mem, buffer_bytes);
     }
 
@@ -92,6 +92,7 @@ TEST_MEM_PERF::runTest(const t_test_config* config, t_test_stats* stats)
 
     assert((config->mcl & config->stride) == 0);
     assert((config->buf_lines & (config->buf_lines - 1)) == 0);
+    assert(config->stride <= 0xffff);
 
     // Read baseline values of counters.  We'll read them again after the
     // test and compute the difference.

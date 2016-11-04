@@ -495,8 +495,9 @@ module cci_mpf_shim_vc_map
                 events.vc_map_out_event_mapping_changed <= 1'b0;
 
                 // Wait for all previous requests to complete since they are
-                // now tracked on the wrong channel.
-                if (! c0_req_active && ! c1_req_active)
+                // now tracked on the wrong channel.  Writes were already
+                // checked before the fence was emitted, so just wait for reads.
+                if (! c0_req_active)
                 begin
                     block_tx_traffic <= 1'b0;
 
@@ -514,12 +515,40 @@ module cci_mpf_shim_vc_map
         end
     end
 
-    // WrFence is emitted if requested and no C1 TX traffic is being
-    // requested by the AFU.
-    assign emit_wrfence_en =
-        (state == CCI_MPF_VC_MAP_EMIT_WRFENCE) &&
-        ! cci_mpf_c1TxIsValid(c1_tx) &&
-        ! fiu.c0TxAlmFull;
+    // WrFence is emitted if requested, no C1 TX traffic is being
+    // requested by the AFU and all writes have retired.
+    logic wrfence_rdy;
+    assign emit_wrfence_en = (state == CCI_MPF_VC_MAP_EMIT_WRFENCE) &&
+                             wrfence_rdy &&
+                             ! cci_mpf_c1TxIsValid(c1_tx);
+
+    logic [2:0] wrfence_delay;
+
+    always_ff @(posedge clk)
+    begin
+        wrfence_rdy <= ! c1_req_active &&
+                       ! fiu.c0TxAlmFull &&
+                       (&(wrfence_delay));
+
+        // Impose a short delay on emitting wrfence to ensure enough time
+        // with almost full high so AFU traffic stops.
+        if (! (&(wrfence_delay)))
+        begin
+            // Saturating counter
+            wrfence_delay <= wrfence_delay + 3'b1;
+        end
+
+        if (state != CCI_MPF_VC_MAP_EMIT_WRFENCE)
+        begin
+            wrfence_delay <= 3'b0;
+        end
+
+        if (reset)
+        begin
+            wrfence_rdy <= 1'b0;
+            wrfence_delay <= 3'b0;
+        end
+    end
 
     // WrFence response received?
     assign is_vc_map_wrfence_rsp =

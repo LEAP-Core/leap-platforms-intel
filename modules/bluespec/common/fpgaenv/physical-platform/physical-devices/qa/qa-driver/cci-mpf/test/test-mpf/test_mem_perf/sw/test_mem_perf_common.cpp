@@ -85,6 +85,13 @@ TEST_MEM_PERF::initMem(bool enableWarmup)
 int
 TEST_MEM_PERF::runTest(const t_test_config* config, t_test_stats* stats)
 {
+    // Clear the FPGA-side cache?
+    if (config->clear_caches)
+    {
+        memset((void*)rd_mem, 0, config->buf_lines * CL(1));
+        memset((void*)wr_mem, 0, config->buf_lines * CL(1));
+    }
+
     // Ensure that the requested number of cycles and the actual executed
     // cycle count fit in a 32 bit counter.  We assume the test won't run
     // for more than 2x the requested length, which had better be the case.
@@ -182,6 +189,63 @@ TEST_MEM_PERF::runTest(const t_test_config* config, t_test_stats* stats)
     *dsm = 0;
 
     return 0;
+}
+
+
+int
+TEST_MEM_PERF::runTestN(const t_test_config* config, t_test_stats* stats, int n)
+{
+    int r = 0;
+    t_test_stats stats_single;
+
+    memset(stats, 0, sizeof(t_test_stats));
+
+    // Sum results from all runs
+    for (int i = 0; i < n; i += 1)
+    {
+        r |= runTest(config, &stats_single);
+
+        stats->actual_cycles += stats_single.actual_cycles;
+        stats->run_sec += stats_single.run_sec;
+
+        stats->read_lines += stats_single.read_lines;
+        stats->write_lines += stats_single.write_lines;
+        stats->read_cache_line_hits += stats_single.read_cache_line_hits;
+        stats->write_cache_line_hits += stats_single.write_cache_line_hits;
+        stats->vl0_rd_lines += stats_single.vl0_rd_lines;
+        stats->vl0_wr_lines += stats_single.vl0_wr_lines;
+        stats->vh0_lines += stats_single.vh0_lines;
+        stats->vh1_lines += stats_single.vh1_lines;
+
+        if (stats->read_max_inflight_lines < stats_single.read_max_inflight_lines)
+        {
+            stats->read_max_inflight_lines = stats_single.read_max_inflight_lines;
+        }
+        stats->read_average_latency += stats_single.read_average_latency;
+        if (stats->write_max_inflight_lines < stats_single.write_max_inflight_lines)
+        {
+            stats->write_max_inflight_lines = stats_single.write_max_inflight_lines;
+        }
+        stats->write_average_latency += stats_single.write_average_latency;
+    }
+
+    // Convert sums to avarages
+    stats->actual_cycles /= n;
+    stats->run_sec /= n;
+
+    stats->read_lines /= n;
+    stats->write_lines /= n;
+    stats->read_cache_line_hits /= n;
+    stats->write_cache_line_hits /= n;
+    stats->vl0_rd_lines /= n;
+    stats->vl0_wr_lines /= n;
+    stats->vh0_lines /= n;
+    stats->vh1_lines /= n;
+
+    stats->read_average_latency /= n;
+    stats->write_average_latency /= n;
+
+    return r;
 }
 
 

@@ -53,3 +53,23 @@ plot 'stats/lat_mcl4_vc0.dat' index 2 using (1/($1+1)):($2) with lines ls 1 titl
      'stats/lat_map_mcl4_vc0.dat' index 2 using (1/($1+1)):($10) axes x1y2 with lines ls 4 title "VC Map Latency", \
      'stats/lat_ord_map_mcl4_vc0.dat' index 2 using (1/($1+1)):($2) with lines ls 5 title "ROB VC Map Bandwidth", \
      'stats/lat_ord_map_mcl4_vc0.dat' index 2 using (1/($1+1)):($10) axes x1y2 with lines ls 6 title "ROB VC Map Latency"
+
+
+set output "| ps2pdf - write_offer_mcl1.pdf"
+set title "BDX Xeon+FPGA Uncached WRITE Varying Offered Load  (MCL=1)" offset 0,1 font ",18"
+set auto x
+
+plot 'stats/lat_mcl1_vc0.dat' index 5 using (1/($1+1)):($3) with lines ls 1 title "VA Bandwidth", \
+     'stats/lat_mcl1_vc0.dat' index 5 using (1/($1+1)):($12) axes x1y2 with lines ls 2 title "VA Latency", \
+     'stats/lat_map_mcl1_vc0.dat' index 5 using (1/($1+1)):($3) with lines ls 3 title "VC Map Bandwidth", \
+     'stats/lat_map_mcl1_vc0.dat' index 5 using (1/($1+1)):($12) axes x1y2 with lines ls 4 title "VC Map Latency"
+
+
+set output "| ps2pdf - write_offer_mcl4.pdf"
+set title "BDX Xeon+FPGA Uncached WRITE Varying Offered Load  (MCL=4)" offset 0,1 font ",18"
+#set xrange [0:.5]
+
+plot 'stats/lat_mcl4_vc0.dat' index 5 using (1/($1+1)):($3) with lines ls 1 title "VA Bandwidth", \
+     'stats/lat_mcl4_vc0.dat' index 5 using (1/($1+1)):($12) axes x1y2 with lines ls 2 title "VA Latency", \
+     'stats/lat_map_mcl4_vc0.dat' index 5 using (1/($1+1)):($3) with lines ls 3 title "VC Map Bandwidth", \
+     'stats/lat_map_mcl4_vc0.dat' index 5 using (1/($1+1)):($12) axes x1y2 with lines ls 4 title "VC Map Latency"

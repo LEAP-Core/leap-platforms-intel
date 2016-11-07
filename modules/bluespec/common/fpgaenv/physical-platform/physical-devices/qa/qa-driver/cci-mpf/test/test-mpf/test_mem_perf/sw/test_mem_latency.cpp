@@ -40,7 +40,6 @@ void testConfigOptions(po::options_description &desc)
     desc.add_options()
         ("vc", po::value<int>()->default_value(0), "Channel (0=VA, 1=VL0, 2=VH0, 3=VH1)")
         ("mcl", po::value<int>()->default_value(1), "Multi-line request size")
-        ("enable-warmup", po::value<bool>()->default_value(true), "Warm up VTP's TLB")
         ;
 }
 
@@ -58,8 +57,7 @@ CCI_TEST* allocTest(const po::variables_map& vm, AAL_SVC_WRAPPER& svc)
 
 btInt TEST_MEM_PERF::test()
 {
-    bool enable_warmup = vm["enable-warmup"].as<bool>();
-    assert(initMem(enable_warmup));
+    assert(initMem(false));
 
     t_test_config config;
     memset(&config, 0, sizeof(config));
@@ -106,6 +104,7 @@ btInt TEST_MEM_PERF::test()
         // Use the full cache unless both read and write are active, in which
         // case use half for each.  The read and write buffers are already
         // offset to avoid overlap in direct mapped caches.
+        config.clear_caches = false;
         config.buf_lines = (mode <= 1 ? 1024 : 512);
         config.stride = 1 + config.mcl;
         config.enable_writes = (mode != 0);
@@ -129,7 +128,7 @@ btInt TEST_MEM_PERF::test()
 
             // Run twice.  The first time is just warmup.
             assert(runTest(&config, &stats) == 0);
-            assert(runTest(&config, &stats) == 0);
+            assert(runTestN(&config, &stats, 4) == 0);
 
             cout << stats << endl;
         }
@@ -146,17 +145,22 @@ btInt TEST_MEM_PERF::test()
         cout << statsHeader()
              << endl;
 
+        // Warmup
+        if (mode < 2)
+        {
+            t_test_stats stats;
+            config.cycles = 128 * 65536;
+            assert(runTest(&config, &stats) == 0);
+        }
+
         // Vary number of cycles in the run.  For small numbers of cycles this works
         // as a proxy for the number requests emitted.
         for (uint64_t cycles = 1; cycles <= 128 * 65536; cycles <<= 1)
         {
-            // Clear the FPGA cache
-            memset((void*)rd_mem, 0, 32768 * CL(1));
-            memset((void*)wr_mem, 0, 32768 * CL(1));
-
             t_test_stats stats;
             config.cycles = cycles;
-            assert(runTest(&config, &stats) == 0);
+            config.clear_caches = true;
+            assert(runTestN(&config, &stats, 4) == 0);
 
             cout << stats << endl;
         }
@@ -179,14 +183,11 @@ btInt TEST_MEM_PERF::test()
         {
             interval -= 1;
 
-            // Clear the FPGA cache
-            memset((void*)rd_mem, 0, 32768 * CL(1));
-            memset((void*)wr_mem, 0, 32768 * CL(1));
-
             t_test_stats stats;
+            config.clear_caches = true;
             config.rd_interval = interval;
             config.wr_interval = interval;
-            assert(runTest(&config, &stats) == 0);
+            assert(runTestN(&config, &stats, 4) == 0);
 
             cout << interval << " " << stats << endl;
         }

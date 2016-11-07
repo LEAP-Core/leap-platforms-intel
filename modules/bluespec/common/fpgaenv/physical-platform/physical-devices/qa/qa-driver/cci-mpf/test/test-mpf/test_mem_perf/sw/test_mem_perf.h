@@ -52,6 +52,7 @@ class TEST_MEM_PERF : public CCI_TEST
         bool wrline_m;
         bool enable_writes;
         bool enable_reads;
+        bool clear_caches;
 
         // Offered load: Cycles between read and write requests
         uint8_t rd_interval;
@@ -99,6 +100,8 @@ class TEST_MEM_PERF : public CCI_TEST
 
   private:
     int runTest(const t_test_config* config, t_test_stats* stats);
+    // Invoke runTest n times and return the average
+    int runTestN(const t_test_config* config, t_test_stats* stats, int n);
 
     bool initMem(bool enableWarmup = false);
 

@@ -1,3 +1,5 @@
+if (! exists("platform")) platform = "SKX"
+
 set term postscript color enhanced font "Helvetica" 17 butt dashed
 
 set ylabel "Bandwidth (GB/s)" offset 1,0 font ",15"
@@ -32,7 +34,7 @@ set style line 6 lc rgb "green" lw 3 dashtype "-"
 
 
 set output "| ps2pdf - read_offer_mcl1.pdf"
-set title "BDX Xeon+FPGA Uncached READ Varying Offered Load  (MCL=1)" offset 0,1 font ",18"
+set title platform . " Xeon+FPGA Uncached READ Varying Offered Load  (MCL=1)" offset 0,1 font ",18"
 set auto x
 
 plot 'stats/lat_mcl1_vc0.dat' index 2 using (1/($1+1)):($2) with lines ls 1 title "VA Bandwidth", \
@@ -44,7 +46,7 @@ plot 'stats/lat_mcl1_vc0.dat' index 2 using (1/($1+1)):($2) with lines ls 1 titl
 
 
 set output "| ps2pdf - read_offer_mcl4.pdf"
-set title "BDX Xeon+FPGA Uncached READ Varying Offered Load  (MCL=4)" offset 0,1 font ",18"
+set title platform . " Xeon+FPGA Uncached READ Varying Offered Load  (MCL=4)" offset 0,1 font ",18"
 set xrange [0:.5]
 
 plot 'stats/lat_mcl4_vc0.dat' index 2 using (1/($1+1)):($2) with lines ls 1 title "VA Bandwidth", \
@@ -56,7 +58,7 @@ plot 'stats/lat_mcl4_vc0.dat' index 2 using (1/($1+1)):($2) with lines ls 1 titl
 
 
 set output "| ps2pdf - write_offer_mcl1.pdf"
-set title "BDX Xeon+FPGA Uncached WRITE Varying Offered Load  (MCL=1)" offset 0,1 font ",18"
+set title platform . " Xeon+FPGA Uncached WRITE Varying Offered Load  (MCL=1)" offset 0,1 font ",18"
 set auto x
 
 plot 'stats/lat_mcl1_vc0.dat' index 5 using (1/($1+1)):($3) with lines ls 1 title "VA Bandwidth", \
@@ -66,7 +68,7 @@ plot 'stats/lat_mcl1_vc0.dat' index 5 using (1/($1+1)):($3) with lines ls 1 titl
 
 
 set output "| ps2pdf - write_offer_mcl4.pdf"
-set title "BDX Xeon+FPGA Uncached WRITE Varying Offered Load  (MCL=4)" offset 0,1 font ",18"
+set title platform . " Xeon+FPGA Uncached WRITE Varying Offered Load  (MCL=4)" offset 0,1 font ",18"
 #set xrange [0:.5]
 
 plot 'stats/lat_mcl4_vc0.dat' index 5 using (1/($1+1)):($3) with lines ls 1 title "VA Bandwidth", \

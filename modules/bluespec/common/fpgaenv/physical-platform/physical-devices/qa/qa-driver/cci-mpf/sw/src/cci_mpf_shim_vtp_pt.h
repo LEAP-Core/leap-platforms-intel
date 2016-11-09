@@ -192,7 +192,7 @@ class MPFVTP_PAGE_TABLE
 class MPFVTP_PT_TREE_CLASS
 {
   public:
-MPFVTP_PT_TREE_CLASS()
+    MPFVTP_PT_TREE_CLASS()
     {
         Reset();
     }

@@ -57,7 +57,7 @@ CCI_TEST* allocTest(const po::variables_map& vm, AAL_SVC_WRAPPER& svc)
 
 btInt TEST_MEM_PERF::test()
 {
-    assert(initMem(false));
+    assert(initMem());
 
     t_test_config config;
     memset(&config, 0, sizeof(config));

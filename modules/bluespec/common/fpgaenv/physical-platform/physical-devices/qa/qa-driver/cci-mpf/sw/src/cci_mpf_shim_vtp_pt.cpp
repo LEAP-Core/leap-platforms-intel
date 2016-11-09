@@ -263,6 +263,9 @@ MPFVTP_PAGE_TABLE::ptTranslateVAtoPA(btVirtAddr va,
 void
 MPFVTP_PAGE_TABLE::ptDumpPageTable()
 {
+    printf("  Page table root VA 0x%016lx -> PA 0x%016lx:\n",
+           ptVtoP,
+           ptGetPageTableRootPA());
     DumpPageTableVAtoPA(ptVtoP, 0, 4);
 }
 

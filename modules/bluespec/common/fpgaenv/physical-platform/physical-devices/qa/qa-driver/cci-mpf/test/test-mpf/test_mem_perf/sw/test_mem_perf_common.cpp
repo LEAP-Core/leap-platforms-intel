@@ -33,7 +33,7 @@
 
 
 bool
-TEST_MEM_PERF::initMem(bool enableWarmup)
+TEST_MEM_PERF::initMem(bool enableWarmup, bool cached)
 {
     // Allocate memory for control
     dsm = (uint64_t*) this->malloc(4096);
@@ -65,8 +65,8 @@ TEST_MEM_PERF::initMem(bool enableWarmup)
 
     if (enableWarmup)
     {
-        warmUp(wr_mem, buffer_bytes);
-        warmUp(rd_mem, buffer_bytes);
+        warmUp(wr_mem, buffer_bytes, cached);
+        warmUp(rd_mem, buffer_bytes, cached);
     }
 
     writeTestCSR(2, uint64_t(rd_mem) / CL(1));
@@ -250,7 +250,7 @@ TEST_MEM_PERF::runTestN(const t_test_config* config, t_test_stats* stats, int n)
 
 
 void
-TEST_MEM_PERF::warmUp(void* buf, uint64_t n_bytes)
+TEST_MEM_PERF::warmUp(void* buf, uint64_t n_bytes, bool cached)
 {
     // Warm up VTP by stepping across 4K pages
     t_test_config config;
@@ -268,17 +268,20 @@ TEST_MEM_PERF::warmUp(void* buf, uint64_t n_bytes)
     config.stride = 4096 / CL(1);
     config.vc = 2;
     config.enable_writes = 1;
-    config.wrline_m = 1;
+    config.wrline_m = cached;
 
     t_test_stats stats;
     runTest(&config, &stats);
 
     // Warm up cache by writing the first 2K lines in the buffer
-    config.cycles = 32768;
-    config.buf_lines = 2048;
-    config.stride = 1;
-    config.vc = 1;
-    runTest(&config, &stats);
+    if (cached)
+    {
+        config.cycles = 32768;
+        config.buf_lines = 2048;
+        config.stride = 1;
+        config.vc = 1;
+        runTest(&config, &stats);
+    }
 }
 
 
@@ -293,7 +296,9 @@ void
 TEST_MEM_PERF::dbgRegDump(uint64_t r)
 {
     cerr << "Test state:" << endl
-         << "  State:           " << ((r >> 8) & 255) << endl
-         << "  FIU C0 Alm Full: " << (r & 1) << endl
-         << "  FIU C1 Alm Full: " << ((r >> 1) & 1) << endl;
+         << "  State:            " << ((r >> 8) & 255) << endl
+         << "  FIU C0 Alm Full:  " << (r & 1) << endl
+         << "  FIU C1 Alm Full:  " << ((r >> 1) & 1) << endl
+         << "  MPF C0 Not Empty: " << ((r >> 2) & 1) << endl
+         << "  MPF C1 Not Empty: " << ((r >> 3) & 1) << endl;
 }

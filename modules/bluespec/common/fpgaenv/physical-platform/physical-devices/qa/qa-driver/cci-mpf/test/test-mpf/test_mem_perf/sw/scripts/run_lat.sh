@@ -15,7 +15,7 @@ for mcl in 1 2 4
 do
     for vc in 0 1 2
     do
-        ./test_mem_latency --mcl=${mcl} --vc=${vc} | tee stats/lat_${tag}mcl${mcl}_vc${vc}.dat
+        ./test_mem_latency --vcmap-enable=0 --mcl=${mcl} --vc=${vc} | tee stats/lat_${tag}mcl${mcl}_vc${vc}.dat
     done
 
     ./test_mem_latency --vcmap-enable=1 --mcl=${mcl} --vc=0 | tee stats/lat_${tag}map_mcl${mcl}_vc0.dat

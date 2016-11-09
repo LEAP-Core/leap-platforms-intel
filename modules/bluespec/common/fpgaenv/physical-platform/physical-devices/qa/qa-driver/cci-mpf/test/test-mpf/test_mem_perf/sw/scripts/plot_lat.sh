@@ -8,8 +8,13 @@
 ##   scripts/run_lat.sh ord
 ##
 
-gnuplot scripts/plot_latency.gp
-gnuplot scripts/plot_offered_load.gp
+platform="SKX"
+if [ -n "${1}" ]; then
+    platform="${1}_"
+fi
+
+gnuplot -e "platform='${platform}'" scripts/plot_latency.gp
+gnuplot -e "platform='${platform}'" scripts/plot_offered_load.gp
 
 # Merge into a single PDF
 gs -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite -sOutputFile=bw-lat.pdf read_*.pdf write_*.pdf

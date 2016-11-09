@@ -1,3 +1,5 @@
+if (! exists("platform")) platform = "SKX"
+
 set term postscript color enhanced font "Helvetica" 17 butt dashed
 
 set ylabel "Bandwidth (GB/s)" offset 1.75,0 font ",15"
@@ -36,7 +38,7 @@ set style line 8 lc rgb "brown" lw 3 dashtype "."
 
 
 set output "| ps2pdf - read_bw_mcl1.pdf"
-set title "BDX Xeon+FPGA Uncached READ Latency vs. Bandwidth  (MCL=1)" offset 0,.25 font ",18"
+set title platform . " Xeon+FPGA Uncached READ Latency vs. Bandwidth  (MCL=1)" offset 0,.25 font ",18"
 
 plot 'stats/lat_mcl1_vc1.dat' index 1 using ($9*2.5):($1) with lines ls 1 title "VL0", \
      'stats/lat_ord_mcl1_vc1.dat' index 1 using ($9*2.5):($1) with lines ls 2 title "VL0 with ROB", \
@@ -49,7 +51,7 @@ plot 'stats/lat_mcl1_vc1.dat' index 1 using ($9*2.5):($1) with lines ls 1 title 
 
 
 set output "| ps2pdf - read_bw_mcl4.pdf"
-set title "BDX Xeon+FPGA Uncached READ Latency vs. Bandwidth  (MCL=4)" offset 0,.25 font ",18"
+set title platform . " Xeon+FPGA Uncached READ Latency vs. Bandwidth  (MCL=4)" offset 0,.25 font ",18"
 
 plot 'stats/lat_mcl4_vc1.dat' index 1 using ($9*2.5):($1) with lines ls 1 title "VL0", \
      'stats/lat_ord_mcl4_vc1.dat' index 1 using ($9*2.5):($1) with lines ls 2 title "VL0 with ROB", \
@@ -62,7 +64,7 @@ plot 'stats/lat_mcl4_vc1.dat' index 1 using ($9*2.5):($1) with lines ls 1 title 
 
 
 set output "| ps2pdf - write_bw_mcl1.pdf"
-set title "BDX Xeon+FPGA Uncached WRITE Latency vs. Bandwidth  (MCL=1)" offset 0,.25 font ",18"
+set title platform . " Xeon+FPGA Uncached WRITE Latency vs. Bandwidth  (MCL=1)" offset 0,.25 font ",18"
 
 plot 'stats/lat_mcl1_vc1.dat' index 4 using ($11*2.5):($2) with lines ls 1 title "VL0", \
      'stats/lat_mcl1_vc2.dat' index 4 using ($11*2.5):($2) with lines ls 3 title "VH0", \
@@ -71,7 +73,7 @@ plot 'stats/lat_mcl1_vc1.dat' index 4 using ($11*2.5):($2) with lines ls 1 title
 
 
 set output "| ps2pdf - write_bw_mcl4.pdf"
-set title "BDX Xeon+FPGA Uncached WRITE Latency vs. Bandwidth  (MCL=4)" offset 0,.25 font ",18"
+set title platform . " Xeon+FPGA Uncached WRITE Latency vs. Bandwidth  (MCL=4)" offset 0,.25 font ",18"
 
 plot 'stats/lat_mcl4_vc1.dat' index 4 using ($11*2.5):($2) with lines ls 1 title "VL0", \
      'stats/lat_mcl4_vc2.dat' index 4 using ($11*2.5):($2) with lines ls 3 title "VH0", \

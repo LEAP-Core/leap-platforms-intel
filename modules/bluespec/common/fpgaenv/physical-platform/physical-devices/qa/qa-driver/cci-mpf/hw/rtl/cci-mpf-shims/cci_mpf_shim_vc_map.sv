@@ -326,6 +326,7 @@ module cci_mpf_shim_vc_map
             t_cci_mpf_ReqMemHdrParams wrfence_params;
             wrfence_params = cci_mpf_defaultReqHdrParams(0);
             wrfence_params.vc_sel = eVC_VA;
+            wrfence_params.sop = 1'b0;
 
             fiu.c1Tx.hdr = cci_mpf_c1_genReqHdr(eREQ_WRFENCE,
                                                 t_cci_clAddr'('x),

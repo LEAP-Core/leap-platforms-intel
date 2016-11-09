@@ -125,8 +125,15 @@ btInt AAL_SVC_WRAPPER::initialize()
         Manifest.Add(keyRegHandle, 20);
         Manifest.Add(ALIAFU_NVS_KEY_TARGET, ali_afu_ase);
 
+        // Using AAL_sysALI isn't pretty, but it works.  AAL version 6 and
+        // later use libALI for connecting to ASE.  AAL_sysALI is defined
+        // in version 6 and later.
+#ifdef AAL_sysALI
+        ConfigRecord.Add(AAL_FACTORY_CREATE_CONFIGRECORD_FULL_SERVICE_NAME, "libALI");
+#else
+        // AAL version 5 and earlier
         ConfigRecord.Add(AAL_FACTORY_CREATE_CONFIGRECORD_FULL_SERVICE_NAME, "libASEALIAFU");
-//        ConfigRecord.Add(AAL_FACTORY_CREATE_CONFIGRECORD_FULL_SERVICE_NAME, "libALI");
+#endif
         ConfigRecord.Add(AAL_FACTORY_CREATE_SOFTWARE_SERVICE,true);
     }
 

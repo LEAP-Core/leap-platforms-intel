@@ -134,7 +134,9 @@ module test_afu
     begin
         csr_state <= { 48'(0),
                        8'(state),
-                       6'(0),
+                       4'(0),
+                       c1NotEmpty,
+                       c0NotEmpty,
                        fiu.c1TxAlmFull,
                        fiu.c0TxAlmFull };
     end

@@ -281,7 +281,7 @@ module cci_mpf_shim_edge_fiu
         t_cci_mdata m;
         m = cci_mpf_setShimMdataTag(RESERVED_MDATA_IDX, CCI_MPF_SHIM_TAG_VTP);
 
-        pt_walk_read_hdr = cci_mpf_c0_genReqHdr(eREQ_RDLINE_S,
+        pt_walk_read_hdr = cci_mpf_c0_genReqHdr(eREQ_RDLINE_I,
                                                 pt_walk_read_addr,
                                                 m,
                                                 cci_mpf_defaultReqHdrParams(0));
@@ -418,8 +418,11 @@ module cci_mpf_shim_edge_fiu
         begin
             // Write request this cycle
             stg2_fiu_c1Tx <= stg1_fiu_c1Tx;
-            // SOP set only first first beat in a multi-beat packet
-            stg2_fiu_c1Tx.hdr.base.sop <= stg1_fiu_c1Tx_sop;
+            // SOP set only first first beat in a multi-beat packet.
+            // Only write requests use SOP.
+            stg2_fiu_c1Tx.hdr.base.sop <=
+                cci_mpf_c1TxIsWriteReq_noCheckValid(stg1_fiu_c1Tx) &&
+                stg1_fiu_c1Tx_sop;
             // Low bits of aligned address reflect the beat
             stg2_fiu_c1Tx.hdr.base.address[$bits(t_ccip_clNum)-1 : 0] <=
                 stg1_fiu_c1Tx.hdr.base.address[$bits(t_ccip_clNum)-1 : 0] |

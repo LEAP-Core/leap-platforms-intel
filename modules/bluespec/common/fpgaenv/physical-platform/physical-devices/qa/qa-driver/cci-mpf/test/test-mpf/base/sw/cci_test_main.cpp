@@ -91,7 +91,7 @@ int main(int argc, char *argv[])
 
     if (svc.m_pVCMAPService)
     {
-        cout << "Configuring VC MAP shim..." << endl;
+        cout << "# Configuring VC MAP shim..." << endl;
         svc.m_pVCMAPService->vcmapSetMapAll(vcmap_all);
         svc.m_pVCMAPService->vcmapSetMode(vcmap_enable, vcmap_dynamic);
         if (vcmap_fixed_vl0_ratio >= 0)

@@ -72,6 +72,16 @@ BEGIN_NAMESPACE(AAL)
 // Typedefs and Constants
 //=============================================================================
 
+// Raise assertion and return with specified error
+#define MPF_ASSERT_RET(__expr, __err) \
+do                                    \
+{                                     \
+    if ( !(__expr))                   \
+    {                                 \
+       ASSERT(__expr);                \
+       return __err;                  \
+    }                                 \
+}while(0)
 
 
 /////////////////////////////////////////////////////////////////////////////
@@ -173,7 +183,7 @@ ali_errnum_e MPFVTP::bufferAllocate( btWSSize             Length,
    }
    size_t nLargeBuffers = Length / LARGE_PAGE_SIZE;
    size_t nSmallBuffers = (Length % LARGE_PAGE_SIZE) / SMALL_PAGE_SIZE;
-   ASSERT( Length % SMALL_PAGE_SIZE == 0 );
+   MPF_ASSERT_RET( Length % SMALL_PAGE_SIZE == 0, ali_errnumNoMem );
 
    AAL_DEBUG(LM_AFU, "padded Length: " << std::dec << Length << std::endl);
    AAL_DEBUG(LM_AFU, std::dec << nLargeBuffers << " large and " << nSmallBuffers << " small buffers" << std::endl);
@@ -192,7 +202,7 @@ ali_errnum_e MPFVTP::bufferAllocate( btWSSize             Length,
    va_base = mmap(NULL, va_base_len,
                   PROT_READ | PROT_WRITE,
                   MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-   ASSERT(va_base != MAP_FAILED);
+   MPF_ASSERT_RET(va_base != MAP_FAILED, ali_errnumNoMem);
    AAL_DEBUG(LM_AFU, "va_base " << std::hex << std::setw(2) << std::setfill('0') << va_base << std::endl);
 
    void* va_aligned = (void*)((size_t(va_base) + LARGE_PAGE_SIZE - 1) & LARGE_PAGE_MASK);
@@ -202,7 +212,7 @@ ali_errnum_e MPFVTP::bufferAllocate( btWSSize             Length,
    size_t trim = LARGE_PAGE_SIZE - (size_t(va_aligned) - size_t(va_base));
    AAL_DEBUG(LM_AFU, "va_base_len trimmed by " << std::hex << std::setw(2) << std::setfill('0') << trim << " to " << va_base_len - trim << std::endl);
    pRet = mremap(va_base, va_base_len, va_base_len - trim, 0);
-   ASSERT(va_base == pRet);
+   MPF_ASSERT_RET(va_base == pRet, ali_errnumNoMem);
    va_base_len -= trim;
 
    // start at the end of the virtual buffer and work backwards
@@ -229,7 +239,7 @@ ali_errnum_e MPFVTP::bufferAllocate( btWSSize             Length,
       // Shrink the reserved area in order to make a hole in the virtual
       // address space.
       pRet = mremap(va_base, va_base_len, va_base_len - SMALL_PAGE_SIZE, 0);
-      ASSERT(va_base == pRet);
+      MPF_ASSERT_RET(va_base == pRet, ali_errnumNoMem);
       va_base_len -= SMALL_PAGE_SIZE;
 
       // allocate buffer
@@ -270,7 +280,7 @@ ali_errnum_e MPFVTP::bufferAllocate( btWSSize             Length,
          va_base_len = 0;
       } else {
          pRet = mremap(va_base, va_base_len, va_base_len - effPageSize, 0);
-         ASSERT(va_base == pRet);
+         MPF_ASSERT_RET(va_base == pRet, ali_errnumNoMem);
          va_base_len -= effPageSize;
       }
 
@@ -289,12 +299,12 @@ ali_errnum_e MPFVTP::bufferAllocate( btWSSize             Length,
                va_base = mmap(va_alloc, LARGE_PAGE_SIZE,
                               PROT_READ | PROT_WRITE,
                               MAP_SHARED | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
-               ASSERT(va_base == va_alloc);
+               MPF_ASSERT_RET(va_base == va_alloc, ali_errnumNoMem);
             } else {
                // this was not the last mapping (or va_base is not aligned), so
                // we still have a valid reserved space. Just resize it back up.
                pRet = mremap(va_base, va_base_len, va_base_len + LARGE_PAGE_SIZE, 0);
-               ASSERT(pRet == va_base);
+               MPF_ASSERT_RET(pRet == va_base, ali_errnumNoMem);
             }
             va_base_len += LARGE_PAGE_SIZE;
             va_alloc = (void *)(size_t(va_alloc) + LARGE_PAGE_SIZE);
@@ -358,7 +368,7 @@ ali_errnum_e MPFVTP::_allocate(btVirtAddr va, size_t pageSize, uint32_t flags)
 
    // insert VTP page table entry
    if (err == ali_errnumOK) {
-      ASSERT(va == alloc);
+      MPF_ASSERT_RET(va == alloc, ali_errnumNoMem);
       ptInsertPageMapping(btVirtAddr(va),
                           m_pALIBuffer->bufferGetIOVA((unsigned char *)va),
                           mapType,
@@ -392,7 +402,7 @@ ali_errnum_e MPFVTP::bufferFree(btVirtAddr Address)
    while (ptRemovePageMapping(va, NULL, NULL, &size, &flags)) {
       ret = m_pALIMMIO->mmioWrite64(m_dfhOffset + CCI_MPF_VTP_CSR_INVAL_PAGE_VADDR,
                                     uint64_t(va) / CL(1));
-      ASSERT(ret);
+      MPF_ASSERT_RET(ret, ali_errnumNoMem);
       if (!ret) {
          return ali_errnumNoMem;
       }
@@ -425,7 +435,7 @@ btPhysAddr MPFVTP::bufferGetIOVA( btVirtAddr Address)
    btPhysAddr pa;
 
    ret = ptTranslateVAtoPA(Address, &pa);
-   ASSERT(ret);
+   MPF_ASSERT_RET(ret, ali_errnumNoMem);
 
    return pa;
 }
@@ -438,7 +448,7 @@ btBool MPFVTP::vtpReset( void )
 {
    btBool ret = false;
    ret = m_pALIMMIO->mmioWrite64(m_dfhOffset + CCI_MPF_VTP_CSR_MODE, 2);
-   ASSERT(ret);
+   MPF_ASSERT_RET(ret, ali_errnumNoMem);
 
    if (!ret) {
       return ret;
@@ -457,7 +467,7 @@ btBool MPFVTP::_vtpEnable( void )
    // Write page table physical address CSR
    ret = m_pALIMMIO->mmioWrite64(m_dfhOffset + CCI_MPF_VTP_CSR_PAGE_TABLE_PADDR,
                                  ptGetPageTableRootPA() / CL(1));
-   ASSERT(ret);
+   MPF_ASSERT_RET(ret, ali_errnumNoMem);
 
    if (!ret) {
       return ret;
@@ -465,7 +475,7 @@ btBool MPFVTP::_vtpEnable( void )
 
    // Enable VTP
    ret = m_pALIMMIO->mmioWrite64(m_dfhOffset + CCI_MPF_VTP_CSR_MODE, 1);
-   ASSERT(ret);
+   MPF_ASSERT_RET(ret, ali_errnumNoMem);
 
    return ret;
 }
@@ -514,7 +524,7 @@ MPFVTP::ptAllocSharedPage(btWSSize length, btPhysAddr* pa)
    btVirtAddr va;
 
    err = m_pALIBuffer->bufferAllocate(length, &va);
-   ASSERT(err == ali_errnumOK && va);
+   MPF_ASSERT_RET(err == ali_errnumOK && va, NULL);
 
    *pa = m_pALIBuffer->bufferGetIOVA((unsigned char *)va);
    return va;

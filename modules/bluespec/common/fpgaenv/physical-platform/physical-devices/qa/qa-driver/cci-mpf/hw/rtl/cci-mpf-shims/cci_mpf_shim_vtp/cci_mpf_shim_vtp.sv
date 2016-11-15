@@ -365,12 +365,15 @@ module cci_mpf_shim_vtp_chan
 
     // The local cache is direct mapped.  Break a VA into cache index
     // and tag.
-    localparam N_LOCAL_CACHE_ENTRIES = `VTP_N_L1_CACHE_ENTRIES;
+    localparam N_LOCAL_4KB_CACHE_ENTRIES = `VTP_N_L1_4KB_CACHE_ENTRIES;
+    localparam N_LOCAL_2MB_CACHE_ENTRIES = `VTP_N_L1_2MB_CACHE_ENTRIES;
 
-    typedef logic [$clog2(N_LOCAL_CACHE_ENTRIES)-1 : 0] t_vtp_tlb_cache_idx;
-    typedef logic [$bits(t_tlb_4kb_va_page_idx)-$bits(t_vtp_tlb_cache_idx)-1 : 0]
+    typedef logic [$clog2(N_LOCAL_4KB_CACHE_ENTRIES)-1 : 0] t_vtp_tlb_4kb_cache_idx;
+    typedef logic [$bits(t_tlb_4kb_va_page_idx)-$bits(t_vtp_tlb_4kb_cache_idx)-1 : 0]
         t_vtp_tlb_4kb_cache_tag;
-    typedef logic [$bits(t_tlb_2mb_va_page_idx)-$bits(t_vtp_tlb_cache_idx)-1 : 0]
+
+    typedef logic [$clog2(N_LOCAL_2MB_CACHE_ENTRIES)-1 : 0] t_vtp_tlb_2mb_cache_idx;
+    typedef logic [$bits(t_tlb_2mb_va_page_idx)-$bits(t_vtp_tlb_2mb_cache_idx)-1 : 0]
         t_vtp_tlb_2mb_cache_tag;
 
     // Struct for passing state through the pipeline
@@ -392,30 +395,30 @@ module cci_mpf_shim_vtp_chan
     //
     // Functions to extract cache index and tag from state
     //
-    function automatic t_vtp_tlb_cache_idx cacheIdx4KB(t_vtp_shim_chan_state s);
+    function automatic t_vtp_tlb_4kb_cache_idx cacheIdx4KB(t_vtp_shim_chan_state s);
         t_vtp_tlb_4kb_cache_tag tag;
-        t_vtp_tlb_cache_idx idx;
+        t_vtp_tlb_4kb_cache_idx idx;
         {tag, idx} = s.cTxAddr;
         return idx;
     endfunction
 
     function automatic t_vtp_tlb_4kb_cache_tag cacheTag4KB(t_vtp_shim_chan_state s);
         t_vtp_tlb_4kb_cache_tag tag;
-        t_vtp_tlb_cache_idx idx;
+        t_vtp_tlb_4kb_cache_idx idx;
         {tag, idx} = s.cTxAddr;
         return tag;
     endfunction
 
-    function automatic t_vtp_tlb_cache_idx cacheIdx2MB(t_vtp_shim_chan_state s);
+    function automatic t_vtp_tlb_2mb_cache_idx cacheIdx2MB(t_vtp_shim_chan_state s);
         t_vtp_tlb_2mb_cache_tag tag;
-        t_vtp_tlb_cache_idx idx;
+        t_vtp_tlb_2mb_cache_idx idx;
         {tag, idx} = vtp4kbTo2mbVA(s.cTxAddr);
         return idx;
     endfunction
 
     function automatic t_vtp_tlb_2mb_cache_tag cacheTag2MB(t_vtp_shim_chan_state s);
         t_vtp_tlb_2mb_cache_tag tag;
-        t_vtp_tlb_cache_idx idx;
+        t_vtp_tlb_2mb_cache_idx idx;
         {tag, idx} = vtp4kbTo2mbVA(s.cTxAddr);
         return tag;
     endfunction
@@ -471,7 +474,7 @@ module cci_mpf_shim_vtp_chan
 
     logic cache_4kb_upd_en;
     t_tlb_4kb_pa_page_idx cache_4kb_upd_pa;
-    t_vtp_tlb_cache_idx cache_4kb_upd_idx;
+    t_vtp_tlb_4kb_cache_idx cache_4kb_upd_idx;
     t_vtp_tlb_4kb_cache_tag cache_4kb_upd_tag;
     logic cache_4kb_upd_valid;
 
@@ -492,7 +495,7 @@ module cci_mpf_shim_vtp_chan
 
     cci_mpf_prim_ram_simple_init
       #(
-        .N_ENTRIES(N_LOCAL_CACHE_ENTRIES),
+        .N_ENTRIES(N_LOCAL_4KB_CACHE_ENTRIES),
         .N_DATA_BITS($bits(t_tlb_4kb_pa_page_idx) + $bits(t_vtp_tlb_4kb_cache_tag) + 1),
         .INIT_VALUE({ t_tlb_4kb_pa_page_idx'('x), t_vtp_tlb_4kb_cache_tag'('x), 1'b0 }),
         .N_OUTPUT_REG_STAGES(1)
@@ -536,13 +539,13 @@ module cci_mpf_shim_vtp_chan
 
     logic cache_2mb_upd_en;
     t_tlb_2mb_pa_page_idx cache_2mb_upd_pa;
-    t_vtp_tlb_cache_idx cache_2mb_upd_idx;
+    t_vtp_tlb_2mb_cache_idx cache_2mb_upd_idx;
     t_vtp_tlb_2mb_cache_tag cache_2mb_upd_tag;
     logic cache_2mb_upd_valid;
 
     cci_mpf_prim_ram_simple_init
       #(
-        .N_ENTRIES(N_LOCAL_CACHE_ENTRIES),
+        .N_ENTRIES(N_LOCAL_2MB_CACHE_ENTRIES),
         .N_DATA_BITS($bits(t_tlb_2mb_pa_page_idx) + $bits(t_vtp_tlb_2mb_cache_tag) + 1),
         .INIT_VALUE({ t_tlb_2mb_pa_page_idx'('x), t_vtp_tlb_2mb_cache_tag'('x), 1'b0 }),
         .N_OUTPUT_REG_STAGES(1)
@@ -833,9 +836,9 @@ module cci_mpf_shim_vtp_chan
             cache_2mb_upd_valid <= 1'b0;
 
             cache_4kb_upd_idx <=
-                t_vtp_tlb_cache_idx'(vtp4kbPageIdxFromVA(csrs.vtp_in_inval_page));
+                t_vtp_tlb_4kb_cache_idx'(vtp4kbPageIdxFromVA(csrs.vtp_in_inval_page));
             cache_2mb_upd_idx <=
-                t_vtp_tlb_cache_idx'(vtp4kbTo2mbVA(vtp4kbPageIdxFromVA(csrs.vtp_in_inval_page)));
+                t_vtp_tlb_2mb_cache_idx'(vtp4kbTo2mbVA(vtp4kbPageIdxFromVA(csrs.vtp_in_inval_page)));
 
             cache_4kb_upd_en <= 1'b1;
             cache_2mb_upd_en <= 1'b1;

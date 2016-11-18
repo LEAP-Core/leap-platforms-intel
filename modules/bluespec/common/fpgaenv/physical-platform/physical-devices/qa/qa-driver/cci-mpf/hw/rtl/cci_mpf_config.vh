@@ -18,13 +18,28 @@
 //
 // ========================================================================
 
-`ifndef VTP_N_L1_4KB_CACHE_ENTRIES
-  `define VTP_N_L1_4KB_CACHE_ENTRIES 512
+//
+// Configure the sizes of the L1 TLB caches.  There are separate, direct
+// mapped caches for 4KB and 2MB pages and for reads (c0) and writes (c1).
+// For most workloads the default values will be optimal. For workloads
+// with extremely poor locality, larger L1 caches may improve performance.
+//
+`ifndef VTP_N_C0_L1_4KB_CACHE_ENTRIES
+  `define VTP_N_C0_L1_4KB_CACHE_ENTRIES 512
 `endif
 
-`ifndef VTP_N_L1_2MB_CACHE_ENTRIES
-  `define VTP_N_L1_2MB_CACHE_ENTRIES 512
+`ifndef VTP_N_C0_L1_2MB_CACHE_ENTRIES
+  `define VTP_N_C0_L1_2MB_CACHE_ENTRIES 512
 `endif
+
+`ifndef VTP_N_C1_L1_4KB_CACHE_ENTRIES
+  `define VTP_N_C1_L1_4KB_CACHE_ENTRIES 512
+`endif
+
+`ifndef VTP_N_C1_L1_2MB_CACHE_ENTRIES
+  `define VTP_N_C1_L1_2MB_CACHE_ENTRIES 512
+`endif
+
 
 `ifndef VTP_N_TLB_4KB_SETS
   // Making this smaller than 512 will save no space since sets are mapped

@@ -121,7 +121,9 @@ module cci_mpf_shim_vtp
     // Pass TX requests through a translation pipeline
     cci_mpf_shim_vtp_chan
       #(
-        .N_META_BITS($bits(t_if_cci_mpf_c0_Tx))
+        .N_META_BITS($bits(t_if_cci_mpf_c0_Tx)),
+        .N_LOCAL_4KB_CACHE_ENTRIES(`VTP_N_C0_L1_4KB_CACHE_ENTRIES),
+        .N_LOCAL_2MB_CACHE_ENTRIES(`VTP_N_C0_L1_2MB_CACHE_ENTRIES)
         )
       c0_vtp
        (
@@ -243,7 +245,9 @@ module cci_mpf_shim_vtp
     // Pass TX requests through a translation pipeline
     cci_mpf_shim_vtp_chan
       #(
-        .N_META_BITS($bits(t_if_cci_mpf_c1_Tx))
+        .N_META_BITS($bits(t_if_cci_mpf_c1_Tx)),
+        .N_LOCAL_4KB_CACHE_ENTRIES(`VTP_N_C1_L1_4KB_CACHE_ENTRIES),
+        .N_LOCAL_2MB_CACHE_ENTRIES(`VTP_N_C1_L1_2MB_CACHE_ENTRIES)
         )
       c1_vtp
        (
@@ -327,7 +331,9 @@ endmodule // cci_mpf_shim_vtp
 //
 module cci_mpf_shim_vtp_chan
   #(
-    parameter N_META_BITS = 0
+    parameter N_META_BITS = 0,
+    parameter N_LOCAL_4KB_CACHE_ENTRIES = 512,
+    parameter N_LOCAL_2MB_CACHE_ENTRIES = 512
     )
    (
     input  logic clk,
@@ -365,9 +371,6 @@ module cci_mpf_shim_vtp_chan
 
     // The local cache is direct mapped.  Break a VA into cache index
     // and tag.
-    localparam N_LOCAL_4KB_CACHE_ENTRIES = `VTP_N_L1_4KB_CACHE_ENTRIES;
-    localparam N_LOCAL_2MB_CACHE_ENTRIES = `VTP_N_L1_2MB_CACHE_ENTRIES;
-
     typedef logic [$clog2(N_LOCAL_4KB_CACHE_ENTRIES)-1 : 0] t_vtp_tlb_4kb_cache_idx;
     typedef logic [$bits(t_tlb_4kb_va_page_idx)-$bits(t_vtp_tlb_4kb_cache_idx)-1 : 0]
         t_vtp_tlb_4kb_cache_tag;

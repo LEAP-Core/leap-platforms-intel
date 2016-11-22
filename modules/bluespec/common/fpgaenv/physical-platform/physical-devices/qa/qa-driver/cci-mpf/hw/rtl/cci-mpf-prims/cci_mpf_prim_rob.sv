@@ -85,7 +85,7 @@ module cci_mpf_prim_rob
 
     t_idx newest;
     t_idx oldest;
-    logic validBits_rdy;
+    logic validBits_rdy[0:1];
 
     // notFull is true as long as there are at least MIN_FREE_SLOTS available
     // at the end of the ring buffer. The computation is complicated by the
@@ -93,7 +93,7 @@ module cci_mpf_prim_rob
     logic newest_ge_oldest;
     assign newest_ge_oldest = (newest >= oldest);
     assign notFull =
-        validBits_rdy &&
+        validBits_rdy[0] &&
         (({1'b0, newest} + t_idx_nowrap'(MIN_FREE_SLOTS)) < {newest_ge_oldest, oldest});
 
     // enq allocates a slot and returns the index of the slot.
@@ -157,17 +157,15 @@ module cci_mpf_prim_rob
 
     always_ff @(posedge clk)
     begin
+        // Toggle the valid_tag every trip around the ring buffer.
+        if (deq_en && (&(oldest) == 1'b1))
+        begin
+            valid_tag <= ~valid_tag;
+        end
+
         if (reset)
         begin
             valid_tag <= 1'b1;
-        end
-        else
-        begin
-            // Toggle the valid_tag every trip around the ring buffer.
-            if (deq_en && (&(oldest) == 1'b1))
-            begin
-                valid_tag <= ~valid_tag;
-            end
         end
     end
 
@@ -181,85 +179,53 @@ module cci_mpf_prim_rob
     typedef logic [2:0] t_valid_cnt;
     t_valid_cnt num_valid;
 
-    assign notEmpty = (num_valid != t_valid_cnt'(0));
+    // Valid bits array.  Memory reads are multi-cycle.  Valid bits
+    // are stored in two banks and accessed in alternate cycles to hide
+    // the latency.
+    logic [$clog2(N_ENTRIES)-2 : 0] test_valid_idx[0:1];
+    logic test_valid_value[0:1], test_valid_value_q[0:1];
+    logic test_valid_tgt;
 
-    // Read validBits array.  Memory reads are multi-cycle.  The minimum
-    // read latency is 1.  As frequencies rise or array sizes grow, two
-    // cycles become necessary.  The code self adjusts from this parameter.
-    localparam VALID_RD_LATENCY = 2;
+    // Which test_valid bank to read?
+    logic test_valid_bank;
 
-    t_idx test_valid_idx[0 : VALID_RD_LATENCY];
-    logic test_valid_tgt[0 : VALID_RD_LATENCY];
-    logic test_ignore[0 : VALID_RD_LATENCY];
-    logic test_valid_value;
-
-    // An entry is ready when the valid tag in the oldest entry matches
+    // The next entry is ready when its valid tag matches
     // the target for the current trip around the ring buffer.
+    logic test_valid_is_set;
+    assign test_valid_is_set =
+        (test_valid_tgt == test_valid_value_q[test_valid_bank]);
+
+    // Don't exceed num_valid's bounds
     logic test_is_valid;
-    assign test_is_valid =
-        (test_valid_tgt[VALID_RD_LATENCY] == test_valid_value) &&
-        // Don't exceed num_valid's bounds
-        (&(num_valid) != 1'b1) &&
-        // Pipeline was rewound due to previous invalid
-        ! test_ignore[VALID_RD_LATENCY];
+    assign test_is_valid = test_valid_is_set && (&(num_valid) != 1'b1);
+
+    assign notEmpty = (num_valid != t_valid_cnt'(0)) || test_valid_is_set;
 
     //
-    // The validBits memory has a VALID_RD_LATENCY cycle latency, making
-    // the tracking of valid entries complicated if we want to maintain
-    // full throughput.  The loop here speculates that tested entries are
-    // valid, rewinds the pipeline when invalid entries are found and
-    // retries.
+    // Update the pointer to the oldest valid entry.
     //
     always_ff @(posedge clk)
     begin
-        if (reset || ! validBits_rdy)
+        if (test_is_valid)
         begin
-            for (int i = 0; i <= VALID_RD_LATENCY; i = i + 1)
+            test_valid_idx[test_valid_bank] <= test_valid_idx[test_valid_bank] + 1;
+
+            // Invert the comparison tag when wrapping, just like valid_tag.
+            if (test_valid_bank && (&(test_valid_idx[1]) == 1'b1))
             begin
-                test_valid_idx[i] <= t_idx'(0);
-                test_valid_tgt[i] <= 1'b1;
-                test_ignore[i] <= 1'b1;
+                test_valid_tgt <= ~test_valid_tgt;
             end
 
-            test_ignore[0] <= 1'b0;
+            test_valid_bank <= ~test_valid_bank;
         end
-        else
+
+        if (reset || ! validBits_rdy[0])
         begin
-            for (int i = 0; i < VALID_RD_LATENCY; i = i + 1)
-            begin
-                // Advance the pipeline
-                test_valid_idx[i+1] <= test_valid_idx[i];
-                test_valid_tgt[i+1] <= test_valid_tgt[i];
-                test_ignore[i+1] <= test_ignore[i];
-            end
+            test_valid_idx[0] <= 0;
+            test_valid_idx[1] <= 0;
 
-            if (! test_is_valid && ! test_ignore[VALID_RD_LATENCY])
-            begin
-                // Failed test.  The test result comes VALID_RD_LATENCY
-                // cycles after the index tested was loaded.  Roll back
-                // and retry.
-                test_valid_idx[0] <= test_valid_idx[VALID_RD_LATENCY];
-                test_valid_tgt[0] <= test_valid_tgt[VALID_RD_LATENCY];
-
-                // Discard any positions in the pipeline after the failed
-                // slot since they can't be considered ready until the
-                // previous slot is ready.
-                for (int i = 1; i <= VALID_RD_LATENCY; i = i + 1)
-                begin
-                    test_ignore[i] <= 1'b1;
-                end
-            end
-            else
-            begin
-                // Speculate that the location being tested will hit.
-                test_valid_idx[0] <= test_valid_idx[0] + t_idx'(1);
-
-                // Invert the comparison tag when wrapping, just like valid_tag.
-                if (&(test_valid_idx[0]) == 1'b1)
-                begin
-                    test_valid_tgt[0] <= ~test_valid_tgt[0];
-                end
-            end
+            test_valid_bank <= 1'b0;
+            test_valid_tgt <= 1'b1;
         end
     end
 
@@ -279,32 +245,48 @@ module cci_mpf_prim_rob
         end
     end
 
-    cci_mpf_prim_ram_simple_init
-      #(
-        .N_ENTRIES(N_ENTRIES),
-        .N_DATA_BITS(1),
-        .N_OUTPUT_REG_STAGES(VALID_RD_LATENCY - 1),
-        .REGISTER_WRITES(1),
-        .INIT_VALUE(1'b0)
-        )
-      validBits
-       (
-        .clk,
-        .reset,
-        .rdy(validBits_rdy),
+    genvar p;
+    generate
+        for (p = 0; p <= 1; p = p + 1)
+        begin : r
+            cci_mpf_prim_lutram_init
+              #(
+                // Two banks, each with half the entries
+                .N_ENTRIES(N_ENTRIES >> 1),
+                .N_DATA_BITS(1),
+                .INIT_VALUE(1'b0)
+                )
+              validBits
+               (
+                .clk,
+                .reset,
+                .rdy(validBits_rdy[p]),
 
-        .raddr(test_valid_idx[0]),
-        .rdata(test_valid_value),
+                .raddr(test_valid_idx[p]),
+                .rdata(test_valid_value[p]),
 
-        .waddr(enqDataIdx),
-        .wen(enqData_en),
-        // Indicate the entry is valid using the appropriate tag to
-        // mark validity.  Indices less than oldest are very young
-        // and have the tag for the next ring buffer loop.  Indicies
-        // greater than or equal to oldest use the tag for the current
-        // trip.
-        .wdata((enqDataIdx >= oldest) ? valid_tag : ~valid_tag)
-        );
+                // Use the low bit of the data index as a bank select bit
+                .wen(enqData_en && (enqDataIdx[0] == p[0])),
+                .waddr(enqDataIdx[1 +: $bits(enqDataIdx)-1]),
+                // Indicate the entry is valid using the appropriate tag to
+                // mark validity.  Indices less than oldest are very young
+                // and have the tag for the next ring buffer loop.  Indicies
+                // greater than or equal to oldest use the tag for the current
+                // trip.
+                .wdata((enqDataIdx >= oldest) ? valid_tag : ~valid_tag)
+                );
+
+            always_ff @(posedge clk)
+            begin
+                test_valid_value_q[p] <= test_valid_value[p];
+
+                if (reset)
+                begin
+                    test_valid_value_q[p] <= 1'b0;
+                end
+            end
+        end
+    endgenerate
 
 
     // ====================================================================

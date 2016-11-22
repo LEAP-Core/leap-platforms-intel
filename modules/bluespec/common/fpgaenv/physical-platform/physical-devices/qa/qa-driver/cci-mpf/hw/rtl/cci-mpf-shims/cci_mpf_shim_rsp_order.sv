@@ -236,18 +236,13 @@ module cci_mpf_shim_rsp_order
             t_cci_clNum rd_rob_rsp_cl_num;
             t_cci_clData rd_rob_rsp_data;
 
-            always_ff @(posedge clk)
+            always_comb
             begin
-                rd_rob_rsp_en <= cci_c0Rx_isReadRsp(fiu.c0Rx);
-                rd_rob_rsp_idx <= t_req_idx'(fiu.c0Rx.hdr.mdata) +
-                                  t_req_idx'(fiu.c0Rx.hdr.cl_num);
-                rd_rob_rsp_cl_num <= fiu.c0Rx.hdr.cl_num;
-                rd_rob_rsp_data <= fiu.c0Rx.data;
-
-                if (reset)
-                begin
-                    rd_rob_rsp_en <= 1'b0;
-                end
+                rd_rob_rsp_en = cci_c0Rx_isReadRsp(fiu.c0Rx);
+                rd_rob_rsp_idx = t_req_idx'(fiu.c0Rx.hdr.mdata) +
+                                 t_req_idx'(fiu.c0Rx.hdr.cl_num);
+                rd_rob_rsp_cl_num = fiu.c0Rx.hdr.cl_num;
+                rd_rob_rsp_data = fiu.c0Rx.data;
             end
 
             t_cci_mdata rd_sop_mdata;

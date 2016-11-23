@@ -108,7 +108,8 @@ module cci_mpf_svc_vtp_pipe
     t_cci_mpf_shim_vtp_lookup_req lookup_req;
     t_cci_mpf_shim_vtp_port_idx lookup_req_port;
     logic lookup_req_en;
-    logic lookup_req_notFull;
+    logic lookup_req_almostFull;
+    assign lookup_req_notFull = ~lookup_req_almostFull;
 
     t_cci_mpf_shim_vtp_lookup_req lookup_rsp;
     t_cci_mpf_shim_vtp_port_idx lookup_rsp_port;
@@ -129,13 +130,13 @@ module cci_mpf_svc_vtp_pipe
 
         .enq_data({ lookup_req, lookup_req_port }),
         .enq_en(lookup_req_en),
-        .notFull(lookup_req_notFull),
+        .almostFull(lookup_req_almostFull),
 
         .first({ lookup_rsp, lookup_rsp_port }),
         .deq_en(tlb_if.lookupRspValid || tlb_if.lookupMiss),
         // Ignored since TLB will respond only when there is an entry here
         .notEmpty(),
-        .almostFull()
+        .notFull()
         );
 
 

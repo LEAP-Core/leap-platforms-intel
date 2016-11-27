@@ -148,7 +148,8 @@ module cci_mpf_shim_buffer_afu
         .N_DATA_BITS(C0TX_BITS),
         .N_ENTRIES(N_ENTRIES),
         .THRESHOLD(THRESHOLD),
-        .REGISTER_OUTPUT(REGISTER_OUTPUT)
+        .REGISTER_OUTPUT(REGISTER_OUTPUT),
+        .BYPASS_TO_REGISTER(ENABLE_C0_BYPASS)
         )
       c0_fifo(.clk,
               .reset(afu_buf.reset),

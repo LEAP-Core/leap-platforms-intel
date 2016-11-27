@@ -41,7 +41,10 @@ module cci_mpf_prim_fifo_lutram
     parameter THRESHOLD = 1,
 
     // Register output if non-zero
-    parameter REGISTER_OUTPUT = 0
+    parameter REGISTER_OUTPUT = 0,
+    // Bypass to register when FIFO and register are empty?  This parameter
+    // has meaning only when REGISTER_OUTPUT is set.
+    parameter BYPASS_TO_REGISTER = 0
     )
    (
     input  logic clk,
@@ -61,6 +64,8 @@ module cci_mpf_prim_fifo_lutram
     logic fifo_notEmpty;
     logic [N_DATA_BITS-1 : 0] fifo_first;
 
+    logic enq_bypass_en;
+
     cci_mpf_prim_fifo_lutram_base
       #(
         .N_DATA_BITS(N_DATA_BITS),
@@ -72,7 +77,7 @@ module cci_mpf_prim_fifo_lutram
         .clk,
         .reset,
         .enq_data,
-        .enq_en,
+        .enq_en(enq_en && ! enq_bypass_en),
         .notFull,
         .almostFull,
         .first(fifo_first),
@@ -86,6 +91,7 @@ module cci_mpf_prim_fifo_lutram
             assign first = fifo_first;
             assign notEmpty = fifo_notEmpty;
             assign fifo_deq = deq_en;
+            assign enq_bypass_en = 1'b0;
         end
         else
         begin : r
@@ -99,9 +105,22 @@ module cci_mpf_prim_fifo_lutram
             assign notEmpty = first_reg_valid;
             assign fifo_deq = fifo_notEmpty && (deq_en || ! first_reg_valid);
 
+            // Bypass to outbound register it will be empty and the FIFO
+            // is empty.
+            assign enq_bypass_en = (BYPASS_TO_REGISTER != 0) &&
+                                   (deq_en || ! first_reg_valid) &&
+                                   ! fifo_notEmpty;
+
             always_ff @(posedge clk)
             begin
-                if (deq_en || ! first_reg_valid)
+                if (enq_bypass_en)
+                begin
+                    // Bypass around FIFO when the FIFO is empty and
+                    // BYPASS_TO_REGISTER is enabled.
+                    first_reg_valid <= enq_en;
+                    first_reg <= enq_data;
+                end
+                else if (deq_en || ! first_reg_valid)
                 begin
                     first_reg_valid <= fifo_notEmpty;
                     first_reg <= fifo_first;

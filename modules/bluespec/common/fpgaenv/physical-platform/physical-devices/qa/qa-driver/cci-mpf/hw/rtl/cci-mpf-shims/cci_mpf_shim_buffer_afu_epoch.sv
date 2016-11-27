@@ -142,9 +142,7 @@ module cci_mpf_shim_buffer_afu_epoch
     logic c1Tx_incr_epoch;
 
     logic c0_epoch_in_en;
-    logic c0_epoch_in_en_q;
     logic c1_epoch_in_en;
-    logic c1_epoch_in_en_q;
 
     logic rdy;
     logic c0_epoch_deq_almostFull;
@@ -182,21 +180,21 @@ module cci_mpf_shim_buffer_afu_epoch
     //
     // Update epoch counters as new requests arrive from the AFU.
     //
-    t_epoch c0_epoch_in;
-    t_epoch c1_epoch_in;
+    t_epoch c0_epoch_in, c0_epoch_in_next;
+    t_epoch c1_epoch_in, c1_epoch_in_next;
 
-    always_ff @(posedge clk)
+    always_comb
     begin
-        // If c1 epoch was updated last cycle make c0 epoch match
-        c0_epoch_in <= c1_epoch_in;
-
-        // Incrementing c0 causes c1 to increment this cycle too
         if (c0Tx_incr_epoch)
         begin
             // c0 comes from last cycle's c1 epoch since c1 may have been
             // updated on its own last cycle
-            c0_epoch_in <= c1_epoch_in + t_epoch'(1);
-            c1_epoch_in <= c1_epoch_in + t_epoch'(1);
+            c0_epoch_in_next = c1_epoch_in + t_epoch'(1);
+        end
+        else
+        begin
+            // If c1 epoch was updated last cycle make c0 epoch match
+            c0_epoch_in_next = c1_epoch_in;
         end
 
         if (c1Tx_incr_epoch)
@@ -204,20 +202,28 @@ module cci_mpf_shim_buffer_afu_epoch
             // Increment by 2 if both c0 and c1 need updates this cycle,
             // in which case both references this cycle are to the same
             // address.  If only c1 is updated then add just 1.
-            c1_epoch_in <= c1_epoch_in +
-                           t_epoch'(c0Tx_incr_epoch ? 2'd2 : 2'd1);
+            c1_epoch_in_next = c1_epoch_in + t_epoch'(c0Tx_incr_epoch ? 2'd2 : 2'd1);
         end
+        else if (c0Tx_incr_epoch)
+        begin
+            // Incrementing c0 causes c1 to increment this cycle too
+            c1_epoch_in_next = c1_epoch_in + t_epoch'(1);
+        end
+        else
+        begin
+            c1_epoch_in_next = c1_epoch_in;
+        end
+    end
 
-        c0_epoch_in_en_q <= c0_epoch_in_en;
-        c1_epoch_in_en_q <= c1_epoch_in_en;
+    always_ff @(posedge clk)
+    begin
+        c0_epoch_in <= c0_epoch_in_next;
+        c1_epoch_in <= c1_epoch_in_next;
 
         if (reset)
         begin
             c0_epoch_in <= t_epoch'(0);
             c1_epoch_in <= t_epoch'(0);
-
-            c0_epoch_in_en_q <= 1'b0;
-            c1_epoch_in_en_q <= 1'b0;
         end
     end
 
@@ -302,15 +308,16 @@ module cci_mpf_shim_buffer_afu_epoch
         .N_DATA_BITS($bits(t_epoch)),
         .N_ENTRIES(N_ENTRIES),
         .THRESHOLD(THRESHOLD),
-        .REGISTER_OUTPUT(1)
+        .REGISTER_OUTPUT(1),
+        .BYPASS_TO_REGISTER(1)
         )
       c0tx_epoch_fifo
        (
         .clk,
         .reset,
 
-        .enq_data(c0_epoch_in),
-        .enq_en(c0_epoch_in_en_q),
+        .enq_data(c0_epoch_in_next),
+        .enq_en(c0_epoch_in_en),
         .notFull(),
         // almostFull driven by request FIFO above
         .almostFull(),
@@ -349,15 +356,16 @@ module cci_mpf_shim_buffer_afu_epoch
         .N_DATA_BITS($bits(t_epoch)),
         .N_ENTRIES(N_ENTRIES),
         .THRESHOLD(THRESHOLD),
-        .REGISTER_OUTPUT(1)
+        .REGISTER_OUTPUT(1),
+        .BYPASS_TO_REGISTER(1)
         )
       c1tx_epoch_fifo
        (
         .clk,
         .reset,
 
-        .enq_data(c1_epoch_in),
-        .enq_en(c1_epoch_in_en_q),
+        .enq_data(c1_epoch_in_next),
+        .enq_en(c1_epoch_in_en),
         .notFull(),
         // almostFull driven by request FIFO above
         .almostFull(),
@@ -580,22 +588,6 @@ module cci_mpf_shim_buffer_afu_epoch_hazards
 
 
     //
-    // Signal output valid to client on the last pipeline stage.
-    //
-    always_ff @(posedge clk)
-    begin
-        c0Tx_en <= cci_mpf_c0TxIsValid(c0Tx[3]);
-        c1Tx_en <= cci_mpf_c1TxIsValid(c1Tx[3]);
-
-        if (reset)
-        begin
-            c0Tx_en <= 1'b0;
-            c1Tx_en <= 1'b0;
-        end
-    end
-
-
-    //
     // The filter is a set of counters with the bucket sizes set based on
     // the depth of the FIFO.  The client should set the counters large enough
     // that they never overflow.
@@ -760,10 +752,6 @@ module cci_mpf_shim_buffer_afu_epoch_hazards
 
     always_ff @(posedge clk)
     begin
-        // Increment epoch if any hazards are detected
-        c0Tx_incr_epoch <= c0_hazard;
-        c1Tx_incr_epoch <= c1_hazard;
-
         if (c0_hazard)
         begin
             c1_hazard_was_last <= 1'b0;
@@ -783,14 +771,21 @@ module cci_mpf_shim_buffer_afu_epoch_hazards
 
         if (reset)
         begin
-            c0Tx_incr_epoch <= 1'b0;
-            c1Tx_incr_epoch <= 1'b0;
-
             c1_hazard_was_last <= 1'b0;
 
             c0_active_this_epoch <= 1'b0;
             c1_active_this_epoch <= 1'b0;
         end
+    end
+
+    always_comb
+    begin
+        // Increment epoch if any hazards are detected
+        c0Tx_incr_epoch = c0_hazard;
+        c1Tx_incr_epoch = c1_hazard;
+
+        c0Tx_en = cci_mpf_c0TxIsValid(c0Tx[3]);
+        c1Tx_en = cci_mpf_c1TxIsValid(c1Tx[3]);
     end
 
 endmodule // cci_mpf_shim_buffer_afu_epoch_hazards

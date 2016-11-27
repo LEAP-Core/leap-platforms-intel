@@ -1018,11 +1018,11 @@ module test_afu
         .clk,
         .reset,
 
-        .enq_data({lineToTag(fiu.c0Rx.data), fiu.c0Rx.data}),
+        .enq_data({lineToTag(c0Rx.data), c0Rx.data}),
         // mdata[0] indicates whether the read is checked
-        .enq_en(cci_c0Rx_isReadRsp(fiu.c0Rx) &&
-                fiu.c0Rx.hdr.mdata[0] &&
-                (fiu.c0Rx.hdr.cl_num == fiu.c0Rx.hdr.mdata[1 +: $bits(t_cci_clNum)])),
+        .enq_en(cci_c0Rx_isReadRsp(c0Rx) &&
+                c0Rx.hdr.mdata[0] &&
+                (c0Rx.hdr.cl_num == c0Rx.hdr.mdata[1 +: $bits(t_cci_clNum)])),
         .notFull(),
         .almostFull(),
 

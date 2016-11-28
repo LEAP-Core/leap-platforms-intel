@@ -183,7 +183,7 @@ module cci_mpf_prim_rob
     // are stored in two banks and accessed in alternate cycles to hide
     // the latency.
     logic [$clog2(N_ENTRIES)-2 : 0] test_valid_idx[0:1];
-    logic test_valid_value[0:1], test_valid_value_q[0:1];
+    logic test_valid_value_q[0:1];
     logic test_valid_tgt;
 
     // Which test_valid bank to read?
@@ -249,12 +249,13 @@ module cci_mpf_prim_rob
     generate
         for (p = 0; p <= 1; p = p + 1)
         begin : r
-            cci_mpf_prim_lutram_init
+            cci_mpf_prim_lutram_init_multi
               #(
                 // Two banks, each with half the entries
                 .N_ENTRIES(N_ENTRIES >> 1),
                 .N_DATA_BITS(1),
-                .INIT_VALUE(1'b0)
+                .INIT_VALUE(1'b0),
+                .N_CHUNKS(4)
                 )
               validBits
                (
@@ -263,7 +264,7 @@ module cci_mpf_prim_rob
                 .rdy(validBits_rdy[p]),
 
                 .raddr(test_valid_idx[p]),
-                .rdata(test_valid_value[p]),
+                .T1_rdata(test_valid_value_q[p]),
 
                 // Use the low bit of the data index as a bank select bit
                 .wen(enqData_en && (enqDataIdx[0] == p[0])),
@@ -275,16 +276,6 @@ module cci_mpf_prim_rob
                 // trip.
                 .wdata((enqDataIdx >= oldest) ? valid_tag : ~valid_tag)
                 );
-
-            always_ff @(posedge clk)
-            begin
-                test_valid_value_q[p] <= test_valid_value[p];
-
-                if (reset)
-                begin
-                    test_valid_value_q[p] <= 1'b0;
-                end
-            end
         end
     endgenerate
 

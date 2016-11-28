@@ -108,7 +108,7 @@ module cci_mpf_svc_vtp_pipe
     t_cci_mpf_shim_vtp_lookup_req lookup_req;
     t_cci_mpf_shim_vtp_port_idx lookup_req_port;
     logic lookup_req_en;
-    logic lookup_req_almostFull;
+    logic lookup_req_almostFull, lookup_req_notFull;
     assign lookup_req_notFull = ~lookup_req_almostFull;
 
     t_cci_mpf_shim_vtp_lookup_req lookup_rsp;

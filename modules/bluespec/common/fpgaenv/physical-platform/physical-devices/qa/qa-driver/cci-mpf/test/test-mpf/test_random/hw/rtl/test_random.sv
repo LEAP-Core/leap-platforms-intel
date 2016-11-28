@@ -798,7 +798,7 @@ module test_afu
                 fiu.c1Tx.hdr.base.sop <= 1'b1;
                 fiu.c1Tx.hdr.base.cl_len <= eCL_LEN_1;
                 fiu.c1Tx.hdr.pwrite.isPartialWrite <= 1'b0;
-                fiu.c1Tx.data <= t_cci_clData'(1);
+                fiu.c1Tx.data[63:0] <= t_cci_clData'(1);
             end
 
             // Error termination: signal error in status memory
@@ -809,7 +809,7 @@ module test_afu
                 fiu.c1Tx.hdr.base.sop <= 1'b1;
                 fiu.c1Tx.hdr.base.cl_len <= eCL_LEN_1;
                 fiu.c1Tx.hdr.pwrite.isPartialWrite <= 1'b0;
-                fiu.c1Tx.data <= t_cci_clData'(2);
+                fiu.c1Tx.data[63:0] <= t_cci_clData'(2);
             end
         end
 

@@ -101,7 +101,7 @@ module cci_mpf_shim_detect_eop
 
     logic rd_rsp_pkt_eop;
 
-    logic rd_rsp_is_tracked[0:2];
+    logic rd_rsp_is_tracked[0:1];
     assign rd_rsp_is_tracked[0] = cci_c0Rx_isReadRsp(fiu.c0Rx) &&
                                   ! fiu.c0Rx.hdr.mdata[RESERVED_MDATA_IDX];
 
@@ -124,8 +124,8 @@ module cci_mpf_shim_detect_eop
         .rspIdx(t_req_idx'(fiu.c0Rx.hdr.mdata)),
         .rspIsPacked(1'b0),
 
-        .T2_pkt_eop(rd_rsp_pkt_eop),
-        .T2_rspLen()
+        .T1_pkt_eop(rd_rsp_pkt_eop),
+        .T1_rspLen()
         );
 
 
@@ -138,24 +138,22 @@ module cci_mpf_shim_detect_eop
     //
     // Responses
     //
-    t_if_cci_c0_Rx c0Rx[0:2];
+    t_if_cci_c0_Rx c0Rx[0:1];
     assign c0Rx[0] = fiu.c0Rx;
 
     always_ff @(posedge clk)
     begin
-        c0Rx[1:2] <= c0Rx[0:1];
-        rd_rsp_is_tracked[1:2] <= rd_rsp_is_tracked[0:1];
+        c0Rx[1] <= c0Rx[0];
+        rd_rsp_is_tracked[1] <= rd_rsp_is_tracked[0];
     end
 
-    always_ff @(posedge clk)
+    always_comb
     begin
-        if (rd_rsp_is_tracked[2])
+        afu.c0Rx = c0Rx[1];
+
+        if (rd_rsp_is_tracked[1])
         begin
-            afu.c0Rx <= cci_mpf_c0Rx_updEOP(c0Rx[2], rd_rsp_pkt_eop);
-        end
-        else
-        begin
-            afu.c0Rx <= c0Rx[2];
+            afu.c0Rx = cci_mpf_c0Rx_updEOP(afu.c0Rx, rd_rsp_pkt_eop);
         end
     end
 
@@ -191,8 +189,8 @@ module cci_mpf_shim_detect_eop
         .rspIdx(t_req_idx'(fiu.c1Rx.hdr.mdata)),
         .rspIsPacked(fiu.c1Rx.hdr.format),
 
-        .T2_pkt_eop(wr_rsp_pkt_eop),
-        .T2_rspLen(wr_rsp_packet_len)
+        .T1_pkt_eop(wr_rsp_pkt_eop),
+        .T1_rspLen(wr_rsp_packet_len)
         );
 
 
@@ -205,27 +203,27 @@ module cci_mpf_shim_detect_eop
     //
     // Responses
     //
-    t_if_cci_c1_Rx c1Rx[0:2];
+    t_if_cci_c1_Rx c1Rx[0:1];
     assign c1Rx[0] = fiu.c1Rx;
 
     always_ff @(posedge clk)
     begin
-        c1Rx[1:2] <= c1Rx[0:1];
+        c1Rx[1] <= c1Rx[0];
     end
 
     always_ff @(posedge clk)
     begin
-        afu.c1Rx <= c1Rx[2];
+        afu.c1Rx <= c1Rx[1];
 
         // If wr_rsp_pkt_eop is 0 then this flit is a write response and it
         // isn't the end of the packet.  Drop it.  The response will be
         // merged into a single flit.
         afu.c1Rx.rspValid <=
-            c1Rx[2].rspValid &&
-            (wr_rsp_pkt_eop || ! cci_c1Rx_isWriteRsp(c1Rx[2]));
+            c1Rx[1].rspValid &&
+            (wr_rsp_pkt_eop || ! cci_c1Rx_isWriteRsp(c1Rx[1]));
 
         // Merge write responses for a packet into single response.
-        if (cci_c1Rx_isWriteRsp(c1Rx[2]))
+        if (cci_c1Rx_isWriteRsp(c1Rx[1]))
         begin
             afu.c1Rx.hdr.format <= 1'b1;
             afu.c1Rx.hdr.cl_num <= wr_rsp_packet_len;
@@ -272,11 +270,12 @@ module cci_mpf_shim_detect_eop_track_flits
     //
 
     // Is response the end of the packet?
-    output logic T2_pkt_eop,
+    output logic T1_pkt_eop,
     // Full length of the flit's packet
-    output t_cci_clNum T2_rspLen
+    output t_cci_clNum T1_rspLen
     );
 
+    typedef logic [$clog2(MAX_ACTIVE_REQS)-1 : 0] t_heap_idx;
 
     //
     // Requests
@@ -284,136 +283,90 @@ module cci_mpf_shim_detect_eop_track_flits
 
     // Packet size of outstanding requests.  Separating this from the count
     // of responses avoids dealing with multiple writers to either memory.
-    cci_mpf_prim_ram_simple
+
+    // Write is registered for timing.
+    logic req_en_q;
+    t_heap_idx reqIdx_q;
+    t_cci_clNum reqLen_q;
+
+    cci_mpf_prim_lutram_multi
       #(
         .N_ENTRIES(MAX_ACTIVE_REQS),
         .N_DATA_BITS($bits(t_cci_clNum)),
-        .N_OUTPUT_REG_STAGES(1)
+        .READ_DURING_WRITE("DONT_CARE"),
+        .N_CHUNKS(4)
         )
       packet_len
        (
         .clk,
+        .reset,
 
         .raddr(rspIdx),
-        .rdata(T2_rspLen),
+        .T1_rdata(T1_rspLen),
 
-        .waddr(reqIdx),
-        .wen(req_en),
-        .wdata(reqLen)
+        .waddr(reqIdx_q),
+        .wen(req_en_q),
+        .wdata(reqLen_q)
         );
+
+    always_ff @(posedge clk)
+    begin
+        reqIdx_q <= reqIdx;
+        req_en_q <= req_en;
+        reqLen_q <= reqLen;
+        if (reset)
+        begin
+            req_en_q <= 1'b0;
+        end
+    end
 
 
     //
     // Responses
     //
 
-    //
-    // Count responses per packet in block RAM.  Block RAM certainly isn't
-    // needed for capacity but it is for speed.  Because the RAM has
-    // 2 cycle latency we have to track updates that are in flight in
-    // order to maintain accurate counts pipelined updates that haven't
-    // reached memory.
-    //
-    logic p_rsp_en[0:2];
-    logic [$clog2(MAX_ACTIVE_REQS)-1 : 0] p_rspIdx[0:2];
-    logic p_rspIsPacked[0:2];
-    t_cci_clNum p_num_inflight_same_idx[0:2];
-    logic inflight_req_match[1:2];
+    logic T1_rspIsPacked;
+    t_heap_idx T1_rspIdx;
+    logic T1_rsp_en;
+    t_cci_clNum T1_wdata;
+    t_cci_clNum T1_flitCnt;
 
-    always_comb
-    begin
-        p_rsp_en[0] = rsp_en;
-        p_rspIdx[0] = rspIdx;
-        p_rspIsPacked[0] = rspIsPacked;
-
-        inflight_req_match[1] = (p_rsp_en[1] && (p_rspIdx[1] == rspIdx));
-        inflight_req_match[2] = (p_rsp_en[2] && (p_rspIdx[2] == rspIdx));
-
-        if (inflight_req_match[1] && inflight_req_match[2])
-        begin
-            // Both earlier requests are to the new index
-            p_num_inflight_same_idx[0] = t_cci_clNum'(2);
-        end
-        else if (inflight_req_match[1] || inflight_req_match[2])
-        begin
-            // One earlier requests is to the new index
-            p_num_inflight_same_idx[0] = t_cci_clNum'(1);
-        end
-        else
-        begin
-            // The new request is unique
-            p_num_inflight_same_idx[0] = t_cci_clNum'(0);
-        end
-    end
-
-    always_ff @(posedge clk)
-    begin
-        p_rsp_en[1:2] <= p_rsp_en[0:1];
-
-        p_rspIdx[1:2] <= p_rspIdx[0:1];
-        p_rspIsPacked[1:2] <= p_rspIsPacked[0:1];
-        p_num_inflight_same_idx[1:2] <= p_num_inflight_same_idx[0:1];
-
-        if (reset)
-        begin
-            p_rsp_en[1] <= 1'b0;
-            p_rsp_en[2] <= 1'b0;
-        end
-    end
-
-    //
-    // Counter array of active requests
-    //
-    t_cci_clNum rcvd_cnt;
-    t_cci_clNum rcvd_cnt_upd;
-    logic rcvd_wen;
-
-    cci_mpf_prim_ram_simple_init
+    cci_mpf_prim_lutram_init_multi
       #(
         .N_ENTRIES(MAX_ACTIVE_REQS),
         .N_DATA_BITS($bits(t_cci_clNum)),
-        .N_OUTPUT_REG_STAGES(1),
-        .REGISTER_WRITES(1)
+        .READ_DURING_WRITE("NEW_DATA"),
+        .N_CHUNKS(4)
         )
-      wr_rsp_cnt
+      flit_cnt
        (
         .clk,
         .reset,
         .rdy,
 
         .raddr(rspIdx),
-        .rdata(rcvd_cnt),
+        .T1_rdata(T1_flitCnt),
 
-        .waddr(p_rspIdx[2]),
-        .wen(p_rsp_en[2]),
-        .wdata(rcvd_cnt_upd)
+        .waddr(T1_rspIdx),
+        .wen(T1_rsp_en),
+        .wdata(T1_wdata)
         );
 
-
-    // Update count as packets are received
-    t_cci_clNum num_received;
-
-    always_comb
+    always_ff @(posedge clk)
     begin
-        T2_pkt_eop = 1'b0;
-        rcvd_cnt_upd = 'x;
-
-        num_received = rcvd_cnt + p_num_inflight_same_idx[2];
-
-        if (p_rsp_en[2])
+        T1_rspIsPacked <= rspIsPacked;
+        T1_rspIdx <= rspIdx;
+        T1_rsp_en <= rsp_en;
+        if (reset)
         begin
-            if (p_rspIsPacked[2] || (num_received == T2_rspLen))
-            begin
-                // Only one response or last packet.  Done!
-                rcvd_cnt_upd = t_cci_clNum'(0);
-                T2_pkt_eop = 1'b1;
-            end
-            else
-            begin
-                // One flit received.  Keep counting.
-                rcvd_cnt_upd = num_received + t_cci_clNum'(1);
-            end
+            T1_rsp_en <= 1'b0;
         end
     end
+
+    // Is the packet complete?
+    assign T1_pkt_eop = (T1_rspLen == T1_flitCnt) || T1_rspIsPacked;
+
+    // Update internal flit count.
+    assign T1_wdata = (T1_pkt_eop ? t_heap_idx'(0) : T1_flitCnt + t_heap_idx'(1));
 
 endmodule // cci_mpf_shim_detect_eop_track_flits

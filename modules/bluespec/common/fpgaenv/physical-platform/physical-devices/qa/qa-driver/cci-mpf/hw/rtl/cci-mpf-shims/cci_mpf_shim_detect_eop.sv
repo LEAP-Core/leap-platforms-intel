@@ -289,12 +289,12 @@ module cci_mpf_shim_detect_eop_track_flits
     t_heap_idx reqIdx_q;
     t_cci_clNum reqLen_q;
 
-    cci_mpf_prim_lutram_multi
+    cci_mpf_prim_lutram_banked
       #(
         .N_ENTRIES(MAX_ACTIVE_REQS),
         .N_DATA_BITS($bits(t_cci_clNum)),
         .READ_DURING_WRITE("DONT_CARE"),
-        .N_CHUNKS(4)
+        .N_BANKS(4)
         )
       packet_len
        (
@@ -331,12 +331,12 @@ module cci_mpf_shim_detect_eop_track_flits
     t_cci_clNum T1_wdata;
     t_cci_clNum T1_flitCnt;
 
-    cci_mpf_prim_lutram_init_multi
+    cci_mpf_prim_lutram_init_banked
       #(
         .N_ENTRIES(MAX_ACTIVE_REQS),
         .N_DATA_BITS($bits(t_cci_clNum)),
         .READ_DURING_WRITE("NEW_DATA"),
-        .N_CHUNKS(4)
+        .N_BANKS(4)
         )
       flit_cnt
        (

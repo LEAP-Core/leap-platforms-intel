@@ -185,6 +185,7 @@ module cci_mpf_prim_rob
     logic [$clog2(N_ENTRIES)-2 : 0] test_valid_idx[0:1];
     logic test_valid_value_q[0:1];
     logic test_valid_tgt;
+    logic test_valid_bypass_q[0:1];
 
     // Which test_valid bank to read?
     logic test_valid_bank;
@@ -193,13 +194,14 @@ module cci_mpf_prim_rob
     // the target for the current trip around the ring buffer.
     logic test_valid_is_set;
     assign test_valid_is_set =
-        (test_valid_tgt == test_valid_value_q[test_valid_bank]);
+        (test_valid_tgt == test_valid_value_q[test_valid_bank]) ||
+        test_valid_bypass_q[test_valid_bank];
 
     // Don't exceed num_valid's bounds
     logic test_is_valid;
     assign test_is_valid = test_valid_is_set && (&(num_valid) != 1'b1);
 
-    assign notEmpty = (num_valid != t_valid_cnt'(0)) || test_valid_is_set;
+    assign notEmpty = (num_valid != t_valid_cnt'(0));
 
     //
     // Update the pointer to the oldest valid entry.
@@ -249,13 +251,25 @@ module cci_mpf_prim_rob
     generate
         for (p = 0; p <= 1; p = p + 1)
         begin : r
-            cci_mpf_prim_lutram_init_multi
+            logic p_wen;
+            logic [$clog2(N_ENTRIES)-2 : 0] p_waddr;
+
+            //
+            // Don't confuse the two banks of valid bits in the ROB with this
+            // banked implementation of a LUTRAM.  The banked LUTRAM exists
+            // for timing, breaking the deep MUX required for a large array
+            // into multiple cycles.  The ROB valid bits are in two banks,
+            // which are implemented as multi-bank LUTRAMs.
+            //
+            cci_mpf_prim_lutram_init_banked
               #(
-                // Two banks, each with half the entries
+                // Two ROB valid bit banks, each with half the entries
                 .N_ENTRIES(N_ENTRIES >> 1),
                 .N_DATA_BITS(1),
                 .INIT_VALUE(1'b0),
-                .N_CHUNKS(4)
+                // LUTRAM banks -- could be any number.  This is not ROB
+                // valid bit banks.
+                .N_BANKS(4)
                 )
               validBits
                (
@@ -266,9 +280,8 @@ module cci_mpf_prim_rob
                 .raddr(test_valid_idx[p]),
                 .T1_rdata(test_valid_value_q[p]),
 
-                // Use the low bit of the data index as a bank select bit
-                .wen(enqData_en && (enqDataIdx[0] == p[0])),
-                .waddr(enqDataIdx[1 +: $bits(enqDataIdx)-1]),
+                .wen(p_wen),
+                .waddr(p_waddr),
                 // Indicate the entry is valid using the appropriate tag to
                 // mark validity.  Indices less than oldest are very young
                 // and have the tag for the next ring buffer loop.  Indicies
@@ -276,6 +289,17 @@ module cci_mpf_prim_rob
                 // trip.
                 .wdata((enqDataIdx >= oldest) ? valid_tag : ~valid_tag)
                 );
+
+            // Use the low bit of the data index as a bank select bit
+            assign p_wen = enqData_en && (enqDataIdx[0] == p[0]);
+            assign p_waddr = enqDataIdx[1 +: $bits(enqDataIdx)-1];
+
+            // Bypass -- note writes to the bank being read
+            always_ff @(posedge clk)
+            begin
+                test_valid_bypass_q[p] <=
+                    (p_wen && (p_waddr == test_valid_idx[p]));
+            end
         end
     endgenerate
 
@@ -293,7 +317,9 @@ module cci_mpf_prim_rob
       #(
         .N_ENTRIES(N_ENTRIES),
         .N_DATA_BITS(N_DATA_BITS),
-        .N_OUTPUT_REG_STAGES(1)
+        .N_OUTPUT_REG_STAGES(1),
+        .REGISTER_WRITES(1),
+        .BYPASS_REGISTERED_WRITES(0)
         )
       memData
        (

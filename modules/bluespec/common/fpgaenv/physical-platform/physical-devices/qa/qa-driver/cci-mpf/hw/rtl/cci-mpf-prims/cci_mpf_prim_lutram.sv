@@ -69,7 +69,7 @@ module cci_mpf_prim_lutram
         if (READ_DURING_WRITE == "OLD_DATA")
         begin : rbw
             //
-            // Delay writes by a cycle for for timing and add a bypass to guarantee
+            // Delay writes by a cycle for timing and add a bypass to guarantee
             // there is never a read/write of the same location in a single cycle.
             //
             logic [$clog2(N_ENTRIES)-1 : 0] waddr_q;
@@ -194,15 +194,16 @@ module cci_mpf_prim_lutram_init
 
     always_ff @(posedge clk)
     begin
+        if (! rdy)
+        begin
+            waddr_init <= waddr_init + 1;
+            rdy <= &(waddr_init);
+        end
+
         if (reset)
         begin
             rdy <= 1'b0;
             waddr_init <= 0;
-        end
-        else if (! rdy)
-        begin
-            waddr_init <= waddr_init + 1;
-            rdy <= &(waddr_init);
         end
     end
 
@@ -212,19 +213,19 @@ endmodule // cci_mpf_prim_lutram_init
 
 // ========================================================================
 //
-//   Multi-cycle read LUTRAM that moves some of the read MUX to the
-//   second cycle.  This allows larger memories to work at high speed.
+//   Banked, multi-cycle read LUTRAM that moves some of the read MUX to
+//   the second cycle.  This allows larger memories to work at high speed.
 //
 // ========================================================================
 
-module cci_mpf_prim_lutram_multi
+module cci_mpf_prim_lutram_banked
   #(
     parameter N_ENTRIES = 32,
     parameter N_DATA_BITS = 64,
     parameter READ_DURING_WRITE = "OLD_DATA",
 
     // Both this and N_ENTRIES should be powers of 2
-    parameter N_CHUNKS = 2
+    parameter N_BANKS = 2
     )
    (
     input  logic clk,
@@ -238,56 +239,147 @@ module cci_mpf_prim_lutram_multi
     input  logic [N_DATA_BITS-1 : 0] wdata
     );
 
-    typedef logic [$clog2(N_CHUNKS)-1 : 0] t_cidx;
-    typedef logic [$clog2(N_ENTRIES)-$bits(t_cidx)-1 : 0] t_caddr;
+    typedef logic [$clog2(N_BANKS)-1 : 0] t_bidx;
+    typedef logic [$clog2(N_ENTRIES)-$bits(t_bidx)-1 : 0] t_baddr;
 
-    t_cidx c_ridx, c_ridx_q;
-    t_caddr c_raddr;
-    assign {c_ridx, c_raddr} = raddr;
+    //
+    // Underlying banks used for storage.  The banks are in DONT_CARE mode.
+    // Scheduling the write and managing read/write to the same address
+    // are handled later.
+    //
 
-    t_cidx c_widx;
-    t_caddr c_waddr;
-    assign {c_widx, c_waddr} = waddr;
+    t_bidx b_ridx, b_ridx_q;
+    t_baddr b_raddr;
+    assign {b_ridx, b_raddr} = raddr;
 
-    logic [N_DATA_BITS-1 : 0] rdata[0 : N_CHUNKS-1];
-    logic [N_DATA_BITS-1 : 0] rdata_q[0 : N_CHUNKS-1];
-    assign T1_rdata = rdata_q[c_ridx_q];
+    t_bidx b_widx;
+    t_baddr b_waddr;
+    logic [N_DATA_BITS-1 : 0] b_wdata;
+    logic b_wen[0 : N_BANKS-1];
 
+    logic [N_DATA_BITS-1 : 0] rdata[0 : N_BANKS-1];
+    logic [N_DATA_BITS-1 : 0] rdata_q[0 : N_BANKS-1];
+
+    // Registered read response from each bank
     always_ff @(posedge clk)
     begin
-        c_ridx_q <= c_ridx;
+        b_ridx_q <= b_ridx;
         rdata_q <= rdata;
     end
 
-    genvar c;
+    genvar p;
     generate
-        for (c = 0; c < N_CHUNKS; c = c + 1)
+        for (p = 0; p < N_BANKS; p = p + 1)
         begin : m
             cci_mpf_prim_lutram
               #(
-                .N_ENTRIES(N_ENTRIES / N_CHUNKS),
+                .N_ENTRIES(N_ENTRIES / N_BANKS),
                 .N_DATA_BITS(N_DATA_BITS),
-                .READ_DURING_WRITE(READ_DURING_WRITE)
+                .READ_DURING_WRITE("DONT_CARE")
                 )
             ram
                (
                 .clk,
                 .reset,
 
-                .raddr(c_raddr),
-                .rdata(rdata[c]),
+                .raddr(b_raddr),
+                .rdata(rdata[p]),
 
-                .waddr(c_waddr),
-                .wen(wen && (c_widx == t_cidx'(c))),
-                .wdata(wdata)
+                // Write parameters depend on the hazard mode and are set below.
+                .waddr(b_waddr),
+                .wen(b_wen[p]),
+                .wdata(b_wdata)
                 );
         end
     endgenerate
 
-endmodule // cci_mpf_prim_lutram_multi
+    generate
+        if (READ_DURING_WRITE == "OLD_DATA")
+        begin : rbw
+            //
+            // Delay writes by a cycle for timing and add a bypass to guarantee
+            // there is never a read/write of the same location in a single cycle.
+            //
+            logic bypass_en;
+            logic [$clog2(N_ENTRIES)-1 : 0] waddr_q;
+            logic wen_q;
+            logic [N_DATA_BITS-1 : 0] wdata_q;
+
+            assign T1_rdata = (! bypass_en) ? rdata_q[b_ridx_q] : wdata_q;
+
+            always_ff @(posedge clk)
+            begin
+                bypass_en <= wen_q && (raddr == waddr_q);
+
+                waddr_q <= waddr;
+                wen_q <= wen;
+                wdata_q <= wdata;
+
+                // Set the bank write details
+                {b_widx, b_waddr} <= waddr;
+            end
+
+            always_comb
+            begin
+                b_wdata = wdata_q;
+
+                for (int b = 0; b < N_BANKS; b = b + 1)
+                begin
+                    b_wen[b] = wen_q && (b_widx == t_bidx'(b));
+                end
+            end
+        end
+        else if (READ_DURING_WRITE == "NEW_DATA")
+        begin : wbr
+            //
+            // Bypass from writes this cycle to reads this cycle, forwarding
+            // the new value to the reader.
+            //
+            logic bypass_en;
+            logic [N_DATA_BITS-1 : 0] wdata_q;
+
+            always_ff @(posedge clk)
+            begin
+                bypass_en <= wen && (raddr == waddr);
+                wdata_q <= wdata;
+            end
+
+            assign T1_rdata = (! bypass_en) ? rdata_q[b_ridx_q] : wdata_q;
+
+            assign {b_widx, b_waddr} = waddr;
+            assign b_wdata = wdata;
+
+            always_comb
+            begin
+                for (int b = 0; b < N_BANKS; b = b + 1)
+                begin
+                    b_wen[b] = wen && (b_widx == t_bidx'(b));
+                end
+            end
+        end
+        else
+        begin : dc
+            //
+            // Don't care.
+            //
+            assign T1_rdata = rdata_q[b_ridx_q];
+            assign {b_widx, b_waddr} = waddr;
+            assign b_wdata = wdata;
+
+            always_comb
+            begin
+                for (int b = 0; b < N_BANKS; b = b + 1)
+                begin
+                    b_wen[b] = wen && (b_widx == t_bidx'(b));
+                end
+            end
+        end
+    endgenerate
+
+endmodule // cci_mpf_prim_lutram_banked
 
 
-module cci_mpf_prim_lutram_init_multi
+module cci_mpf_prim_lutram_init_banked
   #(
     parameter N_ENTRIES = 32,
     parameter N_DATA_BITS = 64,
@@ -295,7 +387,7 @@ module cci_mpf_prim_lutram_init_multi
     parameter READ_DURING_WRITE = "OLD_DATA",
 
     // Both this and N_ENTRIES should be powers of 2
-    parameter N_CHUNKS = 2
+    parameter N_BANKS = 2
     )
    (
     input  logic clk,
@@ -310,58 +402,57 @@ module cci_mpf_prim_lutram_init_multi
     input  logic [N_DATA_BITS-1 : 0] wdata
     );
 
-    typedef logic [$clog2(N_CHUNKS)-1 : 0] t_cidx;
-    typedef logic [$clog2(N_ENTRIES)-$bits(t_cidx)-1 : 0] t_caddr;
+    logic [$clog2(N_ENTRIES)-1 : 0] waddr_local;
+    logic wen_local;
+    logic [N_DATA_BITS-1 : 0] wdata_local;
 
-    logic c_rdy[0 : N_CHUNKS-1];
-    assign rdy = c_rdy[0];
+    cci_mpf_prim_lutram_banked
+      #(
+        .N_ENTRIES(N_ENTRIES),
+        .N_DATA_BITS(N_DATA_BITS),
+        .READ_DURING_WRITE(READ_DURING_WRITE),
+        .N_BANKS(N_BANKS)
+        )
+      ram
+       (
+        .clk,
+        .reset,
 
-    t_cidx c_ridx, c_ridx_q;
-    t_caddr c_raddr;
-    assign {c_ridx, c_raddr} = raddr;
+        .raddr,
+        .T1_rdata,
 
-    t_cidx c_widx;
-    t_caddr c_waddr;
-    assign {c_widx, c_waddr} = waddr;
+        .waddr(waddr_local),
+        .wen(wen_local),
+        .wdata(wdata_local)
+        );
 
-    logic [N_DATA_BITS-1 : 0] rdata[0 : N_CHUNKS-1];
-    logic [N_DATA_BITS-1 : 0] rdata_q[0 : N_CHUNKS-1];
-    assign T1_rdata = rdata_q[c_ridx_q];
+
+    //
+    // Initialization loop
+    //
+
+    logic [$clog2(N_ENTRIES)-1 : 0] waddr_init;
+
+    assign waddr_local = rdy ? waddr : waddr_init;
+    assign wen_local = rdy ? wen : 1'b1;
+    assign wdata_local = rdy ? wdata : INIT_VALUE;
 
     always_ff @(posedge clk)
     begin
-        c_ridx_q <= c_ridx;
-        rdata_q <= rdata;
+        if (! rdy)
+        begin
+            waddr_init <= waddr_init + 1;
+            rdy <= &(waddr_init);
+        end
+
+        if (reset)
+        begin
+            rdy <= 1'b0;
+            waddr_init <= 0;
+        end
     end
 
-    genvar c;
-    generate
-        for (c = 0; c < N_CHUNKS; c = c + 1)
-        begin : m
-            cci_mpf_prim_lutram_init
-              #(
-                .N_ENTRIES(N_ENTRIES / N_CHUNKS),
-                .N_DATA_BITS(N_DATA_BITS),
-                .INIT_VALUE(INIT_VALUE),
-                .READ_DURING_WRITE(READ_DURING_WRITE)
-                )
-            ram
-               (
-                .clk,
-                .reset,
-                .rdy(c_rdy[c]),
-
-                .raddr(c_raddr),
-                .rdata(rdata[c]),
-
-                .waddr(c_waddr),
-                .wen(wen && (c_widx == t_cidx'(c))),
-                .wdata(wdata)
-                );
-        end
-    endgenerate
-
-endmodule // cci_mpf_prim_lutram_init_multi
+endmodule // cci_mpf_prim_lutram_init_banked
 
 
 // ========================================================================

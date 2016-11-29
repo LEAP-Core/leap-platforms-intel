@@ -198,9 +198,18 @@ module cci_mpf_shim_pwrite
 
     logic eop_tracker_rdy;
     logic may_inject_read;
-    assign may_inject_read = ! cci_mpf_c0TxIsValid(afu.c0Tx) &&
-                             ! fiu.c0TxAlmFull &&
-                             eop_tracker_rdy;
+    logic ready_for_read;
+    assign may_inject_read = ! cci_mpf_c0TxIsValid(afu.c0Tx) && ready_for_read;
+
+    always_ff @(posedge clk)
+    begin
+        ready_for_read <= ! fiu.c0TxAlmFull && eop_tracker_rdy;
+
+        if (reset)
+        begin
+            ready_for_read <= 1'b0;
+        end
+    end
 
     // Read requests flow straight through.  Inject read for modify
     // as needed.

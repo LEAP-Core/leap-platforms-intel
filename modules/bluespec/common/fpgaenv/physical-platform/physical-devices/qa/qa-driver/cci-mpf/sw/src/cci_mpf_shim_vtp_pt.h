@@ -141,6 +141,7 @@ class MPFVTP_PAGE_TABLE
     // shared with the FPGA, used here to construct the page table that
     // will be walked in hardware.
     virtual btVirtAddr ptAllocSharedPage(btWSSize length, btPhysAddr* pa) = 0;
+    virtual bool ptInvalVAMapping(btVirtAddr va) = 0;
 
   private:
     // Virtual to physical page hierarchical page table.  This is the table
@@ -153,6 +154,11 @@ class MPFVTP_PAGE_TABLE
     MPFVTP_PT_TREE ptPtoV;
 
     btPhysAddr m_pPageTablePA;
+
+    // Allocate an internal page table page.
+    btVirtAddr ptAllocTablePage(btPhysAddr* pa);
+    void ptFreeTablePage(btVirtAddr va, btPhysAddr pa);
+    btVirtAddr m_pageTableFreeList;
 
     // Add a virtual to physical mapping at depth in the tree.  Returns
     // false if a mapping already exists.
@@ -202,6 +208,16 @@ class MPFVTP_PT_TREE_CLASS
     void Reset()
     {
         memset(table, -1, sizeof(table));
+    }
+
+    bool TableIsEmpty()
+    {
+        for (int idx = 0; idx < 512; idx++)
+        {
+            if (table[idx] != -1) return false;
+        }
+
+        return true;
     }
 
     // Does an entry exist at the index?

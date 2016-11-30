@@ -122,6 +122,8 @@ private:
    // Page allocator used by MPFVTP_PAGE_TABLE to add pages to the
    // shared page table data structure.
    btVirtAddr ptAllocSharedPage(btWSSize length, btPhysAddr* pa);
+   // Invalidate a VA mapping.
+   bool ptInvalVAMapping(btVirtAddr va);
 
    static const size_t SMALL_PAGE_SIZE = KB(4);
    static const size_t SMALL_PAGE_MASK = ~(SMALL_PAGE_SIZE - 1);

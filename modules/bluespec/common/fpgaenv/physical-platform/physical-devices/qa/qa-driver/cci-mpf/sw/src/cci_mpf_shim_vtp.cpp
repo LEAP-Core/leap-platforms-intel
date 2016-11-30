@@ -369,11 +369,16 @@ ali_errnum_e MPFVTP::_allocate(btVirtAddr va, size_t pageSize, uint32_t flags)
    // insert VTP page table entry
    if (err == ali_errnumOK) {
       MPF_ASSERT_RET(va == alloc, ali_errnumNoMem);
-      ptInsertPageMapping(btVirtAddr(va),
-                          m_pALIBuffer->bufferGetIOVA((unsigned char *)va),
-                          mapType,
-                          flags);
+
+      if (! ptInsertPageMapping(btVirtAddr(va),
+                                m_pALIBuffer->bufferGetIOVA((unsigned char *)va),
+                                mapType,
+                                flags)) {
+         AAL_ERR(LM_All, "Page table insertion error." << std::endl);
+         err = ali_errnumBadMapping;
+      }
    }
+
    delete bufAllocArgs;
    return err;
 }
@@ -400,8 +405,7 @@ ali_errnum_e MPFVTP::bufferFree(btVirtAddr Address)
    }
 
    while (ptRemovePageMapping(va, NULL, NULL, &size, &flags)) {
-      ret = m_pALIMMIO->mmioWrite64(m_dfhOffset + CCI_MPF_VTP_CSR_INVAL_PAGE_VADDR,
-                                    uint64_t(va) / CL(1));
+      ret = ptInvalVAMapping(va);
       MPF_ASSERT_RET(ret, ali_errnumNoMem);
       if (!ret) {
          return ali_errnumNoMem;
@@ -528,6 +532,14 @@ MPFVTP::ptAllocSharedPage(btWSSize length, btPhysAddr* pa)
 
    *pa = m_pALIBuffer->bufferGetIOVA((unsigned char *)va);
    return va;
+}
+
+
+bool
+MPFVTP::ptInvalVAMapping(btVirtAddr va)
+{
+    return m_pALIMMIO->mmioWrite64(m_dfhOffset + CCI_MPF_VTP_CSR_INVAL_PAGE_VADDR,
+                                   uint64_t(va) / CL(1));
 }
 
 /// @} group VTPService

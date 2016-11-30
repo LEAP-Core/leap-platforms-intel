@@ -94,7 +94,8 @@ BEGIN_NAMESPACE(AAL)
 // Public functions
 //-----------------------------------------------------------------------------
 
-MPFVTP_PAGE_TABLE::MPFVTP_PAGE_TABLE()
+MPFVTP_PAGE_TABLE::MPFVTP_PAGE_TABLE() :
+    m_pageTableFreeList(NULL)
 {
 }
 
@@ -146,9 +147,7 @@ MPFVTP_PAGE_TABLE::ptInsertPageMapping(
 
     uint32_t depth = (size == MPFVTP_PAGE_4KB) ? 4 : 3;
 
-    AddVAtoPA(va, pa, depth, flags);
-
-    return true;
+    return AddVAtoPA(va, pa, depth, flags);
 }
 
 
@@ -301,6 +300,51 @@ MPFVTP_PAGE_TABLE::ptTranslatePAtoVA(btPhysAddr pa, btVirtAddr *va)
 }
 
 
+btVirtAddr
+MPFVTP_PAGE_TABLE::ptAllocTablePage(btPhysAddr* pa)
+{
+    btVirtAddr va;
+
+    // Is a page available from the free list?
+    if (m_pageTableFreeList != NULL)
+    {
+        // Pop page from free list
+        va = m_pageTableFreeList;
+        MPFVTP_PT_TREE t = MPFVTP_PT_TREE(va);
+        m_pageTableFreeList = btVirtAddr(t->GetChildAddr(0));
+
+        // Corresponding PA is stored in slot 1
+        *pa = btPhysAddr(t->GetChildAddr(1));
+    }
+    else
+    {
+        // Need a new page
+        va = ptAllocSharedPage(sizeof(MPFVTP_PT_TREE_CLASS), pa);
+        assert(va != NULL);
+
+        // Add new page to physical to virtual translation so the table
+        // can be walked in software
+        assert(AddPAtoVA(*pa, va, 4));
+    }
+
+    return va;
+}
+
+
+void
+MPFVTP_PAGE_TABLE::ptFreeTablePage(btVirtAddr va, btPhysAddr pa)
+{
+    // Push page on the free list
+    MPFVTP_PT_TREE t = MPFVTP_PT_TREE(va);
+    t->InsertChildAddr(0, int64_t(m_pageTableFreeList));
+    t->InsertChildAddr(1, int64_t(pa));
+    m_pageTableFreeList = va;
+
+    // Invalidate the address in any hardware tables (page table walker cache)
+    assert(ptInvalVAMapping(va));
+}
+
+
 bool
 MPFVTP_PAGE_TABLE::AddVAtoPA(btVirtAddr va, btPhysAddr pa, uint32_t depth, uint32_t flags)
 {
@@ -319,14 +363,9 @@ MPFVTP_PAGE_TABLE::AddVAtoPA(btVirtAddr va, btPhysAddr pa, uint32_t depth, uint3
         if (! table->EntryExists(idx))
         {
             btPhysAddr pt_p;
-            btVirtAddr pt_v = ptAllocSharedPage(sizeof(MPFVTP_PT_TREE_CLASS),
-                                                &pt_p);
+            btVirtAddr pt_v = ptAllocTablePage(&pt_p);
             MPFVTP_PT_TREE child_table = MPFVTP_PT_TREE(pt_v);
             child_table->Reset();
-
-            // Add new page to physical to virtual translation so the table
-            // can be walked in software
-            if (! AddPAtoVA(pt_p, pt_v, 4)) return false;
 
             // Add new page to the FPGA-visible virtual to physical table
             table->InsertChildAddr(idx, pt_p);
@@ -344,7 +383,29 @@ MPFVTP_PAGE_TABLE::AddVAtoPA(btVirtAddr va, btPhysAddr pa, uint32_t depth, uint3
     }
 
     // Now at the leaf.  Add the translation.
-    if (table->EntryExists(leaf_idx)) return false;
+    if (table->EntryExists(leaf_idx))
+    {
+        if ((cur_depth == 2) && ! table->EntryIsTerminal(leaf_idx))
+        {
+            // Entry exists while trying to add a 2MB entry.  Perhaps there is
+            // an old leaf that used to hold 4KB pages.  If the existing
+            // entry has no active pages then get rid of it.
+            btPhysAddr child_pa = table->GetChildAddr(leaf_idx);
+            btVirtAddr child_va;
+            if (! ptTranslatePAtoVA(child_pa, &child_va)) return false;
+            MPFVTP_PT_TREE child_table = MPFVTP_PT_TREE(child_va);
+
+            if (! child_table->TableIsEmpty()) return false;
+
+            // The old page that held 4KB translations is now empty and the
+            // pointer will be overwritten with a 2MB page pointer.
+            ptFreeTablePage(child_va, child_pa);
+        }
+        else
+        {
+            return false;
+        }
+    }
 
     table->InsertTranslatedAddr(leaf_idx, pa, flags);
 
@@ -396,8 +457,6 @@ MPFVTP_PAGE_TABLE::AddPAtoVA(btPhysAddr pa, btVirtAddr va, uint32_t depth)
     }
 
     // Now at the leaf.  Add the translation.
-    if (table->EntryExists(leaf_idx)) return false;
-
     table->InsertTranslatedAddr(leaf_idx, int64_t(va));
     return true;
 }

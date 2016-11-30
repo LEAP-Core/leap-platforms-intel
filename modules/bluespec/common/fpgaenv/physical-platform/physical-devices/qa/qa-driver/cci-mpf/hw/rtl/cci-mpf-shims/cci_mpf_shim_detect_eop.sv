@@ -294,7 +294,7 @@ module cci_mpf_shim_detect_eop_track_flits
         .N_ENTRIES(MAX_ACTIVE_REQS),
         .N_DATA_BITS($bits(t_cci_clNum)),
         .READ_DURING_WRITE("DONT_CARE"),
-        .N_BANKS(4)
+        .N_BANKS(2)
         )
       packet_len
        (

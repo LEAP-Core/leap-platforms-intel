@@ -84,7 +84,7 @@ module cci_mpf_prim_rob
     typedef logic [$clog2(N_ENTRIES) : 0] t_idx_nowrap;
 
     t_idx newest;
-    t_idx oldest;
+    t_idx oldest, oldest_q;
     logic validBits_rdy[0:1];
 
     // notFull is true as long as there are at least MIN_FREE_SLOTS available
@@ -119,13 +119,12 @@ module cci_mpf_prim_rob
     // Bump the oldest pointer on deq
     always_ff @(posedge clk)
     begin
+        oldest <= oldest + deq_en;
+        oldest_q <= oldest;
+
         if (reset)
         begin
             oldest <= 0;
-        end
-        else
-        begin
-            oldest <= oldest + deq_en;
         end
     end
 
@@ -153,10 +152,14 @@ module cci_mpf_prim_rob
     // second trip around the valid bits start 1, having been set on the
     // previous loop.  The target is thus changed to 0.
     //
-    logic valid_tag;
+    logic valid_tag, valid_tag_q;
+    t_idx enqDataIdx_q;
 
     always_ff @(posedge clk)
     begin
+        enqDataIdx_q <= enqDataIdx;
+        valid_tag_q <= valid_tag;
+
         // Toggle the valid_tag every trip around the ring buffer.
         if (deq_en && (&(oldest) == 1'b1))
         begin
@@ -236,14 +239,12 @@ module cci_mpf_prim_rob
     //
     always_ff @(posedge clk)
     begin
+        num_valid <= num_valid - t_valid_cnt'(deq_en) +
+                                 t_valid_cnt'(test_is_valid);
+
         if (reset)
         begin
             num_valid <= t_valid_cnt'(0);
-        end
-        else
-        begin
-            num_valid <= num_valid - t_valid_cnt'(deq_en) +
-                                     t_valid_cnt'(test_is_valid);
         end
     end
 
@@ -251,8 +252,8 @@ module cci_mpf_prim_rob
     generate
         for (p = 0; p <= 1; p = p + 1)
         begin : r
-            logic p_wen;
-            logic [$clog2(N_ENTRIES)-2 : 0] p_waddr;
+            logic p_wen, p_wen_q;
+            logic [$clog2(N_ENTRIES)-2 : 0] p_waddr, p_waddr_q;
 
             //
             // Don't confuse the two banks of valid bits in the ROB with this
@@ -267,6 +268,9 @@ module cci_mpf_prim_rob
                 .N_ENTRIES(N_ENTRIES >> 1),
                 .N_DATA_BITS(1),
                 .INIT_VALUE(1'b0),
+                // Writes are delayed a cycle for timing so bypass new writes
+                // to reads in the same cycle.
+                .READ_DURING_WRITE("NEW_DATA"),
                 // LUTRAM banks -- could be any number.  This is not ROB
                 // valid bit banks.
                 .N_BANKS(4)
@@ -280,19 +284,25 @@ module cci_mpf_prim_rob
                 .raddr(test_valid_idx[p]),
                 .T1_rdata(test_valid_value_q[p]),
 
-                .wen(p_wen),
-                .waddr(p_waddr),
+                .wen(p_wen_q),
+                .waddr(p_waddr_q),
                 // Indicate the entry is valid using the appropriate tag to
                 // mark validity.  Indices less than oldest are very young
                 // and have the tag for the next ring buffer loop.  Indicies
                 // greater than or equal to oldest use the tag for the current
                 // trip.
-                .wdata((enqDataIdx >= oldest) ? valid_tag : ~valid_tag)
+                .wdata((enqDataIdx_q >= oldest_q) ? valid_tag_q : ~valid_tag_q)
                 );
 
             // Use the low bit of the data index as a bank select bit
             assign p_wen = enqData_en && (enqDataIdx[0] == p[0]);
             assign p_waddr = enqDataIdx[1 +: $bits(enqDataIdx)-1];
+            assign p_waddr_q = enqDataIdx_q[1 +: $bits(enqDataIdx)-1];
+
+            always_ff @(posedge clk)
+            begin
+                p_wen_q <= p_wen;
+            end
 
             // Bypass -- note writes to the bank being read
             always_ff @(posedge clk)

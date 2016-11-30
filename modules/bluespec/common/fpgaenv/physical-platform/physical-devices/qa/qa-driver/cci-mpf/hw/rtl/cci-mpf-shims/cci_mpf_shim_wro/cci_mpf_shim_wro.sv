@@ -62,7 +62,7 @@ module cci_mpf_shim_wro
         reset <= fiu.reset;
     end
 
-    cci_mpf_shim_wro_cam_group
+    cci_mpf_shim_wro_filter_group
       #(
         .ADDRESS_HASH_BITS(`WRO_ADDRESS_HASH_BITS),
         .AFU_BUF_THRESHOLD(AFU_BUF_THRESHOLD),

@@ -34,13 +34,13 @@
 
 
 //
-// Manage a CAM associated with a group of requests that must be kept
+// Manage filters associated with a group of requests that must be kept
 // ordered.  Individual virtual channels are one example of a potential
 // group.  In this case, distinct CCI virtual channels have no order
 // guarantees, even when tracking write responses.  It thus makes sense
-// to limit CAM sizes by tracking virtual channels as separate groups.
+// to limit filter sizes by tracking virtual channels as separate groups.
 //
-module cci_mpf_shim_wro_cam_group
+module cci_mpf_shim_wro_filter_group
   #(
     // Size of an address hash entry. Smaller sizes take less space but
     // increase the probability of address collisions.
@@ -999,4 +999,4 @@ module cci_mpf_shim_wro_cam_group
 
     assign afu_filtered.c2Tx = afu_buf.c2Tx;
 
-endmodule // cci_mpf_shim_wro_cam_group
+endmodule // cci_mpf_shim_wro_filter_group

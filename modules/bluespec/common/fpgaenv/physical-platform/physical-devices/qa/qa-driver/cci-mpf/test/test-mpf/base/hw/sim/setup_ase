@@ -19,10 +19,10 @@ if len(sys.argv) != 2:
     usage()
 
 try:
-    aal_src = os.environ['AALSDK']
+    aal_src = os.environ['AALSDK_SRC']
     ase_src = aal_src + '/ase'
 except:
-    print 'AALSDK environment variable must point to the root of the AAL SDK.'
+    print 'AALSDK_SRC environment variable must point to the root of the AAL SDK source tree.'
     sys.exit(1)
 
 if not os.path.isfile(ase_src + '/scripts/generate_ase_environment.py'):

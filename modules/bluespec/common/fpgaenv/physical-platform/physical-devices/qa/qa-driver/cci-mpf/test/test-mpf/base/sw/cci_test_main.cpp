@@ -72,7 +72,7 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    btInt result = svc.initialize();
+    btInt result = svc.initialize(testAFUID());
 
     //
     // Configure VC MAP shim

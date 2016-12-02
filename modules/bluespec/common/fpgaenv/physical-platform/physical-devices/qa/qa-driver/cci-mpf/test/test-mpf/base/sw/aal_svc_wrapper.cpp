@@ -96,7 +96,7 @@ AAL_SVC_WRAPPER::~AAL_SVC_WRAPPER()
 ///               on whether a hardware, ASE or software implementation is desired.
 ///             - Allocates the necessary buffers to be used by the NLB AFU algorithm
 ///
-btInt AAL_SVC_WRAPPER::initialize()
+btInt AAL_SVC_WRAPPER::initialize(const char *afuID)
 {
     // Request the Servcie we are interested in.
 
@@ -116,7 +116,7 @@ btInt AAL_SVC_WRAPPER::initialize()
         ConfigRecord.Add(AAL_FACTORY_CREATE_CONFIGRECORD_FULL_SERVICE_NAME, "libALI");
 
         // the AFUID to be passed to the Resource Manager. It will be used to locate the appropriate device.
-        ConfigRecord.Add(keyRegAFU_ID, "438D6C19-FF0C-40DA-A43D-1F18BF214D19");
+        ConfigRecord.Add(keyRegAFU_ID, afuID);
 
         // indicate that this service needs to allocate an AIAService, too to talk to the HW
         ConfigRecord.Add(AAL_FACTORY_CREATE_CONFIGRECORD_FULL_AIA_NAME, "libaia");

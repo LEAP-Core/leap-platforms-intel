@@ -31,6 +31,10 @@
 #include "test_mem_perf.h"
 #include <time.h>
 
+const char* testAFUID()
+{
+    return "6DA50A7D-C76F-42B1-9018-EC1AA7629471";
+}
 
 bool
 TEST_MEM_PERF::initMem(bool enableWarmup, bool cached)

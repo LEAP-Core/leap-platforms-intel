@@ -67,6 +67,9 @@ interface test_csrs();
     }
     t_cpu_wr_csrs;
 
+    // Each test must provide an AFU ID
+    logic [127:0] afu_id;
+
     // The test module is not told when a CSR is read.  Values should be
     // held for reads at any time.
     t_cpu_rd_csrs cpu_rd_csrs[0 : NUM_TEST_CSRS-1];
@@ -78,6 +81,7 @@ interface test_csrs();
     // CSR manager port
     modport csr
        (
+        input  afu_id,
         input  cpu_rd_csrs,
         output cpu_wr_csrs
         );
@@ -85,6 +89,7 @@ interface test_csrs();
     // Test port
     modport test
        (
+        output afu_id,
         output cpu_rd_csrs,
         input  cpu_wr_csrs
         );

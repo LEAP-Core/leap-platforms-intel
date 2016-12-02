@@ -67,7 +67,7 @@ class AAL_SVC_WRAPPER: public CAASBase,
     AAL_SVC_WRAPPER(btBool use_hw);
     ~AAL_SVC_WRAPPER();
 
-    btInt initialize();    ///< Return 0 if success
+    btInt initialize(const char* afuID);    ///< Return 0 if success
     btInt terminate();    ///< Return 0 if success
 
     btBool hwIsSimulated(void) const { return ! use_hw; }

@@ -150,6 +150,9 @@ class CCI_TEST
 // A test module must provide the following functions:
 //
 
+// AFU ID of the test hardware.
+const char* testAFUID();
+
 // Set command line option definitions for test.  This is outside the
 // CCI_TEST class because it is needed to configure the base AAL service
 // before the test constructor is called.

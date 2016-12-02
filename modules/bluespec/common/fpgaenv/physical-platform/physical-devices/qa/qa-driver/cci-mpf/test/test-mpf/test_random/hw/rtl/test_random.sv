@@ -223,6 +223,8 @@ module test_afu
 
     always_comb
     begin
+        csrs.afu_id = 128'h5037b187_e561_4ca2_ad5b_d6c7816273c2;
+
         // Default
         for (int i = 0; i < NUM_TEST_CSRS; i = i + 1)
         begin

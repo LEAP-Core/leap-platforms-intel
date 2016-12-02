@@ -36,6 +36,10 @@
 //
 // ========================================================================
 
+const char* testAFUID()
+{
+    return "5037B187-E561-4CA2-AD5B-D6C7816273C2";
+}
 
 void testConfigOptions(po::options_description &desc)
 {

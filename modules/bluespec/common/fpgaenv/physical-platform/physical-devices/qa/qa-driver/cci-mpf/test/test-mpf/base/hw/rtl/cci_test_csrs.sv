@@ -76,9 +76,6 @@ module cci_test_csrs
     localparam MAX_CSR_ADDR = 32 + NUM_TEST_CSRS;
     typedef logic [$clog2(MAX_CSR_ADDR)-1 : 0] t_afu_csr_addr;
 
-    logic [127:0] afu_id;
-    assign afu_id = 128'h438d6c19_ff0c_40da_a43d_1f18bf214d19;
-
     t_if_cci_c0_Rx c0Rx;
     t_if_cci_c1_Rx c1Rx;
 
@@ -164,10 +161,10 @@ module cci_test_csrs
             end
 
           // AFU_ID_L
-          1: c2Tx.data <= afu_id[63:0];
+          1: c2Tx.data <= csrs.afu_id[63:0];
 
           // AFU_ID_H
-          2: c2Tx.data <= afu_id[127:64];
+          2: c2Tx.data <= csrs.afu_id[127:64];
 
           // DFH_RSVD0
           3: c2Tx.data <= t_ccip_mmioData'(0);

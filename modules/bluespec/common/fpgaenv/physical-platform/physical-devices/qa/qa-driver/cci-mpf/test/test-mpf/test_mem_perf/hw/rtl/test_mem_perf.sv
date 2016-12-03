@@ -124,8 +124,8 @@ module test_afu
 
     // Counts of active reads and writes from which average latency
     // can be computed using Little's Law.
-    t_counter rd_req_inflight_now, rd_req_inflight_max;
-    t_counter wr_req_inflight_now, wr_req_inflight_max;
+    logic [15:0] rd_req_inflight_now, rd_req_inflight_max;
+    logic [15:0] wr_req_inflight_now, wr_req_inflight_max;
     logic [63:0] rd_req_inflight_total;
     logic [63:0] wr_req_inflight_total;
 
@@ -523,16 +523,16 @@ module test_afu
         if (do_read != c0Rx_is_read_eop)
         begin
             rd_req_inflight_now <=
-                (c0Rx_is_read_eop ? rd_req_inflight_now - (t_counter'(1)) :
-                                    rd_req_inflight_now + t_counter'(1));
+                (c0Rx_is_read_eop ? rd_req_inflight_now - 1 :
+                                    rd_req_inflight_now + 1);
         end
 
         rd_req_inflight_total <= rd_req_inflight_total + 64'(rd_req_inflight_now);
 
         if (reset || start_new_run)
         begin
-            rd_req_inflight_now <= t_counter'(0);
-            rd_req_inflight_max <= t_counter'(0);
+            rd_req_inflight_now <= 0;
+            rd_req_inflight_max <= 0;
             rd_req_inflight_total <= 64'b0;
         end
     end
@@ -688,12 +688,12 @@ module test_afu
                 fiu.c1Tx.hdr.base.cl_len <= eCL_LEN_1;
                 fiu.c1Tx.hdr.pwrite.isPartialWrite <= 1'b0;
                 fiu.c1Tx.data <=
-                    t_cci_clData'({ wr_req_inflight_total,   // 64 bits
-                                    rd_req_inflight_total,   // 64 bits
-                                    wr_req_inflight_max,     // 32 bits
-                                    rd_req_inflight_max,     // 32 bits
+                    t_cci_clData'({ wr_req_inflight_total,    // 64 bits
+                                    rd_req_inflight_total,    // 64 bits
+                                    32'(wr_req_inflight_max), // 32 bits
+                                    32'(rd_req_inflight_max), // 32 bits
                                     32'b0,
-                                    cycles_executed });      // 32 bits
+                                    cycles_executed });       // 32 bits
             end
         end
 
@@ -743,16 +743,16 @@ module test_afu
         if (do_write != c1Rx_is_write_rsp)
         begin
             wr_req_inflight_now <=
-                (c1Rx_is_write_rsp ? wr_req_inflight_now - (t_counter'(1)) :
-                                     wr_req_inflight_now + t_counter'(1));
+                (c1Rx_is_write_rsp ? wr_req_inflight_now - 1 :
+                                     wr_req_inflight_now + 1);
         end
 
         wr_req_inflight_total <= wr_req_inflight_total + 64'(wr_req_inflight_now);
 
         if (reset || start_new_run)
         begin
-            wr_req_inflight_now <= t_counter'(0);
-            wr_req_inflight_max <= t_counter'(0);
+            wr_req_inflight_now <= 0;
+            wr_req_inflight_max <= 0;
             wr_req_inflight_total <= 64'b0;
         end
     end

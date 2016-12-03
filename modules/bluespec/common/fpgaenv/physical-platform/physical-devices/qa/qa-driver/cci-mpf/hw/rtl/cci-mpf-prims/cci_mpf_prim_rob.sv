@@ -185,7 +185,7 @@ module cci_mpf_prim_rob
     // Valid bits array.  Memory reads are multi-cycle.  Valid bits
     // are stored in two banks and accessed in alternate cycles to hide
     // the latency.
-    logic [$clog2(N_ENTRIES)-2 : 0] test_valid_idx[0:1];
+    logic [$clog2(N_ENTRIES)-2 : 0] test_valid_idx[0:1], test_valid_idx_q[0:1];
     logic test_valid_value_q[0:1];
     logic test_valid_tgt;
     logic test_valid_bypass_q[0:1];
@@ -211,6 +211,8 @@ module cci_mpf_prim_rob
     //
     always_ff @(posedge clk)
     begin
+        test_valid_idx_q <= test_valid_idx;
+
         if (test_is_valid)
         begin
             test_valid_idx[test_valid_bank] <= test_valid_idx[test_valid_bank] + 1;
@@ -253,7 +255,7 @@ module cci_mpf_prim_rob
         for (p = 0; p <= 1; p = p + 1)
         begin : r
             logic p_wen, p_wen_q;
-            logic [$clog2(N_ENTRIES)-2 : 0] p_waddr, p_waddr_q;
+            logic [$clog2(N_ENTRIES)-2 : 0] p_waddr_q;
 
             //
             // Don't confuse the two banks of valid bits in the ROB with this
@@ -296,19 +298,15 @@ module cci_mpf_prim_rob
 
             // Use the low bit of the data index as a bank select bit
             assign p_wen = enqData_en && (enqDataIdx[0] == p[0]);
-            assign p_waddr = enqDataIdx[1 +: $bits(enqDataIdx)-1];
             assign p_waddr_q = enqDataIdx_q[1 +: $bits(enqDataIdx)-1];
+
+            // Bypass -- note writes to the bank being read
+            assign test_valid_bypass_q[p] = (p_wen_q &&
+                                             (p_waddr_q == test_valid_idx_q[p]));
 
             always_ff @(posedge clk)
             begin
                 p_wen_q <= p_wen;
-            end
-
-            // Bypass -- note writes to the bank being read
-            always_ff @(posedge clk)
-            begin
-                test_valid_bypass_q[p] <=
-                    (p_wen && (p_waddr == test_valid_idx[p]));
             end
         end
     endgenerate

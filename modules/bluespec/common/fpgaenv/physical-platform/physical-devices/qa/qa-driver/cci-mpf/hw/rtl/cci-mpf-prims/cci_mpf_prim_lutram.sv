@@ -258,7 +258,11 @@ module cci_mpf_prim_lutram_banked
     logic b_wen[0 : N_BANKS-1];
 
     logic [N_DATA_BITS-1 : 0] rdata[0 : N_BANKS-1];
-    logic [N_DATA_BITS-1 : 0] rdata_q[0 : N_BANKS-1];
+    // Preserve this to prevent Quartus from merging the register into the RAM.
+    // We have balanced the work expecting that the data will be read and
+    // extracted from the MLAB in the first cycle and demultiplexed from
+    // rdata_q in the second read cycle.
+    logic [N_DATA_BITS-1 : 0] rdata_q[0 : N_BANKS-1] /* synthesis preserve */;
 
     // Registered read response from each bank
     always_ff @(posedge clk)

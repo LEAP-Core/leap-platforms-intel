@@ -253,6 +253,14 @@ AFU_CCIS_CLASS::ptAllocSharedPage(btWSSize length, btPhysAddr* pa)
 }
 
 
+bool
+AFU_CCIS_CLASS::ptInvalVAMapping(btVirtAddr va)
+{
+    return m_afu->WriteCSR64(m_csr_base + CCI_MPF_VTP_CSR_INVAL_PAGE_VADDR,
+                             uint64_t(va) / CL(1));
+}
+
+
 uint64_t
 AFU_CCIS_CLASS::GetStatVTP(t_cci_mpf_vtp_csr_offsets stat)
 {

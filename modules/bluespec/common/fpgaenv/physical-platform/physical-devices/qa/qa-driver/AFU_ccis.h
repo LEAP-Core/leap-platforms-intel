@@ -80,6 +80,7 @@ class AFU_CCIS_CLASS : public CAASBase, private MPFVTP_PAGE_TABLE
     // Page allocator used by MPFVTP_PAGE_TABLE to add pages to the
     // shared page table data structure.
     btVirtAddr ptAllocSharedPage(btWSSize length, btPhysAddr* pa);
+    bool ptInvalVAMapping(btVirtAddr va);
 
     void Initialize();
 

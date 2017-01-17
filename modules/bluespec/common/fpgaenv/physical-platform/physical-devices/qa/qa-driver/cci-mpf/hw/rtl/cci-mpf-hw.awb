@@ -20,4 +20,5 @@
 %sources -t VERILOG_PKG -v PRIVATE cci_mpf_csrs_pkg.sv
 
 %sources -t VERILOG     -v PRIVATE cci_mpf.sv
+%sources -t VERILOG_H   -v PRIVATE cci_mpf_config.vh
 %sources -t VERILOG     -v PRIVATE cci_mpf_pipe_std.sv

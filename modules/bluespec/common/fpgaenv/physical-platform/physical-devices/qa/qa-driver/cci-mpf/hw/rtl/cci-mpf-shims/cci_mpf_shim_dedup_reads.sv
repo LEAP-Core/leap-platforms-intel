@@ -631,9 +631,11 @@ module cci_mpf_shim_dedup_reads_tracker
 
         wr_tracker_en = cci_mpf_c0TxIsReadReq(c0Tx_q);
         wr_tracker_idx = rd_tracker_idx_q;
-        wr_tracker_state = '{ tag: tag_q,
-                              cl_len: cl_len_q,
-                              latest_heap_idx: t_heap_idx'(c0Tx_q.hdr.base.mdata) };
+
+        wr_tracker_state = 'x;
+        wr_tracker_state.tag = tag_q;
+        wr_tracker_state.cl_len = cl_len_q;
+        wr_tracker_state.latest_heap_idx = t_heap_idx'(c0Tx_q.hdr.base.mdata);
     end
 
     generate

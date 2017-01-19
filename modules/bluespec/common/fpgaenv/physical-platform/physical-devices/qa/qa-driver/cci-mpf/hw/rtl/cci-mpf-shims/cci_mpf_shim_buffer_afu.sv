@@ -151,19 +151,21 @@ module cci_mpf_shim_buffer_afu
         .REGISTER_OUTPUT(REGISTER_OUTPUT),
         .BYPASS_TO_REGISTER(ENABLE_C0_BYPASS)
         )
-      c0_fifo(.clk,
-              .reset(afu_buf.reset),
+      c0_fifo
+       (
+        .clk,
+        .reset(afu_buf.reset),
 
-              .enq_data(afu_raw.c0Tx.hdr),
-              // Map the valid bit through as enq here and notEmpty below.
-              .enq_en(c0_fifo_enq),
-              .notFull(),
-              .almostFull(afu_raw.c0TxAlmFull),
+        .enq_data(afu_raw.c0Tx.hdr),
+        // Map the valid bit through as enq here and notEmpty below.
+        .enq_en(c0_fifo_enq),
+        .notFull(),
+        .almostFull(afu_raw.c0TxAlmFull),
 
-              .first(c0_fifo_first),
-              .deq_en(c0_fifo_deq),
-              .notEmpty(c0_fifo_notEmpty)
-              );
+        .first(c0_fifo_first),
+        .deq_en(c0_fifo_deq),
+        .notEmpty(c0_fifo_notEmpty)
+        );
 
 
     // ====================================================================
@@ -200,19 +202,21 @@ module cci_mpf_shim_buffer_afu
         .THRESHOLD(THRESHOLD),
         .REGISTER_OUTPUT(REGISTER_OUTPUT)
         )
-      c1_fifo(.clk,
-              .reset(afu_buf.reset),
+      c1_fifo
+       (
+        .clk,
+        .reset(afu_buf.reset),
 
-              // The concatenated field order must match the use of c1_first above.
-              .enq_data(afu_raw.c1Tx),
-              .enq_en(c1_enq_en),
-              .notFull(),
-              .almostFull(afu_raw.c1TxAlmFull),
+        // The concatenated field order must match the use of c1_first above.
+        .enq_data(afu_raw.c1Tx),
+        .enq_en(c1_enq_en),
+        .notFull(),
+        .almostFull(afu_raw.c1TxAlmFull),
 
-              .first(c1_first),
-              .deq_en(deqC1Tx),
-              .notEmpty(c1_notEmpty)
-              );
+        .first(c1_first),
+        .deq_en(deqC1Tx),
+        .notEmpty(c1_notEmpty)
+        );
 
 
     // ====================================================================
@@ -223,5 +227,116 @@ module cci_mpf_shim_buffer_afu
 
     assign afu_buf.c2Tx = afu_raw.c2Tx;
 
-
 endmodule // cci_mpf_shim_buffer_afu
+
+
+//
+// Buffer only channel 1 (writes.  Channel 0 (reads) is straight through.
+//
+module cci_mpf_shim_buffer_afu_c1
+  #(
+    // Assert almost full when the number of free entries falls below threshold.
+    parameter THRESHOLD = CCI_TX_ALMOST_FULL_THRESHOLD,
+
+    // Total entries in the buffer.
+    parameter N_ENTRIES = THRESHOLD + 4,
+
+    // Register output with skid buffers on the LUTRAM FIFOs if non-zero.
+    parameter REGISTER_OUTPUT = 0
+    )
+   (
+    input  logic clk,
+
+    // Raw unbuffered connection.  This is the AFU-side connection of the
+    // parent module.
+    cci_mpf_if.to_afu afu_raw,
+
+    // Generated buffered connection.  The confusing interface direction
+    // arises because the shim is an interposer on the AFU side of a
+    // standard shim.
+    cci_mpf_if.to_fiu afu_buf,
+
+    // Dequeue signals combined with the buffering make the buffered interface
+    // latency insensitive.  Requests sit in the buffers unless explicitly
+    // removed.
+    input logic deqC1Tx
+    );
+
+    assign afu_raw.reset = afu_buf.reset;
+
+    //
+    // Rx wires pass through toward the AFU.  They are latency sensitive
+    // since the CCI provides no back pressure.
+    //
+    assign afu_raw.c0Rx = afu_buf.c0Rx;
+    assign afu_raw.c1Rx = afu_buf.c1Rx;
+
+
+    // ====================================================================
+    //
+    // Channel 0 Tx flows straight through.
+    //
+    // ====================================================================
+
+    assign afu_buf.c0Tx = afu_raw.c0Tx;
+    assign afu_raw.c0TxAlmFull = afu_buf.c0TxAlmFull;
+
+
+    // ====================================================================
+    //
+    // Channel 1 Tx buffer.
+    //
+    // ====================================================================
+
+    localparam C1TX_BITS = $bits(t_if_cci_mpf_c1_Tx);
+
+    // Request payload exists when one of the valid bits is set.
+    logic c1_enq_en;
+    assign c1_enq_en = afu_raw.c1Tx.valid;
+
+    logic c1_notEmpty;
+
+    // Pull request details out of the head of the FIFO.
+    t_if_cci_mpf_c1_Tx c1_first;
+
+    // Forward the FIFO to the buffered output.  The valid bit is
+    // only meaningful when the FIFO isn't empty.
+    always_comb
+    begin
+        afu_buf.c1Tx = c1_first;
+        afu_buf.c1Tx.valid = c1_notEmpty;
+    end
+
+    cci_mpf_prim_fifo_lutram
+      #(
+        .N_DATA_BITS(C1TX_BITS),
+        .N_ENTRIES(N_ENTRIES),
+        .THRESHOLD(THRESHOLD),
+        .REGISTER_OUTPUT(REGISTER_OUTPUT)
+        )
+      c1_fifo
+       (
+        .clk,
+        .reset(afu_buf.reset),
+
+        // The concatenated field order must match the use of c1_first above.
+        .enq_data(afu_raw.c1Tx),
+        .enq_en(c1_enq_en),
+        .notFull(),
+        .almostFull(afu_raw.c1TxAlmFull),
+
+        .first(c1_first),
+        .deq_en(deqC1Tx),
+        .notEmpty(c1_notEmpty)
+        );
+
+
+    // ====================================================================
+    //
+    // Channel 2 Tx (MMIO read response) is unbuffered.
+    //
+    // ====================================================================
+
+    assign afu_buf.c2Tx = afu_raw.c2Tx;
+
+endmodule // cci_mpf_shim_buffer_afu_c1

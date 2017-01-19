@@ -61,7 +61,7 @@ module cci_mpf_shim_buffer_afu_epoch
     // because of memory port contention in the epoch filters.  The filter
     // being full is indicated by almFull signals on client_fiu.  These
     // parameters control when almost full is signalled.
-    parameter N_REMOVE_FIFO_ENTRIES = CCI_TX_ALMOST_FULL_THRESHOLD + 4,
+    parameter N_REMOVE_FIFO_ENTRIES = CCI_TX_ALMOST_FULL_THRESHOLD + 16,
     parameter N_REMOVE_FIFO_THRESHOLD = CCI_TX_ALMOST_FULL_THRESHOLD
     )
    (

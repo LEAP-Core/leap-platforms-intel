@@ -681,8 +681,9 @@ module cci_mpf_prim_filter_counting_bank
     logic process_remove;
     logic remove_notEmpty;
 
-    cci_mpf_prim_fifo2
+    cci_mpf_prim_fifo_lutram
       #(
+        .N_ENTRIES(8),
         .N_DATA_BITS($bits(t_bucket_idx))
         )
       remove_fifo
@@ -694,7 +695,8 @@ module cci_mpf_prim_filter_counting_bank
         .notFull(remove_notFull),
         .first(remove_idx),
         .deq_en(process_remove),
-        .notEmpty(remove_notEmpty)
+        .notEmpty(remove_notEmpty),
+        .almostFull()
         );
 
 

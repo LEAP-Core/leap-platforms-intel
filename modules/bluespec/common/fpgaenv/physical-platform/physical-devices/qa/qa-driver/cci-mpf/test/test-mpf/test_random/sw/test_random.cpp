@@ -58,6 +58,7 @@ void testConfigOptions(po::options_description &desc)
         ("repeat", po::value<int>()->default_value(1), "Number of repetitions")
         ("tc", po::value<int>()->default_value(0), "Test length (cycles)")
         ("ts", po::value<int>()->default_value(1), "Test length (seconds)")
+        ("buffer-size-radix", po::value<int>()->default_value(24), "Radix of buffer size")
         ;
 }
 
@@ -83,10 +84,30 @@ btInt TEST_RANDOM::test()
     // of the memory buffer in CSR 0.
     uint64_t addr_info = readTestCSR(0);
     
-    // Low 16 bits holds the number of line address bits required
-    uint64_t n_bytes = CL(1) * (1LL << uint16_t(addr_info));
+    // Low 16 bits holds the number of line address bits available
+    uint64_t max_bytes = CL(1) * (1LL << uint16_t(addr_info));
 
-    cout << "Allocating " << n_bytes / (1024 * 1024) << "MB test buffer..." << endl;
+    // What's the requested buffer size from the command line?
+    uint64_t n_bytes = (1LL << uint64_t(vm["buffer-size-radix"].as<int>()));
+    if (n_bytes > max_bytes)
+    {
+        cerr << "Requested buffer size (" << n_bytes / (1024 * 1024) << "MB)"
+             << " exceeds maximum in FPGA (" << max_bytes / (1024 * 1024) << "MB)"
+             << endl
+             << "The FPGA maximum is set with the CFG_N_MEM_REGION_BITS parameter."
+             << endl;
+        exit(1);
+    }
+
+    if (n_bytes >= (1024 * 1024))
+    {
+        cout << "Allocating " << n_bytes / (1024 * 1024) << "MB test buffer..." << endl;
+    }
+    else
+    {
+        cout << "Allocating " << n_bytes << " byte test buffer..." << endl;
+    }
+
     volatile uint64_t* mem = (uint64_t*) this->malloc(n_bytes);
     memset((void*)mem, 0, n_bytes);
 

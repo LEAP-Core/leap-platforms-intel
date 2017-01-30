@@ -88,7 +88,7 @@ module test_afu
 
     // Size of the allocated memory address region
 `ifndef CFG_N_MEM_REGION_BITS
-  `define CFG_N_MEM_REGION_BITS 18
+  `define CFG_N_MEM_REGION_BITS 26
 `endif
     localparam N_MEM_REGION_BITS = `CFG_N_MEM_REGION_BITS;
 
@@ -119,8 +119,9 @@ module test_afu
 
 
     // Random address type from a 32 bit LFSR
-    function automatic t_mapped_addr_bits randAddrInFromLFSR(t_random r);
-        return t_mapped_addr_bits'(r);
+    function automatic t_mapped_addr_bits randAddrInFromLFSR(t_random r,
+                                                             t_cci_clAddr mask);
+        return t_mapped_addr_bits'(r) & t_mapped_addr_bits'(mask);
     endfunction
 
     // Random cache line address from a mapped address
@@ -470,7 +471,7 @@ module test_afu
     t_mapped_addr_bits rd_addr_rand_idx;
     always_comb
     begin
-        rd_addr_rand_idx = randAddrInFromLFSR(rd_lfsr_val);
+        rd_addr_rand_idx = randAddrInFromLFSR(rd_lfsr_val, memMask);
 
         // If read/write conflicts aren't allowed then force an address bit
         // to zero.  The corresponding bit for writes will be forced to one.
@@ -640,7 +641,7 @@ module test_afu
     t_mapped_addr_bits wr_addr_rand_idx;
     always_comb
     begin
-        wr_addr_rand_idx = randAddrInFromLFSR(wr_lfsr_val);
+        wr_addr_rand_idx = randAddrInFromLFSR(wr_lfsr_val, memMask);
 
         // If read/write conflicts aren't allowed then force an address bit
         // to one.  The corresponding bit for reads will be forced to zero.
